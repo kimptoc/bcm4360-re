@@ -1,2 +1,13 @@
 *.tar.xz
 linux-*/
+
+# Build artifacts
+*.o
+*.ko
+*.mod
+*.mod.c
+*.mod.o
+.*.cmd
+.module-common.o
+Module.symvers
+modules.order
