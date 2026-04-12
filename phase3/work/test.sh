@@ -4,7 +4,7 @@
 set -e
 
 WORK_DIR="$(cd "$(dirname "$0")" && pwd)"
-DIAG_DIR="$WORK_DIR/../../"
+DIAG_DIR="$WORK_DIR/../logs"
 MODULE="$WORK_DIR/brcmfmac.ko"
 WCC_MODULE="$WORK_DIR/brcmfmac-wcc.ko"
 
