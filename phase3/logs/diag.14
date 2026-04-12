@@ -1,0 +1,20 @@
+[  579.125006] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] NOT releasing ARM — wl firmware crashes host on exec. Need msgbuf-compatible FW.
+[  579.125008] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] FW download path fully verified OK.
+[  579.125010] brcmfmac 0000:03:00.0: brcmf_pcie_setup: Dongle setup failed
+[  579.125013] ieee80211 phy2: brcmf_fw_crashed: Firmware has halted or crashed
+[ 1958.269854] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[ 1958.270710] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.Apple Inc.-MacBookPro11,1.bin failed with error -2
+[ 1958.276333] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txt failed with error -2
+[ 1958.285079] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+[ 1958.285132] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+[ 1958.286245] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] enter_download_state...
+[ 1958.286258] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] enter_download_state OK
+[ 1958.286261] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] Download FW brcm/brcmfmac4360-pcie.bin (635449 bytes)
+[ 1958.372996] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] FW download complete
+[ 1958.373093] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] Shared RAM marker cleared
+[ 1958.373127] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] Disabling bus mastering before ARM release
+[ 1958.373135] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] Bringing ARM out of halt (resetintr=0xb840f180)...
+[ 1958.373333] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] ARM released, waiting for FW init...
+[ 1963.477908] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] FW failed to initialize (timeout, sharedram still 0x00000000)
+[ 1963.477934] brcmfmac 0000:03:00.0: brcmf_pcie_setup: Dongle setup failed
+[ 1963.477948] ieee80211 phy3: brcmf_fw_crashed: Firmware has halted or crashed
