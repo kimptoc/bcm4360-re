@@ -1,0 +1,66 @@
+From: BCM4360-RE Project <bcm4360-re@localhost>
+Subject: [PATCH] brcmfmac: add support for BCM4360 PCIe wireless
+
+Add support for the Broadcom BCM4360 802.11ac wireless chipset to the
+brcmfmac driver. This chip is found in many 2013-2015 MacBook models
+and some PCIe WiFi cards.
+
+The BCM4360 has a very similar architecture to the already-supported
+BCM43602: ARM CR4 core, PCIe Gen2 interface, and BCMA backplane. The
+D11 wireless core is rev 42 (vs rev 44 on BCM43602).
+
+This patch adds:
+- PCI device IDs for BCM4360 (0x43a0) and BCM4352 (0x43b1)
+- Chip ID definitions
+- TCM RAM base address (0x180000, same as BCM43602 family)
+- Firmware file name mappings
+
+Signed-off-by: BCM4360-RE Project <bcm4360-re@localhost>
+---
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+index XXXXXXX..XXXXXXX 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -52,6 +52,8 @@
+ BRCMF_FW_DEF(43602, "brcmfmac43602-pcie");
+ BRCMF_FW_DEF(4350, "brcmfmac4350-pcie");
+ BRCMF_FW_DEF(4350C, "brcmfmac4350c2-pcie");
++BRCMF_FW_DEF(4360, "brcmfmac4360-pcie");
++BRCMF_FW_DEF(4352, "brcmfmac4352-pcie");
+
+ static const struct brcmf_firmware_mapping brcmf_pcie_fwnames[] = {
+ 	BRCMF_FW_ENTRY(BRCM_CC_43602_CHIP_ID, 0xFFFFFFFF, 43602),
+@@ -86,6 +88,8 @@
+ 	BRCMF_FW_ENTRY(BRCM_CC_43602_CHIP_ID, 0xFFFFFFFF, 43602),
++	BRCMF_FW_ENTRY(BRCM_CC_4360_CHIP_ID, 0xFFFFFFFF, 4360),
++	BRCMF_FW_ENTRY(BRCM_CC_4352_CHIP_ID, 0xFFFFFFFF, 4352),
+ 	BRCMF_FW_ENTRY(BRCM_CC_43465_CHIP_ID, 0xFFFFFFF0, 4366C),
+
+ static const struct pci_device_id brcmf_pcie_devid_table[] = {
++	BRCMF_PCIE_DEVICE(BRCM_PCIE_4360_DEVICE_ID, WCC),
++	BRCMF_PCIE_DEVICE(BRCM_PCIE_4352_DEVICE_ID, WCC),
+ 	BRCMF_PCIE_DEVICE(BRCM_PCIE_4350_DEVICE_ID, WCC),
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/chip.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/chip.c
+index XXXXXXX..XXXXXXX 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/chip.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/chip.c
+@@ -718,6 +718,8 @@
+ 	case BRCM_CC_4350_CHIP_ID:
++	case BRCM_CC_4360_CHIP_ID:
++	case BRCM_CC_4352_CHIP_ID:
+ 	case BRCM_CC_4354_CHIP_ID:
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/include/brcm_hw_ids.h b/drivers/net/wireless/broadcom/brcm80211/include/brcm_hw_ids.h
+index XXXXXXX..XXXXXXX 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/include/brcm_hw_ids.h
++++ b/drivers/net/wireless/broadcom/brcm80211/include/brcm_hw_ids.h
+@@ -XX,6 +XX,8 @@
+ #define BRCM_CC_4350_CHIP_ID		0x4350
++#define BRCM_CC_4360_CHIP_ID		0x4360
++#define BRCM_CC_4352_CHIP_ID		0x4352
+ #define BRCM_CC_43525_CHIP_ID		43525
+
++#define BRCM_PCIE_4360_DEVICE_ID	0x43a0
++#define BRCM_PCIE_4352_DEVICE_ID	0x43b1
+ #define BRCM_PCIE_4350_DEVICE_ID	0x43a3
