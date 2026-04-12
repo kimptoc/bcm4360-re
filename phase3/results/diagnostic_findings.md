@@ -142,6 +142,26 @@ brcmfmac cannot complete the protocol handshake.
 - NVRAM is placed at end of TCM (rambase + ramsize - nvram_len)
 - Other memcpy_toio calls (ring info, random seed) may also need 32-bit conversion
 
+## Test 8-9: BCM43602 Firmware on BCM4360 Hardware
+
+**Test 8 (diag.13)**: Loaded BCM43602 msgbuf firmware (635,449 bytes, v7.35.177.61) onto
+BCM4360 hardware. ARM released with bus mastering disabled. Result: **no crash**, but
+firmware init timed out — log capture ended at "ARM released, waiting for FW init..."
+(diag.13 has no timeout line, suggesting the 5s wait simply elapsed silently).
+
+**Test 9 (diag.14)**: Same test with improved timeout logging. Results:
+- FW download complete (635KB via iowrite32, ~87ms)
+- ARM released with bus mastering disabled
+- FW failed to initialize after ~5s timeout (sharedram stayed 0x00000000)
+- **No host crash** — msgbuf firmware is well-behaved even on wrong hardware
+
+This confirms:
+1. **msgbuf firmware doesn't crash the host** — unlike wl/BCDC firmware
+2. **BCM43602 firmware can't initialize BCM4360 hardware** — expected, different D11 core
+   (rev 42 vs 44), different radio, different PHY
+3. **The driver download path works for large firmware** — 635KB transferred without error
+4. **pci_clear_master() is effective** — no DMA-related issues with msgbuf firmware
+
 ## Diagnostic Versions
 
 1. **v1 (diag.3)**: BAR2 reads at 0x000000-0x040000, 5 offsets — all readable
@@ -150,8 +170,12 @@ brcmfmac cannot complete the protocol handshake.
 4. **v4 (diag.8)**: Single u32 write test — OK, ARM halted confirmed (IOCTL=0x21)
 5. **v5 (diag.9)**: Bulk iowrite32 OK, memcpy_toio hangs
 6. **v6 (diag.10)**: Full firmware download with iowrite32 — crash during ARM restart or FW exec
+7. **v7 (diag.11)**: FW download + ARM release — host crash (wl firmware BCDC protocol)
+8. **v8 (diag.12)**: Safe abort — FW download verified, ARM NOT released, no crash
+9. **v9 (diag.13)**: BCM43602 firmware test — no crash, FW init timeout (no timeout log)
+10. **v10 (diag.14)**: BCM43602 firmware test with timeout logging — confirmed 5s timeout
 
 ## Source Files
 
-- Diagnostic output: `phase3/logs/diag.3` through `phase3/logs/diag.10`
+- Diagnostic output: `phase3/logs/diag.3` through `phase3/logs/diag.14`
 - Full dmesg captures: `phase3/logs/dmesg.1`, `phase3/logs/dmesg.2`
