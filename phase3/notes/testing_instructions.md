@@ -8,12 +8,20 @@
 - `phase3/output/brcmfmac.ko` — main brcmfmac driver with BCM4360/4352 support
 - `phase3/output/brcmfmac-wcc.ko` — WCC firmware vendor module (needed for our chip)
 
-## Kernel Version Note
+## ⚠ Kernel Version Mismatch — Must Fix Before Testing
 
-The module was built against 6.12.80 but the running kernel is 6.12.78. The `insmod` may reject it with a version mismatch. If so, options are:
-1. Force load: `sudo insmod --force brcmfmac.ko` (risky)
-2. Rebuild against the exact running kernel headers
-3. Update NixOS to get 6.12.80 kernel, then test
+The module was built against **6.12.80** but the running kernel is **6.12.78**. This mismatch will cause `insmod` to reject the module. **Do not use `--force`** for initial testing — it introduces avoidable failure modes that confound real results.
+
+**Required:** Rebuild against the exact running kernel before the first test:
+1. Rebuild against the exact running kernel headers (preferred)
+2. Or update NixOS to get 6.12.80 kernel, then test
+
+Verify the module vermagic matches before loading:
+```bash
+modinfo phase3/output/brcmfmac.ko | grep vermagic
+uname -r
+# These must match
+```
 
 ## Pre-test Checklist
 

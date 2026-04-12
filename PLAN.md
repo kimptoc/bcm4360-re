@@ -6,144 +6,127 @@ The goal is to add BCM4360 support to the Linux kernel's `brcmfmac` driver by re
 
 We have a live BCM4360 device on this machine with the `wl` driver loaded, giving us the ability to trace driver behaviour, read hardware registers, and compare against the existing `brcmfmac` codebase.
 
-## What We Know So Far
+## Current Status
 
-### The chip
-- BCM4360, PCI ID `14e4:43a0` rev 03, Apple subsystem `106b:0112`
-- FullMAC architecture: the 802.11ac stack runs on an ARM Cortex-R4 (or M3) inside the chip
-- Contains a proprietary Broadcom "D11 core" for the PHY layer
-- Internal cores are connected via a BCMA backplane (same bus used by other Broadcom chips)
-- Firmware is split into ROM (baked into silicon) and RAM (loaded by the host driver)
-- PCIe interface with two BARs: 32KB control registers (BAR0) and 2MB backplane window (BAR2)
+**Phase 1 is complete.** Phase 1 analysis revealed that the BCM4360 is architecturally near-identical to the already-supported BCM43602 — same ARM CR4 CPU, same PCIe Gen2 core, same BCMA backplane. A minimal brcmfmac patch adding PCI/chip IDs, TCM rambase, and firmware mappings has been written, a build system exists, and testing instructions are documented.
 
-### The existing proprietary driver (`wl`)
-- Hybrid driver: open-source shim wrapping two proprietary ELF objects (`wl.o`, `wlc_hybrid.o_shipped`)
-- Contains embedded firmware that is loaded onto the chip's ARM core at init
-- Shares significant code with the on-chip firmware (per Quarkslab analysis)
-- The driver and firmware share APIs — vulnerabilities in one are present in the other
-- Currently loaded and functional on this machine
+**The project has moved directly to patched brcmfmac bring-up** (Phase 3), bypassing MMIO tracing (Phase 2). The central question is now:
 
-### The existing open-source driver (`brcmfmac`)
-- Supports other Broadcom FullMAC chips (BCM4339, BCM4354, BCM4356, BCM43602, BCM4387, etc.)
-- Uses `msgbuf` protocol for PCIe devices, `BCDC` for SDIO/USB
-- Handles firmware loading, backplane enumeration, and host-firmware messaging
-- Maintained by Arend van Spriel at Broadcom
-- BCM4360 is explicitly **not supported** — no chip ID, no firmware interface mapping
+> **How far does the real probe get, and where exactly does it fail?**
 
-### Why brcmfmac doesn't support BCM4360 today
-- Broadcom has never released FullMAC firmware for this chip separately
-- The chip may use an older or different variant of the messaging protocol
-- Nobody has mapped the specific firmware interface (commands, events, init sequence)
-- Arend van Spriel acknowledged it would require "porting everything from fmac to smac" — though this may refer to a different technical approach than what we're attempting
+The answer determines whether this is a small compatibility gap or a deeper reverse-engineering effort.
 
 ---
 
-## Phase 1: Reconnaissance (no risk to running system)
+## Phase 1: Reconnaissance ✅ COMPLETE
 
-### 1.1 — Enumerate BCMA backplane cores
-**Goal:** Identify what internal cores exist on the chip and at what addresses.
+### 1.1 — Enumerate BCMA backplane cores ✅
+**Result:** 9 cores identified — ARM CR4 (rev 2), D11 (rev 42), PCIe Gen2 (rev 1), ChipCommon (rev 43), USB 2.0 Device, plus ARM infrastructure cores. Layout is very similar to brcmfmac-supported chips.
 
-**Method:** Read the BCMA enumeration ROM via BAR2. The BCMA bus stores a table of core descriptors at a known offset. Each entry identifies a core type (ARM, D11, PCIe, USB, etc.), its address range, and revision.
+See: `phase1/notes/core_enumeration_analysis.md`
 
-**Tools:** Python script reading `/sys/bus/pci/devices/0000:03:00.0/resource2`
+### 1.2 — Extract firmware from `wl.ko` ✅
+**Result:** Two firmware variants extracted — `4352pci` (432KB) and `4350pci` (435KB), both version 6.30.223.0 (Dec 2013). Thumb-2 ARM binaries running hndrte RTOS. Firmware contains both `bcmcdc.c` and `pciedev_msg.c` references — BCDC encapsulation within PCIe dongle messaging.
 
-**Output:** A table of core types, addresses, and revisions — compare against brcmfmac's supported layouts.
+See: `phase1/notes/firmware_extraction_analysis.md`
 
-**Risk:** Read-only. No writes to hardware. Safe while `wl` is running.
+### 1.3 — Study brcmfmac source for supported chip patterns ✅
+**Result:** BCM4360 needs only ~10 lines of code to add to brcmfmac: PCI device ID, chip ID, TCM rambase (0x180000), and firmware name mapping. The biggest unknown is the shared memory protocol version (must be 5-7 for msgbuf).
 
-### 1.2 — Extract firmware from `wl.ko`
-**Goal:** Pull out the ARM firmware blob embedded in the proprietary driver module.
-
-**Method:** Use `binwalk`, `objdump`, and manual analysis on the `wl.ko` file. The firmware is likely a contiguous ARM binary within one of the ELF sections. Look for ARM vector tables (reset, IRQ, etc.) and known Broadcom firmware headers.
-
-**Tools:** `binwalk`, `objdump`, `readelf`, `hexdump`, custom Python scripts
-
-**Output:** Raw firmware binary, entry point, load address, size. Compare against known brcmfmac firmware file formats (`.bin`, `.clm_blob`).
-
-**Risk:** None — analysing a file on disk.
-
-### 1.3 — Study brcmfmac source for supported chip patterns
-**Goal:** Understand what brcmfmac expects from a FullMAC PCIe chip, so we know what we need to provide for BCM4360.
-
-**Method:** Read the kernel source — specifically:
-- `drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c` — PCIe bus layer
-- `drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c` — host-firmware protocol
-- `drivers/net/wireless/broadcom/brcm80211/brcmfmac/chip.c` — chip identification and core enumeration
-- `drivers/net/wireless/broadcom/brcm80211/brcmfmac/firmware.c` — firmware loading
-
-**Output:** Documentation of the init sequence, protocol handshake, and chip-specific hooks.
-
-**Risk:** None — reading source code.
+See: `phase1/notes/brcmfmac_analysis.md`
 
 ---
 
-## Phase 2: Active Tracing
+## Phase 2: MMIO Tracing (fallback — use if Phase 3 hits a wall)
+
+> **Note:** This phase was originally the planned path before attempting brcmfmac. Since Phase 1 analysis showed the chip is close to supported chips, the project jumped directly to Phase 3. MMIO tracing remains available as a diagnostic tool if the patched module fails in ways that can't be diagnosed from dmesg alone.
 
 ### 2.1 — Trace `wl` driver MMIO access during initialization
-**Goal:** Capture the complete sequence of register reads/writes the `wl` driver performs during module load and device init.
+**Goal:** Capture the complete register read/write sequence during `wl` module load.
 
-**Method:** Unload and reload the `wl` module with `ftrace` or `kprobes` active on `ioread32`/`iowrite32`. Alternatively, use `mmiotrace` (kernel's MMIO tracing facility) which logs all MMIO access.
+**Method:** Unload and reload `wl` with `mmiotrace` or `ftrace` on `ioread32`/`iowrite32`.
 
-**Tools:** `trace-cmd`, `mmiotrace`, custom `ftrace` setup
+**When to use:** If Phase 3 produces failures related to chip initialization, register access patterns, or undocumented hardware behavior.
 
-**Output:** A timestamped log of every register address read/written, with values. This is the chip's initialization sequence.
+**Risk:** Moderate — requires reloading WiFi driver. USB adapter provides backup connectivity.
 
-**Risk:** Moderate — requires reloading the WiFi driver. Will temporarily lose WiFi on that interface. The USB adapter can provide connectivity during this work.
+### 2.2 — Trace `wl` during scan, associate, and data transfer
+**Goal:** Capture host-firmware command/response protocol for key WiFi operations.
 
-### 2.2 — Trace `wl` driver during scan, associate, and data transfer
-**Goal:** Capture the host-firmware command/response protocol for key operations.
-
-**Method:** Same MMIO tracing, but trigger WiFi operations (scan for networks, connect to AP, transfer data) while tracing is active.
-
-**Output:** Command structures, event formats, ring buffer usage patterns — the protocol we need to replicate.
-
-**Risk:** Same as 2.1 — WiFi disruption during tracing.
+**When to use:** If the chip probes successfully but protocol-level operations fail (scan, associate, data path).
 
 ### 2.3 — Compare traced patterns against brcmfmac msgbuf protocol
-**Goal:** Determine whether BCM4360 uses standard `msgbuf` protocol or a variant.
+**Goal:** Determine whether BCM4360 uses standard `msgbuf` or a variant.
 
-**Method:** Align traced MMIO sequences against brcmfmac's `msgbuf` implementation. Look for shared ring buffer structures, doorbell registers, and message types.
-
-**Output:** A mapping of BCM4360's protocol to brcmfmac concepts — what's the same, what differs.
-
-**Risk:** None — analysis work.
+**When to use:** If protocol version mismatch or unexpected message formats are observed.
 
 ---
 
-## Phase 3: Proof of Concept
+## Phase 3: Patched brcmfmac Bring-up ← CURRENT PHASE
 
-### 3.1 — Write a userspace probe tool
-**Goal:** A tool that can initialize the chip, enumerate cores, and send basic commands — without the `wl` driver loaded.
+This is now the primary path. A proof-of-concept patch exists; the focus is on running a clean test and capturing results.
 
-**Method:** Python or C tool using `/dev/mem` or a small kernel module to access MMIO. Replay the initialization sequence captured in Phase 2.
+### 3.1 — Rebuild module against exact running kernel
+**Goal:** Eliminate kernel version mismatch as a failure mode.
 
-**Output:** Evidence that we can bring the chip up and communicate with the firmware independently of `wl`.
+**Status:** Module was built against 6.12.80; running kernel is 6.12.78. Must rebuild.
 
-**Risk:** High — writing to hardware registers with `wl` unloaded. Could hang the chip or PCIe bus. Mitigated by having the USB adapter for recovery and using PCI reset to recover the device.
+**Method:** Update the Nix expression or build script to target the exact running kernel headers. Verify module `vermagic` matches before testing.
 
-### 3.2 — Attempt firmware load via brcmfmac path
-**Goal:** Try loading the extracted firmware using brcmfmac's firmware loading code path.
+**Output:** `phase3/output/brcmfmac.ko` with correct vermagic.
 
-**Method:** Add BCM4360's PCI ID to brcmfmac, place the extracted firmware where brcmfmac expects it, and attempt to load the module.
+### 3.2 — Prepare firmware and NVRAM files
+**Goal:** Ensure the correct firmware layout is in place before testing.
 
-**Output:** Either it works (partially or fully) or it fails with specific errors that guide further work.
+**Method:** See the firmware workstreams tracker (`phase3/notes/firmware_workstreams.md`) for the full status of each component:
+- **Firmware binary** — place extracted firmware as `/lib/firmware/brcm/brcmfmac4360-pcie.bin`
+- **NVRAM** — determine source (SPROM, extracted, or none) and place as `.txt` if available
+- **CLM blob** — determine if needed and provide if so
 
-**Risk:** Moderate — loading an experimental kernel module. Worst case: kernel panic, reboot required.
+**Output:** Complete `/lib/firmware/brcm/` layout documented in test results.
+
+### 3.3 — Run first real test and capture results
+**Goal:** Load the patched module and determine exactly where probe succeeds or fails.
+
+**Method:**
+1. Switch to USB WiFi adapter for connectivity
+2. Unload `wl` driver
+3. Load patched `brcmfmac.ko` and `brcmfmac-wcc.ko`
+4. Capture full `dmesg` output
+
+**Output:** Full logs saved to `phase3/results/`, with a summary of the exact failure point:
+- Module load failure
+- Firmware load failure
+- NVRAM missing
+- Protocol version mismatch
+- Dongle setup failure
+- Interface successfully created
+
+See: `phase3/notes/testing_instructions.md`
+
+### 3.4 — Analyze results and iterate
+**Goal:** Based on the first test, determine the next action.
+
+**Decision tree:**
+- **Protocol version mismatch** → investigate firmware's shared memory format, may need Phase 2 tracing
+- **Firmware load failure** → check firmware format (TRX header?), try alternate variant
+- **NVRAM missing** → extract from SPROM or `wl` driver
+- **Dongle setup failure** → firmware loaded but init handshake failed, investigate with tracing
+- **Interface created** → proceed to Phase 4
 
 ---
 
-## Phase 4: Driver Development
+## Phase 4: Driver Development and Upstreaming
 
-### 4.1 — Patch brcmfmac for BCM4360 support
-**Goal:** A working brcmfmac patch that supports BCM4360.
+### 4.1 — Validate and harden the patch
+**Goal:** Move from proof-of-concept to review-ready patch.
 
-**Method:** Based on findings from Phases 1-3:
-- Add chip ID and core table to `chip.c`
-- Add firmware file mapping to `firmware.c`
-- Add any protocol quirks to `pcie.c` / `msgbuf.c`
-- Handle any BCM4360-specific initialization
-
-**Output:** A kernel patch that can be tested and submitted for review.
+**Actions:**
+- Separate BCM4360 and BCM4352 support unless both are strictly needed
+- Regenerate patch from a clean kernel tree (not from approximate hunks)
+- Update commit message with observed runtime behavior
+- Add any chip-specific quirks discovered during testing
+- Handle any BCM4360-specific initialization (e.g., USB core disable)
 
 ### 4.2 — Test basic functionality
 **Goal:** Verify scanning, association, and data transfer work.
@@ -158,6 +141,18 @@ We have a live BCM4360 device on this machine with the `wl` driver loaded, givin
 **Method:** Submit to `linux-wireless@vger.kernel.org` and `brcm80211@lists.linux.dev`, CC Arend van Spriel. Follow kernel patch submission process.
 
 **Output:** BCM4360 support in mainline Linux.
+
+---
+
+## Patch Assumptions
+
+The current proof-of-concept patch makes several assumptions that need validation. See `phase3/notes/patch_assumptions.md` for the full list with evidence and verification status.
+
+Key assumptions:
+- BCM4360 behaves like BCM43602-family chips
+- TCM rambase = `0x180000`
+- Firmware mapping `brcmfmac4360-pcie` is sufficient for probe
+- The extracted firmware uses msgbuf-compatible shared memory protocol (version 5-7)
 
 ---
 
