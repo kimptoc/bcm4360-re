@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # BCM4360 offload firmware communication test script
-# Usage: sudo ./test.sh
+# Usage: sudo ./test.sh [max_step]
+#   max_step: 0=BAR read, 1=ARM halt, 2=FW download, 3=shared_info,
+#             4=IRQ setup, 5=ARM release(!), 6=poll init (default: 0)
 set -e
 
 WORK_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="$WORK_DIR/../logs"
 MODULE="$WORK_DIR/bcm4360_test.ko"
+MAX_STEP="${1:-0}"
 
 # Create log dir if needed
 mkdir -p "$LOG_DIR"
@@ -20,6 +23,7 @@ LOG_FILE="$LOG_DIR/test.$LOG_NUM"
 echo "=== BCM4360 offload FW communication test ==="
 echo "Module:    $MODULE"
 echo "Output:    $LOG_FILE"
+echo "Max step:  $MAX_STEP (0=BAR,1=halt,2=FW,3=shinfo,4=IRQ,5=ARM release,6=poll)"
 echo ""
 
 # Check we're root
@@ -46,13 +50,17 @@ for mod in brcmfmac-wcc brcmfmac wl bcm4360_test; do
     fi
 done
 
+# Wait for hardware to quiesce after driver unload
+echo "  Waiting 5s for hardware to quiesce..."
+sleep 5
+
 # Step 2: Record dmesg position
 echo "--- Step 2: Recording dmesg position ---"
 DMESG_BEFORE=$(dmesg | wc -l)
 
 # Step 3: Load test module
-echo "--- Step 3: Loading bcm4360_test ---"
-insmod "$MODULE"
+echo "--- Step 3: Loading bcm4360_test (max_step=$MAX_STEP) ---"
+insmod "$MODULE" max_step="$MAX_STEP"
 echo "  bcm4360_test loaded OK"
 
 # Step 4: Wait for firmware download, ARM release, and init poll (2s timeout + margin)

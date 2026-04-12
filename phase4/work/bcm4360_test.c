@@ -28,13 +28,31 @@
 
 #define DRV_NAME "bcm4360_test"
 
+/*
+ * Module parameter: max_step
+ *
+ * Controls how far the test proceeds. Use to isolate crash point.
+ *   0 = PCI probe + BAR map only (read chip ID)
+ *   1 = + ARM halt via backplane
+ *   2 = + firmware download to TCM
+ *   3 = + olmsg setup + shared_info write
+ *   4 = + disable bus mastering + register IRQ
+ *   5 = + release ARM (DANGEROUS — this is where Phase 3 crashed)
+ *   6 = + re-enable bus mastering + poll fw_init_done
+ */
+static int max_step = 6;
+module_param(max_step, int, 0444);
+
 /* PCI IDs */
 #define BCM4360_VENDOR_ID	0x14e4
 #define BCM4360_DEVICE_ID	0x43a0
 
 /* BAR sizes */
 #define BAR0_SIZE		0x8000		/* 32KB register window */
-#define BAR2_SIZE		0x200000	/* 2MB TCM window */
+#define BAR2_SIZE		0xA0000		/* 640KB TCM (populated region only!) */
+/* NOTE: BAR2 physical region is 2MB but only 640KB is populated.
+ * Mapping the full 2MB risks speculative reads of dead address space
+ * which can hang the PCIe bus. Phase 3 confirmed 640KB = 4 A-banks. */
 
 /* BCMA backplane registers (offsets within wrapper space) */
 #define BCMA_IOCTL		0x0408
@@ -344,26 +362,71 @@ static int bcm4360_run_test(struct bcm4360_dev *dev)
 {
 	u32 val;
 	int i, ret;
+	bool irq_registered = false;
 
-	/* Step 1: Halt ARM */
+	dev_info(&dev->pdev->dev, "=== BCM4360 test: max_step=%d ===\n", max_step);
+
+	/* Step 0: Read chip ID via BAR0 only — no BAR2 access */
+	dev_info(&dev->pdev->dev, "[step 0] Reading chip ID via BAR0...\n");
+	val = ioread32(dev->regs);
+	dev_info(&dev->pdev->dev, "[step 0] BAR0[0x00] = 0x%08x (expect 0x43a0 in low 16 bits)\n", val);
+	dev_info(&dev->pdev->dev, "[step 0] DONE — BAR0 MMIO OK\n");
+
+	if (max_step < 1)
+		return 0;
+
+	/* Step 1: Map BAR2 (TCM) + halt ARM via backplane */
+	dev_info(&dev->pdev->dev, "[step 1] Mapping BAR2 (TCM, %dKB)...\n", BAR2_SIZE / 1024);
+	dev->tcm = pci_iomap(dev->pdev, 2, BAR2_SIZE);
+	if (!dev->tcm) {
+		dev_err(&dev->pdev->dev, "Failed to map BAR2\n");
+		return -ENOMEM;
+	}
+	dev_info(&dev->pdev->dev, "[step 1] BAR2 mapped at %px\n", dev->tcm);
+
+	/* Read a TCM word to verify */
+	val = tcm_read32(dev, 0);
+	dev_info(&dev->pdev->dev, "[step 1] TCM[0x00] = 0x%08x\n", val);
+
+	/* Allocate DMA buffer for olmsg */
+	dev->olmsg_buf = dma_alloc_coherent(&dev->pdev->dev, OLMSG_BUF_SIZE,
+					    &dev->olmsg_dma, GFP_KERNEL);
+	if (!dev->olmsg_buf) {
+		dev_err(&dev->pdev->dev, "Failed to allocate olmsg DMA buffer\n");
+		return -ENOMEM;
+	}
+
+	dev_info(&dev->pdev->dev, "[step 1] Halting ARM CR4...\n");
 	arm_halt(dev);
+	dev_info(&dev->pdev->dev, "[step 1] DONE\n");
 
-	/* Step 2: Download firmware */
+	if (max_step < 2)
+		return 0;
+
+	/* Step 2: Download firmware to TCM */
+	dev_info(&dev->pdev->dev, "[step 2] Downloading firmware...\n");
 	ret = download_firmware(dev);
 	if (ret)
 		return ret;
+	dev_info(&dev->pdev->dev, "[step 2] DONE\n");
 
-	/* Step 3: Set up olmsg ring buffer */
+	if (max_step < 3)
+		return 0;
+
+	/* Step 3: Set up olmsg + shared_info */
+	dev_info(&dev->pdev->dev, "[step 3] Setting up olmsg + shared_info...\n");
 	setup_olmsg(dev);
-
-	/* Step 4: Write shared_info structure in TCM */
 	write_shared_info(dev);
+	dev_info(&dev->pdev->dev, "[step 3] DONE\n");
 
-	/* Step 5: Disable bus mastering before ARM release (safety) */
+	if (max_step < 4)
+		return 0;
+
+	/* Step 4: Disable bus mastering + register IRQ */
+	dev_info(&dev->pdev->dev, "[step 4] Disabling bus mastering...\n");
 	pci_clear_master(dev->pdev);
-	dev_info(&dev->pdev->dev, "Bus mastering disabled\n");
 
-	/* Step 6: Register interrupt handler BEFORE releasing ARM */
+	dev_info(&dev->pdev->dev, "[step 4] Registering IRQ handler...\n");
 	ret = request_irq(dev->pdev->irq, bcm4360_isr, IRQF_SHARED,
 			  DRV_NAME, dev);
 	if (ret) {
@@ -371,18 +434,31 @@ static int bcm4360_run_test(struct bcm4360_dev *dev)
 			dev->pdev->irq, ret);
 		return ret;
 	}
-	dev_info(&dev->pdev->dev, "IRQ handler registered on IRQ %d\n", dev->pdev->irq);
+	irq_registered = true;
+	dev_info(&dev->pdev->dev, "[step 4] DONE — IRQ %d registered\n", dev->pdev->irq);
 
-	/* Step 7: Release ARM */
+	if (max_step < 5)
+		goto cleanup_irq;
+
+	/* Step 5: Release ARM (DANGEROUS — Phase 3 crashed here) */
+	dev_info(&dev->pdev->dev, "[step 5] *** RELEASING ARM CR4 — bus mastering OFF ***\n");
 	arm_release(dev);
+	dev_info(&dev->pdev->dev, "[step 5] ARM released — if you see this, no immediate crash\n");
+	/* Small delay to let ARM start executing */
+	msleep(100);
+	dev_info(&dev->pdev->dev, "[step 5] 100ms after ARM release — still alive\n");
+	dev_info(&dev->pdev->dev, "[step 5] DONE\n");
 
-	/* Step 8: Re-enable bus mastering (firmware needs DMA for olmsg) */
+	if (max_step < 6)
+		goto cleanup_irq;
+
+	/* Step 6: Re-enable bus mastering + poll fw_init_done */
+	dev_info(&dev->pdev->dev, "[step 6] Re-enabling bus mastering...\n");
 	pci_set_master(dev->pdev);
-	dev_info(&dev->pdev->dev, "Bus mastering re-enabled\n");
+	dev_info(&dev->pdev->dev, "[step 6] Bus mastering ON — if you see this, no DMA crash\n");
 
-	/* Step 9: Poll for firmware init completion */
-	dev_info(&dev->pdev->dev, "Polling for fw_init_done at shared_info+0x%x...\n",
-		 SI_FW_INIT_DONE);
+	/* Poll for firmware init completion */
+	dev_info(&dev->pdev->dev, "[step 6] Polling fw_init_done...\n");
 
 	for (i = 0; i < FW_INIT_TIMEOUT_MS / FW_INIT_POLL_MS; i++) {
 		val = tcm_read32(dev, SHARED_INFO_OFFSET + SI_FW_INIT_DONE);
@@ -392,7 +468,7 @@ static int bcm4360_run_test(struct bcm4360_dev *dev)
 				 val, i);
 			goto init_done;
 		}
-		usleep_range(1000, 1500); /* ~1ms */
+		usleep_range(1000, 1500);
 	}
 
 	/* Timeout — dump diagnostics */
@@ -401,7 +477,6 @@ static int bcm4360_run_test(struct bcm4360_dev *dev)
 		"FW init TIMEOUT after %d ms (fw_init_done=0x%08x)\n",
 		FW_INIT_TIMEOUT_MS, val);
 
-	/* Check if shared_info magics are still intact */
 	{
 		u32 m_start = tcm_read32(dev, SHARED_INFO_OFFSET + SI_MAGIC_START);
 		u32 m_end = tcm_read32(dev, SHARED_INFO_OFFSET + SI_MAGIC_END);
@@ -411,43 +486,35 @@ static int bcm4360_run_test(struct bcm4360_dev *dev)
 			 m_start, m_end);
 	}
 
-	/* Dump first few words of TCM to see if FW is running */
 	dev_info(&dev->pdev->dev, "TCM[0x00]=0x%08x TCM[0x04]=0x%08x TCM[0x08]=0x%08x\n",
 		 tcm_read32(dev, 0), tcm_read32(dev, 4), tcm_read32(dev, 8));
 
-	/* Check olmsg buffer for any firmware writes */
 	{
 		u32 *buf = dev->olmsg_buf;
-
 		dev_info(&dev->pdev->dev,
-			 "olmsg ring1 (fw→host): write_ptr=%u read_ptr=%u\n",
+			 "olmsg ring1 (fw->host): write_ptr=%u read_ptr=%u\n",
 			 buf[7], buf[6]);
 	}
 
 	dev_info(&dev->pdev->dev, "Total IRQs received: %d\n", dev->irq_count);
-
-	free_irq(dev->pdev->irq, dev);
-	return -ETIMEDOUT;
+	goto cleanup_irq;
 
 init_done:
-	/* Success! Check olmsg state */
 	{
 		u32 *buf = dev->olmsg_buf;
-
 		dev_info(&dev->pdev->dev,
-			 "olmsg ring0 (host→fw): write_ptr=%u read_ptr=%u\n",
+			 "olmsg ring0 (host->fw): write_ptr=%u read_ptr=%u\n",
 			 buf[3], buf[2]);
 		dev_info(&dev->pdev->dev,
-			 "olmsg ring1 (fw→host): write_ptr=%u read_ptr=%u\n",
+			 "olmsg ring1 (fw->host): write_ptr=%u read_ptr=%u\n",
 			 buf[7], buf[6]);
 	}
-
 	dev_info(&dev->pdev->dev, "Total IRQs received: %d\n", dev->irq_count);
-
-	/* Halt ARM again for clean state */
 	arm_halt(dev);
 
-	free_irq(dev->pdev->irq, dev);
+cleanup_irq:
+	if (irq_registered)
+		free_irq(dev->pdev->irq, dev);
 	return 0;
 }
 
@@ -473,51 +540,45 @@ static int bcm4360_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		goto err_free;
 	}
 
+	/* Disable bus mastering immediately — wl may have left it on */
+	pci_clear_master(pdev);
+
+	/* Try to reset the PCI function to clear any state from wl */
+	ret = pci_reset_function(pdev);
+	if (ret)
+		dev_warn(&pdev->dev, "pci_reset_function failed: %d (non-fatal)\n", ret);
+	else
+		dev_info(&pdev->dev, "PCI function reset OK\n");
+
+	/* Re-enable after reset */
+	ret = pci_enable_device(pdev);
+	if (ret) {
+		dev_err(&pdev->dev, "pci_enable_device after reset failed: %d\n", ret);
+		goto err_free;
+	}
+
 	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
 	if (ret) {
 		dev_err(&pdev->dev, "DMA mask failed: %d\n", ret);
 		goto err_disable;
 	}
 
-	/* Map BAR0 (registers) */
+	/* Map BAR0 only at probe — BAR2 (TCM) is deferred to avoid crash */
 	dev->regs = pci_iomap(pdev, 0, BAR0_SIZE);
 	if (!dev->regs) {
 		dev_err(&pdev->dev, "Failed to map BAR0\n");
 		ret = -ENOMEM;
 		goto err_disable;
 	}
+	dev_info(&pdev->dev, "BAR0 mapped at %px (32KB)\n", dev->regs);
 
-	/* Map BAR2 (TCM) */
-	dev->tcm = pci_iomap(pdev, 2, BAR2_SIZE);
-	if (!dev->tcm) {
-		dev_err(&pdev->dev, "Failed to map BAR2\n");
-		ret = -ENOMEM;
-		goto err_unmap_bar0;
-	}
-
-	dev_info(&pdev->dev, "BAR0 mapped at %px, BAR2 (TCM) mapped at %px\n",
-		 dev->regs, dev->tcm);
-
-	/* Allocate DMA-coherent buffer for olmsg */
-	dev->olmsg_buf = dma_alloc_coherent(&pdev->dev, OLMSG_BUF_SIZE,
-					    &dev->olmsg_dma, GFP_KERNEL);
-	if (!dev->olmsg_buf) {
-		dev_err(&pdev->dev, "Failed to allocate olmsg DMA buffer\n");
-		ret = -ENOMEM;
-		goto err_unmap_bar2;
-	}
-
-	/* Run the test */
+	/* Run the test — BAR2 and DMA are mapped inside if needed */
 	ret = bcm4360_run_test(dev);
 
 	/* Keep module loaded even on failure so dmesg can be inspected */
 	dev_info(&pdev->dev, "Test complete, result: %d\n", ret);
 	return 0;
 
-err_unmap_bar2:
-	pci_iounmap(pdev, dev->tcm);
-err_unmap_bar0:
-	pci_iounmap(pdev, dev->regs);
 err_disable:
 	pci_disable_device(pdev);
 err_free:
@@ -531,13 +592,15 @@ static void bcm4360_remove(struct pci_dev *pdev)
 
 	dev_info(&pdev->dev, "BCM4360 test module remove\n");
 
-	/* Halt ARM for clean state */
-	arm_halt(dev);
+	/* Halt ARM for clean state (only if TCM was mapped) */
+	if (dev->tcm)
+		arm_halt(dev);
 
 	if (dev->olmsg_buf)
 		dma_free_coherent(&pdev->dev, OLMSG_BUF_SIZE,
 				  dev->olmsg_buf, dev->olmsg_dma);
-	pci_iounmap(pdev, dev->tcm);
+	if (dev->tcm)
+		pci_iounmap(pdev, dev->tcm);
 	pci_iounmap(pdev, dev->regs);
 	pci_disable_device(pdev);
 	kfree(dev);
