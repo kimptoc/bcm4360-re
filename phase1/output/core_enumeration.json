@@ -1,0 +1,361 @@
+{
+  "timestamp": "2026-04-12T17:27:40.803337",
+  "pci_slot": "0000:03:00.0",
+  "chip": {
+    "raw": "0x15034360",
+    "id": 17248,
+    "id_str": "0x4360",
+    "revision": 3,
+    "package": 0,
+    "ncores_field": 5
+  },
+  "erom_base": "0x1810A000",
+  "cores": [
+    {
+      "index": 0,
+      "manufacturer": "Broadcom",
+      "manufacturer_id": "0x4BF",
+      "id": "0x800",
+      "id_decimal": 2048,
+      "name": "ChipCommon",
+      "revision": 43,
+      "class": 0,
+      "master_ports": 1,
+      "slave_ports": 2,
+      "master_wrappers": 1,
+      "slave_wrappers": 1,
+      "addresses": [
+        {
+          "addr": "0x18000000",
+          "port": 0,
+          "size": "0x1000"
+        },
+        {
+          "addr": "0x1C000000",
+          "port": 1,
+          "size": "0x1000000"
+        }
+      ],
+      "wrappers": [
+        {
+          "addr": "0x18100000",
+          "type": "master",
+          "port": 0
+        },
+        {
+          "addr": "0x18105000",
+          "type": "slave",
+          "port": 1
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "manufacturer": "Broadcom",
+      "manufacturer_id": "0x4BF",
+      "id": "0x812",
+      "id_decimal": 2066,
+      "name": "IEEE 802.11 (D11)",
+      "revision": 42,
+      "class": 0,
+      "master_ports": 1,
+      "slave_ports": 1,
+      "master_wrappers": 1,
+      "slave_wrappers": 0,
+      "addresses": [
+        {
+          "addr": "0x18001000",
+          "port": 0,
+          "size": "0x1000"
+        }
+      ],
+      "wrappers": [
+        {
+          "addr": "0x18101000",
+          "type": "master",
+          "port": 0
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "manufacturer": "Broadcom",
+      "manufacturer_id": "0x4BF",
+      "id": "0x83E",
+      "id_decimal": 2110,
+      "name": "ARM CR4",
+      "revision": 2,
+      "class": 0,
+      "master_ports": 1,
+      "slave_ports": 2,
+      "master_wrappers": 1,
+      "slave_wrappers": 1,
+      "addresses": [
+        {
+          "addr": "0x18002000",
+          "port": 0,
+          "size": "0x1000"
+        },
+        {
+          "addr": "0x18005000",
+          "port": 0,
+          "size": "0x2000"
+        },
+        {
+          "addr": "0x00000000",
+          "port": 1,
+          "size": "0xA0000"
+        },
+        {
+          "addr": "0x000E0000",
+          "port": 1,
+          "size": "0x8000"
+        }
+      ],
+      "wrappers": [
+        {
+          "addr": "0x18102000",
+          "type": "master",
+          "port": 0
+        },
+        {
+          "addr": "0x18106000",
+          "type": "slave",
+          "port": 1
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "manufacturer": "Broadcom",
+      "manufacturer_id": "0x4BF",
+      "id": "0x83C",
+      "id_decimal": 2108,
+      "name": "PCIe Gen2",
+      "revision": 1,
+      "class": 0,
+      "master_ports": 1,
+      "slave_ports": 2,
+      "master_wrappers": 1,
+      "slave_wrappers": 1,
+      "addresses": [
+        {
+          "addr": "0x18003000",
+          "port": 0,
+          "size": "0x1000"
+        },
+        {
+          "addr": "0x08000000",
+          "port": 1,
+          "size": "0x8000000"
+        },
+        {
+          "addr": "0x00000000",
+          "port": 1,
+          "size": "0x0"
+        }
+      ],
+      "wrappers": [
+        {
+          "addr": "0x18103000",
+          "type": "master",
+          "port": 0
+        },
+        {
+          "addr": "0x18107000",
+          "type": "slave",
+          "port": 1
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "manufacturer": "Broadcom",
+      "manufacturer_id": "0x4BF",
+      "id": "0x81A",
+      "id_decimal": 2074,
+      "name": "USB 2.0 Device",
+      "revision": 17,
+      "class": 0,
+      "master_ports": 1,
+      "slave_ports": 1,
+      "master_wrappers": 1,
+      "slave_wrappers": 0,
+      "addresses": [
+        {
+          "addr": "0x18004000",
+          "port": 0,
+          "size": "0x1000"
+        }
+      ],
+      "wrappers": [
+        {
+          "addr": "0x18104000",
+          "type": "master",
+          "port": 0
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "manufacturer": "ARM",
+      "manufacturer_id": "0x43B",
+      "id": "0x135",
+      "id_decimal": 309,
+      "name": "Unknown(0x135)",
+      "revision": 0,
+      "class": 0,
+      "master_ports": 0,
+      "slave_ports": 1,
+      "master_wrappers": 0,
+      "slave_wrappers": 1,
+      "addresses": [
+        {
+          "addr": "0x18000000",
+          "type": "bridge",
+          "port": 0,
+          "size": "0x8000"
+        }
+      ],
+      "wrappers": [
+        {
+          "addr": "0x18108000",
+          "type": "slave",
+          "port": 0
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "manufacturer": "ARM",
+      "manufacturer_id": "0x43B",
+      "id": "0x367",
+      "id_decimal": 871,
+      "name": "OOB Router",
+      "revision": 0,
+      "class": 0,
+      "master_ports": 0,
+      "slave_ports": 1,
+      "master_wrappers": 0,
+      "slave_wrappers": 0,
+      "addresses": [
+        {
+          "addr": "0x18109000",
+          "port": 0,
+          "size": "0x1000"
+        }
+      ],
+      "wrappers": []
+    },
+    {
+      "index": 7,
+      "manufacturer": "ARM",
+      "manufacturer_id": "0x43B",
+      "id": "0x366",
+      "id_decimal": 870,
+      "name": "Unknown(0x366)",
+      "revision": 0,
+      "class": 0,
+      "master_ports": 0,
+      "slave_ports": 1,
+      "master_wrappers": 0,
+      "slave_wrappers": 0,
+      "addresses": [
+        {
+          "addr": "0x1810A000",
+          "port": 0,
+          "size": "0x1000"
+        }
+      ],
+      "wrappers": []
+    },
+    {
+      "index": 8,
+      "manufacturer": "ARM",
+      "manufacturer_id": "0x43B",
+      "id": "0x301",
+      "id_decimal": 769,
+      "name": "Unknown(0x301)",
+      "revision": 0,
+      "class": 0,
+      "master_ports": 0,
+      "slave_ports": 1,
+      "master_wrappers": 0,
+      "slave_wrappers": 0,
+      "addresses": [
+        {
+          "addr": "0x18200000",
+          "port": 0,
+          "size": "0x100000"
+        }
+      ],
+      "wrappers": []
+    }
+  ],
+  "raw_erom": [
+    "0x4BF80001",
+    "0x2B084411",
+    "0x00000003",
+    "0x18000005",
+    "0x1C000135",
+    "0x01000000",
+    "0x181000C5",
+    "0x18105185",
+    "0x4BF81201",
+    "0x2A004211",
+    "0x00000103",
+    "0x18001005",
+    "0x181010C5",
+    "0x4BF83E01",
+    "0x02084411",
+    "0x00000203",
+    "0x18002005",
+    "0x18005015",
+    "0x00000135",
+    "0x000A0000",
+    "0x000E0135",
+    "0x00008000",
+    "0x181020C5",
+    "0x18106185",
+    "0x4BF83C01",
+    "0x01084411",
+    "0x00000303",
+    "0x18003005",
+    "0x08000135",
+    "0x08000000",
+    "0x0000013D",
+    "0x80000000",
+    "0x00000008",
+    "0x80000000",
+    "0x181030C5",
+    "0x18107185",
+    "0x4BF81A01",
+    "0x11004211",
+    "0x00000403",
+    "0x18004005",
+    "0x181040C5",
+    "0x43B13501",
+    "0x00080201",
+    "0x18000075",
+    "0x00008000",
+    "0x18108085",
+    "0x43B36701",
+    "0x00000201",
+    "0x18109005",
+    "0x43B36601",
+    "0x00000201",
+    "0x1810A005",
+    "0x43B30101",
+    "0x00000201",
+    "0x18200035",
+    "0x00100000",
+    "0x43BFFF01",
+    "0x00080201",
+    "0x000A0025",
+    "0x000E8035",
+    "0x07F18000",
+    "0x10000035",
+    "0x08000000",
+    "0x18006035"
+  ]
+}
