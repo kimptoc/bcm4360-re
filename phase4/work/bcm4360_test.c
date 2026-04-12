@@ -540,22 +540,19 @@ static int bcm4360_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		goto err_free;
 	}
 
-	/* Disable bus mastering immediately — wl may have left it on */
+	/* Disable bus mastering immediately — wl may have left DMA active */
 	pci_clear_master(pdev);
+	dev_info(&pdev->dev, "Bus mastering disabled\n");
 
-	/* Try to reset the PCI function to clear any state from wl */
-	ret = pci_reset_function(pdev);
-	if (ret)
-		dev_warn(&pdev->dev, "pci_reset_function failed: %d (non-fatal)\n", ret);
-	else
-		dev_info(&pdev->dev, "PCI function reset OK\n");
+	/* Wake device from D3 — wl puts chip into power-down on rmmod.
+	 * Without this, all BAR reads return 0xFFFFFFFF. */
+	pci_set_power_state(pdev, PCI_D0);
+	msleep(50);  /* Give the chip time to wake */
+	dev_info(&pdev->dev, "Power state set to D0\n");
 
-	/* Re-enable after reset */
-	ret = pci_enable_device(pdev);
-	if (ret) {
-		dev_err(&pdev->dev, "pci_enable_device after reset failed: %d\n", ret);
-		goto err_free;
-	}
+	/* NOTE: pci_reset_function() hangs on this device — do NOT use.
+	 * The BCM4360 apparently doesn't support FLR (Function Level Reset).
+	 * We rely on pci_clear_master + the 5s sleep in test.sh instead. */
 
 	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
 	if (ret) {
