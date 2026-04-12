@@ -91,6 +91,48 @@ This is not a DMA issue (bus mastering disabled didn't help). Likely causes:
 **Conclusion**: The firmware download path is fully working. The blocker is
 firmware compatibility — need msgbuf-compatible firmware for BCM4360.
 
+## Firmware Protocol Analysis
+
+Compared the BCM4360 (wl) firmware with BCM43602 (brcmfmac) firmware:
+
+| | BCM4360 (wl) | BCM43602 (brcmfmac) |
+|---|---|---|
+| Version | 6.30.223.0 (2013) | 7.35.177.61 |
+| Protocol | BCDC (`bcmcdc.c`, `rtecdc.c`) | msgbuf (`Broadcom PCIE MSGBUF driver`) |
+| PCIe dongle | `pciedngl_*` (CDC over PCIe) | `pciemsgbuf` (ring buffers) |
+| Strings count | 6,755 | 7,550 |
+| brcmfmac compatible | **NO** | YES |
+
+The BCM4360 firmware uses **BCDC (Broadcom CDC) protocol** — a simpler request/response
+protocol designed for the proprietary `wl` driver. brcmfmac's PCIe backend requires
+**msgbuf protocol** (shared ring buffers in host memory, version 5-7).
+
+**No brcmfmac-compatible firmware exists for BCM4360:**
+- linux-firmware has `brcmfmac43602-pcie.bin` but NO `brcmfmac4360-pcie.bin`
+- AppleBCMWLANCompanion supports BCM43602/BCM4350 but NOT BCM4360
+- The antoineco/broadcom-wl#13 issue confirmed no working brcmfmac firmware exists
+- The BCM43602 firmware cannot run on BCM4360 hardware (different D11 core rev)
+
+## Phase 3 Conclusion
+
+The brcmfmac driver modifications for BCM4360 are **proven working**:
+- Chip recognition, BAR mapping, core enumeration
+- TCM bank power-on (A-banks 0-3)
+- Firmware download via 32-bit writes (memcpy_toio incompatible)
+- ARM CR4 halt verification
+
+The **blocker is firmware**: Broadcom never released a msgbuf-protocol firmware for
+BCM4360. The chip predates the msgbuf protocol introduction. Without such firmware,
+brcmfmac cannot complete the protocol handshake.
+
+### Options for future work
+1. **Use the proprietary `wl` driver** — the only working option for BCM4360
+2. **Investigate BCDC-over-PCIe support in brcmfmac** — would require significant
+   driver changes to support BCDC protocol on the PCIe bus backend
+3. **Try the BCM43602 firmware** — very unlikely to work due to different hardware,
+   but safe to test since we don't release the ARM until verified
+4. **Hardware upgrade** — replace BCM4360 with a BCM43602 card (same PCIe slot)
+
 ## Implications for Firmware Download
 
 - Firmware (442KB) fits within 640KB TCM
