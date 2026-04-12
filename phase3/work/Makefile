@@ -5,6 +5,10 @@ ccflags-y += \
 	-I $(src)/linux-6.12.80/drivers/net/wireless/broadcom/brcm80211/brcmfmac \
 	-I $(src)/linux-6.12.80/drivers/net/wireless/broadcom/brcm80211/include
 
+# Override kernel config: only build PCIe backend (no SDIO/USB)
+# Force-include after autoconf.h to undef SDIO/USB, activating the stubs in bus.h
+ccflags-y += -include $(src)/pcie_only.h
+
 # Main brcmfmac module
 obj-m += brcmfmac.o
 
@@ -29,9 +33,6 @@ brcmfmac-objs := \
 	$(BRCM_SRC)/commonring.o \
 	$(BRCM_SRC)/flowring.o \
 	$(BRCM_SRC)/msgbuf.o \
-	$(BRCM_SRC)/sdio.o \
-	$(BRCM_SRC)/bcmsdh.o \
-	$(BRCM_SRC)/usb.o \
 	$(BRCM_SRC)/pcie.o \
 	$(BRCM_SRC)/of.o \
 	$(BRCM_SRC)/dmi.o \
