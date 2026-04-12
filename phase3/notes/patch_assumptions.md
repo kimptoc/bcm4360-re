@@ -21,7 +21,7 @@ This document tracks the key assumptions made by the proof-of-concept patch, wit
 - USB 2.0 Device core present (unusual for a PCIe card, may need to be disabled)
 - Firmware version 6.30.223.0 is from 2013, significantly older than typical 43602 firmware
 
-**Status:** ⚠️ UNVERIFIED — plausible but requires runtime test
+**Status:** ⚠️ PARTIALLY VERIFIED — chip recognized as BCM4360/3 and firmware loaded, but TCM rambase assumption was wrong (see Assumption 2). Chip is *similar* to BCM43602 but not identical in memory layout.
 
 ---
 
@@ -38,7 +38,7 @@ This document tracks the key assumptions made by the proof-of-concept patch, wit
 - Phase 1.1 showed ARM CR4 memory at backplane address `0x00000000` (640KB region) — this is the *local* address, the rambase is the *backplane-mapped* address, but they could differ
 - No direct confirmation from datasheet or runtime probe
 
-**Status:** ⚠️ UNVERIFIED — high confidence but needs runtime confirmation. If wrong, dmesg will show "RAM base not provided" or firmware load to wrong address.
+**Status:** ❌ DISPROVEN — Test 1 crashed with page fault in `iowrite32` at `brcmf_pcie_setup+0x1c4`. The write to `tcm + 0x180000 + ramsize - 4` exceeded the 2MB BAR2 mapping. Core enumeration data confirms TCM is at backplane address `0x00000000` (640KB), not `0x180000`. Fix: changed rambase to `0x0` for BCM4360/4352. See `phase3/results/test1_analysis.md`.
 
 ---
 
@@ -55,7 +55,7 @@ This document tracks the key assumptions made by the proof-of-concept patch, wit
 - The firmware may expect a different loading sequence or header format (TRX?)
 - The firmware variant selection (4352pci vs 4350pci) is uncertain
 
-**Status:** ⚠️ UNVERIFIED — the name mapping is trivially correct, but whether the firmware *content* is compatible is the real question.
+**Status:** ✅ PARTIALLY VERIFIED — firmware loaded successfully (`brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3`). Content compatibility not yet tested (crashed before firmware could run).
 
 ---
 

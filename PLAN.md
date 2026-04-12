@@ -83,29 +83,21 @@ This is now the primary path. A proof-of-concept patch exists; the focus is on r
 
 **Output:** Complete `/lib/firmware/brcm/` layout documented in test results.
 
-### 3.3 — Run first real test and capture results
+### 3.3 — Run first real test and capture results ✅ (Test 1 complete)
 **Goal:** Load the patched module and determine exactly where probe succeeds or fails.
 
-**Method:**
-1. Switch to USB WiFi adapter for connectivity
-2. Unload `wl` driver
-3. Load patched `brcmfmac.ko` and `brcmfmac-wcc.ko`
-4. Capture full `dmesg` output
+**Test 1 Result (2026-04-12):** Module loaded, chip identified as BCM4360/3, firmware loaded, but **crashed in `brcmf_pcie_setup`** during firmware download to TCM. Root cause: rambase=0x180000 was wrong — the BCM4360's TCM is at backplane address 0x0, and the 2MB BAR2 cannot reach 0x180000+ramsize. Fix applied: rambase changed to 0x0.
 
-**Output:** Full logs saved to `phase3/results/`, with a summary of the exact failure point:
-- Module load failure
-- Firmware load failure
-- NVRAM missing
-- Protocol version mismatch
-- Dongle setup failure
-- Interface successfully created
+**Test 2 (pending):** Reboot required after kernel oops, then re-test with corrected rambase.
 
-See: `phase3/notes/testing_instructions.md`
+See: `phase3/results/test1_analysis.md`, `phase3/results/dmesg.1`, `phase3/results/dmesg.2`
 
-### 3.4 — Analyze results and iterate
-**Goal:** Based on the first test, determine the next action.
+### 3.4 — Analyze results and iterate ← CURRENT
+**Goal:** Based on test results, determine the next action.
 
-**Decision tree:**
+**Test 1 outcome → rambase fix:** Core enumeration data confirmed TCM at backplane addr 0x0. Rambase corrected from 0x180000 to 0x0 in chip.c. Module rebuilt. Awaiting Test 2 after reboot.
+
+**Decision tree for Test 2:**
 - **Protocol version mismatch** → investigate firmware's shared memory format, may need Phase 2 tracing
 - **Firmware load failure** → check firmware format (TRX header?), try alternate variant
 - **NVRAM missing** → extract from SPROM or `wl` driver
@@ -147,10 +139,10 @@ See: `phase3/notes/testing_instructions.md`
 The current proof-of-concept patch makes several assumptions that need validation. See `phase3/notes/patch_assumptions.md` for the full list with evidence and verification status.
 
 Key assumptions:
-- BCM4360 behaves like BCM43602-family chips
-- TCM rambase = `0x180000`
-- Firmware mapping `brcmfmac4360-pcie` is sufficient for probe
-- The extracted firmware uses msgbuf-compatible shared memory protocol (version 5-7)
+- BCM4360 behaves like BCM43602-family chips — **partially verified** (similar but different memory layout)
+- ~~TCM rambase = `0x180000`~~ — **disproven**, corrected to `0x0` (confirmed by core enumeration and crash analysis)
+- Firmware mapping `brcmfmac4360-pcie` is sufficient for probe — **verified** (firmware loaded OK)
+- The extracted firmware uses msgbuf-compatible shared memory protocol (version 5-7) — **untested** (crash before firmware could run)
 
 ---
 

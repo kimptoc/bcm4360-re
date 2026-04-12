@@ -12,7 +12,7 @@ D11 wireless core is rev 42 (vs rev 44 on BCM43602).
 This patch adds:
 - PCI device IDs for BCM4360 (0x43a0) and BCM4352 (0x43b1)
 - Chip ID definitions
-- TCM RAM base address (0x180000, same as BCM43602 family)
+- TCM RAM base address (0x0, differs from BCM43602's 0x180000)
 - Firmware file name mappings
 
 Signed-off-by: BCM4360-RE Project <bcm4360-re@localhost>
@@ -46,9 +46,10 @@ index XXXXXXX..XXXXXXX 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/chip.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/chip.c
 @@ -718,6 +718,8 @@
- 	case BRCM_CC_4350_CHIP_ID:
-+	case BRCM_CC_4360_CHIP_ID:
+ 	case BRCM_CC_4360_CHIP_ID:
 +	case BRCM_CC_4352_CHIP_ID:
++		return 0x0;
+ 	case BRCM_CC_4350_CHIP_ID:
  	case BRCM_CC_4354_CHIP_ID:
 
 diff --git a/drivers/net/wireless/broadcom/brcm80211/include/brcm_hw_ids.h b/drivers/net/wireless/broadcom/brcm80211/include/brcm_hw_ids.h

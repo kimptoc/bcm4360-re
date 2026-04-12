@@ -1,0 +1,80 @@
+[ 1349.090009] brcmfmac: Unknown symbol sdio_memcpy_toio (err -2)
+[ 1349.090072] brcmfmac: Unknown symbol sdio_f0_readb (err -2)
+[ 1349.090142] brcmfmac: Unknown symbol sdio_release_irq (err -2)
+[ 1349.090272] brcmfmac: Unknown symbol sdio_set_host_pm_flags (err -2)
+[ 1349.090290] brcmfmac: Unknown symbol sdio_f0_writeb (err -2)
+[ 1349.090309] brcmfmac: Unknown symbol sdio_unregister_driver (err -2)
+[ 1349.090327] brcmfmac: Unknown symbol sdio_readsb (err -2)
+[ 1349.090404] brcmfmac: Unknown symbol sdio_retune_crc_enable (err -2)
+[ 1349.090439] brcmfmac: Unknown symbol sdio_readl (err -2)
+[ 1349.090468] brcmfmac: Unknown symbol mmc_set_data_timeout (err -2)
+[ 1349.090564] brcmfmac: Unknown symbol sdio_writel (err -2)
+[ 1349.090587] brcmfmac: Unknown symbol __sdio_register_driver (err -2)
+[ 1349.090615] brcmfmac: Unknown symbol mmc_wait_for_req (err -2)
+[ 1349.090644] brcmfmac: Unknown symbol sdio_get_host_pm_caps (err -2)
+[ 1349.090749] brcmfmac: Unknown symbol mmc_hw_reset (err -2)
+[ 1349.090765] brcmfmac: Unknown symbol sdio_retune_release (err -2)
+[ 1349.090776] brcmfmac: Unknown symbol sdio_claim_irq (err -2)
+[ 1349.090798] brcmfmac: Unknown symbol sdio_enable_func (err -2)
+[ 1349.090877] brcmfmac: Unknown symbol sdio_readb (err -2)
+[ 1349.090888] brcmfmac: Unknown symbol sdio_writeb (err -2)
+[ 1349.118242] brcmfmac_wcc: Unknown symbol brcmf_set_wsec (err -2)
+[ 1349.118266] brcmfmac_wcc: Unknown symbol brcmf_fwvid_register_vendor (err -2)
+[ 1349.118278] brcmfmac_wcc: Unknown symbol brcmf_fwvid_unregister_vendor (err -2)
+[ 1943.252671] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[ 1943.254865] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.Apple Inc.-MacBookPro11,1.bin failed with error -2
+[ 1943.257683] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txt failed with error -2
+[ 1943.265221] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+[ 1943.265488] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+[ 1943.317967] BUG: unable to handle page fault for address: ffffcff9c461fffc
+[ 1943.317987] #PF: supervisor write access in kernel mode
+[ 1943.317991] #PF: error_code(0x0002) - not-present page
+[ 1943.317996] PGD 100000067 P4D 100000067 PUD 101290067 PMD 17daa0067 PTE 0
+[ 1943.318004] Oops: Oops: 0002 [#1] PREEMPT SMP PTI
+[ 1943.318013] CPU: 2 UID: 0 PID: 57 Comm: kworker/2:1 Tainted: P        W  O       6.12.80 #1-NixOS
+[ 1943.318034] Tainted: [P]=PROPRIETARY_MODULE, [W]=WARN, [O]=OOT_MODULE
+[ 1943.318037] Hardware name: Apple Inc. MacBookPro11,1/Mac-189A3D4F975D5FFC, BIOS 478.0.0.0.0 01/13/2023
+[ 1943.318041] Workqueue: events request_firmware_work_func
+[ 1943.318058] RIP: 0010:iowrite32+0x10/0x40
+[ 1943.318072] Code: fd ff ff 0f 1f 80 00 00 00 00 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 f3 0f 1e fa 48 89 f2 48 81 fe ff ff 03 00 76 07 <89> 3e c3 cc cc cc cc 48 81 fe 00 00 01 00 76 08 89 f8 ef c3 cc cc
+[ 1943.318076] RSP: 0000:ffffcff9c0223d48 EFLAGS: 00010292
+[ 1943.318081] RAX: 0000000000180000 RBX: ffff8ecb455b6500 RCX: 0000000000817e02
+[ 1943.318084] RDX: ffffcff9c461fffc RSI: ffffcff9c461fffc RDI: 0000000000000000
+[ 1943.318086] RBP: ffffcff9c0223e00 R08: ffff8ecb42cb6000 R09: 0000000000001064
+[ 1943.318089] R10: 00000000000007e0 R11: 0000000000000001 R12: 0000000000000000
+[ 1943.318092] R13: 0000000000000000 R14: ffff8ecb42b45660 R15: ffff8ecc0209a800
+[ 1943.318096] FS:  0000000000000000(0000) GS:ffff8ecca7300000(0000) knlGS:0000000000000000
+[ 1943.318101] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[ 1943.318104] CR2: ffffcff9c461fffc CR3: 0000000142394003 CR4: 00000000001726f0
+[ 1943.318108] Call Trace:
+[ 1943.318116]  <TASK>
+[ 1943.318127]  brcmf_pcie_setup+0x1c4/0xd80 [brcmfmac]
+[ 1943.318241]  ? _request_firmware+0x48b/0x670
+[ 1943.318265]  ? brcmf_fw_request_done+0x91/0x1a0 [brcmfmac]
+[ 1943.318350]  brcmf_fw_request_done+0x148/0x1a0 [brcmfmac]
+[ 1943.318412]  request_firmware_work_func+0x55/0xa0
+[ 1943.318431]  process_one_work+0x18d/0x350
+[ 1943.318446]  worker_thread+0x160/0x2c0
+[ 1943.318455]  ? __pfx_worker_thread+0x10/0x10
+[ 1943.318463]  kthread+0xd0/0x100
+[ 1943.318472]  ? __pfx_kthread+0x10/0x10
+[ 1943.318478]  ret_from_fork+0x34/0x50
+[ 1943.318489]  ? __pfx_kthread+0x10/0x10
+[ 1943.318492]  ret_from_fork_asm+0x1a/0x30
+[ 1943.318497]  </TASK>
+[ 1943.318499] Modules linked in: brcmfmac_wcc(O) brcmfmac(O) brcmutil ccm mt76x2u mt76x2_common mt76x02_usb mt76_usb mt76x02_lib mt76 mac80211 libarc4 qrtr rfcomm snd_seq_dummy snd_hrtimer snd_seq snd_seq_device fuse cmac algif_hash algif_skcipher af_alg bnep af_packet btusb btrtl btintel btbcm btmtk bluetooth ecdh_generic ecc input_leds hid_apple joydev mousedev hid_generic usbhid hid bcm5974 apple_mfi_fastcharge uas snd_hda_codec_hdmi ofpart cmdlinepart spi_nor intel_rapl_msr intel_rapl_common mtd x86_pkg_temp_thermal intel_powerclamp coretemp crct10dif_pclmul crc32_pclmul polyval_clmulni polyval_generic ghash_clmulni_intel sha512_ssse3 sha256_ssse3 sha1_ssse3 aesni_intel gf128mul iTCO_wdt intel_pmc_bxt spi_intel_platform crypto_simd nls_iso8859_1 spi_intel watchdog nls_cp437 cryptd i2c_i801 vfat fat rapl intel_cstate i2c_smbus mei_hdcp mei_pxp mac_hid evdev applesmc intel_uncore efi_pstore i2c_mux lpc_ich i915 snd_hda_codec_cirrus snd_hda_codec_generic thunderbolt led_class bcma xt_conntrack nf_conntrack
+[ 1943.318610]  nf_defrag_ipv6 snd_hda_intel nf_defrag_ipv4 sbs snd_intel_dspcfg ip6t_rpfilter acpi_als snd_intel_sdw_acpi industrialio_triggered_buffer snd_hda_codec kfifo_buf drm_buddy industrialio sbshc rtc_cmos ipt_rpfilter snd_hda_core ttm drm_display_helper snd_hwdep cec intel_gtt i2c_algo_bit snd_pcm tiny_power_button video snd_timer mei_me xt_pkttype ac mei snd button wmi soundcore xt_LOG nf_log_syslog xt_tcpudp nft_compat x_tables nf_tables libcrc32c sch_fq_codel cfg80211 rfkill msr loop kvm_intel kvm irqbypass atkbd libps2 serio vivaldi_fmap nfnetlink efivarfs dmi_sysfs autofs4 ext4 usb_storage crc32c_generic crc16 mbcache jbd2 sd_mod ahci libahci libata scsi_mod crc32c_intel scsi_common xhci_pci xhci_hcd dm_mod dax [last unloaded: wl(PO)]
+[ 1943.318688] CR2: ffffcff9c461fffc
+[ 1943.318692] ---[ end trace 0000000000000000 ]---
+[ 1943.817003] RIP: 0010:iowrite32+0x10/0x40
+[ 1943.817015] Code: fd ff ff 0f 1f 80 00 00 00 00 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 f3 0f 1e fa 48 89 f2 48 81 fe ff ff 03 00 76 07 <89> 3e c3 cc cc cc cc 48 81 fe 00 00 01 00 76 08 89 f8 ef c3 cc cc
+[ 1943.817017] RSP: 0000:ffffcff9c0223d48 EFLAGS: 00010292
+[ 1943.817020] RAX: 0000000000180000 RBX: ffff8ecb455b6500 RCX: 0000000000817e02
+[ 1943.817022] RDX: ffffcff9c461fffc RSI: ffffcff9c461fffc RDI: 0000000000000000
+[ 1943.817023] RBP: ffffcff9c0223e00 R08: ffff8ecb42cb6000 R09: 0000000000001064
+[ 1943.817025] R10: 00000000000007e0 R11: 0000000000000001 R12: 0000000000000000
+[ 1943.817026] R13: 0000000000000000 R14: ffff8ecb42b45660 R15: ffff8ecc0209a800
+[ 1943.817038] FS:  0000000000000000(0000) GS:ffff8ecca7300000(0000) knlGS:0000000000000000
+[ 1943.817040] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[ 1943.817041] CR2: ffffcff9c461fffc CR3: 0000000142394003 CR4: 00000000001726f0
+[ 1943.817044] note: kworker/2:1[57] exited with irqs disabled
