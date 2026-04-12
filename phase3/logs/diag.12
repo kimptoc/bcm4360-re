@@ -1,0 +1,15 @@
+[  579.050226] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[  579.052042] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.Apple Inc.-MacBookPro11,1.bin failed with error -2
+[  579.055757] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txt failed with error -2
+[  579.064384] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+[  579.064477] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+[  579.064645] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] enter_download_state...
+[  579.064655] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] enter_download_state OK
+[  579.064658] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] Download FW brcm/brcmfmac4360-pcie.bin (442233 bytes)
+[  579.124920] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] FW download complete
+[  579.124958] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] Shared RAM marker cleared
+[  579.125003] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] FW verify: TCM[0]=0xb80ef000 [4]=0xb82ef000 [8]=0xb839f000 [end-4]=0x00000000
+[  579.125006] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] NOT releasing ARM — wl firmware crashes host on exec. Need msgbuf-compatible FW.
+[  579.125008] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] FW download path fully verified OK.
+[  579.125010] brcmfmac 0000:03:00.0: brcmf_pcie_setup: Dongle setup failed
+[  579.125013] ieee80211 phy2: brcmf_fw_crashed: Firmware has halted or crashed
