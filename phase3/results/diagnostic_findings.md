@@ -72,12 +72,24 @@ to TCM. Wider transactions cause a bus hang.
 **Fix**: Replace `memcpy_toio` with 32-bit `iowrite32` loop for BCM4360 firmware and
 NVRAM download. Implemented as `brcmf_pcie_memcpy_toio32()`.
 
-## Test 6: Firmware Download with iowrite32
+## Test 6-7: Firmware Download and ARM Release
 
-Firmware download using iowrite32 loop was attempted. System crashed — likely during
-ARM CR4 restart in `brcmf_pcie_exit_download_state` or early firmware execution.
-The firmware download itself should have succeeded (based on bulk write tests passing).
-Investigation ongoing.
+**Test 6 (diag.11)**: FW download via iowrite32 succeeded. All steps completed:
+enter_download_state OK → FW download OK → shared RAM marker cleared → ARM released
+→ **CRASH** during firmware execution.
+
+**Test 7**: Same but with `pci_clear_master()` before ARM release to block DMA.
+Still crashed — no kernel output captured at all. Crash is NOT from DMA.
+
+**Root cause**: The `wl` firmware crashes the host when it starts executing.
+This is not a DMA issue (bus mastering disabled didn't help). Likely causes:
+- MSI interrupts from uninitialized firmware interrupt handler
+- Firmware accessing PCIe control registers that affect host
+- Fundamental protocol incompatibility: `wl` firmware uses FullMAC CDC protocol,
+  brcmfmac on PCIe requires msgbuf protocol (version 5-7)
+
+**Conclusion**: The firmware download path is fully working. The blocker is
+firmware compatibility — need msgbuf-compatible firmware for BCM4360.
 
 ## Implications for Firmware Download
 
