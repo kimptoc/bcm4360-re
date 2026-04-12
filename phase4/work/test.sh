@@ -1,90 +1,137 @@
 #!/usr/bin/env bash
-# BCM4360 offload firmware communication test script
-# Usage: sudo ./test.sh [max_step]
-#   max_step: 0=BAR read, 1=ARM halt, 2=FW download, 3=shared_info,
-#             4=IRQ setup, 5=ARM release(!), 6=poll init (default: 0)
+# BCM4360 staged test harness
+# Usage: sudo ./test.sh [max_level]
+#   Levels: 0=bind, 1=config+wake, 2=BAR0 regs, 3=full init
+#   Default: auto-advance through 0→1→2, stop before 3
 set -e
 
 WORK_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="$WORK_DIR/../logs"
 MODULE="$WORK_DIR/bcm4360_test.ko"
-MAX_STEP="${1:-0}"
+MAX_LEVEL="${1:-auto}"
 
-# Create log dir if needed
 mkdir -p "$LOG_DIR"
 
-# Find next available log file number
+# Find next log number
 LOG_NUM=1
 while [ -f "$LOG_DIR/test.$LOG_NUM" ]; do
     LOG_NUM=$((LOG_NUM + 1))
 done
-LOG_FILE="$LOG_DIR/test.$LOG_NUM"
 
-echo "=== BCM4360 offload FW communication test ==="
-echo "Module:    $MODULE"
-echo "Output:    $LOG_FILE"
-echo "Max step:  $MAX_STEP (0=BAR,1=halt,2=FW,3=shinfo,4=IRQ,5=ARM release,6=poll)"
+echo "=== BCM4360 staged test harness ==="
+echo "Module:  $MODULE"
+echo "Mode:    $MAX_LEVEL"
 echo ""
 
-# Check we're root
 if [ "$(id -u)" -ne 0 ]; then
     echo "ERROR: must run as root (sudo ./test.sh)"
     exit 1
 fi
 
-# Check module exists
 if [ ! -f "$MODULE" ]; then
     echo "ERROR: $MODULE not found — run 'make' first"
     exit 1
 fi
 
-# Step 1: Unload conflicting modules
-echo "--- Step 1: Unloading existing modules ---"
+# Unload conflicting modules
+echo "--- Unloading existing modules ---"
 for mod in brcmfmac-wcc brcmfmac wl bcm4360_test; do
     if lsmod | grep -q "^${mod//-/_}"; then
         echo "  Removing $mod..."
         rmmod "$mod" 2>/dev/null || true
         sleep 1
-    else
-        echo "  $mod not loaded, skipping"
     fi
 done
 
-# Wait for hardware to quiesce after driver unload
 echo "  Waiting 5s for hardware to quiesce..."
 sleep 5
 
-# Step 2: Record dmesg position
-echo "--- Step 2: Recording dmesg position ---"
-DMESG_BEFORE=$(dmesg | wc -l)
+run_level() {
+    local level=$1
+    local log_file="$LOG_DIR/test.$LOG_NUM"
+    local dmesg_before
 
-# Step 3: Load test module
-echo "--- Step 3: Loading bcm4360_test (max_step=$MAX_STEP) ---"
-insmod "$MODULE" max_step="$MAX_STEP"
-echo "  bcm4360_test loaded OK"
+    echo ""
+    echo "=== Level $level ==="
+    dmesg_before=$(dmesg | wc -l)
 
-# Step 4: Wait for firmware download, ARM release, and init poll (2s timeout + margin)
-echo "--- Step 4: Waiting 5s for test to complete ---"
-sleep 5
+    # Unload if still loaded from previous level
+    if lsmod | grep -q "^bcm4360_test"; then
+        rmmod bcm4360_test 2>/dev/null || true
+        sleep 1
+    fi
 
-# Step 5: Capture output
-echo "--- Step 5: Capturing dmesg ---"
-dmesg | tail -n +$((DMESG_BEFORE + 1)) > "$LOG_FILE"
-echo "  Saved to $LOG_FILE"
+    echo "  Loading module with max_level=$level..."
 
-# Step 6: Show relevant output
-echo ""
-echo "=== dmesg output (bcm4360 lines) ==="
-grep -i "bcm4360" "$LOG_FILE" || echo "  (no bcm4360 lines found)"
+    # Use timeout to catch hangs (15s should be plenty)
+    if ! timeout 15 insmod "$MODULE" max_level="$level" 2>&1; then
+        echo "  *** HANG or FAIL — insmod did not complete in 15s ***"
+        dmesg | tail -n +$((dmesg_before + 1)) > "$log_file"
+        echo "  dmesg saved to $log_file"
+        echo ""
+        echo "=== dmesg output ==="
+        cat "$log_file"
+        return 1
+    fi
 
-echo ""
-echo "=== All new dmesg ==="
-cat "$LOG_FILE"
+    # Wait a moment for any deferred work
+    sleep 2
 
-echo ""
-echo "=== Module status ==="
-lsmod | grep bcm4360 || echo "  (bcm4360_test not loaded — may have failed to probe)"
+    # Capture dmesg
+    dmesg | tail -n +$((dmesg_before + 1)) > "$log_file"
+    echo "  Log saved to $log_file"
 
-echo ""
-echo "Done. Full output in $LOG_FILE"
-echo "To unload: sudo rmmod bcm4360_test"
+    # Show output
+    echo ""
+    echo "--- dmesg (level $level) ---"
+    cat "$log_file"
+    echo "--- end ---"
+    echo ""
+
+    # Check for FAIL markers
+    if grep -q "FAIL" "$log_file"; then
+        echo "  *** Level $level FAILED ***"
+        # Check specifically for dead device
+        if grep -q "0xFFFFFFFF\|dead\|D3" "$log_file"; then
+            echo "  Device appears dead or in D3 power state"
+        fi
+        return 1
+    fi
+
+    # Check for PASS marker
+    if grep -q "PASS" "$log_file"; then
+        echo "  Level $level PASSED"
+        LOG_NUM=$((LOG_NUM + 1))
+        return 0
+    fi
+
+    echo "  Level $level completed (no explicit PASS/FAIL)"
+    LOG_NUM=$((LOG_NUM + 1))
+    return 0
+}
+
+if [ "$MAX_LEVEL" = "auto" ]; then
+    # Auto-advance through levels 0-2
+    for level in 0 1 2; do
+        if ! run_level "$level"; then
+            echo ""
+            echo "=== STOPPED at level $level ==="
+            echo "Fix the issue and re-run, or try: sudo ./test.sh $level"
+            exit 1
+        fi
+    done
+    echo ""
+    echo "=== Levels 0-2 PASSED ==="
+    echo "Level 3 (full init with ARM release) available: sudo ./test.sh 3"
+else
+    run_level "$MAX_LEVEL"
+fi
+
+# Cleanup
+if lsmod | grep -q "^bcm4360_test"; then
+    echo ""
+    echo "Unloading module..."
+    rmmod bcm4360_test 2>/dev/null || true
+fi
+
+echo "Done. Logs in $LOG_DIR/"
