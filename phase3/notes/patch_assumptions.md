@@ -90,7 +90,7 @@ This document tracks the key assumptions made by the proof-of-concept patch, wit
 - The USB 2.0 Device core (unusual for PCIe) may need to be explicitly disabled
 - D11 rev 42 may need different PHY init compared to rev 44
 
-**Status:** ⚠️ UNVERIFIED — likely to be discovered during testing if needed
+**Status:** ⚠️ PARTIALLY ADDRESSED — Diagnostic testing revealed BCM4360 needs bank power-on similar to BCM43602. Added BCM4360-specific bank power-on to `brcmf_pcie_enter_download_state()` (A-banks 0-3). B-bank (idx 4) must NOT be accessed — it hangs the PCIe bus. See `phase3/results/diagnostic_findings.md`.
 
 ---
 
