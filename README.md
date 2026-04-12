@@ -31,13 +31,15 @@ Broadcom has shown no intention of open-sourcing this driver or releasing firmwa
 
 ## Approach
 
-Rather than writing a driver and firmware from scratch, the goal is to **extend the existing `brcmfmac` kernel driver** to support the BCM4360 — the same approach used by the Asahi Linux project to add BCM4387 (Apple M1) support.
+The initial approach was to extend the existing `brcmfmac` kernel driver — the same strategy used by Asahi Linux for BCM4387 (Apple M1). Phase 3 testing proved the driver-side PCIe bring-up works end-to-end, but revealed a **fundamental protocol mismatch**: the BCM4360 firmware uses BCDC protocol while brcmfmac's PCIe backend requires msgbuf. No msgbuf firmware exists for this chip.
 
-This requires:
-1. Understanding the host-to-firmware protocol the BCM4360 uses
-2. Extracting the firmware blob from the existing `wl` driver module
-3. Mapping the chip's internal core layout via BCMA backplane enumeration
-4. Adapting `brcmfmac` to load the firmware and speak the chip's protocol variant
+The project is now investigating a **BCDC-over-PCIe host transport** — reverse-engineering the proprietary `wl` driver's communication protocol and building an open-source implementation. This requires:
+
+1. ~~Extending brcmfmac with chip IDs and firmware mappings~~ ✅ Done (Phase 3)
+2. ~~Proving firmware download and ARM release work~~ ✅ Done (Phase 3)
+3. Reverse-engineering the BCDC-over-PCIe transport from the `wl` driver (Phase 4A)
+4. Building a minimal host-side implementation (Phase 4B-C)
+5. Deciding whether to integrate into brcmfmac or build standalone (Phase 4D)
 
 See [PLAN.md](PLAN.md) for the detailed execution plan.
 

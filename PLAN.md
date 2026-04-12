@@ -8,13 +8,11 @@ We have a live BCM4360 device on this machine with the `wl` driver loaded, givin
 
 ## Current Status
 
-**Phase 1 is complete.** Phase 1 analysis revealed that the BCM4360 is architecturally near-identical to the already-supported BCM43602 — same ARM CR4 CPU, same PCIe Gen2 core, same BCMA backplane. A minimal brcmfmac patch adding PCI/chip IDs, TCM rambase, and firmware mappings has been written, a build system exists, and testing instructions are documented.
+**Phases 1 and 3 are complete.** Phase 3 proved the brcmfmac driver-side code works end-to-end for BCM4360: chip recognition, BAR mapping, TCM access, firmware download, and ARM release all succeed. The blocker is **firmware protocol incompatibility** — the BCM4360 firmware speaks BCDC, not the msgbuf protocol that brcmfmac's PCIe backend requires. No msgbuf firmware exists for this chip.
 
-**The project has moved directly to patched brcmfmac bring-up** (Phase 3), bypassing MMIO tracing (Phase 2). The central question is now:
+**The project is now in Phase 4** — investigating whether a BCDC-over-PCIe host transport can be reverse-engineered from the `wl` driver and implemented to communicate with the existing BCM4360 firmware. This is a deeper reverse-engineering effort than the original "minimal patch" approach.
 
-> **How far does the real probe get, and where exactly does it fail?**
-
-The answer determines whether this is a small compatibility gap or a deeper reverse-engineering effort.
+> **Central question: Can we build a host-side BCDC transport that talks to the BCM4360 firmware over PCIe?**
 
 ---
 
@@ -62,87 +60,169 @@ See: `phase1/notes/brcmfmac_analysis.md`
 
 ---
 
-## Phase 3: Patched brcmfmac Bring-up ← CURRENT PHASE
+## Phase 3: Patched brcmfmac Bring-up ✅ COMPLETE
 
-This is now the primary path. A proof-of-concept patch exists; the focus is on running a clean test and capturing results.
+A proof-of-concept brcmfmac patch was built and tested through 10 diagnostic iterations.
 
 ### 3.1 — Rebuild module against exact running kernel ✅
-**Goal:** Eliminate kernel version mismatch as a failure mode.
+Module built against kernel 6.12.80 with BCM4360/4352 patches applied.
 
-**Status:** Complete. Host kernel updated to 6.12.80, matching module vermagic. Out-of-tree Makefile rewritten to compile the full brcmfmac source tree (all bus backends, protocols, platform modules) and the WCC vendor module, matching the running kernel config. BCM4360/4352 patch applied to pcie.c (chip.c and brcm_hw_ids.h were already patched).
+### 3.2 — Prepare firmware and NVRAM files ✅
+Firmware extracted from macOS `wl.ko`: `brcmfmac4360-pcie.bin` (442,233 bytes, v6.30.223.0).
+No NVRAM `.txt` file available. CLM blob not needed for basic bring-up.
 
-**Output:** `phase3/output/brcmfmac.ko` and `phase3/output/brcmfmac-wcc.ko` with correct vermagic and BCM4360 device aliases.
+### 3.3 — Diagnostic testing (10 iterations) ✅
 
-### 3.2 — Prepare firmware and NVRAM files
-**Goal:** Ensure the correct firmware layout is in place before testing.
+| Test | Result |
+|---|---|
+| Test 1 (diag.1-2) | Crash — rambase 0x180000 wrong, corrected to 0x0 |
+| Test 2 (diag.3) | BAR2 reads OK — TCM at offset 0, 640KB accessible |
+| Test 3 (diag.4) | B-bank (idx 4) access hangs PCIe bus |
+| Test 4 (diag.5-7) | A-banks powered on, full BAR2 map characterized |
+| Test 5 (diag.8) | Single u32 TCM write OK, ARM halt confirmed |
+| Test 6 (diag.9) | Bulk iowrite32 OK (256KB), memcpy_toio hangs |
+| Test 7 (diag.10-11) | FW download OK, ARM release crashes host |
+| Test 8 (diag.12) | Safe abort — FW download verified end-to-end, no crash |
+| Test 9 (diag.13) | BCM43602 msgbuf FW — no crash, init timeout |
+| Test 10 (diag.14) | BCM43602 FW with timeout logging — confirmed 5s timeout |
 
-**Method:** See the firmware workstreams tracker (`phase3/notes/firmware_workstreams.md`) for the full status of each component:
-- **Firmware binary** — place extracted firmware as `/lib/firmware/brcm/brcmfmac4360-pcie.bin`
-- **NVRAM** — determine source (SPROM, extracted, or none) and place as `.txt` if available
-- **CLM blob** — determine if needed and provide if so
+### 3.4 — Phase 3 Conclusion
 
-**Output:** Complete `/lib/firmware/brcm/` layout documented in test results.
+**All driver-side code is working.** The sole blocker is firmware protocol incompatibility:
 
-### 3.3 — Run first real test and capture results ✅ (Test 1 complete)
-**Goal:** Load the patched module and determine exactly where probe succeeds or fails.
+- BCM4360 firmware uses **BCDC protocol** (bcmcdc.c, rtecdc.c, pciedngl_*)
+- brcmfmac PCIe backend requires **msgbuf protocol** (shared ring buffers, version 5-7)
+- No msgbuf-compatible firmware exists for BCM4360 (chip predates msgbuf)
+- BCM43602 msgbuf firmware loads without crash but can't drive BCM4360 hardware (different D11 core rev 42 vs 44)
 
-**Test 1 Result (2026-04-12):** Module loaded, chip identified as BCM4360/3, firmware loaded, but **crashed in `brcmf_pcie_setup`** during firmware download to TCM. Root cause: rambase=0x180000 was wrong — the BCM4360's TCM is at backplane address 0x0, and the 2MB BAR2 cannot reach 0x180000+ramsize. Fix applied: rambase changed to 0x0.
+Key hardware discoveries:
+- BAR2 maps TCM at offset 0 (2MB window, only 640KB populated)
+- ARM CR4: 4 A-banks (128KB each) + 1 B-bank (must NOT access via BANKIDX)
+- BCM4360 requires 32-bit iowrite32 only — memcpy_toio (64-bit rep movsq) hangs PCIe bus
+- `brcmf_pcie_memcpy_toio32()` helper added for 32-bit firmware download
 
-**Test 2 (pending):** Reboot required after kernel oops, then re-test with corrected rambase.
-
-See: `phase3/results/test1_analysis.md`, `phase3/results/dmesg.1`, `phase3/results/dmesg.2`
-
-### 3.4 — Analyze results and iterate ← CURRENT
-**Goal:** Based on test results, determine the next action.
-
-**Test 1 outcome → rambase fix:** Core enumeration data confirmed TCM at backplane addr 0x0. Rambase corrected from 0x180000 to 0x0 in chip.c. Module rebuilt. Awaiting Test 2 after reboot.
-
-**Decision tree for Test 2:**
-- **Protocol version mismatch** → investigate firmware's shared memory format, may need Phase 2 tracing
-- **Firmware load failure** → check firmware format (TRX header?), try alternate variant
-- **NVRAM missing** → extract from SPROM or `wl` driver
-- **Dongle setup failure** → firmware loaded but init handshake failed, investigate with tracing
-- **Interface created** → proceed to Phase 4
-
----
-
-## Phase 4: Driver Development and Upstreaming
-
-### 4.1 — Validate and harden the patch
-**Goal:** Move from proof-of-concept to review-ready patch.
-
-**Actions:**
-- Separate BCM4360 and BCM4352 support unless both are strictly needed
-- Regenerate patch from a clean kernel tree (not from approximate hunks)
-- Update commit message with observed runtime behavior
-- Add any chip-specific quirks discovered during testing
-- Handle any BCM4360-specific initialization (e.g., USB core disable)
-
-### 4.2 — Test basic functionality
-**Goal:** Verify scanning, association, and data transfer work.
-
-**Method:** Load patched brcmfmac, scan for networks, connect, run throughput tests.
-
-**Output:** Test results, any remaining issues documented.
-
-### 4.3 — Submit upstream
-**Goal:** Get the patch accepted into the Linux kernel.
-
-**Method:** Submit to `linux-wireless@vger.kernel.org` and `brcm80211@lists.linux.dev`, CC Arend van Spriel. Follow kernel patch submission process.
-
-**Output:** BCM4360 support in mainline Linux.
+See: `phase3/results/diagnostic_findings.md`, `phase3/logs/diag.1-14`
 
 ---
 
-## Patch Assumptions
+## Phase 4: BCDC-over-PCIe Host Transport ← CURRENT PHASE
 
-The current proof-of-concept patch makes several assumptions that need validation. See `phase3/notes/patch_assumptions.md` for the full list with evidence and verification status.
+Phase 3 proved the driver-side PCIe bring-up works. The blocker is that brcmfmac speaks
+msgbuf but the BCM4360 firmware speaks BCDC. This phase investigates whether a BCDC-over-PCIe
+host transport can be built to communicate with the existing BCM4360 firmware.
 
-Key assumptions:
-- BCM4360 behaves like BCM43602-family chips — **partially verified** (similar but different memory layout)
-- ~~TCM rambase = `0x180000`~~ — **disproven**, corrected to `0x0` (confirmed by core enumeration and crash analysis)
-- Firmware mapping `brcmfmac4360-pcie` is sufficient for probe — **verified** (firmware loaded OK)
-- The extracted firmware uses msgbuf-compatible shared memory protocol (version 5-7) — **untested** (crash before firmware could run)
+See: GitHub issue #4 for the original proposal.
+
+### 4A — Transport Discovery
+
+**Goal:** Understand how BCDC is transported over PCIe by reverse-engineering the `wl` driver.
+
+#### 4A.1 — Static analysis of `wl.ko`
+Disassemble/decompile `wl.ko` to identify PCIe init functions, register definitions,
+doorbell/mailbox offsets, DMA ring setup, and BCDC transport code. The module has symbols,
+so this should be productive. This can shortcut or guide the live tracing work.
+
+#### 4A.2 — Firmware binary analysis
+Deeper analysis of BCM4360 firmware strings and binary structure. We already found
+`bcmcdc.c`, `rtecdc.c`, `pciedngl_*`. Look for shared memory layout definitions,
+ring descriptors, doorbell offsets, and handshake sequences the firmware expects.
+
+#### 4A.3 — Live tracing of `wl` driver
+Trace `wl` with `mmiotrace`/`ftrace` during:
+- Firmware release (ARM start)
+- Initial handshake
+- Interface creation
+- First scan
+
+Capture: MMIO register accesses (doorbells/mailboxes), interrupt behavior, DMA/ring
+setup, first host→firmware and firmware→host messages.
+
+**Deliverable:** Document describing boot handoff sequence, control path structure,
+data path (if observable), interrupt model, and buffer ownership rules.
+
+### 4B — Minimal PCIe + Firmware Harness
+
+**Goal:** Prove controlled host ↔ firmware communication.
+
+Build a minimal standalone kernel module that:
+- Reuses Phase 3 proven code: PCIe mapping, TCM access, iowrite32 path, ARM CR4 control
+- Loads firmware and releases ARM
+- Registers an interrupt handler (even a stub that acks and logs) **before** ARM release —
+  the wl firmware fires interrupts/DMA immediately, which is what crashed us in Phase 3
+- Performs a single control exchange based on Phase 4A findings
+- Logs all interactions
+
+**Success criteria:**
+- Firmware runs without crashing host
+- At least one control message exchanged successfully
+- Responses are stable and repeatable
+
+### 4C — Minimal BCDC Control Implementation
+
+**Goal:** Implement enough BCDC functionality for basic WiFi interaction.
+
+Implement:
+- BCDC command framing (request/response)
+- Query firmware version
+- Query MAC address
+- Bring interface up/down
+- Trigger scan
+
+**Success criteria:**
+- Commands return valid responses
+- Interface can be brought up
+- Scan completes or produces expected output
+
+### 4D — Integration Decision
+
+Based on Phase 4C results, choose direction:
+
+**Option 1: Standalone out-of-tree driver**
+- Clean architecture, avoids brcmfmac constraints
+- Faster to iterate on, but no shared code reuse
+
+**Option 2: Extend/fork brcmfmac**
+- Reuse shared code (chip recognition, BCMA, firmware loading)
+- Add alternate PCIe protocol path alongside msgbuf
+- Harder to land upstream but more maintainable long-term
+
+### Key Risks
+
+- PCIe transport may be more complex than BCDC-over-USB (the well-understood path)
+- `wl` firmware may rely on opaque driver-specific setup during init
+- DMA/interrupt behavior may cause instability under load
+- Data path (actual WiFi frames) will be significantly harder than control path
+- The control path may work but data path may prove infeasible
+
+---
+
+## Phase 5: Driver Development and Upstreaming
+
+Contingent on Phase 4 success.
+
+### 5.1 — Harden the implementation
+- Clean up the prototype into review-ready code
+- Handle edge cases, error paths, teardown
+- Test stability under sustained use
+
+### 5.2 — Test basic functionality
+Verify scanning, association, and data transfer work.
+
+### 5.3 — Submit upstream
+Submit to `linux-wireless@vger.kernel.org` and `brcm80211@lists.linux.dev`,
+CC Arend van Spriel. Follow kernel patch submission process.
+
+---
+
+## Patch Assumptions (Phase 3 outcomes)
+
+See `phase3/notes/patch_assumptions.md` for the full list.
+
+- BCM4360 behaves like BCM43602-family chips — **partially true** (same BCMA/CR4/PCIe, different memory layout and protocol)
+- ~~TCM rambase = `0x180000`~~ — **disproven**, corrected to `0x0`
+- Firmware mapping `brcmfmac4360-pcie` is sufficient for probe — **verified**
+- The extracted firmware uses msgbuf protocol — **disproven** (uses BCDC, the fundamental blocker)
+- memcpy_toio works for TCM writes — **disproven** (requires 32-bit iowrite32 only)
 
 ---
 
@@ -156,7 +236,10 @@ Key assumptions:
 
 ## Success Criteria
 
-- BCM4360 works with `brcmfmac` (scan, connect, transfer data)
-- No proprietary code in the driver (firmware is loaded as a separate binary, same as other brcmfmac chips)
+- BCM4360 works with an open-source Linux driver (scan, connect, transfer data)
+- No proprietary code in the driver (firmware loaded as a separate binary)
 - Patch accepted upstream or viable for out-of-tree use
-- Documented protocol for community reference
+- BCDC-over-PCIe transport protocol documented for community reference
+
+Even a partial result (e.g., control path works but data path proves infeasible) is
+valuable — it documents the protocol and informs future efforts.
