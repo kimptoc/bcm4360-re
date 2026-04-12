@@ -1,27 +1,18 @@
 # Phase 3: Testing the Patched brcmfmac Module
 
-**Date:** 2026-04-12
-**Module built against:** kernel 6.12.80 (running: 6.12.78 — minor mismatch, may need rebuild)
+**Date:** 2026-04-12 (updated)
+**Module built against:** kernel 6.12.80 (running: 6.12.80 — verified match)
 
 ## Built Modules
 
 - `phase3/output/brcmfmac.ko` — main brcmfmac driver with BCM4360/4352 support
 - `phase3/output/brcmfmac-wcc.ko` — WCC firmware vendor module (needed for our chip)
 
-## ⚠ Kernel Version Mismatch — Must Fix Before Testing
+## ✅ Kernel Version Match — Resolved
 
-The module was built against **6.12.80** but the running kernel is **6.12.78**. This mismatch will cause `insmod` to reject the module. **Do not use `--force`** for initial testing — it introduces avoidable failure modes that confound real results.
+Host kernel updated to 6.12.80, matching the module vermagic. No rebuild needed for version alignment.
 
-**Required:** Rebuild against the exact running kernel before the first test:
-1. Rebuild against the exact running kernel headers (preferred)
-2. Or update NixOS to get 6.12.80 kernel, then test
-
-Verify the module vermagic matches before loading:
-```bash
-modinfo phase3/output/brcmfmac.ko | grep vermagic
-uname -r
-# These must match
-```
+**Note:** The out-of-tree Makefile was rewritten to compile the full brcmfmac source (all bus backends, protocols, and platform modules) matching the kernel config. The original Makefile only compiled 5 source files, causing missing symbol errors at load time. The `brcmutil` kernel module must also be loaded before `brcmfmac` (`sudo modprobe brcmutil`).
 
 ## Pre-test Checklist
 
@@ -53,7 +44,8 @@ sudo nmcli device disconnect wlp3s0 2>/dev/null || true
 # 2. Unload the proprietary wl driver
 sudo modprobe -r wl
 
-# 3. Load our patched brcmfmac
+# 3. Load dependencies and our patched brcmfmac
+sudo modprobe brcmutil
 sudo insmod phase3/output/brcmfmac.ko
 sudo insmod phase3/output/brcmfmac-wcc.ko
 

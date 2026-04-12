@@ -66,14 +66,12 @@ See: `phase1/notes/brcmfmac_analysis.md`
 
 This is now the primary path. A proof-of-concept patch exists; the focus is on running a clean test and capturing results.
 
-### 3.1 — Rebuild module against exact running kernel
+### 3.1 — Rebuild module against exact running kernel ✅
 **Goal:** Eliminate kernel version mismatch as a failure mode.
 
-**Status:** Module was built against 6.12.80; running kernel is 6.12.78. Must rebuild.
+**Status:** Complete. Host kernel updated to 6.12.80, matching module vermagic. Out-of-tree Makefile rewritten to compile the full brcmfmac source tree (all bus backends, protocols, platform modules) and the WCC vendor module, matching the running kernel config. BCM4360/4352 patch applied to pcie.c (chip.c and brcm_hw_ids.h were already patched).
 
-**Method:** Update the Nix expression or build script to target the exact running kernel headers. Verify module `vermagic` matches before testing.
-
-**Output:** `phase3/output/brcmfmac.ko` with correct vermagic.
+**Output:** `phase3/output/brcmfmac.ko` and `phase3/output/brcmfmac-wcc.ko` with correct vermagic and BCM4360 device aliases.
 
 ### 3.2 — Prepare firmware and NVRAM files
 **Goal:** Ensure the correct firmware layout is in place before testing.
