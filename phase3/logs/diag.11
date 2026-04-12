@@ -1,0 +1,12 @@
+Apr 12 21:07:19 nixos kernel: brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+Apr 12 21:07:19 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.Apple Inc.-MacBookPro11,1.bin failed with error -2
+Apr 12 21:07:19 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txt failed with error -2
+Apr 12 21:07:19 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+Apr 12 21:07:19 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+Apr 12 21:07:19 nixos kernel: brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] enter_download_state...
+Apr 12 21:07:19 nixos kernel: brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] enter_download_state OK
+Apr 12 21:07:19 nixos kernel: brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] Download FW brcm/brcmfmac4360-pcie.bin (442233 bytes)
+Apr 12 21:07:19 nixos kernel: brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] FW download complete
+Apr 12 21:07:19 nixos kernel: brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] Shared RAM marker cleared
+Apr 12 21:07:19 nixos kernel: brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] Bringing ARM out of halt (resetintr=0xb80ef000)...
+Apr 12 21:07:19 nixos kernel: brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: [4360] ARM released, waiting for FW init...
