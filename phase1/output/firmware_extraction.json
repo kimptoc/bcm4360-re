@@ -1,0 +1,67 @@
+{
+  "timestamp": "2026-04-12T17:37:55.485830",
+  "source": "/run/booted-system/kernel-modules/lib/modules/6.12.78/kernel/net/wireless/wl.ko",
+  "source_size": 7624256,
+  "firmwares": [
+    {
+      "variant": "4352pci",
+      "name": "4352pci-bmac/debug-ag-nodis-aoe-ndoe",
+      "version": "2013.12.15.193036",
+      "date": "2013/12/15 19:30:36",
+      "tag": "4352pci-bmac/debug-ag-nodis-aoe-ndoe Version: 6.30.223.0 CRC: ff98ca92 Date: Sun 2013-12-15 19:30:36 PST FWID 01-9413fb21",
+      "symbol": "dlarray_4352pci",
+      "file_offset": "0x4A5CB0",
+      "size": 442233,
+      "size_hex": "0x6BF79",
+      "output_file": "/home/kimptoc/bcm4360-re/phase1/output/firmware_4352pci.bin",
+      "analysis": {
+        "size": 442233,
+        "size_hex": "0x6BF79",
+        "size_kb": "431.9KB",
+        "vector_table": [
+          "0xB80EF000",
+          "0xB82EF000",
+          "0xB839F000",
+          "0xB844F000",
+          "0xB852F000",
+          "0xB860F000",
+          "0xB86EF000",
+          "0xB87CF000"
+        ],
+        "has_arm_vectors": false,
+        "total_strings": 2701,
+        "arm_bl_instructions_first_64k": 99
+      }
+    },
+    {
+      "variant": "4350pci",
+      "name": "4350pci-bmac/debug-ag-nodis-aoe-ndoe",
+      "version": "2013.12.15.195433",
+      "date": "2013/12/15 19:54:33",
+      "tag": "4350pci-bmac/debug-ag-nodis-aoe-ndoe Version: 6.30.223.0 CRC: ffcf9e98 Date: Sun 2013-12-15 19:54:33 PST FWID 01-518e42f8",
+      "symbol": "dlarray_4350pci",
+      "file_offset": "0x511D20",
+      "size": 445717,
+      "size_hex": "0x6CD15",
+      "output_file": "/home/kimptoc/bcm4360-re/phase1/output/firmware_4350pci.bin",
+      "analysis": {
+        "size": 445717,
+        "size_hex": "0x6CD15",
+        "size_kb": "435.3KB",
+        "vector_table": [
+          "0xBC3EF180",
+          "0xBC68F180",
+          "0xBC73F180",
+          "0xBC7EF180",
+          "0xBC8CF180",
+          "0xBC9AF180",
+          "0xBCA8F180",
+          "0xBCB6F180"
+        ],
+        "has_arm_vectors": false,
+        "total_strings": 2704,
+        "arm_bl_instructions_first_64k": 99
+      }
+    }
+  ]
+}
