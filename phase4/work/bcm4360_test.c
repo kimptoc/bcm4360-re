@@ -898,6 +898,15 @@ static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 		}
 	}
 
+	/* When heading to level 5, skip ARM halt and FW download entirely.
+	 * arm_halt() destabilizes the PCIe link on this Gen1 x1 device —
+	 * machine crashes ~1-2s after halt. Level 5 does its own halt. */
+	if (max_level >= 5) {
+		dev_info(&pdev->dev, "[level 3] Skipping ARM halt + FW download (max_level=%d)\n", max_level);
+		dev_info(&pdev->dev, "[level 3] PASS — BAR2 mapped, ready for level 5\n");
+		return 0;
+	}
+
 	/* === CANARY 3: about to halt ARM === */
 	pr_emerg("bcm4360: CANARY 3 — AER cleared, about to arm_halt()\n");
 	mdelay(100);
@@ -922,16 +931,6 @@ static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 	if (val & BCMA_RESET_CTL_RESET) {
 		dev_err(&pdev->dev, "[level 3] FAIL — ARM still in reset, TCM not writable\n");
 		return -EIO;
-	}
-
-	/* Skip firmware download if heading to level 5 — the bulk TCM write
-	 * (442KB via MMIO) crashes the PCIe link on this Gen1 x1 device.
-	 * Level 5 will write SROM + release ARM without needing FW first
-	 * (we can test SROM separately from firmware boot). */
-	if (max_level >= 5) {
-		dev_info(&pdev->dev, "[level 3] Skipping FW download (max_level=%d, bulk write crashes PCIe)\n", max_level);
-		dev_info(&pdev->dev, "[level 3] PASS — ARM halted, BAR2 mapped, ready for level 5\n");
-		return 0;
 	}
 
 	/* Download firmware */
