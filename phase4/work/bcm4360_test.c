@@ -988,7 +988,27 @@ static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 	}
 	/* === CANARY 6: bulk write survived === */
 	pr_emerg("bcm4360: CANARY 6 — bulk TCM write complete\n");
-	mdelay(100);
+	mdelay(500);
+
+	/* Clear any AER errors accumulated during bulk write */
+	{
+		int aer_pos = pci_find_ext_capability(pdev, PCI_EXT_CAP_ID_ERR);
+		if (aer_pos) {
+			u32 uncorr, corr;
+			pci_read_config_dword(pdev, aer_pos + 0x04, &uncorr);
+			pci_read_config_dword(pdev, aer_pos + 0x10, &corr);
+			dev_info(&pdev->dev,
+				 "[level 3] AER post-write: uncorr=0x%08x corr=0x%08x\n",
+				 uncorr, corr);
+			if (uncorr)
+				pci_write_config_dword(pdev, aer_pos + 0x04, uncorr);
+			if (corr)
+				pci_write_config_dword(pdev, aer_pos + 0x10, corr);
+		}
+	}
+
+	pr_emerg("bcm4360: CANARY 6b — AER cleared, about to verify\n");
+	mdelay(200);
 
 	dev_info(&pdev->dev, "[level 3] FW write complete\n");
 
