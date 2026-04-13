@@ -1194,24 +1194,10 @@ static int level5_full_init(struct bcm4360_dev *dev)
 	/* Mask PCIe interrupts */
 	pcie_mask_irqs(dev);
 
-	/* Re-download firmware (ARM may have modified TCM) */
-	{
-		const struct firmware *fw;
-		const u32 *src;
-		u32 word_count;
-
-		ret = request_firmware(&fw, FW_NAME, &pdev->dev);
-		if (ret) {
-			dev_err(&pdev->dev, "[level 5] Firmware load failed: %d\n", ret);
-			return ret;
-		}
-		src = (const u32 *)fw->data;
-		word_count = (fw->size + 3) / 4;
-		for (i = 0; i < word_count; i++)
-			iowrite32(src[i], dev->tcm + (i * 4));
-		dev_info(&pdev->dev, "[level 5] FW re-downloaded (%zu bytes)\n", fw->size);
-		release_firmware(fw);
-	}
+	/* Skip firmware re-download — level 3 already wrote it to TCM and
+	 * the bulk TCM write crashes the PCIe link on this Gen1 x1 device.
+	 * ARM is halted so TCM should be intact. */
+	dev_info(&pdev->dev, "[level 5] Skipping FW re-download (using level 3 copy)\n");
 
 	/* Dump SPROM/OTP from host side (before firmware can interfere) */
 	dump_sprom_and_otp(dev);
