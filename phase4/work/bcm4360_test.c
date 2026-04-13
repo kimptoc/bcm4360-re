@@ -651,20 +651,22 @@ static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 	mdelay(100);
 
 	for (i = 0; i < word_count; i++) {
+		/* Single-word pacing for Gen1 x1: barrier + write + readback
+		 * every word to prevent PCIe write-post buffer overflow.
+		 * Crashed at DWORD 0 with 16-word pacing — even one posted
+		 * write without immediate flush can overflow this link. */
+		wmb();
 		iowrite32(src[i], dev->tcm + (i * 4));
-		/* Pace writes: read-back every 16 DWORDs (64 bytes) to flush
-		 * PCIe write buffers — Gen1 x1 link overflows at 64 DWORDs (256B) */
-		if ((i & 0x0F) == 0x0F) {
-			val = ioread32(dev->tcm + (i * 4));
-			if (val == 0xFFFFFFFF) {
-				dev_err(&pdev->dev,
-					"[level 3] FAIL — device died mid-transfer at DWORD %u\n", i);
-				release_firmware(fw);
-				return -EIO;
-			}
-			/* Let PCIe link drain between chunks */
-			udelay(50);
+		val = ioread32(dev->tcm + (i * 4));  /* flush posted write */
+		if (val == 0xFFFFFFFF) {
+			dev_err(&pdev->dev,
+				"[level 3] FAIL — device died at DWORD %u\n", i);
+			release_firmware(fw);
+			return -EIO;
 		}
+		/* Extra drain pause every 16 DWORDs */
+		if ((i & 0x0F) == 0x0F)
+			udelay(20);
 		/* Progress canary every 1024 DWORDs so crash shows how far we got */
 		if ((i & 0x3FF) == 0)
 			pr_emerg("bcm4360: TCM write progress: DWORD %u/%u\n",

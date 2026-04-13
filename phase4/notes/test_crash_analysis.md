@@ -211,9 +211,31 @@ delay is also too short to allow the link to fully drain.
 3. **Add progress canaries**: `pr_emerg` every 1024 DWORDs so the next crash
    (if any) reveals exactly how far the write got before dying
 
+## Canary progress test (2026-04-13, 16 DWORD + 50μs pacing)
+
+### Result: crashed at DWORD 0
+
+Progress canary showed "DWORD 0/XXXXX" but no "DWORD 1024/XXXXX" — the machine
+locks up within the first 16 `iowrite32` calls, before the first paced readback
+even triggers.
+
+### Diagnosis
+
+16-word chunks are still too many posted writes for Gen1 x1. The write-post
+buffer fills before the first readback at word 15 can flush it. Since reads to
+BAR2 work fine (CANARY 2→3 pass, TCM[0x00] and TCM[0x04] return valid data),
+the problem is specifically **posted writes accumulating without flush**.
+
+### Fix: single-word pacing
+
+- `wmb()` before each `iowrite32` to serialize the write
+- `ioread32` after **every single** `iowrite32` to flush posted writes immediately
+- Extra `udelay(20)` every 16 words to let the link drain
+- This will be slow (~160K readbacks for a 640KB firmware) but correctness first
+
 ## Next Steps
 
-1. Build and test with tighter pacing (16 DWORDs + 50μs)
-2. If still crashing, check progress canaries for how far it gets
-3. If crash is near the start — may need single-word pacing or `wmb()` barriers
-4. If crash is near the end — may be a specific TCM address region issue
+1. Test single-word pacing (wmb + write + readback per word)
+2. If it works, measure time and consider relaxing to 2- or 4-word pacing
+3. If still crashing at DWORD 0 — problem is not write pacing but something
+   else (e.g., ARM not properly halted, TCM not writable in current state)
