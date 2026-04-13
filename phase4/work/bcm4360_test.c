@@ -1223,36 +1223,91 @@ static int level5_full_init(struct bcm4360_dev *dev)
 	 * Firmware reads board config from SROM/OTP. Host CC SROM returns 0x0000,
 	 * firmware gets 0xFFFF. Try multiple approaches to provide board data. */
 
-	/* --- Approach: Switch firmware to OTP CIS path ---
-	 * SROM_CTRL=0x23: SRC_PRSNT(bit0)=1, SRC_OTPSEL(bit4)=0
-	 * Firmware sees "SPROM present" → reads SPROM → gets 0xFFFF.
-	 * Fix: clear SRC_PRSNT, set SRC_OTPSEL → firmware reads OTP CIS.
-	 * OTP CIS data lives at PCIe+0x800 (auto-loaded from OTP at reset). */
+	/* --- Approach: Write minimal SROM11 to PCIe SROM shadow ---
+	 * PCIe+0x800 is WRITABLE and contains CIS data. The firmware reads
+	 * SROM through the PCIe core. Write a minimal SROM11 image with
+	 * valid boardtype/boardrev over the CIS data. The SROM11 format
+	 * uses 16-bit words; we write as 32-bit (2 words per DWORD).
+	 *
+	 * Also scan other PCIe core offsets to find where firmware reads. */
 	{
-		u32 srom_ctrl, new_ctrl;
+		u32 offsets_to_check[] = {0x400, 0x800, 0xC00, 0x1000};
+		int noff = sizeof(offsets_to_check) / sizeof(offsets_to_check[0]);
+		int j;
 
-		srom_ctrl = bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_CTRL);
-		dev_info(&pdev->dev, "[level 5] SROM_CTRL before = 0x%08x\n",
-			 srom_ctrl);
+		/* Scan multiple PCIe core regions */
+		for (j = 0; j < noff; j++) {
+			u32 off = offsets_to_check[j];
+			u32 w0 = bp_read32(dev, PCIE_CORE_BASE + off);
+			u32 w1 = bp_read32(dev, PCIE_CORE_BASE + off + 4);
+			int writable;
 
-		/* Clear SRC_PRSNT (bit 0), set SRC_OTPSEL (bit 4) */
-		new_ctrl = (srom_ctrl & ~0x01) | 0x10;
-		bp_write32(dev, CHIPCOMMON_BASE + CC_SROM_CTRL, new_ctrl);
-		val = bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_CTRL);
-		dev_info(&pdev->dev, "[level 5] SROM_CTRL after = 0x%08x (wrote 0x%08x)\n",
-			 val, new_ctrl);
+			/* Test writability */
+			bp_write32(dev, PCIE_CORE_BASE + off, 0xBAADF00D);
+			writable = (bp_read32(dev, PCIE_CORE_BASE + off) == 0xBAADF00D);
+			if (writable)
+				bp_write32(dev, PCIE_CORE_BASE + off, w0); /* restore */
 
-		/* Verify CC SROM reads changed */
-		bp_write32(dev, CHIPCOMMON_BASE + CC_SROM_ADDR, 0);
-		udelay(10);
-		val = bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_DATA);
-		dev_info(&pdev->dev, "[level 5] CC SROM[0] with OTP mode = 0x%04x\n",
-			 val & 0xFFFF);
-		bp_write32(dev, CHIPCOMMON_BASE + CC_SROM_ADDR, 65);
-		udelay(10);
-		val = bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_DATA);
-		dev_info(&pdev->dev, "[level 5] CC SROM[65] with OTP mode = 0x%04x\n",
-			 val & 0xFFFF);
+			dev_info(&pdev->dev,
+				 "[level 5] PCIe+0x%03x: [0]=0x%08x [1]=0x%08x %s\n",
+				 off, w0, w1, writable ? "WRITABLE" : "read-only");
+		}
+
+		/* Write minimal SROM11 image to PCIe+0x800 (the writable area).
+		 * SROM11: 512 words (1024 bytes = 256 DWORDs).
+		 * Each 32-bit write = 2 consecutive 16-bit SROM words.
+		 * Word layout: SROM[2n] = low 16 bits, SROM[2n+1] = high 16 bits.
+		 *
+		 * Key SROM11 words:
+		 *   Word  48: sromrev = 11 (0x000B)
+		 *   Word  65: devid = 0x43a0
+		 *   Word  66: boardtype = 0x0552
+		 *   Word  67: boardrev = 0x1101
+		 *   Word  70: boardflags_lo = 0x1001
+		 *   Word  71: boardflags_hi = 0x1040
+		 *   Word  72: boardflags2_lo = 0x0002
+		 */
+		dev_info(&pdev->dev, "[level 5] Writing SROM11 to PCIe+0x800...\n");
+
+		/* Clear the entire 256-DWORD region first */
+		for (i = 0; i < 256; i++)
+			bp_write32(dev, PCIE_CORE_BASE + 0x800 + i * 4, 0);
+
+		/* Write key SROM11 fields (as 32-bit: low word | high word << 16) */
+		/* DWORD 24 = SROM words 48-49: sromrev=11, padding */
+		bp_write32(dev, PCIE_CORE_BASE + 0x800 + 24 * 4,
+			   0x0000000B); /* sromrev=11 */
+
+		/* DWORD 32 = SROM words 64-65: subvid, devid */
+		bp_write32(dev, PCIE_CORE_BASE + 0x800 + 32 * 4,
+			   0x43a0106B); /* subvid=0x106B, devid=0x43a0 */
+
+		/* DWORD 33 = SROM words 66-67: boardtype, boardrev */
+		bp_write32(dev, PCIE_CORE_BASE + 0x800 + 33 * 4,
+			   0x11010552); /* boardtype=0x0552, boardrev=0x1101 */
+
+		/* DWORD 35 = SROM words 70-71: boardflags lo/hi */
+		bp_write32(dev, PCIE_CORE_BASE + 0x800 + 35 * 4,
+			   0x10401001); /* bfl_lo=0x1001, bfl_hi=0x1040 */
+
+		/* DWORD 36 = SROM words 72-73: boardflags2 lo/hi */
+		bp_write32(dev, PCIE_CORE_BASE + 0x800 + 36 * 4,
+			   0x00000002); /* bfl2_lo=0x0002, bfl2_hi=0 */
+
+		/* DWORD 44 = SROM words 88-89: ccode, regrev */
+		bp_write32(dev, PCIE_CORE_BASE + 0x800 + 44 * 4,
+			   0x00005830); /* ccode="X0" (0x5830), regrev=0 */
+
+		/* Antenna: aa2g, aa5g */
+		/* DWORD 49 = SROM words 98-99: antavail/gain */
+		bp_write32(dev, PCIE_CORE_BASE + 0x800 + 49 * 4,
+			   0x00070007); /* aa2g=7, aa5g=7 */
+
+		/* Verify key words */
+		val = bp_read32(dev, PCIE_CORE_BASE + 0x800 + 33 * 4);
+		dev_info(&pdev->dev,
+			 "[level 5] SROM11 verify: DWORD33=0x%08x (boardtype=0x%04x)\n",
+			 val, val & 0xFFFF);
 	}
 
 	/* Register ISR */
@@ -1460,10 +1515,14 @@ static int bcm4360_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (ret || max_level < 4)
 		goto done;
 
-	/* Level 4: ARM release (NO DMA, NO bus mastering) */
-	ret = level4_arm_release_safe(dev);
-	if (ret || max_level < 5)
+	/* Level 4: ARM release (NO DMA, NO bus mastering)
+	 * SKIP when going to level 5 — level 4 crashes the machine ~50% of the
+	 * time (firmware corrupts PCIe link after ~1-2s), and level 5 does its
+	 * own ARM halt + FW re-download + release cycle. */
+	if (max_level == 4) {
+		ret = level4_arm_release_safe(dev);
 		goto done;
+	}
 
 	/* Level 5: Full init with shared_info + DMA */
 	ret = level5_full_init(dev);
