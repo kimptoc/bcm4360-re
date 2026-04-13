@@ -1187,11 +1187,22 @@ static int level5_full_init(struct bcm4360_dev *dev)
 	bool irq_registered = false;
 	int ret;
 
-	dev_info(&pdev->dev, "[level 5] Full init: FW + NVRAM + ARM release...\n");
+	dev_info(&pdev->dev, "[level 5] Full init: SROM write + ARM release...\n");
 
-	if (!dev->tcm || !dev->regs) {
-		dev_err(&pdev->dev, "[level 5] FAIL — BAR0/BAR2 not mapped\n");
+	if (!dev->regs) {
+		dev_err(&pdev->dev, "[level 5] FAIL — BAR0 not mapped\n");
 		return -EINVAL;
+	}
+
+	/* Map BAR2 (TCM) if not already mapped by level 3 */
+	if (!dev->tcm) {
+		dev_info(&pdev->dev, "[level 5] Mapping BAR2 (TCM)...\n");
+		dev->tcm = pci_iomap(pdev, 2, BAR2_SIZE);
+		if (!dev->tcm) {
+			dev_err(&pdev->dev, "[level 5] FAIL — pci_iomap BAR2\n");
+			return -ENOMEM;
+		}
+		dev_info(&pdev->dev, "[level 5] BAR2 mapped at %px\n", dev->tcm);
 	}
 
 	/* Halt ARM (may still be running from level 4) */
@@ -1507,10 +1518,17 @@ static int bcm4360_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (ret || max_level < 3)
 		goto done;
 
-	/* Level 3: TCM + halt ARM + FW download */
-	ret = level3_tcm_and_fw(dev);
-	if (ret || max_level < 4)
-		goto done;
+	/* Level 3: TCM + halt ARM + FW download
+	 * SKIP entirely when heading to level 5 — level 5 maps BAR2 itself
+	 * and does its own ARM halt + FW download. Running level 3 first
+	 * destabilizes the PCIe link on this Gen1 x1 device. */
+	if (max_level >= 5) {
+		dev_info(&pdev->dev, "[level 3] SKIPPED (going to level 5)\n");
+	} else {
+		ret = level3_tcm_and_fw(dev);
+		if (ret || max_level < 4)
+			goto done;
+	}
 
 	/* Level 4: ARM release (NO DMA, NO bus mastering)
 	 * SKIP when going to level 5 — level 4 crashes the machine ~50% of the
