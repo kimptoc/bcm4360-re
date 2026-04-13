@@ -1,0 +1,27 @@
+[ 1314.090901] bcm4360_test 0000:03:00.0: BCM4360 test module remove
+[ 1314.090906] bcm4360_test 0000:03:00.0: BCM4360 test module remove done (device left enabled)
+[ 1315.136001] bcm4360_test 0000:03:00.0: === BCM4360 test: max_level=1 ===
+[ 1315.136061] bcm4360_test 0000:03:00.0: [level 0] PCI bind only — no hardware access
+[ 1315.136063] bcm4360_test 0000:03:00.0: [level 0] PASS
+[ 1315.136064] bcm4360_test 0000:03:00.0: [level 1] Reading PCI config space...
+[ 1315.136075] bcm4360_test 0000:03:00.0: [level 1] Vendor:Device = 14e4:43a0  Subsys = 106b:0112
+[ 1315.136083] bcm4360_test 0000:03:00.0: [level 1] CMD=0x0002 STATUS=0x0010
+[ 1315.136085] bcm4360_test 0000:03:00.0: [level 1]   IO=0 MEM=1 BusMaster=0
+[ 1315.136096] bcm4360_test 0000:03:00.0: [level 1] PM cap at 0x48, PMCSR=0x4008, state=D0
+[ 1315.136101] bcm4360_test 0000:03:00.0: [level 1] Post-wake CMD=0x0002 (MEM=1)
+[ 1315.136106] bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN (config 0x80) = 0x18003000
+[ 1315.136110] bcm4360_test 0000:03:00.0: [level 1] BAR0 raw=0xb0600004 phys=0xb0600000 len=0x8000
+[ 1315.136112] bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18000000 (ChipCommon)...
+[ 1315.136119] bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18000000
+[ 1315.136121] bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18003000 (PCIe core)...
+[ 1315.136127] bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18003000
+[ 1315.136131] bcm4360_test 0000:03:00.0: [level 1] BAR2 raw=0xb0400004 phys=0xb0400000 len=0x200000
+[ 1315.136151] bcm4360_test 0000:03:00.0: [level 1] PCIe link: speed=1 width=1 ctrl=0x0143
+[ 1315.136163] bcm4360_test 0000:03:00.0: [level 1] AER: uncorr=0x00008000 corr=0x00002000
+[ 1315.136167] bcm4360_test 0000:03:00.0: [level 1] Cleared AER uncorrectable errors
+[ 1315.136171] bcm4360_test 0000:03:00.0: [level 1] Cleared AER correctable errors
+[ 1315.136176] bcm4360_test 0000:03:00.0: [level 1] AER after clear: uncorr=0x00000000 corr=0x00000000
+[ 1315.136178] bcm4360_test 0000:03:00.0: [level 1] Enabling bus mastering...
+[ 1315.136186] bcm4360_test 0000:03:00.0: [level 1] CMD after bus master: 0x0006 (MEM=1 MASTER=1)
+[ 1315.136188] bcm4360_test 0000:03:00.0: [level 1] PASS
+[ 1315.136190] bcm4360_test 0000:03:00.0: === Test complete: level=1 result=0 ===

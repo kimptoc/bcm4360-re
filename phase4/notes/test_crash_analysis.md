@@ -357,11 +357,43 @@ performs PCIe init that's incompatible with our setup.
 3. **Monitor AER in a tight loop**: poll AER status immediately after release
    to catch the fatal error before it propagates
 
+## Cold boot testing (2026-04-13, issue #6)
+
+### Setup
+
+Blacklisted `wl` module (`boot.blacklistedKernelModules = [ "wl" ]` in NixOS
+config) so it never loads. Device was claimed by `bcma-pci-bridge` instead —
+required adding unbind logic to test.sh before our module can claim the device.
+
+### Results: levels 0-3 all PASS (tests 23-26)
+
+Cold boot behavior is essentially identical to warm-handoff (post-wl) testing.
+
+### Cold boot vs warm-handoff comparison
+
+| Property | Cold boot | After wl unload | Verdict |
+|---|---|---|---|
+| STATUS | 0x0010 | 0x0810 | SSE bit (0x0800) is wl artifact |
+| AER (first probe) | uncorr=0x8000 corr=0x2000 | same | NOT a wl artifact — BIOS/bcma |
+| AER (after clear) | 0x00000000 | 0x00000000 | Same |
+| PCIe link | Gen1 x1 | Gen1 x1 | Intrinsic hardware state |
+| PMCSR | 0x4008 (D0) | 0x4008 (D0) | Same |
+| ARM IOCTL | 0x00000020 | 0x00000020 | Same |
+| BAR0_WIN | 0x18003000 | 0x18001000 | Different — wl sets window |
+| FW download | PASS (0.76s) | PASS (0.76s) | Same |
+
+### Key conclusions (addresses issue #6)
+
+1. **Behavior is intrinsic, not wl side-effects.** The only wl artifact is
+   the SSE status bit (0x0800) — cosmetic, not functional.
+2. **AER errors exist on cold boot** — they come from BIOS/EFI enumeration or
+   bcma-pci-bridge, not from wl teardown.
+3. **Gen1 x1 is the hardware's native state**, not degradation from wl.
+4. **Test script now handles cold boot** — unbinds bcma-pci-bridge automatically.
+
 ## Next Steps
 
-1. Try level 4 with shorter timeout (re-halt at 50ms) to see if we can catch
-   the firmware alive before it crashes the host
-2. Investigate whether the firmware can be prevented from accessing PCIe
-   core registers while still running
-3. Consider whether this firmware is fundamentally incompatible (FullMAC CDC
-   vs msgbuf protocol) and if further level 4 work is productive
+1. Try level 4 on cold boot — firmware hasn't been tainted by wl state
+2. If still crashes, try shorter timeout (re-halt at 50ms)
+3. Consider whether this firmware is fundamentally incompatible and if further
+   level 4 work is productive

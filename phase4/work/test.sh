@@ -49,6 +49,17 @@ for mod in brcmfmac-wcc brcmfmac wl bcm4360_test; do
     fi
 done
 
+# Unbind from bcma-pci-bridge if it claimed the device (happens on cold
+# boot without wl). Our module needs direct PCI access, not BCMA bus.
+if [ -e "/sys/bus/pci/devices/0000:$PCI_DEV/driver" ]; then
+    BOUND_DRV=$(basename "$(readlink /sys/bus/pci/devices/0000:$PCI_DEV/driver)")
+    if [ "$BOUND_DRV" != "bcm4360_test" ]; then
+        echo "  Unbinding from $BOUND_DRV..."
+        echo "0000:$PCI_DEV" > "/sys/bus/pci/devices/0000:$PCI_DEV/driver/unbind" 2>/dev/null || true
+        sleep 1
+    fi
+fi
+
 echo "  Waiting 10s for hardware to quiesce after module unload..."
 sleep 10
 
