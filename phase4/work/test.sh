@@ -103,6 +103,17 @@ else
     echo "  (setpci not found, skipping hardware checks)"
 fi
 
+# Install NVRAM file if present and not already installed
+NVRAM_SRC="$WORK_DIR/brcmfmac4360-pcie.txt"
+NVRAM_DST="/lib/firmware/brcm/brcmfmac4360-pcie.txt"
+if [ -f "$NVRAM_SRC" ]; then
+    if [ ! -f "$NVRAM_DST" ] || ! cmp -s "$NVRAM_SRC" "$NVRAM_DST"; then
+        echo "--- Installing NVRAM file ---"
+        cp "$NVRAM_SRC" "$NVRAM_DST"
+        echo "  Copied to $NVRAM_DST"
+    fi
+fi
+
 echo ""
 
 run_level() {
