@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 # BCM4360 staged test harness
 # Usage: sudo ./test.sh [max_level]
-#   Levels: 0=bind, 1=config+wake, 2=BAR0 regs, 3=full init
-#   Default: auto-advance through 0→1→2, stop before 3
+#   Levels: 0=bind, 1=config+wake, 2=BAR0 regs, 3=TCM+FW,
+#           4=ARM release (no DMA), 5=full init (DMA+olmsg)
+#   Default: auto-advance through 0→1→2→3, stop before 4
 set -e
 
 WORK_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Find setpci/lspci (may not be on PATH in NixOS)
+SETPCI=$(command -v setpci 2>/dev/null || find /nix/store -name "setpci" -path "*/bin/*" 2>/dev/null | head -1)
+LSPCI=$(command -v lspci 2>/dev/null || find /nix/store -name "lspci" -path "*/bin/*" 2>/dev/null | head -1)
+PCI_DEV="03:00.0"
 LOG_DIR="$WORK_DIR/../logs"
 MODULE="$WORK_DIR/bcm4360_test.ko"
 MAX_LEVEL="${1:-auto}"
@@ -43,8 +49,50 @@ for mod in brcmfmac-wcc brcmfmac wl bcm4360_test; do
     fi
 done
 
-echo "  Waiting 5s for hardware to quiesce..."
-sleep 5
+echo "  Waiting 10s for hardware to quiesce after module unload..."
+sleep 10
+
+# Verify device is still visible and healthy on PCI bus
+echo "--- PCI device pre-flight check ---"
+if [ -n "$LSPCI" ]; then
+    $LSPCI -s $PCI_DEV 2>/dev/null || echo "  WARNING: device not visible!"
+else
+    echo "  (lspci not found, skipping)"
+fi
+
+if [ -n "$SETPCI" ]; then
+    # Check vendor ID — 0xFFFF means device is gone
+    PCI_VID=$($SETPCI -s $PCI_DEV 0x00.w 2>/dev/null || echo "FAIL")
+    echo "  Vendor ID = $PCI_VID (expect 14e4)"
+    if [ "$PCI_VID" = "ffff" ] || [ "$PCI_VID" = "FAIL" ]; then
+        echo "  *** ABORT: device not responding in config space ***"
+        echo "  The device may need a full power cycle (reboot) to recover."
+        exit 1
+    fi
+
+    # Check power state
+    PCI_PM=$($SETPCI -s $PCI_DEV 0x4c.w 2>/dev/null || echo "FAIL")
+    echo "  PMCSR = $PCI_PM (D0=xx00/xx08, D3=xx03)"
+
+    # Check AER errors
+    AER_UNCORR=$($SETPCI -s $PCI_DEV 0x104+4.l 2>/dev/null || echo "FAIL")
+    AER_CORR=$($SETPCI -s $PCI_DEV 0x104+16.l 2>/dev/null || echo "FAIL")
+    echo "  AER uncorr=$AER_UNCORR corr=$AER_CORR"
+
+    # Clear AER errors before loading module
+    if [ "$AER_UNCORR" != "00000000" ] && [ "$AER_UNCORR" != "FAIL" ]; then
+        echo "  Clearing AER uncorrectable errors..."
+        $SETPCI -s $PCI_DEV 0x104+4.l=$AER_UNCORR 2>/dev/null
+    fi
+    if [ "$AER_CORR" != "00000000" ] && [ "$AER_CORR" != "FAIL" ]; then
+        echo "  Clearing AER correctable errors..."
+        $SETPCI -s $PCI_DEV 0x104+16.l=$AER_CORR 2>/dev/null
+    fi
+else
+    echo "  (setpci not found, skipping hardware checks)"
+fi
+
+echo ""
 
 run_level() {
     local level=$1
@@ -111,8 +159,8 @@ run_level() {
 }
 
 if [ "$MAX_LEVEL" = "auto" ]; then
-    # Auto-advance through levels 0-2
-    for level in 0 1 2; do
+    # Auto-advance through levels 0-3 (safe levels)
+    for level in 0 1 2 3; do
         if ! run_level "$level"; then
             echo ""
             echo "=== STOPPED at level $level ==="
@@ -121,8 +169,9 @@ if [ "$MAX_LEVEL" = "auto" ]; then
         fi
     done
     echo ""
-    echo "=== Levels 0-2 PASSED ==="
-    echo "Level 3 (full init with ARM release) available: sudo ./test.sh 3"
+    echo "=== Levels 0-3 PASSED ==="
+    echo "Level 4 (ARM release, no DMA): sudo ./test.sh 4"
+    echo "Level 5 (full init with DMA):  sudo ./test.sh 5"
 else
     run_level "$MAX_LEVEL"
 fi

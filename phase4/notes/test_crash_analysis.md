@@ -139,9 +139,52 @@ for this link speed. When the PCIe write buffer overflows:
 | Mid-transfer death check | If readback returns 0xFFFFFFFF, abort immediately |
 | AER check before bulk write | Clear and verify AER errors after BAR2 map, before FW download |
 
+## Level 3 — continued crash analysis (2026-04-13, post-pacing fix)
+
+### Status
+
+Level 3 still crashes the machine with **0 bytes in dmesg** (test.10–13), even
+after applying the pacing fixes from the previous commit. The pacing fixes
+(readback every 64 DWORDs + 10μs udelay) were confirmed compiled and loaded,
+but had no effect — all four attempts produced identical hard lockups.
+
+### Key observation: crash may not be the bulk write
+
+The fact that 0 bytes of level 3 output appear in dmesg suggests the crash
+happens very early — possibly before even the first `dev_info` can flush.
+Possible crash points, in order:
+
+1. **`pci_iomap(BAR2)`** — mapping 640KB of BAR2 after level 2 unload/reload
+2. **First TCM read** — `tcm_read32(dev, 0)` via BAR2 MMIO
+3. **`arm_halt()`** — `bp_write32` to ARM wrapper (0x18102000+offset) uses
+   BAR0 window; rapid config space + MMIO writes may overwhelm Gen1 x1 link
+4. **Bulk TCM write loop** — the previously suspected cause, but if (1)–(3)
+   crash first, the pacing fix is irrelevant
+
+### Diagnostic: pr_emerg canary printks
+
+Added 6 `pr_emerg` canary messages with `mdelay(100)` pauses at each critical
+point in `level3_tcm_and_fw()`:
+
+| Canary | Location | If this is last seen... |
+|---|---|---|
+| CANARY 1 | Before `pci_iomap(BAR2)` | BAR2 mapping crashes |
+| CANARY 2 | After BAR2 map, before first TCM read | TCM read crashes |
+| CANARY 3 | After AER clear, before `arm_halt()` | ARM halt crashes |
+| CANARY 4 | After `arm_halt()` returns | Post-halt bp_read32 verification crashes |
+| CANARY 5 | Before bulk TCM write loop | Bulk write crashes (original theory) |
+| CANARY 6 | After bulk write completes | Crash is in verify/shared_info reads |
+
+`pr_emerg` is the highest kernel log priority and most likely to appear on the
+physical console even during a hard lockup. Check VT or serial console — dmesg
+log capture may not work if the crash is too fast.
+
 ## Next Steps
 
-1. Re-test level 3 with pacing fixes
-2. If level 3 passes, proceed to level 4 (ARM release, no DMA)
-3. Investigate ARM wrapper IOCTL value 0x83828180 — may indicate window
-   math issue (ARM_WRAP_BASE=0x18102000 crosses 4KB window boundary)
+1. Run `sudo ./test.sh 3` with canary-instrumented module
+2. Check physical console (or serial if available) for last canary seen
+3. Based on canary results, isolate the specific crash-causing operation
+4. If crash is in `arm_halt()` — may need to add pacing/delays to `bp_write32`
+   or verify ARM_WRAP_BASE window math
+5. If crash is in BAR2 map/read — investigate whether BAR2 needs bus mastering
+   or additional AER clearing

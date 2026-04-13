@@ -552,6 +552,10 @@ static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 
 	dev_info(&pdev->dev, "[level 3] BAR2 + ARM halt + FW download...\n");
 
+	/* === CANARY 1: before BAR2 map === */
+	pr_emerg("bcm4360: CANARY 1 — about to pci_iomap BAR2\n");
+	mdelay(100);
+
 	/* Map BAR2 (TCM) */
 	dev_info(&pdev->dev, "[level 3] Mapping BAR2 (TCM, %dKB)...\n", BAR2_SIZE / 1024);
 	dev->tcm = pci_iomap(pdev, 2, BAR2_SIZE);
@@ -560,6 +564,10 @@ static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 		return -ENOMEM;
 	}
 	dev_info(&pdev->dev, "[level 3] BAR2 mapped at %px\n", dev->tcm);
+
+	/* === CANARY 2: BAR2 mapped, about to read TCM === */
+	pr_emerg("bcm4360: CANARY 2 — BAR2 mapped, about to read TCM[0]\n");
+	mdelay(100);
 
 	/* Verify TCM access with multiple reads */
 	val = tcm_read32(dev, 0);
@@ -595,9 +603,17 @@ static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 		}
 	}
 
+	/* === CANARY 3: about to halt ARM === */
+	pr_emerg("bcm4360: CANARY 3 — AER cleared, about to arm_halt()\n");
+	mdelay(100);
+
 	/* Halt ARM before firmware download */
 	dev_info(&pdev->dev, "[level 3] Halting ARM...\n");
 	arm_halt(dev);
+
+	/* === CANARY 4: ARM halt returned === */
+	pr_emerg("bcm4360: CANARY 4 — arm_halt() returned\n");
+	mdelay(100);
 
 	/* Verify ARM halt actually took effect */
 	val = bp_read32(dev, ARM_WRAP_BASE + BCMA_RESET_CTL);
@@ -628,6 +644,12 @@ static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 	word_count = (fw->size + 3) / 4;
 	dev_info(&pdev->dev, "[level 3] Writing %u DWORDs (%zu bytes) to TCM...\n",
 		 word_count, fw->size);
+
+	/* === CANARY 5: about to start bulk TCM write === */
+	pr_emerg("bcm4360: CANARY 5 — starting bulk TCM write (%u DWORDs)\n",
+		 word_count);
+	mdelay(100);
+
 	for (i = 0; i < word_count; i++) {
 		iowrite32(src[i], dev->tcm + (i * 4));
 		/* Pace writes: read-back every 64 DWORDs (256 bytes) to flush
@@ -651,6 +673,10 @@ static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 		release_firmware(fw);
 		return -EIO;
 	}
+	/* === CANARY 6: bulk write survived === */
+	pr_emerg("bcm4360: CANARY 6 — bulk TCM write complete\n");
+	mdelay(100);
+
 	dev_info(&pdev->dev, "[level 3] FW write complete\n");
 
 	val = ioread32(dev->tcm);
