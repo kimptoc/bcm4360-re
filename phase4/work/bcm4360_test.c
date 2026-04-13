@@ -1022,7 +1022,85 @@ static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 	dev_info(&pdev->dev, "[level 3] FW write complete (verify SKIPPED — PCIe link fragile after bulk write)\n");
 	release_firmware(fw);
 
-	dev_info(&pdev->dev, "[level 3] PASS — ARM halted, FW downloaded, ready for level 4\n");
+	/* --- SROM11 write test (PCIe+0x800) ---
+	 * Test whether we can write valid boardtype to the PCIe SROM shadow.
+	 * This is the key hypothesis: firmware reads SROM from PCIe core,
+	 * and PCIe+0x800 is writable. If we can put boardtype=0x0552 here,
+	 * firmware should read it instead of 0xFFFF. */
+	dev_info(&pdev->dev, "[level 3] === SROM write test (PCIe+0x800) ===\n");
+
+	/* First, dump what's currently at PCIe+0x800 (original CIS data) */
+	{
+		u32 offsets_to_check[] = {0x400, 0x800, 0xC00, 0x1000};
+		int noff = 4;
+		int j;
+
+		for (j = 0; j < noff; j++) {
+			u32 off = offsets_to_check[j];
+			u32 w0 = bp_read32(dev, PCIE_CORE_BASE + off);
+			u32 w1 = bp_read32(dev, PCIE_CORE_BASE + off + 4);
+			int writable;
+
+			bp_write32(dev, PCIE_CORE_BASE + off, 0xBAADF00D);
+			writable = (bp_read32(dev, PCIE_CORE_BASE + off) == 0xBAADF00D);
+			if (writable)
+				bp_write32(dev, PCIE_CORE_BASE + off, w0);
+
+			dev_info(&pdev->dev,
+				 "[level 3] PCIe+0x%03x: [0]=0x%08x [1]=0x%08x %s\n",
+				 off, w0, w1, writable ? "WRITABLE" : "read-only");
+		}
+	}
+
+	/* Write minimal SROM11 image to PCIe+0x800 */
+	dev_info(&pdev->dev, "[level 3] Writing SROM11 to PCIe+0x800...\n");
+
+	/* Clear the entire 256-DWORD region first */
+	for (i = 0; i < 256; i++)
+		bp_write32(dev, PCIE_CORE_BASE + 0x800 + i * 4, 0);
+
+	/* DWORD 24 = SROM words 48-49: sromrev=11 */
+	bp_write32(dev, PCIE_CORE_BASE + 0x800 + 24 * 4, 0x0000000B);
+	/* DWORD 32 = SROM words 64-65: subvid=0x106B, devid=0x43a0 */
+	bp_write32(dev, PCIE_CORE_BASE + 0x800 + 32 * 4, 0x43a0106B);
+	/* DWORD 33 = SROM words 66-67: boardtype=0x0552, boardrev=0x1101 */
+	bp_write32(dev, PCIE_CORE_BASE + 0x800 + 33 * 4, 0x11010552);
+	/* DWORD 35 = SROM words 70-71: boardflags lo=0x1001, hi=0x1040 */
+	bp_write32(dev, PCIE_CORE_BASE + 0x800 + 35 * 4, 0x10401001);
+	/* DWORD 36 = SROM words 72-73: boardflags2 lo=0x0002 */
+	bp_write32(dev, PCIE_CORE_BASE + 0x800 + 36 * 4, 0x00000002);
+	/* DWORD 44 = SROM words 88-89: ccode="X0", regrev=0 */
+	bp_write32(dev, PCIE_CORE_BASE + 0x800 + 44 * 4, 0x00005830);
+	/* DWORD 49 = SROM words 98-99: aa2g=7, aa5g=7 */
+	bp_write32(dev, PCIE_CORE_BASE + 0x800 + 49 * 4, 0x00070007);
+
+	/* Verify all key fields */
+	dev_info(&pdev->dev, "[level 3] SROM11 verify:\n");
+	val = bp_read32(dev, PCIE_CORE_BASE + 0x800 + 24 * 4);
+	dev_info(&pdev->dev, "[level 3]   DWORD24=0x%08x (sromrev=%d, expect 11)\n",
+		 val, val & 0xFFFF);
+	val = bp_read32(dev, PCIE_CORE_BASE + 0x800 + 32 * 4);
+	dev_info(&pdev->dev, "[level 3]   DWORD32=0x%08x (subvid=0x%04x devid=0x%04x)\n",
+		 val, val & 0xFFFF, (val >> 16) & 0xFFFF);
+	val = bp_read32(dev, PCIE_CORE_BASE + 0x800 + 33 * 4);
+	dev_info(&pdev->dev, "[level 3]   DWORD33=0x%08x (boardtype=0x%04x boardrev=0x%04x)\n",
+		 val, val & 0xFFFF, (val >> 16) & 0xFFFF);
+	val = bp_read32(dev, PCIE_CORE_BASE + 0x800 + 35 * 4);
+	dev_info(&pdev->dev, "[level 3]   DWORD35=0x%08x (bfl_lo=0x%04x bfl_hi=0x%04x)\n",
+		 val, val & 0xFFFF, (val >> 16) & 0xFFFF);
+
+	/* Also read SROM via CC SROM interface to see if it reflects our write */
+	{
+		u32 srom_val;
+		bp_write32(dev, CHIPCOMMON_BASE + CC_SROM_ADDR, 66); /* word 66 = boardtype */
+		mdelay(1);
+		srom_val = bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_DATA);
+		dev_info(&pdev->dev,
+			 "[level 3]   CC SROM word 66 = 0x%08x (boardtype via CC, expect 0x0552)\n",
+			 srom_val);
+	}
+
+	dev_info(&pdev->dev, "[level 3] PASS — ARM halted, FW downloaded, SROM written\n");
 	return 0;
 }
 
