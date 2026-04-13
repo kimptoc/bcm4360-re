@@ -1,0 +1,35 @@
+[ 1358.063974] bcm4360_test 0000:03:00.0: === BCM4360 test: max_level=2 ===
+[ 1358.064018] bcm4360_test 0000:03:00.0: [level 0] PCI bind only — no hardware access
+[ 1358.064020] bcm4360_test 0000:03:00.0: [level 0] PASS
+[ 1358.064021] bcm4360_test 0000:03:00.0: [level 1] Reading PCI config space...
+[ 1358.064032] bcm4360_test 0000:03:00.0: [level 1] Vendor:Device = 14e4:43a0  Subsys = 106b:0112
+[ 1358.064040] bcm4360_test 0000:03:00.0: [level 1] CMD=0x0002 STATUS=0x0810
+[ 1358.064042] bcm4360_test 0000:03:00.0: [level 1]   IO=0 MEM=1 BusMaster=0
+[ 1358.064054] bcm4360_test 0000:03:00.0: [level 1] PM cap at 0x48, PMCSR=0x4008, state=D0
+[ 1358.064058] bcm4360_test 0000:03:00.0: [level 1] Post-wake CMD=0x0002 (MEM=1)
+[ 1358.064063] bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN (config 0x80) = 0x18000000
+[ 1358.064067] bcm4360_test 0000:03:00.0: [level 1] BAR0 raw=0xb0600004 phys=0xb0600000 len=0x8000
+[ 1358.064069] bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18000000 (ChipCommon)...
+[ 1358.064075] bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18000000
+[ 1358.064077] bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18003000 (PCIe core)...
+[ 1358.064083] bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18003000
+[ 1358.064087] bcm4360_test 0000:03:00.0: [level 1] BAR2 raw=0xb0400004 phys=0xb0400000 len=0x200000
+[ 1358.064107] bcm4360_test 0000:03:00.0: [level 1] PCIe link: speed=1 width=1 ctrl=0x0143
+[ 1358.064118] bcm4360_test 0000:03:00.0: [level 1] AER: uncorr=0x00000000 corr=0x00000000
+[ 1358.064124] bcm4360_test 0000:03:00.0: [level 1] AER after clear: uncorr=0x00000000 corr=0x00000000
+[ 1358.064126] bcm4360_test 0000:03:00.0: [level 1] Enabling bus mastering...
+[ 1358.064134] bcm4360_test 0000:03:00.0: [level 1] CMD after bus master: 0x0006 (MEM=1 MASTER=1)
+[ 1358.064136] bcm4360_test 0000:03:00.0: [level 1] PASS
+[ 1358.064138] bcm4360_test 0000:03:00.0: [level 2] Mapping BAR0...
+[ 1358.064151] bcm4360_test 0000:03:00.0: [level 2] BAR0 mapped at ffffd3ef80560000 (32KB)
+[ 1358.064190] bcm4360_test 0000:03:00.0: [level 2] AER pre-read: uncorr=0x00000000 corr=0x00000000
+[ 1358.064195] bcm4360_test 0000:03:00.0: [level 2] BAR0_WIN register = 0x18000000
+[ 1358.064196] bcm4360_test 0000:03:00.0: [level 2] About to do first MMIO read (BAR0+0x00)...
+[ 1358.064200] bcm4360_test 0000:03:00.0: [level 2] BAR0[0x00] (current window) = 0x15034360
+[ 1358.064201] bcm4360_test 0000:03:00.0: [level 2] Chip ID=0x4360 Rev=3 Pkg=0
+[ 1358.064203] bcm4360_test 0000:03:00.0: [level 2] Unexpected chip ID (expected 0x43a0)
+[ 1358.064207] bcm4360_test 0000:03:00.0: [level 2] ChipCommon caps = 0x58680001
+[ 1358.064210] bcm4360_test 0000:03:00.0: [level 2] ChipCommon status = 0x1810a000
+[ 1358.064217] bcm4360_test 0000:03:00.0: [level 2] ARM wrapper IOCTL = 0x83828180 (via BAR0 window)
+[ 1358.064221] bcm4360_test 0000:03:00.0: [level 2] PASS
+[ 1358.064222] bcm4360_test 0000:03:00.0: === Test complete: level=2 result=0 ===

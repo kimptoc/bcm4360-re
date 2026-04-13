@@ -282,6 +282,105 @@ static int level1_config_space(struct bcm4360_dev *dev)
 		}
 	}
 
+	/* --- BAR0 window diagnostics (config space only, no MMIO) --- */
+	{
+		u32 bar0_win, bar0_raw;
+		resource_size_t bar0_phys;
+		u32 bar0_len;
+
+		/* Read current BAR0 window value */
+		pci_read_config_dword(pdev, PCI_BAR0_WIN, &bar0_win);
+		dev_info(&pdev->dev, "[level 1] BAR0_WIN (config 0x80) = 0x%08x\n", bar0_win);
+
+		/* Read BAR0 base address from config space */
+		pci_read_config_dword(pdev, PCI_BASE_ADDRESS_0, &bar0_raw);
+		bar0_phys = pci_resource_start(pdev, 0);
+		bar0_len = pci_resource_len(pdev, 0);
+		dev_info(&pdev->dev, "[level 1] BAR0 raw=0x%08x phys=0x%llx len=0x%x\n",
+			 bar0_raw, (u64)bar0_phys, bar0_len);
+
+		if (bar0_phys == 0 || bar0_len == 0) {
+			dev_err(&pdev->dev, "[level 1] BAR0 not assigned by BIOS/firmware!\n");
+		}
+
+		/* Try writing BAR0_WIN to ChipCommon (0x18000000) */
+		dev_info(&pdev->dev, "[level 1] Setting BAR0_WIN to 0x18000000 (ChipCommon)...\n");
+		pci_write_config_dword(pdev, PCI_BAR0_WIN, 0x18000000);
+		pci_read_config_dword(pdev, PCI_BAR0_WIN, &bar0_win);
+		dev_info(&pdev->dev, "[level 1] BAR0_WIN readback = 0x%08x\n", bar0_win);
+
+		if (bar0_win != 0x18000000) {
+			dev_warn(&pdev->dev, "[level 1] BAR0_WIN write did not stick!\n");
+		}
+
+		/* Try PCIe core window */
+		dev_info(&pdev->dev, "[level 1] Setting BAR0_WIN to 0x18003000 (PCIe core)...\n");
+		pci_write_config_dword(pdev, PCI_BAR0_WIN, 0x18003000);
+		pci_read_config_dword(pdev, PCI_BAR0_WIN, &bar0_win);
+		dev_info(&pdev->dev, "[level 1] BAR0_WIN readback = 0x%08x\n", bar0_win);
+
+		/* Read BAR2 info too */
+		pci_read_config_dword(pdev, PCI_BASE_ADDRESS_2, &bar0_raw);
+		bar0_phys = pci_resource_start(pdev, 2);
+		bar0_len = pci_resource_len(pdev, 2);
+		dev_info(&pdev->dev, "[level 1] BAR2 raw=0x%08x phys=0x%llx len=0x%x\n",
+			 bar0_raw, (u64)bar0_phys, bar0_len);
+
+		/* Check PCIe link status via capability */
+		{
+			int pcie_cap = pci_find_capability(pdev, PCI_CAP_ID_EXP);
+			if (pcie_cap) {
+				u16 link_status, link_ctrl;
+				pci_read_config_word(pdev, pcie_cap + PCI_EXP_LNKSTA, &link_status);
+				pci_read_config_word(pdev, pcie_cap + PCI_EXP_LNKCTL, &link_ctrl);
+				dev_info(&pdev->dev, "[level 1] PCIe link: speed=%d width=%d ctrl=0x%04x\n",
+					 link_status & PCI_EXP_LNKSTA_CLS,
+					 (link_status & PCI_EXP_LNKSTA_NLW) >> PCI_EXP_LNKSTA_NLW_SHIFT,
+					 link_ctrl);
+			} else {
+				dev_warn(&pdev->dev, "[level 1] No PCIe capability found\n");
+			}
+		}
+
+		/* Restore BAR0_WIN to ChipCommon for level 2 */
+		pci_write_config_dword(pdev, PCI_BAR0_WIN, 0x18000000);
+
+		/* Check and clear AER (Advanced Error Reporting) status */
+		{
+			int aer_pos = pci_find_ext_capability(pdev, PCI_EXT_CAP_ID_ERR);
+			if (aer_pos) {
+				u32 uncorr, corr;
+				pci_read_config_dword(pdev, aer_pos + 0x04, &uncorr);
+				pci_read_config_dword(pdev, aer_pos + 0x10, &corr);
+				dev_info(&pdev->dev, "[level 1] AER: uncorr=0x%08x corr=0x%08x\n",
+					 uncorr, corr);
+
+				/* Clear errors by writing 1 to each set bit (W1C registers) */
+				if (uncorr) {
+					pci_write_config_dword(pdev, aer_pos + 0x04, uncorr);
+					dev_info(&pdev->dev, "[level 1] Cleared AER uncorrectable errors\n");
+				}
+				if (corr) {
+					pci_write_config_dword(pdev, aer_pos + 0x10, corr);
+					dev_info(&pdev->dev, "[level 1] Cleared AER correctable errors\n");
+				}
+
+				/* Verify they cleared */
+				pci_read_config_dword(pdev, aer_pos + 0x04, &uncorr);
+				pci_read_config_dword(pdev, aer_pos + 0x10, &corr);
+				dev_info(&pdev->dev, "[level 1] AER after clear: uncorr=0x%08x corr=0x%08x\n",
+					 uncorr, corr);
+			}
+		}
+
+		/* Enable bus mastering — device may need it for internal operations */
+		dev_info(&pdev->dev, "[level 1] Enabling bus mastering...\n");
+		pci_set_master(pdev);
+		pci_read_config_word(pdev, PCI_COMMAND, &cmd);
+		dev_info(&pdev->dev, "[level 1] CMD after bus master: 0x%04x (MEM=%d MASTER=%d)\n",
+			 cmd, !!(cmd & PCI_COMMAND_MEMORY), !!(cmd & PCI_COMMAND_MASTER));
+	}
+
 	dev_info(&pdev->dev, "[level 1] PASS\n");
 	return 0;
 }
@@ -303,11 +402,32 @@ static int level2_bar0_access(struct bcm4360_dev *dev)
 	}
 	dev_info(&pdev->dev, "[level 2] BAR0 mapped at %px (32KB)\n", dev->regs);
 
+	/* Re-check AER status before MMIO — did level 1 clear succeed? */
+	{
+		int aer_pos = pci_find_ext_capability(pdev, PCI_EXT_CAP_ID_ERR);
+		if (aer_pos) {
+			u32 uncorr, corr;
+			pci_read_config_dword(pdev, aer_pos + 0x04, &uncorr);
+			pci_read_config_dword(pdev, aer_pos + 0x10, &corr);
+			dev_info(&pdev->dev, "[level 2] AER pre-read: uncorr=0x%08x corr=0x%08x\n",
+				 uncorr, corr);
+		}
+	}
+
 	/* Check current BAR0 window register value */
 	pci_read_config_dword(pdev, PCI_BAR0_WIN, &bar0_win);
 	dev_info(&pdev->dev, "[level 2] BAR0_WIN register = 0x%08x\n", bar0_win);
 
-	/* Try reading BAR0 with current window first */
+	/* Ensure window points to ChipCommon before first MMIO read */
+	if (bar0_win != 0x18000000) {
+		dev_info(&pdev->dev, "[level 2] Setting BAR0_WIN to ChipCommon...\n");
+		pci_write_config_dword(pdev, PCI_BAR0_WIN, 0x18000000);
+		msleep(1);
+	}
+
+	dev_info(&pdev->dev, "[level 2] About to do first MMIO read (BAR0+0x00)...\n");
+
+	/* Single MMIO read — this is the dangerous operation */
 	val = ioread32(dev->regs);
 	dev_info(&pdev->dev, "[level 2] BAR0[0x00] (current window) = 0x%08x\n", val);
 
@@ -359,8 +479,8 @@ static int level2_bar0_access(struct bcm4360_dev *dev)
 	dev_info(&pdev->dev, "[level 2] Chip ID=0x%04x Rev=%d Pkg=%d\n",
 		 chip_id, chip_rev, chip_pkg);
 
-	if (chip_id != 0x43a0) {
-		dev_warn(&pdev->dev, "[level 2] Unexpected chip ID (expected 0x43a0)\n");
+	if (chip_id != 0x4360) {
+		dev_warn(&pdev->dev, "[level 2] Unexpected chip ID (expected 0x4360)\n");
 	}
 
 	/* Read a few more ChipCommon registers to verify BAR0 is working */

@@ -1,119 +1,98 @@
 # Phase 4B — Test Module Crash Analysis
 
-**Date:** 2026-04-12
+**Date:** 2026-04-12 – 2026-04-13
 
 ## Summary
 
-Testing the `bcm4360_test.ko` module has revealed multiple issues:
+Testing the `bcm4360_test.ko` module through progressive level-gating has
+identified and resolved the root cause of BAR0 read failures and machine crashes.
 
-1. **Original module (full probe):** Instant hard lockup — PCIe bus hang on load
-2. **pci_reset_function():** Hangs indefinitely — BCM4360 doesn't support FLR
-3. **Step-gated module (step 0, BAR0 only):** Loads OK, but BAR0 reads return
-   `0xFFFFFFFF` (device not responding). Machine crashes ~1 minute after unload.
+**Root cause: Stale AER (Advanced Error Reporting) errors left by the `wl` driver
+prevent PCIe MMIO completion, causing 0xFFFFFFFF reads and machine lockups.**
 
-The `0xFFFFFFFF` return indicates the chip is in PCI D3 power state after `wl`
-unloads — all MMIO reads return all-ones. The delayed crash after module unload
-suggests the chip enters an unstable PCIe link state.
+**Fix: Clear AER error status registers and enable bus mastering before MMIO access.**
+
+## Key Findings
+
+### AER errors were the blocker (discovered 2026-04-13)
+
+After `wl` unloads, the device has stale PCIe errors recorded:
+- **Uncorrectable: 0x00008000** — bit 15 = Unsupported Request Error
+- **Correctable: 0x00002000** — bit 13 = Advisory Non-Fatal Error
+
+These are W1C (write-1-to-clear) registers at the AER extended capability.
+Clearing them before MMIO access allows BAR0 reads to succeed.
+
+### Device state after `wl` unload
+
+- Power state: **D0** (not D3 as initially assumed)
+- PMCSR: 0x4008
+- Memory space: enabled (CMD bit 1 = 1)
+- Bus mastering: disabled (CMD bit 2 = 0)
+- BAR0_WIN: 0x18001000 (ChipCommon + 0x1000, left by wl)
+- PCIe link: Gen1 x1 (speed=1, width=1)
+- BAR0: phys=0xb0600000, len=0x8000 (32KB)
+- BAR2: phys=0xb0400000, len=0x200000 (2MB)
+
+### Chip identity (from BAR0 ChipCommon register)
+
+- **Chip ID: 0x4360** (silicon ID, distinct from PCI device ID 0x43a0)
+- **Revision: 3**
+- **Package: 0**
+- ChipCommon caps: 0x58680001
+- ChipCommon status: 0x1810a000
+
+### What doesn't work
+
+- `pci_reset_function()` — hangs indefinitely (BCM4360 lacks FLR support)
+- `pci_disable_device()` in remove — causes delayed PCIe bus lockup (~1-2 min)
+- MMIO reads without clearing AER — returns 0xFFFFFFFF, may crash machine
 
 ## Timeline
 
-| Boot | Time | Event | Result |
+| Test | Time | Level | Result |
 |---|---|---|---|
-| (a94bec1) | 21:17–23:09 | Module built, sudo blocked | No test |
-| (9eecf9e) | 23:09–23:18 | First test attempt | Crash (no evidence of load) |
-| (349490a) | 23:19–23:27 | `test.sh 0` (original module) | Instant crash |
-| (788e34a) | 23:27–23:44 | Rebuilt with step gates, pci_reset_function | pci_reset_function hangs, module stuck |
-| (352bbb3d) | 23:45–23:48 | `test.sh 0` (step-gated, BAR0 only) | Step 0 OK, reads 0xFFFFFFFF, crash ~1min later |
-| current | 23:49– | Investigating | — |
-
-## Test Results
-
-### Test 1 (boot 349490a): Original module, step 0
-
-**Command:** `sudo test.sh 0`
-**Result:** Instant hard lockup. No kernel messages from module.
-**Cause:** Module mapped BAR2 (2MB) at probe time + `pci_reset_function` + BAR reads
-all happening when chip was in D3/unstable state after `wl` unload.
-
-### Test 2 (boot 788e34a): Step-gated with pci_reset_function
-
-**Command:** `sudo test.sh 0`
-**Result:** Module hung in `pci_reset_function()` — never returned.
-**Cause:** BCM4360 doesn't support PCI Function Level Reset (FLR).
-**Fix:** Removed `pci_reset_function()`.
-
-### Test 3 (boot 352bbb3d): Step-gated, BAR0 only, no FLR
-
-**Command:** `sudo test.sh 0`
-**Result:** Module loaded and completed step 0 successfully:
-```
-bcm4360_test 0000:03:00.0: BCM4360 test module probe
-bcm4360_test 0000:03:00.0: Bus mastering disabled
-bcm4360_test 0000:03:00.0: BAR0 mapped at ffffcb87c1080000 (32KB)
-bcm4360_test 0000:03:00.0: === BCM4360 test: max_step=0 ===
-bcm4360_test 0000:03:00.0: [step 0] Reading chip ID via BAR0...
-bcm4360_test 0000:03:00.0: [step 0] BAR0[0x00] = 0xffffffff (expect 0x43a0 in low 16 bits)
-bcm4360_test 0000:03:00.0: [step 0] DONE — BAR0 MMIO OK
-bcm4360_test 0000:03:00.0: Test complete, result: 0
-```
-
-**Key finding:** `0xFFFFFFFF` = device in D3 power state or PCIe link down.
-The `pci_set_power_state(PCI_D0)` code was in the source but its log message
-didn't appear — possibly the old .ko was loaded (from before rebuild) or the
-D0 transition itself was ineffective.
-
-**Post-test crash:** System crashed ~1 minute after module unload. No kernel
-panic/oops logged — suggests PCIe link entered an irrecoverable state.
-
-## Root Cause Analysis
-
-### Why 0xFFFFFFFF?
-
-The `wl` driver puts the BCM4360 into PCI D3 (deep sleep) during `rmmod`. In D3:
-- All BAR MMIO reads return `0xFFFFFFFF`
-- The PCIe link may be in L2/L3 low-power state
-- `pci_enable_device()` alone doesn't wake the device
-
-To properly wake the device we need:
-1. `pci_set_power_state(pdev, PCI_D0)` — transition from D3→D0
-2. `pci_restore_state(pdev)` — restore PCI config saved by wl
-3. Possibly: BCMA backplane init to wake internal cores
-
-### Why delayed crash?
-
-After our module unloads (`pci_disable_device`), the chip may be in a half-awake
-state — PCI D0 but with no driver managing it. The PCIe link may degrade over
-time (ASPM, power management) until the link fails, causing a bus error that
-locks up the host.
-
-### Why did the original module cause instant crash?
-
-The original module mapped BAR2 (2MB TCM) at probe time. If `pci_iomap` or the
-kernel's page table setup triggers a speculative read of the 2MB region while
-the device is in D3, the PCIe endpoint can't respond, causing an immediate
-bus timeout → machine check → lockup.
-
-BAR0 (32KB) mapping was safe because either:
-- Smaller mapping = less likely to trigger speculative access
-- BAR0 may respond even in partial D3 (config space is always accessible)
+| test.1 | Apr 12 23:47 | step 0 (old module) | BAR0=0xFFFFFFFF |
+| test.2 | Apr 12 23:54 | step 0 (journal) | BAR0=0xFFFFFFFF |
+| test.3 | Apr 13 00:14 | level 0 | PASS (bind only) |
+| test.4 | Apr 13 00:14 | level 1 | PASS (config space, D0 confirmed) |
+| test.5 | Apr 13 00:14 | level 2 | FAIL — BAR0=0xFFFFFFFF, no crash |
+| test.6 | Apr 13 11:12 | level 1 | PASS (old module, no BAR0_WIN diag) |
+| test.7 | Apr 13 11:16 | level 1 | PASS — BAR0_WIN diag, AER errors found |
+| test.8 | Apr 13 11:20 | level 1 | PASS — AER cleared, bus master enabled |
+| test.9 | Apr 13 11:21 | level 2 | **PASS — BAR0 MMIO works! Chip ID=0x4360 Rev=3** |
 
 ## Fixes Applied
 
 | Fix | Status | Effect |
 |---|---|---|
-| BAR2 deferred to step 1 | ✅ Applied | No more instant crash at probe |
+| BAR2 deferred to level 3 | ✅ Applied | No instant crash at probe |
 | BAR2 size reduced to 640KB | ✅ Applied | Avoids unpopulated regions |
-| pci_reset_function | ❌ Removed | Hangs — BCM4360 lacks FLR support |
-| pci_clear_master at probe | ✅ Applied | Stops any DMA from wl |
-| 5s sleep after wl unload | ✅ Applied | Hardware quiesce time |
-| pci_set_power_state(D0) | ✅ Added | Not yet confirmed working |
+| pci_reset_function | ❌ Removed | Hangs — BCM4360 lacks FLR |
+| pci_clear_master at probe | ✅ Applied | Stops residual DMA from wl |
+| pci_disable_device in remove | ❌ Removed | Caused delayed crash |
+| AER error clearing | ✅ Applied | **Key fix — enables MMIO** |
+| Bus mastering enable | ✅ Applied | Required for DMA in level 3 |
+| BAR0_WIN set to ChipCommon | ✅ Applied | Ensures known window state |
+
+## Level 2 Successful Output (test.9)
+
+```
+[level 2] BAR0 mapped at ffffd3ef80560000 (32KB)
+[level 2] AER pre-read: uncorr=0x00000000 corr=0x00000000
+[level 2] BAR0_WIN register = 0x18000000
+[level 2] About to do first MMIO read (BAR0+0x00)...
+[level 2] BAR0[0x00] (current window) = 0x15034360
+[level 2] Chip ID=0x4360 Rev=3 Pkg=0
+[level 2] ChipCommon caps = 0x58680001
+[level 2] ChipCommon status = 0x1810a000
+[level 2] ARM wrapper IOCTL = 0x83828180 (via BAR0 window)
+[level 2] PASS
+```
 
 ## Next Steps
 
-1. **Confirm D0 wake works** — Rebuild and verify "Power state set to D0" appears
-   in dmesg, then check if BAR0 reads return chip ID instead of 0xFFFFFFFF
-2. **If still 0xFFFFFFFF:** Try `pci_save_state`/`pci_restore_state`, or
-   manually write PCI power management config space register
-3. **If chip wakes up:** Proceed to step 1 (map BAR2 + halt ARM)
-4. **Blacklist wl as fallback:** If wl's D3 transition is the problem,
-   test with wl never loaded (add `module_blacklist=wl` to kernel cmdline)
+1. **Level 3** — Full init: map BAR2 (TCM), halt ARM, download firmware,
+   set up olmsg shared info, release ARM, poll fw_init_done
+2. Investigate ARM wrapper IOCTL value 0x83828180 — may indicate window
+   math issue (ARM_WRAP_BASE=0x18102000 crosses 4KB window boundary)
