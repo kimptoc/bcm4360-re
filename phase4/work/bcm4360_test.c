@@ -64,6 +64,8 @@ MODULE_PARM_DESC(max_level, "Max test level: 0=bind, 1=config, 2=BAR0, 3=TCM+FW,
 #define SI_OLMSG_PHYS_LO	0x004
 #define SI_OLMSG_PHYS_HI	0x008
 #define SI_OLMSG_SIZE		0x00C
+#define SI_CONFIG_FLAGS		0x020
+#define SI_MAC_ADDR		0x024	/* 6 bytes: MAC address */
 #define SI_FW_INIT_DONE		0x2028
 #define SI_MAGIC_END		0x2F38
 #define SHARED_MAGIC_START	0xA5A5A5A5
@@ -974,6 +976,30 @@ static int level5_full_init(struct bcm4360_dev *dev)
 	tcm_write32(dev, base + SI_OLMSG_PHYS_LO, lower_32_bits(dev->olmsg_dma));
 	tcm_write32(dev, base + SI_OLMSG_PHYS_HI, upper_32_bits(dev->olmsg_dma));
 	tcm_write32(dev, base + SI_OLMSG_SIZE, OLMSG_BUF_SIZE);
+	/* Config flags — wl driver writes a value here from wlc state.
+	 * Use 0 for now; firmware may check but shouldn't block init. */
+	tcm_write32(dev, base + SI_CONFIG_FLAGS, 0);
+	/* MAC address — firmware expects this; read from PCI subsystem ID
+	 * or use the Apple OUI with device-derived bytes for testing */
+	{
+		u8 mac[8] = {0}; /* 8 bytes for aligned 2x u32 writes */
+		u16 subsys;
+		pci_read_config_word(pdev, PCI_SUBSYSTEM_ID, &subsys);
+		/* Apple OUI 00:xx:xx + subsystem-derived bytes */
+		mac[0] = 0x00;
+		mac[1] = 0x1C;
+		mac[2] = 0xB3;  /* Apple OUI prefix */
+		mac[3] = (u8)(subsys >> 8);
+		mac[4] = (u8)(subsys & 0xFF);
+		mac[5] = 0x01;
+		tcm_write32(dev, base + SI_MAC_ADDR,
+			    mac[0] | (mac[1] << 8) | (mac[2] << 16) | (mac[3] << 24));
+		tcm_write32(dev, base + SI_MAC_ADDR + 4,
+			    mac[4] | (mac[5] << 8));
+		dev_info(&pdev->dev,
+			 "[level 5] MAC in shared_info: %02x:%02x:%02x:%02x:%02x:%02x\n",
+			 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+	}
 	tcm_write32(dev, base + SI_FW_INIT_DONE, 0);
 	tcm_write32(dev, base + SI_MAGIC_END, SHARED_MAGIC_END);
 
@@ -994,24 +1020,27 @@ static int level5_full_init(struct bcm4360_dev *dev)
 	irq_registered = true;
 	dev_info(&pdev->dev, "[level 5] IRQ %d registered\n", pdev->irq);
 
-	/* Release ARM (still no bus mastering — FW can't DMA yet) */
-	dev_info(&pdev->dev, "[level 5] *** RELEASING ARM (bus master still OFF) ***\n");
-	arm_release(dev);
-	dev_info(&pdev->dev, "[level 5] ARM released — still alive\n");
-
-	/* Give firmware a moment, then enable bus mastering for DMA */
-	msleep(50);
-	dev_info(&pdev->dev, "[level 5] 50ms — alive, enabling bus mastering...\n");
+	/* Enable bus mastering BEFORE ARM release — firmware needs DMA
+	 * access to read olmsg buffer immediately on startup */
 	pci_set_master(pdev);
-	dev_info(&pdev->dev, "[level 5] Bus mastering ON\n");
+	dev_info(&pdev->dev, "[level 5] Bus mastering ON (before ARM release)\n");
 
-	/* Clear pending interrupts and unmask — firmware has been sending
-	 * mailbox signals (intstatus=0x300, mailboxint=0x03) that need acking */
+	/* Clear pending interrupts and unmask */
 	bp_write32(dev, PCIE_CORE_BASE + PCIE_INTSTATUS, 0xFFFFFFFF);
 	bp_write32(dev, PCIE_CORE_BASE + PCIE_MAILBOXINT, 0xFFFFFFFF);
 	bp_write32(dev, PCIE_CORE_BASE + PCIE_INTMASK, 0xFFFFFFFF);
 	bp_write32(dev, PCIE_CORE_BASE + PCIE_MAILBOXMASK, 0xFFFFFFFF);
-	dev_info(&pdev->dev, "[level 5] PCIe interrupts unmasked\n");
+	dev_info(&pdev->dev, "[level 5] PCIe interrupts cleared and unmasked\n");
+
+	/* Boot handshake step 6: write CPUHALT to ARM IOCTL before release
+	 * (matches wl driver's sequence between shared_info and ARM release) */
+	bp_write32(dev, ARM_WRAP_BASE + BCMA_IOCTL, ARMCR4_CPUHALT);
+	dev_info(&pdev->dev, "[level 5] ARM IOCTL = 0x20 (step 6 pre-release)\n");
+
+	/* Release ARM — firmware starts executing immediately */
+	dev_info(&pdev->dev, "[level 5] *** RELEASING ARM ***\n");
+	arm_release(dev);
+	dev_info(&pdev->dev, "[level 5] ARM released\n");
 
 	/* Poll for firmware init */
 	dev_info(&pdev->dev, "[level 5] Polling fw_init_done...\n");
@@ -1023,6 +1052,14 @@ static int level5_full_init(struct bcm4360_dev *dev)
 				 val, i);
 			goto fw_ok;
 		}
+		/* Periodic progress at 100ms, 500ms, 1000ms, 1500ms */
+		if (i == 100 || i == 500 || i == 1000 || i == 1500) {
+			u32 ist = bp_read32(dev, PCIE_CORE_BASE + PCIE_INTSTATUS);
+			u32 mbi = bp_read32(dev, PCIE_CORE_BASE + PCIE_MAILBOXINT);
+			dev_info(&pdev->dev,
+				 "[level 5] %dms: fw_init_done=0, intstatus=0x%x, mailbox=0x%x, irqs=%d\n",
+				 i, ist, mbi, dev->irq_count);
+		}
 		usleep_range(1000, 1500);
 	}
 
@@ -1032,21 +1069,79 @@ static int level5_full_init(struct bcm4360_dev *dev)
 	dev_err(&pdev->dev, "[level 5] FW init TIMEOUT (%dms) — bus master disabled\n",
 		FW_INIT_TIMEOUT_MS);
 
-	/* Diagnostic dump */
-	val = tcm_read32(dev, SHARED_INFO_OFFSET + SI_MAGIC_START);
-	dev_info(&pdev->dev, "[level 5] Post-timeout magic_start=0x%08x\n", val);
-	val = tcm_read32(dev, SHARED_INFO_OFFSET + SI_MAGIC_END);
-	dev_info(&pdev->dev, "[level 5] Post-timeout magic_end=0x%08x\n", val);
-	dev_info(&pdev->dev, "[level 5] TCM[0]=0x%08x TCM[4]=0x%08x\n",
-		 tcm_read32(dev, 0), tcm_read32(dev, 4));
+	/* === Comprehensive diagnostic dump === */
+	dev_info(&pdev->dev, "[level 5] === POST-TIMEOUT DIAGNOSTICS ===\n");
 
-	buf = dev->olmsg_buf;
-	dev_info(&pdev->dev, "[level 5] olmsg fw->host: wr=%u rd=%u\n", buf[7], buf[6]);
+	/* ARM state — still running or crashed? */
+	val = bp_read32(dev, ARM_WRAP_BASE + BCMA_IOCTL);
+	dev_info(&pdev->dev, "[level 5] ARM IOCTL=0x%08x RESET_CTL=0x%08x\n",
+		 val, bp_read32(dev, ARM_WRAP_BASE + BCMA_RESET_CTL));
+
+	/* PCIe interrupt state */
+	dev_info(&pdev->dev, "[level 5] PCIe intstatus=0x%08x mailboxint=0x%08x\n",
+		 bp_read32(dev, PCIE_CORE_BASE + PCIE_INTSTATUS),
+		 bp_read32(dev, PCIE_CORE_BASE + PCIE_MAILBOXINT));
+	dev_info(&pdev->dev, "[level 5] PCIe intmask=0x%08x mailboxmask=0x%08x\n",
+		 bp_read32(dev, PCIE_CORE_BASE + PCIE_INTMASK),
+		 bp_read32(dev, PCIE_CORE_BASE + PCIE_MAILBOXMASK));
 	dev_info(&pdev->dev, "[level 5] IRQs received: %d\n", dev->irq_count);
 
-	/* Read PCIe interrupt state */
-	val = bp_read32(dev, PCIE_CORE_BASE + PCIE_INTSTATUS);
-	dev_info(&pdev->dev, "[level 5] PCIe intstatus=0x%08x\n", val);
+	/* Scan entire shared_info for non-zero words firmware wrote
+	 * (we zeroed it all before writing our fields) */
+	base = SHARED_INFO_OFFSET;
+	{
+		int nz_count = 0;
+		for (i = 0; i < SHARED_INFO_SIZE / 4; i++) {
+			val = tcm_read32(dev, base + i * 4);
+			if (val != 0) {
+				if (nz_count < 40) /* cap output */
+					dev_info(&pdev->dev,
+						 "[level 5] shared_info[0x%04x]=0x%08x\n",
+						 i * 4, val);
+				nz_count++;
+			}
+		}
+		dev_info(&pdev->dev,
+			 "[level 5] shared_info: %d non-zero words out of %u\n",
+			 nz_count, SHARED_INFO_SIZE / 4);
+	}
+
+	/* Check TCM area just after firmware image for .bss/heap activity */
+	{
+		u32 fw_end = 0x6C000; /* round up firmware end 0x6BF79 */
+		dev_info(&pdev->dev, "[level 5] TCM post-fw area (bss/heap check):\n");
+		for (i = 0; i < 16; i++)
+			dev_info(&pdev->dev, "[level 5]   [0x%05x]=0x%08x\n",
+				 fw_end + i * 4, tcm_read32(dev, fw_end + i * 4));
+	}
+
+	/* Check for firmware console buffer — common location near end of RAM.
+	 * Look at address 0x9AF88 (value firmware wrote to shared_info[0x010]) */
+	{
+		u32 console_ptr = tcm_read32(dev, base + 0x010);
+		if (console_ptr > 0 && console_ptr < TCM_RAMSIZE - 64) {
+			dev_info(&pdev->dev,
+				 "[level 5] FW ptr at shared_info[0x010]=0x%08x, reading:\n",
+				 console_ptr);
+			for (i = 0; i < 16; i++)
+				dev_info(&pdev->dev, "[level 5]   [0x%05x]=0x%08x\n",
+					 console_ptr + i * 4,
+					 tcm_read32(dev, console_ptr + i * 4));
+		}
+	}
+
+	/* Check olmsg DMA buffer */
+	buf = dev->olmsg_buf;
+	dev_info(&pdev->dev, "[level 5] olmsg host->fw: wr=%u rd=%u\n", buf[3], buf[2]);
+	dev_info(&pdev->dev, "[level 5] olmsg fw->host: wr=%u rd=%u\n", buf[7], buf[6]);
+	/* Scan first 64 words of olmsg for any non-zero data */
+	{
+		int nz = 0;
+		for (i = 0; i < 64; i++)
+			if (buf[i]) nz++;
+		dev_info(&pdev->dev,
+			 "[level 5] olmsg first 256 bytes: %d non-zero words\n", nz);
+	}
 
 	/* Halt ARM */
 	arm_halt(dev);
