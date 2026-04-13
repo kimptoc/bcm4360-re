@@ -311,99 +311,87 @@ static void dump_sprom_and_otp(struct bcm4360_dev *dev)
 	}
 	dev_info(&pdev->dev, "[hw] OTP CC+0x800 scan: %d non-zero of 256\n", nz);
 
-	/* --- Method 3: otpprog register word-by-word read ---
-	 * IPX OTP read sequence: write (START | READ_CMD | row_addr) to
-	 * otpprog, wait for START bit to clear, read data from otpprog. */
-	dev_info(&pdev->dev, "[hw] OTP via otpprog (first 128 rows):\n");
-	nz = 0;
-	for (i = 0; i < 128; i++) {
-		int timeout = 100;
-		/* Write: bit31=START, bits[30:28]=0 (read), bits[11:0]=row */
-		bp_write32(dev, CHIPCOMMON_BASE + CC_OTPPROG,
-			   0x80000000 | (i & 0xFFF));
-		/* Wait for START/BUSY (bit 31) to clear */
-		do {
-			udelay(10);
-			val = bp_read32(dev, CHIPCOMMON_BASE + CC_OTPPROG);
-		} while ((val & 0x80000000) && --timeout > 0);
-		if (timeout == 0) {
-			dev_info(&pdev->dev, "[hw]   otpprog timeout at row %u\n", i);
-			break;
-		}
-		/* Data in lower bits */
-		if ((val & 0xFFFF) != 0 && (val & 0xFFFF) != 0xFFFF) {
-			if (nz < 48)
-				dev_info(&pdev->dev, "[hw]   OTPprog[%03u] = 0x%08x (data=0x%04x)\n",
-					 i, val, val & 0xFFFF);
-			nz++;
-		}
-	}
-	dev_info(&pdev->dev, "[hw] OTP otpprog scan: %d non-zero of 128\n", nz);
+	/* --- Method 3: otpprog register read ---
+	 * Previous test showed otpprog echoes addresses (not useful).
+	 * Skip — PCIe SROM shadow (method 4) has the real data. */
 
 	/* --- Method 4: PCIe core SROM shadow ---
-	 * PCIe core at 0x18003000 may have SROM shadow at +0x0800.
-	 * If OTP auto-loads to SROM shadow, reads here would work. */
-	dev_info(&pdev->dev, "[hw] PCIe SROM shadow (PCIe+0x800, first 16 words):\n");
+	 * PCIe core at 0x18003000 has SROM/CIS shadow at +0x0800.
+	 * On Apple hardware, OTP CIS data auto-loads here at boot.
+	 * Read full area — CIS data can be up to 1KB+. */
+	dev_info(&pdev->dev, "[hw] PCIe SROM shadow (PCIe+0x800, 256 DWORDs):\n");
 	nz = 0;
-	for (i = 0; i < 16; i++) {
-		val = bp_read32(dev, PCIE_CORE_BASE + 0x800 + i * 4);
-		if (val != 0xFFFFFFFF)
-			dev_info(&pdev->dev, "[hw]   PCIeSROM[%02u] = 0x%08x\n",
-				 i, val);
-		if (val != 0 && val != 0xFFFFFFFF)
-			nz++;
-	}
-	dev_info(&pdev->dev, "[hw] PCIe SROM shadow: %d non-zero of 16\n", nz);
-
-	/* --- Method 5: OTP core direct access --- */
-	val = bp_read32(dev, OTP_CORE_BASE);
-	dev_info(&pdev->dev, "[hw] OTP core ID = 0x%08x\n", val);
-	if (val != 0xFFFFFFFF) {
-		/* Try OTP core wrapper regs and data area */
-		dev_info(&pdev->dev, "[hw] OTP core+0x400 (wrapper):\n");
-		for (i = 0; i < 4; i++) {
-			val = bp_read32(dev, OTP_CORE_BASE + 0x400 + i * 4);
-			dev_info(&pdev->dev, "[hw]   wrap[%u] = 0x%08x\n", i, val);
-		}
-		dev_info(&pdev->dev, "[hw] OTP core data (core+0x800, 32 DWORDs):\n");
-		nz = 0;
-		for (i = 0; i < 32; i++) {
-			val = bp_read32(dev, OTP_CORE_BASE + 0x800 + i * 4);
+	{
+		u32 last_nz_idx = 0;
+		for (i = 0; i < 256; i++) {
+			val = bp_read32(dev, PCIE_CORE_BASE + 0x800 + i * 4);
 			if (val != 0 && val != 0xFFFFFFFF) {
-				dev_info(&pdev->dev, "[hw]   OTPcore[%02u] = 0x%08x\n",
-					 i, val);
+				if (nz < 64)
+					dev_info(&pdev->dev,
+						 "[hw]   CIS[%03u] = 0x%08x\n",
+						 i, val);
 				nz++;
+				last_nz_idx = i;
 			}
 		}
-		dev_info(&pdev->dev, "[hw] OTP core data: %d non-zero of 32\n", nz);
+		dev_info(&pdev->dev,
+			 "[hw] PCIe CIS shadow: %d non-zero of 256 (last at [%u])\n",
+			 nz, last_nz_idx);
 	}
 
-	/* --- Method 6: ChipCommon SROM with OTP init ---
-	 * Try toggling OTP control register to trigger a read cycle,
-	 * then re-read via SROM_ADDR/DATA */
-	bp_write32(dev, CHIPCOMMON_BASE + CC_OTPCTRL, 0x00000040); /* CI enable */
-	udelay(100);
-	val = bp_read32(dev, CHIPCOMMON_BASE + CC_OTPST);
-	dev_info(&pdev->dev, "[hw] OTP_STATUS after CI enable = 0x%08x\n", val);
+	/* --- CIS byte-level hex dump for tuple parsing ---
+	 * Dump first 256 bytes of CIS as hex for manual/automated parsing.
+	 * CIS format: tag, length, data... tag, length, data... 0xFF=end */
+	if (nz > 0) {
+		u8 cis[256];
+		int cis_len = nz * 4;
+		if (cis_len > 256)
+			cis_len = 256;
+		for (i = 0; i < (u32)cis_len / 4; i++) {
+			val = bp_read32(dev, PCIE_CORE_BASE + 0x800 + i * 4);
+			cis[i * 4 + 0] = val & 0xFF;
+			cis[i * 4 + 1] = (val >> 8) & 0xFF;
+			cis[i * 4 + 2] = (val >> 16) & 0xFF;
+			cis[i * 4 + 3] = (val >> 24) & 0xFF;
+		}
+		/* Print as hex lines (16 bytes each) */
+		for (i = 0; i < (u32)cis_len; i += 16) {
+			int j, len = cis_len - i;
+			char hexbuf[80];
+			int pos = 0;
+			if (len > 16) len = 16;
+			for (j = 0; j < len; j++)
+				pos += snprintf(hexbuf + pos, sizeof(hexbuf) - pos,
+						"%02x ", cis[i + j]);
+			dev_info(&pdev->dev, "[hw] CIS %03x: %s\n", i, hexbuf);
+		}
 
-	/* Try reading SROM words at key offsets (sromrev=11 layout) */
-	dev_info(&pdev->dev, "[hw] SROM key offsets after OTP init:\n");
-	{
-		/* SROM11: word 0=first, word 65=boardtype, word 66=boardrev,
-		 * word 87=macaddr, words 202-end=calibration */
-		u16 offsets[] = {0, 1, 2, 64, 65, 66, 67, 87, 88, 100, 200, 202};
-		int noff = sizeof(offsets) / sizeof(offsets[0]);
-		for (i = 0; i < noff; i++) {
-			bp_write32(dev, CHIPCOMMON_BASE + CC_SROM_ADDR, offsets[i]);
-			udelay(10);
-			val = bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_DATA);
-			dev_info(&pdev->dev, "[hw]   SROM[%u] = 0x%04x\n",
-				 offsets[i], val & 0xFFFF);
+		/* Parse CIS tuples — look for HNBU (Broadcom vendor) tuples */
+		dev_info(&pdev->dev, "[hw] CIS tuple parse:\n");
+		i = 0;
+		while (i < (u32)cis_len - 1) {
+			u8 tag = cis[i];
+			u8 tlen;
+			if (tag == 0xFF) {
+				dev_info(&pdev->dev, "[hw]   @%03x: END\n", i);
+				break;
+			}
+			tlen = cis[i + 1];
+			dev_info(&pdev->dev,
+				 "[hw]   @%03x: tag=0x%02x len=%u\n",
+				 i, tag, tlen);
+			if (tlen == 0 || i + 2 + tlen > (u32)cis_len)
+				break;
+			/* tag 0x80 = CISTPL_BRCM_HNBU (Broadcom specific) */
+			if (tag == 0x80 && tlen >= 3) {
+				u8 subtag = cis[i + 2];
+				dev_info(&pdev->dev,
+					 "[hw]     HNBU subtag=0x%02x\n",
+					 subtag);
+			}
+			i += 2 + tlen;
 		}
 	}
-
-	/* Restore OTP control */
-	bp_write32(dev, CHIPCOMMON_BASE + CC_OTPCTRL, 0);
 }
 
 /* ---- NVRAM loading to TCM ---- */

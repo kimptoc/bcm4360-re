@@ -1,0 +1,300 @@
+[ 8609.998949] bcm4360: TCM write progress: DWORD 73728/110559
+[ 8610.005181] bcm4360: TCM write progress: DWORD 74752/110559
+[ 8610.011442] bcm4360: TCM write progress: DWORD 75776/110559
+[ 8610.017603] bcm4360: TCM write progress: DWORD 76800/110559
+[ 8610.023874] bcm4360: TCM write progress: DWORD 77824/110559
+[ 8610.030107] bcm4360: TCM write progress: DWORD 78848/110559
+[ 8610.036384] bcm4360: TCM write progress: DWORD 79872/110559
+[ 8610.042655] bcm4360: TCM write progress: DWORD 80896/110559
+[ 8610.048895] bcm4360: TCM write progress: DWORD 81920/110559
+[ 8610.055155] bcm4360: TCM write progress: DWORD 82944/110559
+[ 8610.061417] bcm4360: TCM write progress: DWORD 83968/110559
+[ 8610.067685] bcm4360: TCM write progress: DWORD 84992/110559
+[ 8610.073952] bcm4360: TCM write progress: DWORD 86016/110559
+[ 8610.080135] bcm4360: TCM write progress: DWORD 87040/110559
+[ 8610.086397] bcm4360: TCM write progress: DWORD 88064/110559
+[ 8610.092587] bcm4360: TCM write progress: DWORD 89088/110559
+[ 8610.098852] bcm4360: TCM write progress: DWORD 90112/110559
+[ 8610.105171] bcm4360: TCM write progress: DWORD 91136/110559
+[ 8610.111442] bcm4360: TCM write progress: DWORD 92160/110559
+[ 8610.117716] bcm4360: TCM write progress: DWORD 93184/110559
+[ 8610.123872] bcm4360: TCM write progress: DWORD 94208/110559
+[ 8610.130103] bcm4360: TCM write progress: DWORD 95232/110559
+[ 8610.136376] bcm4360: TCM write progress: DWORD 96256/110559
+[ 8610.142646] bcm4360: TCM write progress: DWORD 97280/110559
+[ 8610.148917] bcm4360: TCM write progress: DWORD 98304/110559
+[ 8610.155187] bcm4360: TCM write progress: DWORD 99328/110559
+[ 8610.161458] bcm4360: TCM write progress: DWORD 100352/110559
+[ 8610.167736] bcm4360: TCM write progress: DWORD 101376/110559
+[ 8610.173971] bcm4360: TCM write progress: DWORD 102400/110559
+[ 8610.180242] bcm4360: TCM write progress: DWORD 103424/110559
+[ 8610.186513] bcm4360: TCM write progress: DWORD 104448/110559
+[ 8610.192786] bcm4360: TCM write progress: DWORD 105472/110559
+[ 8610.198987] bcm4360: TCM write progress: DWORD 106496/110559
+[ 8610.205186] bcm4360: TCM write progress: DWORD 107520/110559
+[ 8610.211445] bcm4360: TCM write progress: DWORD 108544/110559
+[ 8610.217710] bcm4360: TCM write progress: DWORD 109568/110559
+[ 8610.223708] bcm4360: CANARY 6 — bulk TCM write complete
+[ 8610.323752] bcm4360_test 0000:03:00.0: [level 3] FW write complete
+[ 8610.323789] bcm4360_test 0000:03:00.0: [level 3] FW verify: first=0xb80ef000 (expect 0xb80ef000)
+[ 8610.323852] bcm4360_test 0000:03:00.0: [level 3] TCM at shared_info offset 0x9d0a4:
+[ 8610.323896] bcm4360_test 0000:03:00.0: [level 3]   [0x9d0a4] = 0xa5a5a5a5
+[ 8610.323900] bcm4360_test 0000:03:00.0: [level 3]   [0x9d0a8] = 0x01110000
+[ 8610.323904] bcm4360_test 0000:03:00.0: [level 3]   [0x9d0ac] = 0x00000000
+[ 8610.323907] bcm4360_test 0000:03:00.0: [level 3]   [0x9d0b0] = 0x00010000
+[ 8610.323909] bcm4360_test 0000:03:00.0: [level 3]   [0x9d0b4] = 0x0009af88
+[ 8610.323912] bcm4360_test 0000:03:00.0: [level 3]   [0x9d0b8] = 0x00000000
+[ 8610.323914] bcm4360_test 0000:03:00.0: [level 3]   [0x9d0bc] = 0x00000000
+[ 8610.323917] bcm4360_test 0000:03:00.0: [level 3]   [0x9d0c0] = 0x00000000
+[ 8610.323918] bcm4360_test 0000:03:00.0: [level 3] PASS — ARM halted, FW downloaded, ready for level 4
+[ 8610.323919] bcm4360_test 0000:03:00.0: [level 4] ARM release with shared_info (NO DMA)...
+[ 8610.323955] bcm4360_test 0000:03:00.0: [level 4] olmsg buffer: dma=0x12e0000
+[ 8610.323956] bcm4360_test 0000:03:00.0: [level 4] Writing shared_info at TCM 0x9d0a4...
+[ 8610.325159] bcm4360_test 0000:03:00.0: [level 4] shared_info magic_start=0xa5a5a5a5 (expect 0xa5a5a5a5)
+[ 8610.325164] bcm4360_test 0000:03:00.0: [level 4] shared_info magic_end=0x5a5a5a5a (expect 0x5a5a5a5a)
+[ 8610.325168] bcm4360_test 0000:03:00.0: [level 4] fw_init_done=0x00000000 (expect 0)
+[ 8610.325181] bcm4360_test 0000:03:00.0: [level 4] IRQ 18 registered, PCIe interrupts masked
+[ 8610.325182] bcm4360: LEVEL4 — about to release ARM (shared_info written, no DMA)
+[ 8610.425235] bcm4360_test 0000:03:00.0: [level 4] *** RELEASING ARM (shared_info written, no bus master) ***
+[ 8610.425239] bcm4360_test 0000:03:00.0: Releasing ARM CR4...
+[ 8610.425292] bcm4360_test 0000:03:00.0: ARM IOCTL after release: 0x00000001
+[ 8610.425293] bcm4360: LEVEL4 — arm_release() returned, still alive
+[ 8610.425324] bcm4360_test 0000:03:00.0: [level 4] ARM released — still alive
+[ 8610.527922] bcm4360: LEVEL4 — 50ms post-release, alive, fw_init_done=0
+[ 8610.631971] bcm4360: LEVEL4 — 100ms post-release, alive, fw_init_done=0
+[ 8611.450935] bcm4360: LEVEL4 — 500ms post-release, alive, fw_init_done=0
+[ 8612.451892] bcm4360: LEVEL4 — 1000ms post-release, alive, fw_init_done=0
+[ 8614.455814] bcm4360_test 0000:03:00.0: [level 4] fw_init_done timeout (2000ms) — firmware did not signal
+[ 8614.455831] bcm4360_test 0000:03:00.0: [level 4] IRQs received: 0
+[ 8614.455837] bcm4360_test 0000:03:00.0: [level 4] Post-release shared_info snapshot:
+[ 8614.455875] bcm4360_test 0000:03:00.0: [level 4]   [0x9d0a4] = 0xa5a5a5a5
+[ 8614.455885] bcm4360_test 0000:03:00.0: [level 4]   [0x9d0a8] = 0x012e0000
+[ 8614.455893] bcm4360_test 0000:03:00.0: [level 4]   [0x9d0ac] = 0x00000000
+[ 8614.455901] bcm4360_test 0000:03:00.0: [level 4]   [0x9d0b0] = 0x00010000
+[ 8614.455909] bcm4360_test 0000:03:00.0: [level 4]   [0x9d0b4] = 0x0009af88
+[ 8614.455917] bcm4360_test 0000:03:00.0: [level 4]   [0x9d0b8] = 0x00000000
+[ 8614.455924] bcm4360_test 0000:03:00.0: [level 4]   [0x9d0bc] = 0x00000000
+[ 8614.455932] bcm4360_test 0000:03:00.0: [level 4]   [0x9d0c0] = 0x00000000
+[ 8614.455939] bcm4360_test 0000:03:00.0: [level 4] Post-release fw_init_done=0x00000000
+[ 8614.455952] bcm4360_test 0000:03:00.0: [level 4] TCM[0x00]=0xb80ef000 [0x04]=0xb82ef000 [0x08]=0xb839f000
+[ 8614.455966] bcm4360_test 0000:03:00.0: [level 4] PCIe intstatus=0x00000300
+[ 8614.455977] bcm4360_test 0000:03:00.0: [level 4] PCIe mailboxint=0x00000003
+[ 8614.455981] bcm4360_test 0000:03:00.0: [level 4] Re-halting ARM...
+[ 8614.455986] bcm4360_test 0000:03:00.0: Halting ARM CR4...
+[ 8614.456160] bcm4360_test 0000:03:00.0: ARM IOCTL after halt: 0x00000021
+[ 8614.456172] bcm4360_test 0000:03:00.0: ARM RESET_CTL: 0x00000000
+[ 8614.456192] bcm4360_test 0000:03:00.0: [level 4] PASS — ARM released and re-halted safely
+[ 8614.456196] bcm4360_test 0000:03:00.0: [level 5] Full init: FW + NVRAM + ARM release...
+[ 8614.456200] bcm4360_test 0000:03:00.0: Halting ARM CR4...
+[ 8614.456392] bcm4360_test 0000:03:00.0: ARM IOCTL after halt: 0x00000021
+[ 8614.456402] bcm4360_test 0000:03:00.0: ARM RESET_CTL: 0x00000000
+[ 8614.504455] bcm4360_test 0000:03:00.0: [level 5] FW re-downloaded (442233 bytes)
+[ 8614.504553] bcm4360_test 0000:03:00.0: [hw] CC SROM_CTRL=0x00000023
+[ 8614.504563] bcm4360_test 0000:03:00.0: [hw] CC OTP_STATUS=0x00009000
+[ 8614.504570] bcm4360_test 0000:03:00.0: [hw] CC OTP_CONTROL=0x00000000
+[ 8614.504576] bcm4360_test 0000:03:00.0: [hw] CC OTP_LAYOUT=0x00115200 (rows=512)
+[ 8614.504583] bcm4360_test 0000:03:00.0: [hw] CC OTP_PROG=0x0000080f
+[ 8614.504589] bcm4360_test 0000:03:00.0: [hw] CC caps=0x58680001 (OTP size bits[16:12]=0x0)
+[ 8614.504590] bcm4360_test 0000:03:00.0: [hw] SPROM first 8 words (CC SROM_ADDR/DATA):
+[ 8614.504612] bcm4360_test 0000:03:00.0: [hw]   SPROM[0] = 0xffff
+[ 8614.504632] bcm4360_test 0000:03:00.0: [hw]   SPROM[1] = 0xffff
+[ 8614.504652] bcm4360_test 0000:03:00.0: [hw]   SPROM[2] = 0xffff
+[ 8614.504673] bcm4360_test 0000:03:00.0: [hw]   SPROM[3] = 0xffff
+[ 8614.504693] bcm4360_test 0000:03:00.0: [hw]   SPROM[4] = 0xffff
+[ 8614.504714] bcm4360_test 0000:03:00.0: [hw]   SPROM[5] = 0xffff
+[ 8614.504733] bcm4360_test 0000:03:00.0: [hw]   SPROM[6] = 0xffff
+[ 8614.504754] bcm4360_test 0000:03:00.0: [hw]   SPROM[7] = 0xffff
+[ 8614.504755] bcm4360_test 0000:03:00.0: [hw] OTP direct scan CC+0x800..0xC00 (256 DWORDs = 512 rows):
+[ 8614.505966] bcm4360_test 0000:03:00.0: [hw] OTP CC+0x800 scan: 0 non-zero of 256
+[ 8614.505968] bcm4360_test 0000:03:00.0: [hw] OTP via otpprog (first 128 rows):
+[ 8614.506009] bcm4360_test 0000:03:00.0: [hw]   OTPprog[001] = 0x00000001 (data=0x0001)
+[ 8614.506031] bcm4360_test 0000:03:00.0: [hw]   OTPprog[002] = 0x00000002 (data=0x0002)
+[ 8614.506052] bcm4360_test 0000:03:00.0: [hw]   OTPprog[003] = 0x00000003 (data=0x0003)
+[ 8614.506073] bcm4360_test 0000:03:00.0: [hw]   OTPprog[004] = 0x00000004 (data=0x0004)
+[ 8614.506093] bcm4360_test 0000:03:00.0: [hw]   OTPprog[005] = 0x00000005 (data=0x0005)
+[ 8614.506115] bcm4360_test 0000:03:00.0: [hw]   OTPprog[006] = 0x00000006 (data=0x0006)
+[ 8614.506135] bcm4360_test 0000:03:00.0: [hw]   OTPprog[007] = 0x00000007 (data=0x0007)
+[ 8614.506156] bcm4360_test 0000:03:00.0: [hw]   OTPprog[008] = 0x00000008 (data=0x0008)
+[ 8614.506176] bcm4360_test 0000:03:00.0: [hw]   OTPprog[009] = 0x00000009 (data=0x0009)
+[ 8614.506198] bcm4360_test 0000:03:00.0: [hw]   OTPprog[010] = 0x0000000a (data=0x000a)
+[ 8614.506219] bcm4360_test 0000:03:00.0: [hw]   OTPprog[011] = 0x0000000b (data=0x000b)
+[ 8614.506241] bcm4360_test 0000:03:00.0: [hw]   OTPprog[012] = 0x0000000c (data=0x000c)
+[ 8614.506261] bcm4360_test 0000:03:00.0: [hw]   OTPprog[013] = 0x0000000d (data=0x000d)
+[ 8614.506283] bcm4360_test 0000:03:00.0: [hw]   OTPprog[014] = 0x0000000e (data=0x000e)
+[ 8614.506303] bcm4360_test 0000:03:00.0: [hw]   OTPprog[015] = 0x0000000f (data=0x000f)
+[ 8614.506323] bcm4360_test 0000:03:00.0: [hw]   OTPprog[016] = 0x00000010 (data=0x0010)
+[ 8614.506345] bcm4360_test 0000:03:00.0: [hw]   OTPprog[017] = 0x00000011 (data=0x0011)
+[ 8614.506366] bcm4360_test 0000:03:00.0: [hw]   OTPprog[018] = 0x00000012 (data=0x0012)
+[ 8614.506386] bcm4360_test 0000:03:00.0: [hw]   OTPprog[019] = 0x00000013 (data=0x0013)
+[ 8614.506406] bcm4360_test 0000:03:00.0: [hw]   OTPprog[020] = 0x00000014 (data=0x0014)
+[ 8614.506426] bcm4360_test 0000:03:00.0: [hw]   OTPprog[021] = 0x00000015 (data=0x0015)
+[ 8614.506448] bcm4360_test 0000:03:00.0: [hw]   OTPprog[022] = 0x00000016 (data=0x0016)
+[ 8614.506468] bcm4360_test 0000:03:00.0: [hw]   OTPprog[023] = 0x00000017 (data=0x0017)
+[ 8614.506488] bcm4360_test 0000:03:00.0: [hw]   OTPprog[024] = 0x00000018 (data=0x0018)
+[ 8614.506508] bcm4360_test 0000:03:00.0: [hw]   OTPprog[025] = 0x00000019 (data=0x0019)
+[ 8614.506529] bcm4360_test 0000:03:00.0: [hw]   OTPprog[026] = 0x0000001a (data=0x001a)
+[ 8614.506549] bcm4360_test 0000:03:00.0: [hw]   OTPprog[027] = 0x0000001b (data=0x001b)
+[ 8614.506571] bcm4360_test 0000:03:00.0: [hw]   OTPprog[028] = 0x0000001c (data=0x001c)
+[ 8614.506591] bcm4360_test 0000:03:00.0: [hw]   OTPprog[029] = 0x0000001d (data=0x001d)
+[ 8614.506612] bcm4360_test 0000:03:00.0: [hw]   OTPprog[030] = 0x0000001e (data=0x001e)
+[ 8614.506631] bcm4360_test 0000:03:00.0: [hw]   OTPprog[031] = 0x0000001f (data=0x001f)
+[ 8614.506652] bcm4360_test 0000:03:00.0: [hw]   OTPprog[032] = 0x10000020 (data=0x0020)
+[ 8614.506674] bcm4360_test 0000:03:00.0: [hw]   OTPprog[033] = 0x10000021 (data=0x0021)
+[ 8614.506695] bcm4360_test 0000:03:00.0: [hw]   OTPprog[034] = 0x10000022 (data=0x0022)
+[ 8614.506717] bcm4360_test 0000:03:00.0: [hw]   OTPprog[035] = 0x10000023 (data=0x0023)
+[ 8614.506738] bcm4360_test 0000:03:00.0: [hw]   OTPprog[036] = 0x10000024 (data=0x0024)
+[ 8614.506758] bcm4360_test 0000:03:00.0: [hw]   OTPprog[037] = 0x10000025 (data=0x0025)
+[ 8614.506778] bcm4360_test 0000:03:00.0: [hw]   OTPprog[038] = 0x10000026 (data=0x0026)
+[ 8614.506798] bcm4360_test 0000:03:00.0: [hw]   OTPprog[039] = 0x10000027 (data=0x0027)
+[ 8614.506818] bcm4360_test 0000:03:00.0: [hw]   OTPprog[040] = 0x10000028 (data=0x0028)
+[ 8614.506839] bcm4360_test 0000:03:00.0: [hw]   OTPprog[041] = 0x10000029 (data=0x0029)
+[ 8614.506861] bcm4360_test 0000:03:00.0: [hw]   OTPprog[042] = 0x1000002a (data=0x002a)
+[ 8614.506881] bcm4360_test 0000:03:00.0: [hw]   OTPprog[043] = 0x1000002b (data=0x002b)
+[ 8614.506901] bcm4360_test 0000:03:00.0: [hw]   OTPprog[044] = 0x1000002c (data=0x002c)
+[ 8614.506924] bcm4360_test 0000:03:00.0: [hw]   OTPprog[045] = 0x1000002d (data=0x002d)
+[ 8614.506944] bcm4360_test 0000:03:00.0: [hw]   OTPprog[046] = 0x1000002e (data=0x002e)
+[ 8614.506964] bcm4360_test 0000:03:00.0: [hw]   OTPprog[047] = 0x1000002f (data=0x002f)
+[ 8614.506985] bcm4360_test 0000:03:00.0: [hw]   OTPprog[048] = 0x10000030 (data=0x0030)
+[ 8614.508572] bcm4360_test 0000:03:00.0: [hw] OTP otpprog scan: 127 non-zero of 128
+[ 8614.508574] bcm4360_test 0000:03:00.0: [hw] PCIe SROM shadow (PCIe+0x800, first 16 words):
+[ 8614.508579] bcm4360_test 0000:03:00.0: [hw]   PCIeSROM[00] = 0x30003801
+[ 8614.508586] bcm4360_test 0000:03:00.0: [hw]   PCIeSROM[01] = 0x106b0112
+[ 8614.508591] bcm4360_test 0000:03:00.0: [hw]   PCIeSROM[02] = 0x1b7e0218
+[ 8614.508597] bcm4360_test 0000:03:00.0: [hw]   PCIeSROM[03] = 0x2bc40a00
+[ 8614.508602] bcm4360_test 0000:03:00.0: [hw]   PCIeSROM[04] = 0x29642a64
+[ 8614.508606] bcm4360_test 0000:03:00.0: [hw]   PCIeSROM[05] = 0x3ce72c64
+[ 8614.508611] bcm4360_test 0000:03:00.0: [hw]   PCIeSROM[06] = 0x013c460a
+[ 8614.508616] bcm4360_test 0000:03:00.0: [hw]   PCIeSROM[07] = 0x31642132
+[ 8614.508621] bcm4360_test 0000:03:00.0: [hw]   PCIeSROM[08] = 0x00051852
+[ 8614.508627] bcm4360_test 0000:03:00.0: [hw]   PCIeSROM[09] = 0x4df71f2e
+[ 8614.508632] bcm4360_test 0000:03:00.0: [hw]   PCIeSROM[10] = 0x000b8080
+[ 8614.508637] bcm4360_test 0000:03:00.0: [hw]   PCIeSROM[11] = 0x01908630
+[ 8614.508642] bcm4360_test 0000:03:00.0: [hw]   PCIeSROM[12] = 0x41f65f00
+[ 8614.508647] bcm4360_test 0000:03:00.0: [hw]   PCIeSROM[13] = 0x01918630
+[ 8614.508652] bcm4360_test 0000:03:00.0: [hw]   PCIeSROM[14] = 0x01eb8300
+[ 8614.508656] bcm4360_test 0000:03:00.0: [hw]   PCIeSROM[15] = 0x65f59f01
+[ 8614.508658] bcm4360_test 0000:03:00.0: [hw] PCIe SROM shadow: 16 non-zero of 16
+[ 8614.508664] bcm4360_test 0000:03:00.0: [hw] OTP core ID = 0xffffffff
+[ 8614.508804] bcm4360_test 0000:03:00.0: [hw] OTP_STATUS after CI enable = 0x00009000
+[ 8614.508806] bcm4360_test 0000:03:00.0: [hw] SROM key offsets after OTP init:
+[ 8614.508827] bcm4360_test 0000:03:00.0: [hw]   SROM[0] = 0xffff
+[ 8614.508847] bcm4360_test 0000:03:00.0: [hw]   SROM[1] = 0xffff
+[ 8614.508867] bcm4360_test 0000:03:00.0: [hw]   SROM[2] = 0xffff
+[ 8614.508887] bcm4360_test 0000:03:00.0: [hw]   SROM[64] = 0xffff
+[ 8614.508907] bcm4360_test 0000:03:00.0: [hw]   SROM[65] = 0xffff
+[ 8614.508928] bcm4360_test 0000:03:00.0: [hw]   SROM[66] = 0xffff
+[ 8614.508948] bcm4360_test 0000:03:00.0: [hw]   SROM[67] = 0xffff
+[ 8614.508968] bcm4360_test 0000:03:00.0: [hw]   SROM[87] = 0xffff
+[ 8614.508988] bcm4360_test 0000:03:00.0: [hw]   SROM[88] = 0xffff
+[ 8614.509008] bcm4360_test 0000:03:00.0: [hw]   SROM[100] = 0xffff
+[ 8614.509029] bcm4360_test 0000:03:00.0: [hw]   SROM[200] = 0xffff
+[ 8614.509048] bcm4360_test 0000:03:00.0: [hw]   SROM[202] = 0xffff
+[ 8614.509104] bcm4360_test 0000:03:00.0: [nvram] Loaded brcm/brcmfmac4360-pcie.txt (353 bytes raw)
+[ 8614.509108] bcm4360_test 0000:03:00.0: [nvram] Stripped to 224 bytes (padded 224)
+[ 8614.509109] bcm4360_test 0000:03:00.0: [nvram] Writing to TCM 0x9ff1c (224 bytes)
+[ 8614.509156] bcm4360_test 0000:03:00.0: [nvram] Token at TCM 0x9fffc = 0xffc70038 (words=56)
+[ 8614.509166] bcm4360_test 0000:03:00.0: [nvram] Verify TCM[0x9ff1c] = 0x6d6f7273 ('srom')
+[ 8614.509175] bcm4360_test 0000:03:00.0: [level 5] IRQ 18 registered
+[ 8614.509182] bcm4360_test 0000:03:00.0: [level 5] Bus mastering ON
+[ 8614.509202] bcm4360_test 0000:03:00.0: [level 5] PCIe interrupts cleared and unmasked
+[ 8614.509203] bcm4360_test 0000:03:00.0: [level 5] *** RELEASING ARM ***
+[ 8614.509204] bcm4360_test 0000:03:00.0: Releasing ARM CR4...
+[ 8614.509224] bcm4360_test 0000:03:00.0: ARM IOCTL after release: 0x00000001
+[ 8614.509225] bcm4360_test 0000:03:00.0: [level 5] ARM released
+[ 8614.509226] bcm4360_test 0000:03:00.0: [level 5] Polling for firmware activity...
+[ 8614.659349] bcm4360_test 0000:03:00.0: [level 5] 100ms: console_ptr=0x9af88, intstatus=0x300, mailbox=0x3, irqs=0
+[ 8615.254328] bcm4360_test 0000:03:00.0: [level 5] 500ms: console_ptr=0x9af88, intstatus=0x300, mailbox=0x3, irqs=0
+[ 8616.001787] bcm4360_test 0000:03:00.0: [level 5] 1000ms: console_ptr=0x9af88, intstatus=0x300, mailbox=0x3, irqs=0
+[ 8616.748707] bcm4360_test 0000:03:00.0: [level 5] 1500ms: console_ptr=0x9af88, intstatus=0x300, mailbox=0x3, irqs=0
+[ 8617.592701] bcm4360_test 0000:03:00.0: [level 5] Poll complete (2000ms) — bus master disabled
+[ 8617.592707] bcm4360_test 0000:03:00.0: [level 5] === DIAGNOSTICS ===
+[ 8617.592718] bcm4360_test 0000:03:00.0: [level 5] ARM IOCTL=0x00000001 RESET_CTL=0x00000000
+[ 8617.592730] bcm4360_test 0000:03:00.0: [level 5] PCIe intstatus=0x00000300 mailboxint=0x00000003
+[ 8617.592741] bcm4360_test 0000:03:00.0: [level 5] PCIe intmask=0x00000000 mailboxmask=0x00000000
+[ 8617.592743] bcm4360_test 0000:03:00.0: [level 5] IRQs received: 0
+[ 8617.592747] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x0000]=0xa5a5a5a5
+[ 8617.592751] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x0004]=0x012e0000
+[ 8617.592757] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x000c]=0x00010000
+[ 8617.592761] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x0010]=0x0009af88
+[ 8617.599955] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2e78]=0x6d6f7273
+[ 8617.599959] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2e7c]=0x3d766572
+[ 8617.599962] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2e80]=0x62003131
+[ 8617.599964] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2e84]=0x6472616f
+[ 8617.599967] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2e88]=0x65707974
+[ 8617.599969] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2e8c]=0x3078303d
+[ 8617.599972] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2e90]=0x00323535
+[ 8617.599974] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2e94]=0x72616f62
+[ 8617.599976] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2e98]=0x76657264
+[ 8617.599979] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2e9c]=0x3178303d
+[ 8617.599981] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ea0]=0x00313031
+[ 8617.599984] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ea4]=0x72616f62
+[ 8617.599986] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ea8]=0x616c6664
+[ 8617.599989] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2eac]=0x303d7367
+[ 8617.599991] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2eb0]=0x34303178
+[ 8617.599993] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2eb4]=0x30303130
+[ 8617.599996] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2eb8]=0x6f620031
+[ 8617.599998] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ebc]=0x66647261
+[ 8617.600001] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ec0]=0x7367616c
+[ 8617.600003] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ec4]=0x78303d32
+[ 8617.600005] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ec8]=0x30303030
+[ 8617.600008] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ecc]=0x32303030
+[ 8617.600010] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ed0]=0x616f6200
+[ 8617.600013] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ed4]=0x6c666472
+[ 8617.600015] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ed8]=0x33736761
+[ 8617.600017] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2edc]=0x3078303d
+[ 8617.600020] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ee0]=0x30303030
+[ 8617.600022] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ee4]=0x00303030
+[ 8617.600024] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ee8]=0x72616f62
+[ 8617.600027] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2eec]=0x6d756e64
+[ 8617.600029] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ef0]=0x6d00303d
+[ 8617.600032] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ef4]=0x64616361
+[ 8617.600034] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2ef8]=0x303d7264
+[ 8617.600036] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2efc]=0x43313a30
+[ 8617.600039] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2f00]=0x3a33423a
+[ 8617.600041] bcm4360_test 0000:03:00.0: [level 5] shared_info[0x2f04]=0x313a3130
+[ 8617.600072] bcm4360_test 0000:03:00.0: [level 5] shared_info: 53 non-zero words out of 3023
+[ 8617.600083] bcm4360_test 0000:03:00.0: [level 5] FW console: struct=0x9af88 buf=0x96f78 size=16384 written=1433
+[ 8617.600085] bcm4360_test 0000:03:00.0: [level 5] FW console (1433 bytes):
+[ 8617.600165] bcm4360_test 0000:03:00.0: [level 5] CON: Found chip type AI (0x15034360)
+[ 8617.600371] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.000 Chipc: rev 43, caps 0x58680001, chipst 0xa4d pmurev 17, pmucaps 0x10a22b11
+[ 8617.600506] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.000 si_kattach done. ccrev = 43, wd_msticks = 32
+[ 8617.600536] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.000 
+[ 8617.600720] bcm4360_test 0000:03:00.0: [level 5] CON: RTE (PCI-CDC) 6.30.223 (TOB) (r) on BCM4360 r3 @ 40.0/160.0/160.0MHz
+[ 8617.600806] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.000 pciedngl_probe called
+[ 8617.600915] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.000 Found chip type AI (0x15034360)
+[ 8617.601128] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.000 Chipc: rev 43, caps 0x58680001, chipst 0xa4d pmurev 17, pmucaps 0x10a22b11
+[ 8617.601199] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.000 wl_probe called
+[ 8617.601308] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.000 Found chip type AI (0x15034360)
+[ 8617.601521] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.000 Chipc: rev 43, caps 0x58680001, chipst 0xa4d pmurev 17, pmucaps 0x10a22b11
+[ 8617.601771] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.000 wl0: wlc_bmac_attach: Unsupported Broadcom board type (0xffff) or revision level (0x0)
+[ 8617.601903] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.000 wl0: wlc_bmac_attach: failed with err 15
+[ 8617.602022] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.000 wl0: wlc_attach: failed with err 15
+[ 8617.602057] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.000 
+[ 8617.602104] bcm4360_test 0000:03:00.0: [level 5] CON: FWID 01-9413fb21
+[ 8617.602139] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.000 
+[ 8617.602322] bcm4360_test 0000:03:00.0: [level 5] CON: TRAP 4(9cee8): pc 3e560, lr 68189, sp 9cf40, cpsr 600001df, spsr 600001ff
+[ 8617.602412] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.001   dfsr 8, dfar b80ef234
+[ 8617.602583] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.001   r0 b80ef000, r1 0, r2 0, r3 0, r4 0, r5 91cc4, r6 0
+[ 8617.602739] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.001   r7 91c3c, r8 0, r9 93610, r10 9cfec, r11 0, r12 0
+[ 8617.602775] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.001 
+[ 8617.602887] bcm4360_test 0000:03:00.0: [level 5] CON:    sp+0 00091cc4 00092440 00000000 00068189
+[ 8617.603025] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.001   sp+10 00062e20 00092440 00000000 000043b1
+[ 8617.603098] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.001 sp+1c 000043b1
+[ 8617.603166] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.001 sp+48 000043b1
+[ 8617.603233] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.001 sp+88 000043b1
+[ 8617.603301] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.001 sp+b8 000043b1
+[ 8617.603369] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.001 sp+c0 000043b1
+[ 8617.603439] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.001 sp+134 00002409
+[ 8617.603509] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.001 sp+154 00002417
+[ 8617.603587] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.001 sp+158 00002409
+[ 8617.603661] bcm4360_test 0000:03:00.0: [level 5] CON: 125888.001 sp+30b8 0000373d
+[ 8617.603665] bcm4360_test 0000:03:00.0: Halting ARM CR4...
+[ 8617.603837] bcm4360_test 0000:03:00.0: ARM IOCTL after halt: 0x00000021
+[ 8617.603849] bcm4360_test 0000:03:00.0: ARM RESET_CTL: 0x00000000
+[ 8617.603867] bcm4360_test 0000:03:00.0: [level 5] PASS — diagnostics collected
+[ 8617.603871] bcm4360_test 0000:03:00.0: === Test complete: level=5 result=0 ===
+[ 8619.651486] bcm4360_test 0000:03:00.0: BCM4360 test module remove
+[ 8619.651491] bcm4360_test 0000:03:00.0: Halting ARM CR4...
+[ 8619.651677] bcm4360_test 0000:03:00.0: ARM IOCTL after halt: 0x00000021
+[ 8619.651685] bcm4360_test 0000:03:00.0: ARM RESET_CTL: 0x00000000
+[ 8619.651698] bcm4360_test 0000:03:00.0: BCM4360 test module remove done (device left enabled)

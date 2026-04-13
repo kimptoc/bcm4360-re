@@ -1,0 +1,93 @@
+[ 8830.111170] bcm4360_test 0000:03:00.0: [level 4] fw_init_done timeout (2000ms) — firmware did not signal
+[ 8830.111187] bcm4360_test 0000:03:00.0: [level 4] IRQs received: 0
+[ 8830.111193] bcm4360_test 0000:03:00.0: [level 4] Post-release shared_info snapshot:
+[ 8830.111231] bcm4360_test 0000:03:00.0: [level 4]   [0x9d0a4] = 0xa5a5a5a5
+[ 8830.111241] bcm4360_test 0000:03:00.0: [level 4]   [0x9d0a8] = 0x87950000
+[ 8830.111249] bcm4360_test 0000:03:00.0: [level 4]   [0x9d0ac] = 0x00000000
+[ 8830.111257] bcm4360_test 0000:03:00.0: [level 4]   [0x9d0b0] = 0x00010000
+[ 8830.111265] bcm4360_test 0000:03:00.0: [level 4]   [0x9d0b4] = 0x0009af88
+[ 8830.111273] bcm4360_test 0000:03:00.0: [level 4]   [0x9d0b8] = 0x00000000
+[ 8830.111280] bcm4360_test 0000:03:00.0: [level 4]   [0x9d0bc] = 0x00000000
+[ 8830.111287] bcm4360_test 0000:03:00.0: [level 4]   [0x9d0c0] = 0x00000000
+[ 8830.111295] bcm4360_test 0000:03:00.0: [level 4] Post-release fw_init_done=0x00000000
+[ 8830.111307] bcm4360_test 0000:03:00.0: [level 4] TCM[0x00]=0xb80ef000 [0x04]=0xb82ef000 [0x08]=0xb839f000
+[ 8830.111321] bcm4360_test 0000:03:00.0: [level 4] PCIe intstatus=0x00000300
+[ 8830.111333] bcm4360_test 0000:03:00.0: [level 4] PCIe mailboxint=0x00000003
+[ 8830.111338] bcm4360_test 0000:03:00.0: [level 4] Re-halting ARM...
+[ 8830.111342] bcm4360_test 0000:03:00.0: Halting ARM CR4...
+[ 8830.111514] bcm4360_test 0000:03:00.0: ARM IOCTL after halt: 0x00000021
+[ 8830.111525] bcm4360_test 0000:03:00.0: ARM RESET_CTL: 0x00000000
+[ 8830.111545] bcm4360_test 0000:03:00.0: [level 4] PASS — ARM released and re-halted safely
+[ 8830.111550] bcm4360_test 0000:03:00.0: [level 5] Full init: FW + NVRAM + ARM release...
+[ 8830.111554] bcm4360_test 0000:03:00.0: Halting ARM CR4...
+[ 8830.111746] bcm4360_test 0000:03:00.0: ARM IOCTL after halt: 0x00000021
+[ 8830.111757] bcm4360_test 0000:03:00.0: ARM RESET_CTL: 0x00000000
+[ 8830.162311] bcm4360_test 0000:03:00.0: [level 5] FW re-downloaded (442233 bytes)
+[ 8830.162387] bcm4360_test 0000:03:00.0: [hw] CC SROM_CTRL=0x00000023
+[ 8830.162393] bcm4360_test 0000:03:00.0: [hw] CC OTP_STATUS=0x00009000
+[ 8830.162400] bcm4360_test 0000:03:00.0: [hw] CC OTP_CONTROL=0x00000000
+[ 8830.162405] bcm4360_test 0000:03:00.0: [hw] CC OTP_LAYOUT=0x00115200 (rows=512)
+[ 8830.162411] bcm4360_test 0000:03:00.0: [hw] CC OTP_PROG=0x1000007f
+[ 8830.162416] bcm4360_test 0000:03:00.0: [hw] CC caps=0x58680001 (OTP size bits[16:12]=0x0)
+[ 8830.162417] bcm4360_test 0000:03:00.0: [hw] SPROM first 8 words (CC SROM_ADDR/DATA):
+[ 8830.162439] bcm4360_test 0000:03:00.0: [hw]   SPROM[0] = 0xffff
+[ 8830.162460] bcm4360_test 0000:03:00.0: [hw]   SPROM[1] = 0xffff
+[ 8830.162481] bcm4360_test 0000:03:00.0: [hw]   SPROM[2] = 0xffff
+[ 8830.162500] bcm4360_test 0000:03:00.0: [hw]   SPROM[3] = 0xffff
+[ 8830.162521] bcm4360_test 0000:03:00.0: [hw]   SPROM[4] = 0xffff
+[ 8830.162541] bcm4360_test 0000:03:00.0: [hw]   SPROM[5] = 0xffff
+[ 8830.162561] bcm4360_test 0000:03:00.0: [hw]   SPROM[6] = 0xffff
+[ 8830.162581] bcm4360_test 0000:03:00.0: [hw]   SPROM[7] = 0xffff
+[ 8830.162582] bcm4360_test 0000:03:00.0: [hw] OTP direct scan CC+0x800..0xC00 (256 DWORDs = 512 rows):
+[ 8830.163786] bcm4360_test 0000:03:00.0: [hw] OTP CC+0x800 scan: 0 non-zero of 256
+[ 8830.163787] bcm4360_test 0000:03:00.0: [hw] PCIe SROM shadow (PCIe+0x800, 256 DWORDs):
+[ 8830.163793] bcm4360_test 0000:03:00.0: [hw]   CIS[000] = 0x30003801
+[ 8830.163800] bcm4360_test 0000:03:00.0: [hw]   CIS[001] = 0x106b0112
+[ 8830.163805] bcm4360_test 0000:03:00.0: [hw]   CIS[002] = 0x1b7e0218
+[ 8830.163809] bcm4360_test 0000:03:00.0: [hw]   CIS[003] = 0x2bc40a00
+[ 8830.163814] bcm4360_test 0000:03:00.0: [hw]   CIS[004] = 0x29642a64
+[ 8830.163821] bcm4360_test 0000:03:00.0: [hw]   CIS[005] = 0x3ce72c64
+[ 8830.163825] bcm4360_test 0000:03:00.0: [hw]   CIS[006] = 0x013c460a
+[ 8830.163832] bcm4360_test 0000:03:00.0: [hw]   CIS[007] = 0x31642132
+[ 8830.163837] bcm4360_test 0000:03:00.0: [hw]   CIS[008] = 0x00051852
+[ 8830.163841] bcm4360_test 0000:03:00.0: [hw]   CIS[009] = 0x4df71f2e
+[ 8830.163846] bcm4360_test 0000:03:00.0: [hw]   CIS[010] = 0x000b8080
+[ 8830.163851] bcm4360_test 0000:03:00.0: [hw]   CIS[011] = 0x01908630
+[ 8830.163856] bcm4360_test 0000:03:00.0: [hw]   CIS[012] = 0x41f65f00
+[ 8830.163861] bcm4360_test 0000:03:00.0: [hw]   CIS[013] = 0x01918630
+[ 8830.163866] bcm4360_test 0000:03:00.0: [hw]   CIS[014] = 0x01eb8300
+[ 8830.163871] bcm4360_test 0000:03:00.0: [hw]   CIS[015] = 0x65f59f01
+[ 8830.163875] bcm4360_test 0000:03:00.0: [hw]   CIS[016] = 0xd8008200
+[ 8830.163880] bcm4360_test 0000:03:00.0: [hw]   CIS[017] = 0x007c8010
+[ 8830.163885] bcm4360_test 0000:03:00.0: [hw]   CIS[018] = 0x00041f00
+[ 8830.163890] bcm4360_test 0000:03:00.0: [hw]   CIS[019] = 0x200c8000
+[ 8830.163914] bcm4360_test 0000:03:00.0: [hw]   CIS[024] = 0x800043a0
+[ 8830.163918] bcm4360_test 0000:03:00.0: [hw]   CIS[025] = 0x00000002
+[ 8830.163923] bcm4360_test 0000:03:00.0: [hw]   CIS[026] = 0x18003ff3
+[ 8830.163928] bcm4360_test 0000:03:00.0: [hw]   CIS[027] = 0xffff0000
+[ 8830.165008] bcm4360_test 0000:03:00.0: [hw] PCIe CIS shadow: 24 non-zero of 256 (last at [27])
+[ 8830.165132] bcm4360_test 0000:03:00.0: [hw] CIS 000: 01 38 00 30 12 01 6b 10 18 02 7e 1b 00 0a c4 2b 
+[ 8830.165135] bcm4360_test 0000:03:00.0: [hw] CIS 010: 64 2a 64 29 64 2c e7 3c 0a 46 3c 01 32 21 64 31 
+[ 8830.165139] bcm4360_test 0000:03:00.0: [hw] CIS 020: 52 18 05 00 2e 1f f7 4d 80 80 0b 00 30 86 90 01 
+[ 8830.165142] bcm4360_test 0000:03:00.0: [hw] CIS 030: 00 5f f6 41 30 86 91 01 00 83 eb 01 01 9f f5 65 
+[ 8830.165145] bcm4360_test 0000:03:00.0: [hw] CIS 040: 00 82 00 d8 10 80 7c 00 00 1f 04 00 00 80 0c 20 
+[ 8830.165148] bcm4360_test 0000:03:00.0: [hw] CIS 050: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+[ 8830.165150] bcm4360_test 0000:03:00.0: [hw] CIS tuple parse:
+[ 8830.165152] bcm4360_test 0000:03:00.0: [hw]   @000: tag=0x01 len=56
+[ 8830.165154] bcm4360_test 0000:03:00.0: [hw]   @03a: tag=0xeb len=1
+[ 8830.165156] bcm4360_test 0000:03:00.0: [hw]   @03d: tag=0x9f len=245
+[ 8830.165220] bcm4360_test 0000:03:00.0: [nvram] Loaded brcm/brcmfmac4360-pcie.txt (353 bytes raw)
+[ 8830.165225] bcm4360_test 0000:03:00.0: [nvram] Stripped to 224 bytes (padded 224)
+[ 8830.165227] bcm4360_test 0000:03:00.0: [nvram] Writing to TCM 0x9ff1c (224 bytes)
+[ 8830.165274] bcm4360_test 0000:03:00.0: [nvram] Token at TCM 0x9fffc = 0xffc70038 (words=56)
+[ 8830.165284] bcm4360_test 0000:03:00.0: [nvram] Verify TCM[0x9ff1c] = 0x6d6f7273 ('srom')
+[ 8830.165295] bcm4360_test 0000:03:00.0: [level 5] IRQ 18 registered
+[ 8830.165339] bcm4360_test 0000:03:00.0: [level 5] Bus mastering ON
+[ 8830.165360] bcm4360_test 0000:03:00.0: [level 5] PCIe interrupts cleared and unmasked
+[ 8830.165362] bcm4360_test 0000:03:00.0: [level 5] *** RELEASING ARM ***
+[ 8830.165363] bcm4360_test 0000:03:00.0: Releasing ARM CR4...
+[ 8830.165385] bcm4360_test 0000:03:00.0: ARM IOCTL after release: 0x00000001
+[ 8830.165387] bcm4360_test 0000:03:00.0: [level 5] ARM released
+[ 8830.165388] bcm4360_test 0000:03:00.0: [level 5] Polling for firmware activity...
+[ 8830.312714] bcm4360_test 0000:03:00.0: [level 5] 100ms: console_ptr=0x9af88, intstatus=0x300, mailbox=0x3, irqs=0
+[ 8830.912087] bcm4360_test 0000:03:00.0: [level 5] 500ms: console_ptr=0x9af88, intstatus=0x300, mailbox=0x3, irqs=0
