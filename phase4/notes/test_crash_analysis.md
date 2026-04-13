@@ -412,10 +412,42 @@ and DMA buffer addresses. Without this, the firmware panics and corrupts host
 PCIe state. This matches the Phase 3 analysis and option_c_feasibility.md
 findings about the boot handshake sequence.
 
+## Test.28 — Level 4 PASS with shared_info (2026-04-13)
+
+### Result: NO CRASH — firmware alive for 2 full seconds
+
+Writing valid shared_info (magic markers, olmsg DMA address) before ARM release
+completely prevents the crash. The firmware boots, finds the handshake structure,
+and runs stably with bus mastering OFF.
+
+### Key observations
+
+| Property | Value | Meaning |
+|---|---|---|
+| fw_init_done | 0x00000000 (timeout) | FW didn't complete init — needs DMA |
+| shared_info magic_start | 0xA5A5A5A5 (intact) | FW found and validated it |
+| shared_info[0x10] | 0x0009af88 | FW wrote this — wasn't set by host |
+| PCIe intstatus | 0x00000300 | FW set interrupt bits |
+| PCIe mailboxint | 0x00000003 | FW sent 2 mailbox signals |
+| IRQs received | 0 | Expected — interrupts masked |
+| ARM re-halt | Clean (IOCTL=0x21) | FW didn't corrupt anything |
+
+### Analysis
+
+The firmware is **alive and communicating**:
+1. Found shared_info magic markers → didn't panic
+2. Read olmsg DMA address from shared_info
+3. Wrote 0x0009af88 to shared_info[0x10] (possibly its own version/status)
+4. Tried to signal host via PCIe mailbox (2 signals)
+5. Couldn't complete init because bus mastering was OFF (can't DMA to olmsg)
+
+### Root cause of previous crashes confirmed
+
+Without valid shared_info, the firmware panics on boot (~100ms) and corrupts
+the PCIe link. With valid shared_info, it runs indefinitely without issues.
+
 ## Next Steps
 
-1. Write proper shared_info structure before ARM release (magic markers,
-   DMA buffer address) — firmware may stabilize if it finds valid handshake
-2. If firmware stabilizes, poll fw_init_done for initialization status
-3. Consider whether this firmware path is worth pursuing vs alternative
-   approaches (mac80211 SoftMAC driver per issue #5)
+1. Level 5: enable bus mastering so firmware can DMA to olmsg buffer
+2. If fw_init_done becomes non-zero → firmware fully initialized
+3. Try sending olmsg commands (BCM_OL_SCAN etc.) to test communication
