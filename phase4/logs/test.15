@@ -1,0 +1,53 @@
+[ 1958.149661] bcm4360_test 0000:03:00.0: === BCM4360 test: max_level=3 ===
+[ 1958.149823] bcm4360_test 0000:03:00.0: [level 0] PCI bind only — no hardware access
+[ 1958.149825] bcm4360_test 0000:03:00.0: [level 0] PASS
+[ 1958.149826] bcm4360_test 0000:03:00.0: [level 1] Reading PCI config space...
+[ 1958.149837] bcm4360_test 0000:03:00.0: [level 1] Vendor:Device = 14e4:43a0  Subsys = 106b:0112
+[ 1958.149843] bcm4360_test 0000:03:00.0: [level 1] CMD=0x0002 STATUS=0x0810
+[ 1958.149845] bcm4360_test 0000:03:00.0: [level 1]   IO=0 MEM=1 BusMaster=0
+[ 1958.149856] bcm4360_test 0000:03:00.0: [level 1] PM cap at 0x48, PMCSR=0x4008, state=D0
+[ 1958.149860] bcm4360_test 0000:03:00.0: [level 1] Post-wake CMD=0x0002 (MEM=1)
+[ 1958.149863] bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN (config 0x80) = 0x18001000
+[ 1958.149866] bcm4360_test 0000:03:00.0: [level 1] BAR0 raw=0xb0600004 phys=0xb0600000 len=0x8000
+[ 1958.149868] bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18000000 (ChipCommon)...
+[ 1958.149874] bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18000000
+[ 1958.149875] bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18003000 (PCIe core)...
+[ 1958.149881] bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18003000
+[ 1958.149883] bcm4360_test 0000:03:00.0: [level 1] BAR2 raw=0xb0400004 phys=0xb0400000 len=0x200000
+[ 1958.149903] bcm4360_test 0000:03:00.0: [level 1] PCIe link: speed=1 width=1 ctrl=0x0143
+[ 1958.149913] bcm4360_test 0000:03:00.0: [level 1] AER: uncorr=0x00008000 corr=0x00002000
+[ 1958.149916] bcm4360_test 0000:03:00.0: [level 1] Cleared AER uncorrectable errors
+[ 1958.149918] bcm4360_test 0000:03:00.0: [level 1] Cleared AER correctable errors
+[ 1958.149923] bcm4360_test 0000:03:00.0: [level 1] AER after clear: uncorr=0x00000000 corr=0x00000000
+[ 1958.149924] bcm4360_test 0000:03:00.0: [level 1] Enabling bus mastering...
+[ 1958.149932] bcm4360_test 0000:03:00.0: [level 1] CMD after bus master: 0x0006 (MEM=1 MASTER=1)
+[ 1958.149933] bcm4360_test 0000:03:00.0: [level 1] PASS
+[ 1958.149934] bcm4360_test 0000:03:00.0: [level 2] Mapping BAR0...
+[ 1958.149946] bcm4360_test 0000:03:00.0: [level 2] BAR0 mapped at ffffcf3f40bc0000 (32KB)
+[ 1958.149988] bcm4360_test 0000:03:00.0: [level 2] AER pre-read: uncorr=0x00000000 corr=0x00000000
+[ 1958.149991] bcm4360_test 0000:03:00.0: [level 2] BAR0_WIN register = 0x18000000
+[ 1958.149992] bcm4360_test 0000:03:00.0: [level 2] About to do first MMIO read (BAR0+0x00)...
+[ 1958.149995] bcm4360_test 0000:03:00.0: [level 2] BAR0[0x00] (current window) = 0x15034360
+[ 1958.149996] bcm4360_test 0000:03:00.0: [level 2] Chip ID=0x4360 Rev=3 Pkg=0
+[ 1958.150000] bcm4360_test 0000:03:00.0: [level 2] ChipCommon caps = 0x58680001
+[ 1958.150003] bcm4360_test 0000:03:00.0: [level 2] ChipCommon status = 0x1810a000
+[ 1958.150008] bcm4360_test 0000:03:00.0: [level 2] ARM wrapper[0x000] = 0x83828180 (via BAR0 window)
+[ 1958.150013] bcm4360_test 0000:03:00.0: [level 2] ARM wrapper IOCTL(0x408) = 0x00000020
+[ 1958.150016] bcm4360_test 0000:03:00.0: [level 2] PASS
+[ 1958.150016] bcm4360_test 0000:03:00.0: [level 3] BAR2 + ARM halt + FW download...
+[ 1958.150017] bcm4360: CANARY 1 — about to pci_iomap BAR2
+[ 1958.250051] bcm4360_test 0000:03:00.0: [level 3] Mapping BAR2 (TCM, 640KB)...
+[ 1958.250079] bcm4360_test 0000:03:00.0: [level 3] BAR2 mapped at ffffcf3f41100000
+[ 1958.250082] bcm4360: CANARY 2 — BAR2 mapped, about to read TCM[0]
+[ 1958.350150] bcm4360_test 0000:03:00.0: [level 3] TCM[0x00] = 0x025d4384
+[ 1958.350155] bcm4360_test 0000:03:00.0: [level 3] TCM[0x04] = 0x005b03a2 (BAR2 sanity check)
+[ 1958.350164] bcm4360_test 0000:03:00.0: [level 3] AER pre-write: uncorr=0x00000000 corr=0x00000000
+[ 1958.350166] bcm4360: CANARY 3 — AER cleared, about to arm_halt()
+[ 1958.450194] bcm4360_test 0000:03:00.0: [level 3] Halting ARM...
+[ 1958.450196] bcm4360_test 0000:03:00.0: Halting ARM CR4...
+[ 1958.450379] bcm4360_test 0000:03:00.0: ARM IOCTL after halt: 0x00000021
+[ 1958.450386] bcm4360_test 0000:03:00.0: ARM RESET_CTL: 0x00000000
+[ 1958.450387] bcm4360: CANARY 4 — arm_halt() returned
+[ 1958.550447] bcm4360_test 0000:03:00.0: [level 3] ARM RESET_CTL after halt = 0x00000000
+[ 1958.550449] bcm4360_test 0000:03:00.0: [level 3] FAIL — ARM halt not confirmed (RESET_CTL=0x00000000)
+[ 1958.550486] bcm4360_test 0000:03:00.0: === Test complete: level=3 result=-5 ===

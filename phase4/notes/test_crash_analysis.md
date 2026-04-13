@@ -233,9 +233,54 @@ the problem is specifically **posted writes accumulating without flush**.
 - Extra `udelay(20)` every 16 words to let the link drain
 - This will be slow (~160K readbacks for a 640KB firmware) but correctness first
 
+## Single-word pacing test (2026-04-13, test.14)
+
+### Result: "died at DWORD 0" — no crash, but immediate readback failure
+
+With single-word pacing, no hard lockup occurred. But the readback after the
+very first `iowrite32` returned 0xFFFFFFFF, triggering the death check.
+
+### Root cause: ARM left in reset, TCM not writable
+
+The `arm_halt()` function was leaving `RESET_CTL=1` (ARM in reset). With the ARM
+core in reset, the SOCRAM/TCM controller is also held in reset, making TCM
+**read-only**. Reads work (they return stale wl firmware data) but writes don't
+take effect — readback returns 0xFFFFFFFF.
+
+### Fix: clear RESET_CTL after setting CPUHALT
+
+Updated `arm_halt()` to match `brcmf_chip_cr4_set_passive`:
+1. Force clocks (FGC + CLK), put ARM in reset
+2. Set CPUHALT while in reset
+3. **Clear reset** — ARM stays halted via CPUHALT, but TCM becomes accessible
+4. Drop FGC, keep CPUHALT + CLK
+
+After fix: IOCTL=0x21 (CPUHALT+CLK), RESET_CTL=0x00 (out of reset).
+
+## Test.15 — stale validation check (2026-04-13)
+
+### Result: FAIL at validation, not actual hardware failure
+
+The arm_halt fix worked perfectly (IOCTL=0x21, RESET_CTL=0x00), but the
+post-halt validation check expected `RESET_CTL & RESET` to be set — the old
+(wrong) state. Fixed validation to check CPUHALT is set and RESET_CTL is clear.
+
+## Test.16 — false positive at DWORD 142 (2026-04-13)
+
+### Result: "died at DWORD 142" — firmware download started but false alarm
+
+Firmware download started successfully and reached DWORD 142 (byte offset 0x238).
+The readback check treated 0xFFFFFFFF as "device dead", but the firmware binary
+actually contains 0xFFFFFFFF at that offset — it's valid data.
+
+### Fix: compare readback against expected firmware data
+
+Changed the write verification to compare `ioread32` against `src[i]` instead of
+checking for the 0xFFFFFFFF sentinel. A 0xFFFFFFFF readback is only treated as
+device death if the firmware data at that offset is *not* 0xFFFFFFFF.
+
 ## Next Steps
 
-1. Test single-word pacing (wmb + write + readback per word)
-2. If it works, measure time and consider relaxing to 2- or 4-word pacing
-3. If still crashing at DWORD 0 — problem is not write pacing but something
-   else (e.g., ARM not properly halted, TCM not writable in current state)
+1. Test with corrected verification — expect firmware download to complete
+2. If download completes (CANARY 6), check verify/shared_info reads
+3. Consider relaxing single-word pacing to improve download speed

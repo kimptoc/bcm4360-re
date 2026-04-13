@@ -130,15 +130,35 @@ static void tcm_write32(struct bcm4360_dev *dev, u32 offset, u32 val)
 static void arm_halt(struct bcm4360_dev *dev)
 {
 	u32 val;
+	int count = 0;
 
 	dev_info(&dev->pdev->dev, "Halting ARM CR4...\n");
+
+	/* Step 1: Force clocks, put ARM in reset */
 	bp_write32(dev, ARM_WRAP_BASE + BCMA_IOCTL,
 		   BCMA_IOCTL_FGC | BCMA_IOCTL_CLK);
 	bp_write32(dev, ARM_WRAP_BASE + BCMA_RESET_CTL, BCMA_RESET_CTL_RESET);
 	usleep_range(10, 20);
+
+	/* Step 2: Set CPUHALT while still in reset */
 	bp_write32(dev, ARM_WRAP_BASE + BCMA_IOCTL,
 		   ARMCR4_CPUHALT | BCMA_IOCTL_FGC | BCMA_IOCTL_CLK);
 	usleep_range(10, 20);
+
+	/* Step 3: Take ARM out of reset — ARM stays halted via CPUHALT,
+	 * but SOCRAM/TCM becomes accessible for firmware download.
+	 * Without this step, TCM reads return 0xFFFFFFFF. */
+	bp_write32(dev, ARM_WRAP_BASE + BCMA_RESET_CTL, 0);
+	do {
+		val = bp_read32(dev, ARM_WRAP_BASE + BCMA_RESET_CTL);
+		if (!(val & BCMA_RESET_CTL_RESET))
+			break;
+		usleep_range(40, 60);
+	} while (++count < 50);
+
+	/* Step 4: Drop FGC, keep CPUHALT + CLK */
+	bp_write32(dev, ARM_WRAP_BASE + BCMA_IOCTL,
+		   ARMCR4_CPUHALT | BCMA_IOCTL_CLK);
 
 	val = bp_read32(dev, ARM_WRAP_BASE + BCMA_IOCTL);
 	dev_info(&dev->pdev->dev, "ARM IOCTL after halt: 0x%08x\n", val);
@@ -615,15 +635,19 @@ static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 	pr_emerg("bcm4360: CANARY 4 — arm_halt() returned\n");
 	mdelay(100);
 
-	/* Verify ARM halt actually took effect */
-	val = bp_read32(dev, ARM_WRAP_BASE + BCMA_RESET_CTL);
-	dev_info(&pdev->dev, "[level 3] ARM RESET_CTL after halt = 0x%08x\n", val);
-	if (!(val & BCMA_RESET_CTL_RESET)) {
-		dev_err(&pdev->dev, "[level 3] FAIL — ARM halt not confirmed (RESET_CTL=0x%08x)\n", val);
+	/* Verify ARM halt: CPUHALT set, reset cleared (TCM accessible) */
+	val = bp_read32(dev, ARM_WRAP_BASE + BCMA_IOCTL);
+	dev_info(&pdev->dev, "[level 3] ARM IOCTL after halt = 0x%08x (expect CPUHALT|CLK=0x21)\n", val);
+	if (!(val & ARMCR4_CPUHALT)) {
+		dev_err(&pdev->dev, "[level 3] FAIL — ARM CPUHALT not set (IOCTL=0x%08x)\n", val);
 		return -EIO;
 	}
-	val = bp_read32(dev, ARM_WRAP_BASE + BCMA_IOCTL);
-	dev_info(&pdev->dev, "[level 3] ARM IOCTL after halt = 0x%08x (expect CPUHALT|FGC|CLK=0x23)\n", val);
+	val = bp_read32(dev, ARM_WRAP_BASE + BCMA_RESET_CTL);
+	dev_info(&pdev->dev, "[level 3] ARM RESET_CTL after halt = 0x%08x (expect 0x00)\n", val);
+	if (val & BCMA_RESET_CTL_RESET) {
+		dev_err(&pdev->dev, "[level 3] FAIL — ARM still in reset, TCM not writable\n");
+		return -EIO;
+	}
 
 	/* Download firmware */
 	dev_info(&pdev->dev, "[level 3] Downloading firmware...\n");
@@ -652,17 +676,22 @@ static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 
 	for (i = 0; i < word_count; i++) {
 		/* Single-word pacing for Gen1 x1: barrier + write + readback
-		 * every word to prevent PCIe write-post buffer overflow.
-		 * Crashed at DWORD 0 with 16-word pacing — even one posted
-		 * write without immediate flush can overflow this link. */
+		 * every word to prevent PCIe write-post buffer overflow. */
 		wmb();
 		iowrite32(src[i], dev->tcm + (i * 4));
 		val = ioread32(dev->tcm + (i * 4));  /* flush posted write */
-		if (val == 0xFFFFFFFF) {
+		/* Verify write — but 0xFFFFFFFF is valid firmware data, so
+		 * compare against expected value instead of magic sentinel */
+		if (val != src[i]) {
 			dev_err(&pdev->dev,
-				"[level 3] FAIL — device died at DWORD %u\n", i);
-			release_firmware(fw);
-			return -EIO;
+				"[level 3] FAIL — write mismatch at DWORD %u: "
+				"wrote 0x%08x read 0x%08x\n", i, src[i], val);
+			/* If readback is 0xFFFFFFFF and we didn't write that,
+			 * device is dead. Otherwise it's a real mismatch. */
+			if (val == 0xFFFFFFFF) {
+				release_firmware(fw);
+				return -EIO;
+			}
 		}
 		/* Extra drain pause every 16 DWORDs */
 		if ((i & 0x0F) == 0x0F)
@@ -672,12 +701,15 @@ static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 			pr_emerg("bcm4360: TCM write progress: DWORD %u/%u\n",
 				 i, word_count);
 	}
-	/* Final flush */
+	/* Final flush — verify last word */
 	val = ioread32(dev->tcm + ((word_count - 1) * 4));
-	if (val == 0xFFFFFFFF) {
-		dev_err(&pdev->dev, "[level 3] FAIL — device died after final flush\n");
-		release_firmware(fw);
-		return -EIO;
+	if (val != src[word_count - 1]) {
+		dev_err(&pdev->dev, "[level 3] FAIL — final verify mismatch: "
+			"wrote 0x%08x read 0x%08x\n", src[word_count - 1], val);
+		if (val == 0xFFFFFFFF) {
+			release_firmware(fw);
+			return -EIO;
+		}
 	}
 	/* === CANARY 6: bulk write survived === */
 	pr_emerg("bcm4360: CANARY 6 — bulk TCM write complete\n");

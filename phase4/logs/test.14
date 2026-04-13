@@ -1,0 +1,58 @@
+[  829.713398] bcm4360_test 0000:03:00.0: === BCM4360 test: max_level=3 ===
+[  829.713554] bcm4360_test 0000:03:00.0: [level 0] PCI bind only — no hardware access
+[  829.713556] bcm4360_test 0000:03:00.0: [level 0] PASS
+[  829.713558] bcm4360_test 0000:03:00.0: [level 1] Reading PCI config space...
+[  829.713569] bcm4360_test 0000:03:00.0: [level 1] Vendor:Device = 14e4:43a0  Subsys = 106b:0112
+[  829.713577] bcm4360_test 0000:03:00.0: [level 1] CMD=0x0002 STATUS=0x0810
+[  829.713579] bcm4360_test 0000:03:00.0: [level 1]   IO=0 MEM=1 BusMaster=0
+[  829.713591] bcm4360_test 0000:03:00.0: [level 1] PM cap at 0x48, PMCSR=0x4008, state=D0
+[  829.713595] bcm4360_test 0000:03:00.0: [level 1] Post-wake CMD=0x0002 (MEM=1)
+[  829.713600] bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN (config 0x80) = 0x18001000
+[  829.713604] bcm4360_test 0000:03:00.0: [level 1] BAR0 raw=0xb0600004 phys=0xb0600000 len=0x8000
+[  829.713606] bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18000000 (ChipCommon)...
+[  829.713613] bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18000000
+[  829.713615] bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18003000 (PCIe core)...
+[  829.713621] bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18003000
+[  829.713625] bcm4360_test 0000:03:00.0: [level 1] BAR2 raw=0xb0400004 phys=0xb0400000 len=0x200000
+[  829.713646] bcm4360_test 0000:03:00.0: [level 1] PCIe link: speed=1 width=1 ctrl=0x0143
+[  829.713657] bcm4360_test 0000:03:00.0: [level 1] AER: uncorr=0x00008000 corr=0x00002000
+[  829.713661] bcm4360_test 0000:03:00.0: [level 1] Cleared AER uncorrectable errors
+[  829.713665] bcm4360_test 0000:03:00.0: [level 1] Cleared AER correctable errors
+[  829.713670] bcm4360_test 0000:03:00.0: [level 1] AER after clear: uncorr=0x00000000 corr=0x00000000
+[  829.713672] bcm4360_test 0000:03:00.0: [level 1] Enabling bus mastering...
+[  829.713681] bcm4360_test 0000:03:00.0: [level 1] CMD after bus master: 0x0006 (MEM=1 MASTER=1)
+[  829.713683] bcm4360_test 0000:03:00.0: [level 1] PASS
+[  829.713684] bcm4360_test 0000:03:00.0: [level 2] Mapping BAR0...
+[  829.713699] bcm4360_test 0000:03:00.0: [level 2] BAR0 mapped at ffffcfd780bd0000 (32KB)
+[  829.713709] bcm4360_test 0000:03:00.0: [level 2] AER pre-read: uncorr=0x00000000 corr=0x00000000
+[  829.713713] bcm4360_test 0000:03:00.0: [level 2] BAR0_WIN register = 0x18000000
+[  829.713715] bcm4360_test 0000:03:00.0: [level 2] About to do first MMIO read (BAR0+0x00)...
+[  829.713719] bcm4360_test 0000:03:00.0: [level 2] BAR0[0x00] (current window) = 0x15034360
+[  829.713721] bcm4360_test 0000:03:00.0: [level 2] Chip ID=0x4360 Rev=3 Pkg=0
+[  829.713725] bcm4360_test 0000:03:00.0: [level 2] ChipCommon caps = 0x58680001
+[  829.713728] bcm4360_test 0000:03:00.0: [level 2] ChipCommon status = 0x1810a000
+[  829.713735] bcm4360_test 0000:03:00.0: [level 2] ARM wrapper[0x000] = 0x83828180 (via BAR0 window)
+[  829.713742] bcm4360_test 0000:03:00.0: [level 2] ARM wrapper IOCTL(0x408) = 0x00000020
+[  829.713746] bcm4360_test 0000:03:00.0: [level 2] PASS
+[  829.713747] bcm4360_test 0000:03:00.0: [level 3] BAR2 + ARM halt + FW download...
+[  829.713749] bcm4360: CANARY 1 — about to pci_iomap BAR2
+[  829.813799] bcm4360_test 0000:03:00.0: [level 3] Mapping BAR2 (TCM, 640KB)...
+[  829.813842] bcm4360_test 0000:03:00.0: [level 3] BAR2 mapped at ffffcfd781800000
+[  829.813845] bcm4360: CANARY 2 — BAR2 mapped, about to read TCM[0]
+[  829.913929] bcm4360_test 0000:03:00.0: [level 3] TCM[0x00] = 0x02dd4304
+[  829.913935] bcm4360_test 0000:03:00.0: [level 3] TCM[0x04] = 0x085b03e3 (BAR2 sanity check)
+[  829.913944] bcm4360_test 0000:03:00.0: [level 3] AER pre-write: uncorr=0x00000000 corr=0x00000000
+[  829.913946] bcm4360: CANARY 3 — AER cleared, about to arm_halt()
+[  830.014922] bcm4360_test 0000:03:00.0: [level 3] Halting ARM...
+[  830.014924] bcm4360_test 0000:03:00.0: Halting ARM CR4...
+[  830.015051] bcm4360_test 0000:03:00.0: ARM IOCTL after halt: 0x00000023
+[  830.015058] bcm4360_test 0000:03:00.0: ARM RESET_CTL: 0x00000001
+[  830.015059] bcm4360: CANARY 4 — arm_halt() returned
+[  830.116118] bcm4360_test 0000:03:00.0: [level 3] ARM RESET_CTL after halt = 0x00000001
+[  830.116125] bcm4360_test 0000:03:00.0: [level 3] ARM IOCTL after halt = 0x00000023 (expect CPUHALT|FGC|CLK=0x23)
+[  830.116126] bcm4360_test 0000:03:00.0: [level 3] Downloading firmware...
+[  830.119702] bcm4360_test 0000:03:00.0: [level 3] Firmware: brcm/brcmfmac4360-pcie.bin (442233 bytes)
+[  830.119706] bcm4360_test 0000:03:00.0: [level 3] Writing 110559 DWORDs (442233 bytes) to TCM...
+[  830.119708] bcm4360: CANARY 5 — starting bulk TCM write (110559 DWORDs)
+[  830.262694] bcm4360_test 0000:03:00.0: [level 3] FAIL — device died at DWORD 0
+[  830.263808] bcm4360_test 0000:03:00.0: === Test complete: level=3 result=-5 ===
