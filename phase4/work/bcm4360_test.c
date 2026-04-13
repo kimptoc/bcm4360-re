@@ -78,7 +78,17 @@ MODULE_PARM_DESC(max_level, "Max test level: 0=bind, 1=config, 2=BAR0, 3=TCM+FW,
 
 /* Firmware */
 #define FW_NAME			"brcm/brcmfmac4360-pcie.bin"
+#define NVRAM_NAME		"brcm/brcmfmac4360-pcie.txt"
 #define FW_INIT_TIMEOUT_MS	2000
+
+/* NVRAM/SPROM */
+#define CHIPCOMMON_BASE		0x18000000
+#define CC_SROM_CTRL		0x0190
+#define CC_SROM_ADDR		0x019C
+#define CC_SROM_DATA		0x01A0
+#define SROM_BUSTYPE_WORD	0x0002	/* word offset for boardtype in SROM */
+#define SROM_BOARDREV_WORD	0x0003
+#define NVRAM_END_MAGIC		0x0FEED
 
 struct bcm4360_dev {
 	struct pci_dev *pdev;
@@ -235,6 +245,107 @@ static void pcie_mask_irqs(struct bcm4360_dev *dev)
 	/* Clear any pending */
 	bp_write32(dev, PCIE_CORE_BASE + PCIE_INTSTATUS, 0xFFFFFFFF);
 	bp_write32(dev, PCIE_CORE_BASE + PCIE_MAILBOXINT, 0xFFFFFFFF);
+}
+
+/* ---- SPROM reading (host side, via ChipCommon) ---- */
+
+static u16 sprom_read16(struct bcm4360_dev *dev, u16 word_offset)
+{
+	/* Set the SPROM address and read via ChipCommon */
+	bp_write32(dev, CHIPCOMMON_BASE + CC_SROM_ADDR, (u32)word_offset);
+	/* Trigger read: some chips need a specific control value */
+	udelay(10);
+	return (u16)bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_DATA);
+}
+
+static void dump_sprom(struct bcm4360_dev *dev)
+{
+	struct pci_dev *pdev = dev->pdev;
+	u16 i;
+	u32 ctrl;
+
+	/* Read SROM control register to check capability */
+	ctrl = bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_CTRL);
+	dev_info(&pdev->dev, "[sprom] CC SROM_CTRL=0x%08x\n", ctrl);
+
+	/* Dump first 16 SPROM words — these contain board ID info */
+	dev_info(&pdev->dev, "[sprom] First 16 words:\n");
+	for (i = 0; i < 16; i++) {
+		u16 val = sprom_read16(dev, i);
+		dev_info(&pdev->dev, "[sprom]   [%02u] = 0x%04x\n", i, val);
+	}
+
+	/* Also try PCI config space SPROM shadow (offset 0x100+) */
+	dev_info(&pdev->dev, "[sprom] PCI config space 0x100-0x11F:\n");
+	for (i = 0; i < 8; i++) {
+		u32 val;
+		pci_read_config_dword(pdev, 0x100 + i * 4, &val);
+		dev_info(&pdev->dev, "[sprom]   cfg[0x%03x] = 0x%08x\n",
+			 0x100 + i * 4, val);
+	}
+}
+
+/* ---- NVRAM loading to TCM ---- */
+
+/*
+ * brcmfmac NVRAM format in TCM:
+ * - NVRAM text placed at (ramsize - nvram_padded_len - 4)
+ * - Null-terminated key=value pairs, each separated by \0
+ * - Padded with \0 to 4-byte boundary
+ * - At (ramsize - 4): write the total padded length as a u32
+ *   with bit pattern: (~nvram_padded_len << 16) | nvram_padded_len
+ */
+static int load_nvram_to_tcm(struct bcm4360_dev *dev)
+{
+	struct pci_dev *pdev = dev->pdev;
+	const struct firmware *nvram_fw;
+	const char *data;
+	size_t len, padded_len;
+	u32 nvram_tcm_offset, token;
+	u32 i, word;
+	int ret;
+
+	ret = request_firmware(&nvram_fw, NVRAM_NAME, &pdev->dev);
+	if (ret) {
+		dev_info(&pdev->dev, "[nvram] No NVRAM file (%s): %d\n",
+			 NVRAM_NAME, ret);
+		return ret;
+	}
+
+	data = nvram_fw->data;
+	len = nvram_fw->size;
+	dev_info(&pdev->dev, "[nvram] Loaded %s (%zu bytes)\n", NVRAM_NAME, len);
+
+	/* Pad to 4-byte boundary */
+	padded_len = (len + 3) & ~3;
+
+	/* NVRAM goes at end of TCM: ramsize - padded_len - 4 */
+	nvram_tcm_offset = TCM_RAMSIZE - 4 - padded_len;
+	dev_info(&pdev->dev, "[nvram] Writing %zu bytes to TCM 0x%x\n",
+		 padded_len, nvram_tcm_offset);
+
+	/* Write NVRAM data to TCM, word by word */
+	for (i = 0; i < padded_len; i += 4) {
+		word = 0;
+		if (i < len)
+			word |= (u8)data[i];
+		if (i + 1 < len)
+			word |= (u32)(u8)data[i + 1] << 8;
+		if (i + 2 < len)
+			word |= (u32)(u8)data[i + 2] << 16;
+		if (i + 3 < len)
+			word |= (u32)(u8)data[i + 3] << 24;
+		tcm_write32(dev, nvram_tcm_offset + i, word);
+	}
+
+	/* Write the length token at ramsize - 4 */
+	token = (~padded_len << 16) | (padded_len & 0xFFFF);
+	tcm_write32(dev, TCM_RAMSIZE - 4, token);
+	dev_info(&pdev->dev, "[nvram] Length token at TCM 0x%x = 0x%08x\n",
+		 TCM_RAMSIZE - 4, token);
+
+	release_firmware(nvram_fw);
+	return 0;
 }
 
 /* ==== LEVEL 0: PCI bind only ==== */
@@ -938,6 +1049,14 @@ static int level5_full_init(struct bcm4360_dev *dev)
 		dev_info(&pdev->dev, "[level 5] FW re-downloaded (%zu bytes)\n", fw->size);
 		release_firmware(fw);
 	}
+
+	/* Dump SPROM from host side (before firmware can interfere) */
+	dump_sprom(dev);
+
+	/* Load NVRAM to TCM (at end of RAM, brcmfmac format) */
+	ret = load_nvram_to_tcm(dev);
+	if (ret)
+		dev_info(&pdev->dev, "[level 5] Continuing without NVRAM file\n");
 
 	/* Allocate DMA buffer if not already allocated */
 	if (!dev->olmsg_buf) {
