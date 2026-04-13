@@ -546,10 +546,62 @@ Most likely causes:
   devices typically need MSI. Without working interrupts, there's no host-to-firmware
   signaling path.
 
+### test.33 — Firmware console decoded! (2026-04-13)
+
+**BREAKTHROUGH: Firmware console reveals exact failure.**
+
+Console output (1404 bytes at TCM 0x96F78):
+```
+Found chip type AI (0x15034360)
+Chipc: rev 43, caps 0x58680001, chipst 0xa4d pmurev 17, pmucaps 0x10a22b11
+si_kattach done. ccrev = 43, wd_msticks = 32
+
+RTE (PCI-CDC) 6.30.223 (TOB) (r) on BCM4360 r3 @ 40.0/160.0/160.0MHz
+pciedngl_probe called
+Found chip type AI (0x15034360)
+wl_probe called
+wl0: wlc_bmac_attach: Unsupported Broadcom board type (0xffff) or revision level (0x0)
+wl0: wlc_bmac_attach: failed with err 15
+wl0: wlc_attach: failed with err 15
+
+FWID 01-9413fb21
+
+TRAP 4(9cee8): pc 3e560, lr 68189, sp 9cf40, cpsr 600001df, spsr 600001ff
+  dfsr 8, dfar b80ef234
+  r0 b80ef000, r1 0, r2 0, r3 0, r4 0, r5 91cc4, r6 0
+  r7 91c3c, r8 0, r9 93610, r10 9cfec, r11 0, r12 0
+```
+
+**Key findings:**
+
+1. **Firmware is PCI-CDC (FullMAC), not just offload.** Identifies as
+   "RTE (PCI-CDC) 6.30.223" — this is a full wl stack firmware using the
+   CDC (Common Driver Core) protocol, same as brcmfmac expects.
+
+2. **Root cause: Missing NVRAM.** The firmware tries `wlc_bmac_attach` which
+   reads SPROM/SROM for board type and revision. Gets 0xFFFF (bad read) and
+   0x0. On Apple hardware, NVRAM data must be provided by the host in TCM
+   alongside the firmware binary.
+
+3. **Firmware CRASHED (TRAP 4 = data abort).** After the NVRAM failure, it
+   hit a data abort accessing backplane address 0xB80EF234.
+
+4. **Board info:** Subsystem vendor=0x106B (Apple), device=0x0112 (MacBookPro11,1)
+
+**Implications:**
+- brcmfmac4360-pcie.bin IS a FullMAC firmware with full wl stack
+- The firmware CAN do WiFi independently if properly initialized
+- We need to provide NVRAM data (board type, revision, calibration, MAC) in TCM
+- No nvram file found at /lib/firmware/brcm/ — need to create or extract one
+- On Apple Macs, NVRAM data comes from EFI device properties or must be extracted
+  from macOS IO registry
+
 ## Next Steps
 
-1. **Read firmware console** (1404 bytes at TCM 0x96F78) — this will reveal exact
-   error messages or state where firmware is stuck
-2. Investigate MSI vs INTx interrupt delivery
-3. Check if PCIe DMA translation registers need programming
-4. Consider if firmware simply cannot proceed without host MAC stack interaction
+1. **Create/obtain NVRAM file** for BCM4360 on MacBookPro11,1 (Apple subsys 106b:0112)
+   - Need at minimum: boardtype, boardrev, macaddr, ccode, regrev
+   - Community may have nvram for this exact board (search broadcom-wl-devel, brcmfmac)
+   - Can extract from macOS via `ioreg -l | grep RequestedFiles` or IO registry
+2. **Load NVRAM to TCM** alongside firmware (brcmfmac puts nvram at end of RAM)
+3. Once firmware initializes, shift from olmsg to CDC protocol for host communication
+4. Reconsider project architecture — if this is FullMAC, brcmfmac might work directly
