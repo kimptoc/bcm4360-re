@@ -279,8 +279,32 @@ Changed the write verification to compare `ioread32` against `src[i]` instead of
 checking for the 0xFFFFFFFF sentinel. A 0xFFFFFFFF readback is only treated as
 device death if the firmware data at that offset is *not* 0xFFFFFFFF.
 
+## Test.17 — Level 3 PASS (2026-04-13)
+
+### Result: firmware download complete, all 110,559 DWORDs verified
+
+All fixes working together:
+- ARM halt: IOCTL=0x21 (CPUHALT+CLK), RESET_CTL=0x00 (out of reset)
+- No AER errors throughout (clean 0x00000000)
+- Bulk TCM write: 442,233 bytes (110,559 DWORDs) written with zero mismatches
+- Download time: ~0.76s (~580 KB/s with single-word pacing on Gen1 x1)
+- First word verified: 0xb80ef000 matches expected
+- Shared info region (0x9d0a4) contains firmware data (not yet initialized)
+
+### Level 3 output summary
+
+```
+CANARY 5 — starting bulk TCM write (110559 DWORDs)
+TCM write progress: DWORD 0/110559
+  ... (108 progress lines, ~7ms per 1024 DWORDs) ...
+TCM write progress: DWORD 109568/110559
+CANARY 6 — bulk TCM write complete
+FW verify: first=0xb80ef000 (expect 0xb80ef000)
+PASS — ARM halted, FW downloaded, ready for level 4
+```
+
 ## Next Steps
 
-1. Test with corrected verification — expect firmware download to complete
-2. If download completes (CANARY 6), check verify/shared_info reads
-3. Consider relaxing single-word pacing to improve download speed
+1. Level 4: ARM release + firmware boot + shared memory handshake
+2. Consider relaxing single-word pacing to improve download speed (~4x possible)
+3. Clean up canary/pr_emerg debug instrumentation once level 4 is stable

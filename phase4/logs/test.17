@@ -1,0 +1,176 @@
+[ 2690.060134] bcm4360_test 0000:03:00.0: === BCM4360 test: max_level=3 ===
+[ 2690.060178] bcm4360_test 0000:03:00.0: [level 0] PCI bind only — no hardware access
+[ 2690.060180] bcm4360_test 0000:03:00.0: [level 0] PASS
+[ 2690.060181] bcm4360_test 0000:03:00.0: [level 1] Reading PCI config space...
+[ 2690.060192] bcm4360_test 0000:03:00.0: [level 1] Vendor:Device = 14e4:43a0  Subsys = 106b:0112
+[ 2690.060199] bcm4360_test 0000:03:00.0: [level 1] CMD=0x0002 STATUS=0x0810
+[ 2690.060201] bcm4360_test 0000:03:00.0: [level 1]   IO=0 MEM=1 BusMaster=0
+[ 2690.060213] bcm4360_test 0000:03:00.0: [level 1] PM cap at 0x48, PMCSR=0x4008, state=D0
+[ 2690.060217] bcm4360_test 0000:03:00.0: [level 1] Post-wake CMD=0x0002 (MEM=1)
+[ 2690.060222] bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN (config 0x80) = 0x18102000
+[ 2690.060226] bcm4360_test 0000:03:00.0: [level 1] BAR0 raw=0xb0600004 phys=0xb0600000 len=0x8000
+[ 2690.060228] bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18000000 (ChipCommon)...
+[ 2690.060234] bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18000000
+[ 2690.060236] bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18003000 (PCIe core)...
+[ 2690.060242] bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18003000
+[ 2690.060246] bcm4360_test 0000:03:00.0: [level 1] BAR2 raw=0xb0400004 phys=0xb0400000 len=0x200000
+[ 2690.060266] bcm4360_test 0000:03:00.0: [level 1] PCIe link: speed=1 width=1 ctrl=0x0143
+[ 2690.060277] bcm4360_test 0000:03:00.0: [level 1] AER: uncorr=0x00000000 corr=0x00000000
+[ 2690.060283] bcm4360_test 0000:03:00.0: [level 1] AER after clear: uncorr=0x00000000 corr=0x00000000
+[ 2690.060285] bcm4360_test 0000:03:00.0: [level 1] Enabling bus mastering...
+[ 2690.060293] bcm4360_test 0000:03:00.0: [level 1] CMD after bus master: 0x0006 (MEM=1 MASTER=1)
+[ 2690.060295] bcm4360_test 0000:03:00.0: [level 1] PASS
+[ 2690.060296] bcm4360_test 0000:03:00.0: [level 2] Mapping BAR0...
+[ 2690.060311] bcm4360_test 0000:03:00.0: [level 2] BAR0 mapped at ffffcf3f40bc0000 (32KB)
+[ 2690.060351] bcm4360_test 0000:03:00.0: [level 2] AER pre-read: uncorr=0x00000000 corr=0x00000000
+[ 2690.060355] bcm4360_test 0000:03:00.0: [level 2] BAR0_WIN register = 0x18000000
+[ 2690.060356] bcm4360_test 0000:03:00.0: [level 2] About to do first MMIO read (BAR0+0x00)...
+[ 2690.060360] bcm4360_test 0000:03:00.0: [level 2] BAR0[0x00] (current window) = 0x15034360
+[ 2690.060361] bcm4360_test 0000:03:00.0: [level 2] Chip ID=0x4360 Rev=3 Pkg=0
+[ 2690.060366] bcm4360_test 0000:03:00.0: [level 2] ChipCommon caps = 0x58680001
+[ 2690.060369] bcm4360_test 0000:03:00.0: [level 2] ChipCommon status = 0x1810a000
+[ 2690.060375] bcm4360_test 0000:03:00.0: [level 2] ARM wrapper[0x000] = 0x83828180 (via BAR0 window)
+[ 2690.060382] bcm4360_test 0000:03:00.0: [level 2] ARM wrapper IOCTL(0x408) = 0x00000021
+[ 2690.060386] bcm4360_test 0000:03:00.0: [level 2] PASS
+[ 2690.060387] bcm4360_test 0000:03:00.0: [level 3] BAR2 + ARM halt + FW download...
+[ 2690.060388] bcm4360: CANARY 1 — about to pci_iomap BAR2
+[ 2690.160432] bcm4360_test 0000:03:00.0: [level 3] Mapping BAR2 (TCM, 640KB)...
+[ 2690.160461] bcm4360_test 0000:03:00.0: [level 3] BAR2 mapped at ffffcf3f41100000
+[ 2690.160465] bcm4360: CANARY 2 — BAR2 mapped, about to read TCM[0]
+[ 2690.261498] bcm4360_test 0000:03:00.0: [level 3] TCM[0x00] = 0xb80ef000
+[ 2690.261503] bcm4360_test 0000:03:00.0: [level 3] TCM[0x04] = 0xb82ef000 (BAR2 sanity check)
+[ 2690.261512] bcm4360_test 0000:03:00.0: [level 3] AER pre-write: uncorr=0x00000000 corr=0x00000000
+[ 2690.261513] bcm4360: CANARY 3 — AER cleared, about to arm_halt()
+[ 2690.362518] bcm4360_test 0000:03:00.0: [level 3] Halting ARM...
+[ 2690.362520] bcm4360_test 0000:03:00.0: Halting ARM CR4...
+[ 2690.362714] bcm4360_test 0000:03:00.0: ARM IOCTL after halt: 0x00000021
+[ 2690.362723] bcm4360_test 0000:03:00.0: ARM RESET_CTL: 0x00000000
+[ 2690.362724] bcm4360: CANARY 4 — arm_halt() returned
+[ 2690.463875] bcm4360_test 0000:03:00.0: [level 3] ARM IOCTL after halt = 0x00000021 (expect CPUHALT|CLK=0x21)
+[ 2690.463883] bcm4360_test 0000:03:00.0: [level 3] ARM RESET_CTL after halt = 0x00000000 (expect 0x00)
+[ 2690.463884] bcm4360_test 0000:03:00.0: [level 3] Downloading firmware...
+[ 2690.465608] bcm4360_test 0000:03:00.0: [level 3] Firmware: brcm/brcmfmac4360-pcie.bin (442233 bytes)
+[ 2690.465611] bcm4360_test 0000:03:00.0: [level 3] Writing 110559 DWORDs (442233 bytes) to TCM...
+[ 2690.465612] bcm4360: CANARY 5 — starting bulk TCM write (110559 DWORDs)
+[ 2690.566665] bcm4360: TCM write progress: DWORD 0/110559
+[ 2690.574255] bcm4360: TCM write progress: DWORD 1024/110559
+[ 2690.581834] bcm4360: TCM write progress: DWORD 2048/110559
+[ 2690.589410] bcm4360: TCM write progress: DWORD 3072/110559
+[ 2690.596974] bcm4360: TCM write progress: DWORD 4096/110559
+[ 2690.604529] bcm4360: TCM write progress: DWORD 5120/110559
+[ 2690.612042] bcm4360: TCM write progress: DWORD 6144/110559
+[ 2690.619521] bcm4360: TCM write progress: DWORD 7168/110559
+[ 2690.626971] bcm4360: TCM write progress: DWORD 8192/110559
+[ 2690.634405] bcm4360: TCM write progress: DWORD 9216/110559
+[ 2690.641868] bcm4360: TCM write progress: DWORD 10240/110559
+[ 2690.649270] bcm4360: TCM write progress: DWORD 11264/110559
+[ 2690.656686] bcm4360: TCM write progress: DWORD 12288/110559
+[ 2690.664084] bcm4360: TCM write progress: DWORD 13312/110559
+[ 2690.671541] bcm4360: TCM write progress: DWORD 14336/110559
+[ 2690.678965] bcm4360: TCM write progress: DWORD 15360/110559
+[ 2690.686354] bcm4360: TCM write progress: DWORD 16384/110559
+[ 2690.693714] bcm4360: TCM write progress: DWORD 17408/110559
+[ 2690.700994] bcm4360: TCM write progress: DWORD 18432/110559
+[ 2690.708243] bcm4360: TCM write progress: DWORD 19456/110559
+[ 2690.715521] bcm4360: TCM write progress: DWORD 20480/110559
+[ 2690.722722] bcm4360: TCM write progress: DWORD 21504/110559
+[ 2690.729873] bcm4360: TCM write progress: DWORD 22528/110559
+[ 2690.736998] bcm4360: TCM write progress: DWORD 23552/110559
+[ 2690.744128] bcm4360: TCM write progress: DWORD 24576/110559
+[ 2690.751255] bcm4360: TCM write progress: DWORD 25600/110559
+[ 2690.758404] bcm4360: TCM write progress: DWORD 26624/110559
+[ 2690.765555] bcm4360: TCM write progress: DWORD 27648/110559
+[ 2690.772680] bcm4360: TCM write progress: DWORD 28672/110559
+[ 2690.779779] bcm4360: TCM write progress: DWORD 29696/110559
+[ 2690.786890] bcm4360: TCM write progress: DWORD 30720/110559
+[ 2690.793964] bcm4360: TCM write progress: DWORD 31744/110559
+[ 2690.801018] bcm4360: TCM write progress: DWORD 32768/110559
+[ 2690.808090] bcm4360: TCM write progress: DWORD 33792/110559
+[ 2690.815135] bcm4360: TCM write progress: DWORD 34816/110559
+[ 2690.822235] bcm4360: TCM write progress: DWORD 35840/110559
+[ 2690.829286] bcm4360: TCM write progress: DWORD 36864/110559
+[ 2690.836325] bcm4360: TCM write progress: DWORD 37888/110559
+[ 2690.843327] bcm4360: TCM write progress: DWORD 38912/110559
+[ 2690.850325] bcm4360: TCM write progress: DWORD 39936/110559
+[ 2690.857339] bcm4360: TCM write progress: DWORD 40960/110559
+[ 2690.864350] bcm4360: TCM write progress: DWORD 41984/110559
+[ 2690.871352] bcm4360: TCM write progress: DWORD 43008/110559
+[ 2690.878339] bcm4360: TCM write progress: DWORD 44032/110559
+[ 2690.885320] bcm4360: TCM write progress: DWORD 45056/110559
+[ 2690.892297] bcm4360: TCM write progress: DWORD 46080/110559
+[ 2690.899237] bcm4360: TCM write progress: DWORD 47104/110559
+[ 2690.906112] bcm4360: TCM write progress: DWORD 48128/110559
+[ 2690.912968] bcm4360: TCM write progress: DWORD 49152/110559
+[ 2690.919837] bcm4360: TCM write progress: DWORD 50176/110559
+[ 2690.926691] bcm4360: TCM write progress: DWORD 51200/110559
+[ 2690.933551] bcm4360: TCM write progress: DWORD 52224/110559
+[ 2690.940415] bcm4360: TCM write progress: DWORD 53248/110559
+[ 2690.947231] bcm4360: TCM write progress: DWORD 54272/110559
+[ 2690.954092] bcm4360: TCM write progress: DWORD 55296/110559
+[ 2690.960941] bcm4360: TCM write progress: DWORD 56320/110559
+[ 2690.967769] bcm4360: TCM write progress: DWORD 57344/110559
+[ 2690.974626] bcm4360: TCM write progress: DWORD 58368/110559
+[ 2690.981461] bcm4360: TCM write progress: DWORD 59392/110559
+[ 2690.988278] bcm4360: TCM write progress: DWORD 60416/110559
+[ 2690.995127] bcm4360: TCM write progress: DWORD 61440/110559
+[ 2691.001999] bcm4360: TCM write progress: DWORD 62464/110559
+[ 2691.008904] bcm4360: TCM write progress: DWORD 63488/110559
+[ 2691.015741] bcm4360: TCM write progress: DWORD 64512/110559
+[ 2691.022579] bcm4360: TCM write progress: DWORD 65536/110559
+[ 2691.029436] bcm4360: TCM write progress: DWORD 66560/110559
+[ 2691.036294] bcm4360: TCM write progress: DWORD 67584/110559
+[ 2691.043131] bcm4360: TCM write progress: DWORD 68608/110559
+[ 2691.049967] bcm4360: TCM write progress: DWORD 69632/110559
+[ 2691.056823] bcm4360: TCM write progress: DWORD 70656/110559
+[ 2691.063674] bcm4360: TCM write progress: DWORD 71680/110559
+[ 2691.070542] bcm4360: TCM write progress: DWORD 72704/110559
+[ 2691.077382] bcm4360: TCM write progress: DWORD 73728/110559
+[ 2691.084229] bcm4360: TCM write progress: DWORD 74752/110559
+[ 2691.091101] bcm4360: TCM write progress: DWORD 75776/110559
+[ 2691.097953] bcm4360: TCM write progress: DWORD 76800/110559
+[ 2691.104819] bcm4360: TCM write progress: DWORD 77824/110559
+[ 2691.111663] bcm4360: TCM write progress: DWORD 78848/110559
+[ 2691.118484] bcm4360: TCM write progress: DWORD 79872/110559
+[ 2691.125328] bcm4360: TCM write progress: DWORD 80896/110559
+[ 2691.132163] bcm4360: TCM write progress: DWORD 81920/110559
+[ 2691.139018] bcm4360: TCM write progress: DWORD 82944/110559
+[ 2691.145881] bcm4360: TCM write progress: DWORD 83968/110559
+[ 2691.152738] bcm4360: TCM write progress: DWORD 84992/110559
+[ 2691.159574] bcm4360: TCM write progress: DWORD 86016/110559
+[ 2691.166414] bcm4360: TCM write progress: DWORD 87040/110559
+[ 2691.173250] bcm4360: TCM write progress: DWORD 88064/110559
+[ 2691.180099] bcm4360: TCM write progress: DWORD 89088/110559
+[ 2691.186951] bcm4360: TCM write progress: DWORD 90112/110559
+[ 2691.193801] bcm4360: TCM write progress: DWORD 91136/110559
+[ 2691.200650] bcm4360: TCM write progress: DWORD 92160/110559
+[ 2691.207488] bcm4360: TCM write progress: DWORD 93184/110559
+[ 2691.214353] bcm4360: TCM write progress: DWORD 94208/110559
+[ 2691.221203] bcm4360: TCM write progress: DWORD 95232/110559
+[ 2691.228073] bcm4360: TCM write progress: DWORD 96256/110559
+[ 2691.234946] bcm4360: TCM write progress: DWORD 97280/110559
+[ 2691.241781] bcm4360: TCM write progress: DWORD 98304/110559
+[ 2691.248633] bcm4360: TCM write progress: DWORD 99328/110559
+[ 2691.255473] bcm4360: TCM write progress: DWORD 100352/110559
+[ 2691.262297] bcm4360: TCM write progress: DWORD 101376/110559
+[ 2691.269136] bcm4360: TCM write progress: DWORD 102400/110559
+[ 2691.275975] bcm4360: TCM write progress: DWORD 103424/110559
+[ 2691.282807] bcm4360: TCM write progress: DWORD 104448/110559
+[ 2691.289653] bcm4360: TCM write progress: DWORD 105472/110559
+[ 2691.296510] bcm4360: TCM write progress: DWORD 106496/110559
+[ 2691.303373] bcm4360: TCM write progress: DWORD 107520/110559
+[ 2691.310205] bcm4360: TCM write progress: DWORD 108544/110559
+[ 2691.317065] bcm4360: TCM write progress: DWORD 109568/110559
+[ 2691.323675] bcm4360: CANARY 6 — bulk TCM write complete
+[ 2691.423921] bcm4360_test 0000:03:00.0: [level 3] FW write complete
+[ 2691.423957] bcm4360_test 0000:03:00.0: [level 3] FW verify: first=0xb80ef000 (expect 0xb80ef000)
+[ 2691.424017] bcm4360_test 0000:03:00.0: [level 3] TCM at shared_info offset 0x9d0a4:
+[ 2691.424058] bcm4360_test 0000:03:00.0: [level 3]   [0x9d0a4] = 0x555c0631
+[ 2691.424063] bcm4360_test 0000:03:00.0: [level 3]   [0x9d0a8] = 0x232703c4
+[ 2691.424065] bcm4360_test 0000:03:00.0: [level 3]   [0x9d0ac] = 0x7a3681cd
+[ 2691.424068] bcm4360_test 0000:03:00.0: [level 3]   [0x9d0b0] = 0xde4cd7ed
+[ 2691.424071] bcm4360_test 0000:03:00.0: [level 3]   [0x9d0b4] = 0xc7ea90bb
+[ 2691.424073] bcm4360_test 0000:03:00.0: [level 3]   [0x9d0b8] = 0x66918f50
+[ 2691.424076] bcm4360_test 0000:03:00.0: [level 3]   [0x9d0bc] = 0x5befdbeb
+[ 2691.424079] bcm4360_test 0000:03:00.0: [level 3]   [0x9d0c0] = 0x84f44b2a
+[ 2691.424080] bcm4360_test 0000:03:00.0: [level 3] PASS — ARM halted, FW downloaded, ready for level 4
+[ 2691.424081] bcm4360_test 0000:03:00.0: === Test complete: level=3 result=0 ===
