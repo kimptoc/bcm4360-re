@@ -26,7 +26,7 @@
 
 static int max_level = 0;
 module_param(max_level, int, 0444);
-MODULE_PARM_DESC(max_level, "Max test level: 0=bind, 1=config, 2=BAR0, 3=full");
+MODULE_PARM_DESC(max_level, "Max test level: 0=bind, 1=config, 2=BAR0, 3=TCM+FW, 4=ARM release (no DMA), 5=ARM+DMA+olmsg");
 
 /* PCI IDs */
 #define BCM4360_VENDOR_ID	0x14e4
@@ -170,18 +170,49 @@ static void arm_release(struct bcm4360_dev *dev)
 	dev_info(&dev->pdev->dev, "ARM IOCTL after release: 0x%08x\n", val);
 }
 
-/* ---- ISR ---- */
+/* ---- Interrupt handling ---- */
+
+/* PCIe core registers (within BAR0 when window set to PCIe core 0x18003000) */
+#define PCIE_CORE_BASE		0x18003000
+#define PCIE_INTSTATUS		0x020	/* offset within PCIe core */
+#define PCIE_INTMASK		0x024
+#define PCIE_MAILBOXINT		0x048
+#define PCIE_MAILBOXMASK	0x04C
 
 static irqreturn_t bcm4360_isr(int irq, void *data)
 {
 	struct bcm4360_dev *dev = data;
+	u32 intstatus;
+
+	if (!dev->regs)
+		return IRQ_NONE;
+
+	/* Read and clear PCIe core interrupt status via backplane */
+	intstatus = bp_read32(dev, PCIE_CORE_BASE + PCIE_INTSTATUS);
+	if (intstatus == 0 || intstatus == 0xFFFFFFFF)
+		return IRQ_NONE;
+
+	/* Clear by writing back (W1C) */
+	bp_write32(dev, PCIE_CORE_BASE + PCIE_INTSTATUS, intstatus);
 
 	dev->irq_count++;
 	if (dev->irq_count <= 10)
-		dev_info(&dev->pdev->dev, "IRQ #%d\n", dev->irq_count);
+		dev_info(&dev->pdev->dev, "IRQ #%d intstatus=0x%08x\n",
+			 dev->irq_count, intstatus);
 	else if (dev->irq_count == 11)
-		dev_info(&dev->pdev->dev, "IRQ log suppressed\n");
+		dev_info(&dev->pdev->dev, "IRQ log suppressed (further IRQs silenced)\n");
+
 	return IRQ_HANDLED;
+}
+
+/* Mask all PCIe core interrupts */
+static void pcie_mask_irqs(struct bcm4360_dev *dev)
+{
+	bp_write32(dev, PCIE_CORE_BASE + PCIE_INTMASK, 0);
+	bp_write32(dev, PCIE_CORE_BASE + PCIE_MAILBOXMASK, 0);
+	/* Clear any pending */
+	bp_write32(dev, PCIE_CORE_BASE + PCIE_INTSTATUS, 0xFFFFFFFF);
+	bp_write32(dev, PCIE_CORE_BASE + PCIE_MAILBOXINT, 0xFFFFFFFF);
 }
 
 /* ==== LEVEL 0: PCI bind only ==== */
@@ -490,10 +521,17 @@ static int level2_bar0_access(struct bcm4360_dev *dev)
 	val = ioread32(dev->regs + 0xFC);  /* chip status */
 	dev_info(&pdev->dev, "[level 2] ChipCommon status = 0x%08x\n", val);
 
-	/* Test BAR0 window switching: point to ARM wrapper and read IOCTL */
+	/* Test BAR0 window switching: point to ARM wrapper and read base */
 	pci_write_config_dword(pdev, PCI_BAR0_WIN, ARM_WRAP_BASE & ~(BAR0_WIN_SIZE - 1));
 	val = ioread32(dev->regs + (ARM_WRAP_BASE & (BAR0_WIN_SIZE - 1)));
-	dev_info(&pdev->dev, "[level 2] ARM wrapper IOCTL = 0x%08x (via BAR0 window)\n", val);
+	dev_info(&pdev->dev, "[level 2] ARM wrapper[0x000] = 0x%08x (via BAR0 window)\n", val);
+	/* Also read actual IOCTL at offset 0x408 */
+	{
+		u32 ioctl_addr = ARM_WRAP_BASE + BCMA_IOCTL;
+		pci_write_config_dword(pdev, PCI_BAR0_WIN, ioctl_addr & ~(BAR0_WIN_SIZE - 1));
+		val = ioread32(dev->regs + (ioctl_addr & (BAR0_WIN_SIZE - 1)));
+		dev_info(&pdev->dev, "[level 2] ARM wrapper IOCTL(0x408) = 0x%08x\n", val);
+	}
 
 	/* Restore BAR0 window to default (ChipCommon) */
 	pci_write_config_dword(pdev, PCI_BAR0_WIN, 0x18000000);
@@ -502,19 +540,17 @@ static int level2_bar0_access(struct bcm4360_dev *dev)
 	return 0;
 }
 
-/* ==== LEVEL 3: Full init (BAR2 + ARM + FW + olmsg) ==== */
+/* ==== LEVEL 3: BAR2 (TCM) mapping + halt ARM + download FW ==== */
 
-static int level3_full_init(struct bcm4360_dev *dev)
+static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 {
 	struct pci_dev *pdev = dev->pdev;
 	const struct firmware *fw;
 	const u32 *src;
-	u32 word_count, i, val, base;
-	u32 *buf;
-	bool irq_registered = false;
+	u32 word_count, i, val;
 	int ret;
 
-	dev_info(&pdev->dev, "[level 3] Full initialization...\n");
+	dev_info(&pdev->dev, "[level 3] BAR2 + ARM halt + FW download...\n");
 
 	/* Map BAR2 (TCM) */
 	dev_info(&pdev->dev, "[level 3] Mapping BAR2 (TCM, %dKB)...\n", BAR2_SIZE / 1024);
@@ -525,7 +561,7 @@ static int level3_full_init(struct bcm4360_dev *dev)
 	}
 	dev_info(&pdev->dev, "[level 3] BAR2 mapped at %px\n", dev->tcm);
 
-	/* Verify TCM access */
+	/* Verify TCM access with multiple reads */
 	val = tcm_read32(dev, 0);
 	dev_info(&pdev->dev, "[level 3] TCM[0x00] = 0x%08x\n", val);
 	if (val == 0xFFFFFFFF) {
@@ -533,18 +569,45 @@ static int level3_full_init(struct bcm4360_dev *dev)
 		dev->result = 1;
 		return -EIO;
 	}
+	val = tcm_read32(dev, 4);
+	dev_info(&pdev->dev, "[level 3] TCM[0x04] = 0x%08x (BAR2 sanity check)\n", val);
 
-	/* Allocate DMA buffer */
-	dev->olmsg_buf = dma_alloc_coherent(&pdev->dev, OLMSG_BUF_SIZE,
-					    &dev->olmsg_dma, GFP_KERNEL);
-	if (!dev->olmsg_buf) {
-		dev_err(&pdev->dev, "[level 3] FAIL — DMA alloc failed\n");
-		return -ENOMEM;
+	/* Check and clear AER errors before bulk write — stale errors on
+	 * Gen1 x1 link can cause fatal lockup during sustained MMIO traffic */
+	{
+		int aer_pos = pci_find_ext_capability(pdev, PCI_EXT_CAP_ID_ERR);
+		if (aer_pos) {
+			u32 uncorr, corr;
+
+			pci_read_config_dword(pdev, aer_pos + 0x04, &uncorr);
+			pci_read_config_dword(pdev, aer_pos + 0x10, &corr);
+			dev_info(&pdev->dev,
+				 "[level 3] AER pre-write: uncorr=0x%08x corr=0x%08x\n",
+				 uncorr, corr);
+			if (uncorr) {
+				pci_write_config_dword(pdev, aer_pos + 0x04, uncorr);
+				dev_info(&pdev->dev, "[level 3] Cleared AER uncorrectable errors\n");
+			}
+			if (corr) {
+				pci_write_config_dword(pdev, aer_pos + 0x10, corr);
+				dev_info(&pdev->dev, "[level 3] Cleared AER correctable errors\n");
+			}
+		}
 	}
 
-	/* Halt ARM */
+	/* Halt ARM before firmware download */
 	dev_info(&pdev->dev, "[level 3] Halting ARM...\n");
 	arm_halt(dev);
+
+	/* Verify ARM halt actually took effect */
+	val = bp_read32(dev, ARM_WRAP_BASE + BCMA_RESET_CTL);
+	dev_info(&pdev->dev, "[level 3] ARM RESET_CTL after halt = 0x%08x\n", val);
+	if (!(val & BCMA_RESET_CTL_RESET)) {
+		dev_err(&pdev->dev, "[level 3] FAIL — ARM halt not confirmed (RESET_CTL=0x%08x)\n", val);
+		return -EIO;
+	}
+	val = bp_read32(dev, ARM_WRAP_BASE + BCMA_IOCTL);
+	dev_info(&pdev->dev, "[level 3] ARM IOCTL after halt = 0x%08x (expect CPUHALT|FGC|CLK=0x23)\n", val);
 
 	/* Download firmware */
 	dev_info(&pdev->dev, "[level 3] Downloading firmware...\n");
@@ -563,8 +626,32 @@ static int level3_full_init(struct bcm4360_dev *dev)
 
 	src = (const u32 *)fw->data;
 	word_count = (fw->size + 3) / 4;
-	for (i = 0; i < word_count; i++)
+	dev_info(&pdev->dev, "[level 3] Writing %u DWORDs (%zu bytes) to TCM...\n",
+		 word_count, fw->size);
+	for (i = 0; i < word_count; i++) {
 		iowrite32(src[i], dev->tcm + (i * 4));
+		/* Pace writes: read-back every 64 DWORDs (256 bytes) to flush
+		 * PCIe write buffers — Gen1 x1 link overflows at 256 DWORDs */
+		if ((i & 0x3F) == 0x3F) {
+			val = ioread32(dev->tcm + (i * 4));
+			if (val == 0xFFFFFFFF) {
+				dev_err(&pdev->dev,
+					"[level 3] FAIL — device died mid-transfer at DWORD %u\n", i);
+				release_firmware(fw);
+				return -EIO;
+			}
+			/* Let PCIe link drain between chunks */
+			udelay(10);
+		}
+	}
+	/* Final flush */
+	val = ioread32(dev->tcm + ((word_count - 1) * 4));
+	if (val == 0xFFFFFFFF) {
+		dev_err(&pdev->dev, "[level 3] FAIL — device died after final flush\n");
+		release_firmware(fw);
+		return -EIO;
+	}
+	dev_info(&pdev->dev, "[level 3] FW write complete\n");
 
 	val = ioread32(dev->tcm);
 	dev_info(&pdev->dev, "[level 3] FW verify: first=0x%08x (expect 0x%08x)\n",
@@ -576,20 +663,195 @@ static int level3_full_init(struct bcm4360_dev *dev)
 	}
 	release_firmware(fw);
 
+	/* Read the TCM region where shared_info will go (diagnostic) */
+	{
+		u32 base = SHARED_INFO_OFFSET;
+		dev_info(&pdev->dev, "[level 3] TCM at shared_info offset 0x%x:\n", base);
+		for (i = 0; i < 8; i++)
+			dev_info(&pdev->dev, "[level 3]   [0x%x] = 0x%08x\n",
+				 base + i * 4, tcm_read32(dev, base + i * 4));
+	}
+
+	dev_info(&pdev->dev, "[level 3] PASS — ARM halted, FW downloaded, ready for level 4\n");
+	return 0;
+}
+
+/* ==== LEVEL 4: ARM release (NO DMA, NO bus mastering) ==== */
+/*
+ * This is the dangerous step. We release the ARM with:
+ * - Bus mastering OFF (firmware cannot DMA)
+ * - IRQs masked at the PCIe core (firmware cannot generate interrupts)
+ * - An ISR registered just in case (reads + clears intstatus)
+ * - NO shared_info written (firmware will fail to find magic, but safely)
+ *
+ * Expected outcome: ARM runs, finds no valid shared_info, spins or halts.
+ * We observe via TCM reads whether the firmware modified any memory.
+ */
+static int level4_arm_release_safe(struct bcm4360_dev *dev)
+{
+	struct pci_dev *pdev = dev->pdev;
+	u32 i, val, base;
+	bool irq_registered = false;
+	int ret;
+
+	dev_info(&pdev->dev, "[level 4] ARM release (NO DMA, NO bus mastering)...\n");
+
+	if (!dev->tcm || !dev->regs) {
+		dev_err(&pdev->dev, "[level 4] FAIL — BAR0/BAR2 not mapped (run level 2+3 first)\n");
+		return -EINVAL;
+	}
+
+	/* Ensure bus mastering is OFF — firmware cannot DMA */
+	pci_clear_master(pdev);
+
+	/* Mask all PCIe core interrupts before ARM release */
+	pcie_mask_irqs(dev);
+
+	/* Register ISR as safety net */
+	ret = request_irq(pdev->irq, bcm4360_isr, IRQF_SHARED, DRV_NAME, dev);
+	if (ret) {
+		dev_err(&pdev->dev, "[level 4] IRQ registration failed: %d\n", ret);
+		return ret;
+	}
+	irq_registered = true;
+	dev_info(&pdev->dev, "[level 4] IRQ %d registered, PCIe interrupts masked\n", pdev->irq);
+
+	/* Snapshot TCM near shared_info region before ARM release */
+	base = SHARED_INFO_OFFSET;
+	dev_info(&pdev->dev, "[level 4] Pre-release TCM snapshot (shared_info area):\n");
+	for (i = 0; i < 4; i++)
+		dev_info(&pdev->dev, "[level 4]   [0x%x] = 0x%08x\n",
+			 base + i * 4, tcm_read32(dev, base + i * 4));
+
+	/* Snapshot FW init done location */
+	val = tcm_read32(dev, base + SI_FW_INIT_DONE);
+	dev_info(&pdev->dev, "[level 4] Pre-release fw_init_done=0x%08x\n", val);
+
+	/* === RELEASE ARM === */
+	dev_info(&pdev->dev, "[level 4] *** RELEASING ARM (no DMA, no bus master) ***\n");
+	arm_release(dev);
+	dev_info(&pdev->dev, "[level 4] ARM released — still alive\n");
+
+	/* Wait and observe — firmware runs but cannot DMA */
+	msleep(100);
+	dev_info(&pdev->dev, "[level 4] 100ms post-release — alive, IRQs=%d\n", dev->irq_count);
+
+	msleep(200);
+	dev_info(&pdev->dev, "[level 4] 300ms post-release — alive, IRQs=%d\n", dev->irq_count);
+
+	msleep(500);
+	dev_info(&pdev->dev, "[level 4] 800ms post-release — alive, IRQs=%d\n", dev->irq_count);
+
+	msleep(1200);
+	dev_info(&pdev->dev, "[level 4] 2000ms post-release — alive, IRQs=%d\n", dev->irq_count);
+
+	/* Read TCM to see what the firmware did */
+	dev_info(&pdev->dev, "[level 4] Post-release TCM snapshot:\n");
+	for (i = 0; i < 4; i++)
+		dev_info(&pdev->dev, "[level 4]   [0x%x] = 0x%08x\n",
+			 base + i * 4, tcm_read32(dev, base + i * 4));
+	val = tcm_read32(dev, base + SI_FW_INIT_DONE);
+	dev_info(&pdev->dev, "[level 4] Post-release fw_init_done=0x%08x\n", val);
+
+	/* Check first few words of TCM (firmware entry point area) */
+	dev_info(&pdev->dev, "[level 4] TCM[0x00]=0x%08x [0x04]=0x%08x [0x08]=0x%08x\n",
+		 tcm_read32(dev, 0), tcm_read32(dev, 4), tcm_read32(dev, 8));
+
+	/* Read PCIe core intstatus to see if FW tried to signal */
+	val = bp_read32(dev, PCIE_CORE_BASE + PCIE_INTSTATUS);
+	dev_info(&pdev->dev, "[level 4] PCIe intstatus=0x%08x\n", val);
+	val = bp_read32(dev, PCIE_CORE_BASE + PCIE_MAILBOXINT);
+	dev_info(&pdev->dev, "[level 4] PCIe mailboxint=0x%08x\n", val);
+
+	/* Halt ARM again for safety */
+	dev_info(&pdev->dev, "[level 4] Re-halting ARM...\n");
+	arm_halt(dev);
+
+	if (irq_registered)
+		free_irq(pdev->irq, dev);
+
+	dev_info(&pdev->dev, "[level 4] PASS — ARM released and re-halted safely\n");
+	return 0;
+}
+
+/* ==== LEVEL 5: ARM release with shared_info + DMA (full init) ==== */
+
+static int level5_full_init(struct bcm4360_dev *dev)
+{
+	struct pci_dev *pdev = dev->pdev;
+	u32 i, val, base;
+	u32 *buf;
+	bool irq_registered = false;
+	int ret;
+
+	dev_info(&pdev->dev, "[level 5] Full init with shared_info + DMA...\n");
+
+	if (!dev->tcm || !dev->regs) {
+		dev_err(&pdev->dev, "[level 5] FAIL — BAR0/BAR2 not mapped\n");
+		return -EINVAL;
+	}
+
+	/* Halt ARM (may still be running from level 4) */
+	arm_halt(dev);
+
+	/* Ensure bus mastering OFF */
+	pci_clear_master(pdev);
+
+	/* Mask PCIe interrupts */
+	pcie_mask_irqs(dev);
+
+	/* Re-download firmware (ARM may have modified TCM) */
+	{
+		const struct firmware *fw;
+		const u32 *src;
+		u32 word_count;
+
+		ret = request_firmware(&fw, FW_NAME, &pdev->dev);
+		if (ret) {
+			dev_err(&pdev->dev, "[level 5] Firmware load failed: %d\n", ret);
+			return ret;
+		}
+		src = (const u32 *)fw->data;
+		word_count = (fw->size + 3) / 4;
+		for (i = 0; i < word_count; i++)
+			iowrite32(src[i], dev->tcm + (i * 4));
+		dev_info(&pdev->dev, "[level 5] FW re-downloaded (%zu bytes)\n", fw->size);
+		release_firmware(fw);
+	}
+
+	/* Allocate DMA buffer if not already allocated */
+	if (!dev->olmsg_buf) {
+		dev->olmsg_buf = dma_alloc_coherent(&pdev->dev, OLMSG_BUF_SIZE,
+						    &dev->olmsg_dma, GFP_KERNEL);
+		if (!dev->olmsg_buf) {
+			dev_err(&pdev->dev, "[level 5] FAIL — DMA alloc failed\n");
+			return -ENOMEM;
+		}
+	}
+
 	/* Setup olmsg ring buffer */
 	buf = dev->olmsg_buf;
 	memset(buf, 0, OLMSG_BUF_SIZE);
-	buf[0] = OLMSG_HEADER_SIZE;
-	buf[1] = OLMSG_RING_SIZE;
-	buf[4] = OLMSG_HEADER_SIZE + OLMSG_RING_SIZE;
-	buf[5] = OLMSG_RING_SIZE;
-	dev_info(&pdev->dev, "[level 3] olmsg: dma=0x%llx\n", (u64)dev->olmsg_dma);
+	/* Ring 0 (host→fw): data at offset 0x20, size 0x7800 */
+	buf[0] = OLMSG_HEADER_SIZE;	/* data_offset */
+	buf[1] = OLMSG_RING_SIZE;	/* size */
+	buf[2] = 0;			/* read_ptr */
+	buf[3] = 0;			/* write_ptr */
+	/* Ring 1 (fw→host): data at offset 0x20+0x7800, size 0x7800 */
+	buf[4] = OLMSG_HEADER_SIZE + OLMSG_RING_SIZE;	/* data_offset */
+	buf[5] = OLMSG_RING_SIZE;	/* size */
+	buf[6] = 0;			/* read_ptr */
+	buf[7] = 0;			/* write_ptr */
+	dev_info(&pdev->dev, "[level 5] olmsg buffer: dma=0x%llx virt=%px\n",
+		 (u64)dev->olmsg_dma, dev->olmsg_buf);
 
-	/* Write shared_info */
+	/* Write shared_info to TCM */
 	base = SHARED_INFO_OFFSET;
-	dev_info(&pdev->dev, "[level 3] Writing shared_info at TCM 0x%x...\n", base);
+	dev_info(&pdev->dev, "[level 5] Writing shared_info at TCM 0x%x...\n", base);
+	/* Zero the entire shared_info structure first */
 	for (i = 0; i < SHARED_INFO_SIZE / 4; i++)
 		tcm_write32(dev, base + i * 4, 0);
+	/* Write required fields */
 	tcm_write32(dev, base + SI_MAGIC_START, SHARED_MAGIC_START);
 	tcm_write32(dev, base + SI_OLMSG_PHYS_LO, lower_32_bits(dev->olmsg_dma));
 	tcm_write32(dev, base + SI_OLMSG_PHYS_HI, upper_32_bits(dev->olmsg_dma));
@@ -597,66 +859,83 @@ static int level3_full_init(struct bcm4360_dev *dev)
 	tcm_write32(dev, base + SI_FW_INIT_DONE, 0);
 	tcm_write32(dev, base + SI_MAGIC_END, SHARED_MAGIC_END);
 
+	/* Verify shared_info writes */
 	val = tcm_read32(dev, base + SI_MAGIC_START);
-	dev_info(&pdev->dev, "[level 3] shared_info magic_start=0x%08x\n", val);
+	dev_info(&pdev->dev, "[level 5] shared_info magic_start=0x%08x (expect 0x%08x)\n",
+		 val, SHARED_MAGIC_START);
+	val = tcm_read32(dev, base + SI_MAGIC_END);
+	dev_info(&pdev->dev, "[level 5] shared_info magic_end=0x%08x (expect 0x%08x)\n",
+		 val, SHARED_MAGIC_END);
 
-	/* Disable bus mastering, register IRQ, release ARM */
-	pci_clear_master(pdev);
-
+	/* Register ISR */
 	ret = request_irq(pdev->irq, bcm4360_isr, IRQF_SHARED, DRV_NAME, dev);
 	if (ret) {
-		dev_err(&pdev->dev, "[level 3] IRQ registration failed: %d\n", ret);
+		dev_err(&pdev->dev, "[level 5] IRQ registration failed: %d\n", ret);
 		return ret;
 	}
 	irq_registered = true;
-	dev_info(&pdev->dev, "[level 3] IRQ %d registered\n", pdev->irq);
+	dev_info(&pdev->dev, "[level 5] IRQ %d registered\n", pdev->irq);
 
-	dev_info(&pdev->dev, "[level 3] *** RELEASING ARM ***\n");
+	/* Release ARM (still no bus mastering — FW can't DMA yet) */
+	dev_info(&pdev->dev, "[level 5] *** RELEASING ARM (bus master still OFF) ***\n");
 	arm_release(dev);
-	dev_info(&pdev->dev, "[level 3] ARM released — still alive\n");
-	msleep(100);
-	dev_info(&pdev->dev, "[level 3] 100ms post-release — still alive\n");
+	dev_info(&pdev->dev, "[level 5] ARM released — still alive\n");
 
-	/* Re-enable bus mastering for DMA */
+	/* Give firmware a moment, then enable bus mastering for DMA */
+	msleep(50);
+	dev_info(&pdev->dev, "[level 5] 50ms — alive, enabling bus mastering...\n");
 	pci_set_master(pdev);
-	dev_info(&pdev->dev, "[level 3] Bus mastering ON\n");
+	dev_info(&pdev->dev, "[level 5] Bus mastering ON\n");
 
 	/* Poll for firmware init */
-	dev_info(&pdev->dev, "[level 3] Polling fw_init_done...\n");
+	dev_info(&pdev->dev, "[level 5] Polling fw_init_done...\n");
 	for (i = 0; i < FW_INIT_TIMEOUT_MS; i++) {
 		val = tcm_read32(dev, SHARED_INFO_OFFSET + SI_FW_INIT_DONE);
 		if (val != 0) {
 			dev_info(&pdev->dev,
-				 "[level 3] *** FW INIT SUCCESS *** val=0x%08x at %d ms\n",
+				 "[level 5] *** FW INIT SUCCESS *** val=0x%08x at %dms\n",
 				 val, i);
 			goto fw_ok;
 		}
 		usleep_range(1000, 1500);
 	}
 
-	dev_err(&pdev->dev, "[level 3] FW init TIMEOUT (2s)\n");
+	/* Timeout — disable bus mastering immediately */
+	pci_clear_master(pdev);
+	dev_err(&pdev->dev, "[level 5] FW init TIMEOUT (%dms) — bus master disabled\n",
+		FW_INIT_TIMEOUT_MS);
+
+	/* Diagnostic dump */
 	val = tcm_read32(dev, SHARED_INFO_OFFSET + SI_MAGIC_START);
-	dev_info(&pdev->dev, "[level 3] Post-timeout magic_start=0x%08x\n", val);
+	dev_info(&pdev->dev, "[level 5] Post-timeout magic_start=0x%08x\n", val);
 	val = tcm_read32(dev, SHARED_INFO_OFFSET + SI_MAGIC_END);
-	dev_info(&pdev->dev, "[level 3] Post-timeout magic_end=0x%08x\n", val);
-	dev_info(&pdev->dev, "[level 3] TCM[0]=0x%08x TCM[4]=0x%08x\n",
+	dev_info(&pdev->dev, "[level 5] Post-timeout magic_end=0x%08x\n", val);
+	dev_info(&pdev->dev, "[level 5] TCM[0]=0x%08x TCM[4]=0x%08x\n",
 		 tcm_read32(dev, 0), tcm_read32(dev, 4));
 
 	buf = dev->olmsg_buf;
-	dev_info(&pdev->dev, "[level 3] olmsg fw->host: wr=%u rd=%u\n", buf[7], buf[6]);
-	dev_info(&pdev->dev, "[level 3] IRQs received: %d\n", dev->irq_count);
+	dev_info(&pdev->dev, "[level 5] olmsg fw->host: wr=%u rd=%u\n", buf[7], buf[6]);
+	dev_info(&pdev->dev, "[level 5] IRQs received: %d\n", dev->irq_count);
 
+	/* Read PCIe interrupt state */
+	val = bp_read32(dev, PCIE_CORE_BASE + PCIE_INTSTATUS);
+	dev_info(&pdev->dev, "[level 5] PCIe intstatus=0x%08x\n", val);
+
+	/* Halt ARM */
+	arm_halt(dev);
 	if (irq_registered)
 		free_irq(pdev->irq, dev);
 	return -ETIMEDOUT;
 
 fw_ok:
 	buf = dev->olmsg_buf;
-	dev_info(&pdev->dev, "[level 3] olmsg host->fw: wr=%u rd=%u\n", buf[3], buf[2]);
-	dev_info(&pdev->dev, "[level 3] olmsg fw->host: wr=%u rd=%u\n", buf[7], buf[6]);
-	dev_info(&pdev->dev, "[level 3] IRQs received: %d\n", dev->irq_count);
-	dev_info(&pdev->dev, "[level 3] PASS\n");
+	dev_info(&pdev->dev, "[level 5] olmsg host->fw: wr=%u rd=%u\n", buf[3], buf[2]);
+	dev_info(&pdev->dev, "[level 5] olmsg fw->host: wr=%u rd=%u\n", buf[7], buf[6]);
+	dev_info(&pdev->dev, "[level 5] IRQs received: %d\n", dev->irq_count);
+	dev_info(&pdev->dev, "[level 5] PASS\n");
 
+	/* Disable bus mastering and halt ARM */
+	pci_clear_master(pdev);
 	arm_halt(dev);
 	if (irq_registered)
 		free_irq(pdev->irq, dev);
@@ -703,8 +982,18 @@ static int bcm4360_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (ret || max_level < 3)
 		goto done;
 
-	/* Level 3 */
-	ret = level3_full_init(dev);
+	/* Level 3: TCM + halt ARM + FW download */
+	ret = level3_tcm_and_fw(dev);
+	if (ret || max_level < 4)
+		goto done;
+
+	/* Level 4: ARM release (NO DMA, NO bus mastering) */
+	ret = level4_arm_release_safe(dev);
+	if (ret || max_level < 5)
+		goto done;
+
+	/* Level 5: Full init with shared_info + DMA */
+	ret = level5_full_init(dev);
 
 done:
 	dev_info(&pdev->dev, "=== Test complete: level=%d result=%d ===\n",
