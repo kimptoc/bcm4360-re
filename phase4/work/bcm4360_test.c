@@ -84,8 +84,8 @@ MODULE_PARM_DESC(max_level, "Max test level: 0=bind, 1=config, 2=BAR0, 3=TCM+FW,
 /* NVRAM/SPROM */
 #define CHIPCOMMON_BASE		0x18000000
 #define CC_SROM_CTRL		0x0190
-#define CC_SROM_ADDR		0x019C
-#define CC_SROM_DATA		0x01A0
+#define CC_SROM_ADDR		0x0194
+#define CC_SROM_DATA		0x0198
 #define SROM_BUSTYPE_WORD	0x0002	/* word offset for boardtype in SROM */
 #define SROM_BOARDREV_WORD	0x0003
 #define NVRAM_END_MAGIC		0x0FEED
@@ -1220,8 +1220,7 @@ static int level5_full_init(struct bcm4360_dev *dev)
 		dev_info(&pdev->dev, "[level 5] Continuing without NVRAM file\n");
 
 	/* NOTE: This firmware is PCI-CDC (FullMAC), NOT olmsg offload.
-	 * PCI-CDC firmware gets board config from NVRAM in TCM, not shared_info.
-	 * Skip olmsg/shared_info setup — just firmware + NVRAM + release. */
+	 * Firmware reads board config from SROM/OTP via ChipCommon. */
 
 	/* Register ISR */
 	ret = request_irq(pdev->irq, bcm4360_isr, IRQF_SHARED, DRV_NAME, dev);
