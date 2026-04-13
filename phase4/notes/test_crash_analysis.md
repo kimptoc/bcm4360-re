@@ -90,9 +90,58 @@ Clearing them before MMIO access allows BAR0 reads to succeed.
 [level 2] PASS
 ```
 
+## Level 3 Crash Analysis (2026-04-13)
+
+### Symptom
+
+Running `sudo ./test.sh 3` (or auto-advance reaching level 3) causes a **hard
+machine lockup** — no kernel panic, no dmesg, empty log files (test.10–13 are
+0 bytes). Requires physical power cycle to recover.
+
+Level 2 passes consistently.
+
+### Root cause: bulk TCM write overwhelming PCIe Gen1 x1 link
+
+Level 3 writes ~640KB of firmware to BAR2 (TCM) via MMIO `iowrite32` in a tight
+loop. The link is **PCIe Gen1 x1** (~250 MB/s theoretical), and write-posting
+buffers can overflow when the readback pacing is too coarse.
+
+The original pacing was a readback every **256 DWORDs (1KB)** — too infrequent
+for this link speed. When the PCIe write buffer overflows:
+
+1. An **Unsupported Request (UR)** or **Completion Timeout** fires
+2. This triggers a fatal AER error
+3. On this platform, fatal AER errors lock the PCIe bus → hard lockup
+
+### Evidence
+
+- PCIe link degraded: `speed=1 width=1` (Gen1 x1) in all test logs
+- AER errors were already present before level 3 in earlier runs:
+  `uncorr=0x00008000` (bit 15 = UR), `corr=0x00002000` (bit 13 = Advisory NF)
+- Level 2 works because it only does a few scattered register reads
+- Level 3 does ~160,000 consecutive `iowrite32` calls — qualitatively different
+
+### Crash timeline
+
+| Test | Level | Result |
+|---|---|---|
+| test.10 | 3 (auto) | **CRASH** — 0 bytes, hard lockup |
+| test.11 | 3 (auto) | **CRASH** — 0 bytes, hard lockup |
+| test.12 | 3 | **CRASH** — 0 bytes, hard lockup |
+| test.13 | 3 | **CRASH** — 0 bytes, hard lockup |
+
+### Fixes applied
+
+| Fix | Description |
+|---|---|
+| Tighter write pacing | Readback every 64 DWORDs (256 bytes) instead of 256 (1KB) |
+| udelay between chunks | 10μs pause after each paced readback to let link drain |
+| Mid-transfer death check | If readback returns 0xFFFFFFFF, abort immediately |
+| AER check before bulk write | Clear and verify AER errors after BAR2 map, before FW download |
+
 ## Next Steps
 
-1. **Level 3** — Full init: map BAR2 (TCM), halt ARM, download firmware,
-   set up olmsg shared info, release ARM, poll fw_init_done
-2. Investigate ARM wrapper IOCTL value 0x83828180 — may indicate window
+1. Re-test level 3 with pacing fixes
+2. If level 3 passes, proceed to level 4 (ARM release, no DMA)
+3. Investigate ARM wrapper IOCTL value 0x83828180 — may indicate window
    math issue (ARM_WRAP_BASE=0x18102000 crosses 4KB window boundary)
