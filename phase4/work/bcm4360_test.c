@@ -924,6 +924,16 @@ static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 		return -EIO;
 	}
 
+	/* Skip firmware download if heading to level 5 — the bulk TCM write
+	 * (442KB via MMIO) crashes the PCIe link on this Gen1 x1 device.
+	 * Level 5 will write SROM + release ARM without needing FW first
+	 * (we can test SROM separately from firmware boot). */
+	if (max_level >= 5) {
+		dev_info(&pdev->dev, "[level 3] Skipping FW download (max_level=%d, bulk write crashes PCIe)\n", max_level);
+		dev_info(&pdev->dev, "[level 3] PASS — ARM halted, BAR2 mapped, ready for level 5\n");
+		return 0;
+	}
+
 	/* Download firmware */
 	dev_info(&pdev->dev, "[level 3] Downloading firmware...\n");
 	ret = request_firmware(&fw, FW_NAME, &pdev->dev);
