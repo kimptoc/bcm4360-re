@@ -249,40 +249,74 @@ static void pcie_mask_irqs(struct bcm4360_dev *dev)
 
 /* ---- SPROM reading (host side, via ChipCommon) ---- */
 
-static u16 sprom_read16(struct bcm4360_dev *dev, u16 word_offset)
-{
-	/* Set the SPROM address and read via ChipCommon */
-	bp_write32(dev, CHIPCOMMON_BASE + CC_SROM_ADDR, (u32)word_offset);
-	/* Trigger read: some chips need a specific control value */
-	udelay(10);
-	return (u16)bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_DATA);
-}
 
-static void dump_sprom(struct bcm4360_dev *dev)
+/* OTP registers within ChipCommon */
+#define CC_OTPST		0x010	/* OTP status */
+#define CC_OTPCTRL		0x014	/* OTP control */
+#define CC_OTPPROG		0x018	/* OTP programming */
+#define CC_OTPLAYOUT		0x01C	/* OTP layout */
+#define CC_OTPCONTROL1		0x0F4	/* OTP control 1 (newer chips) */
+
+/* CIS/OTP core registers (via OTP wrapper) */
+#define OTP_CORE_BASE		0x18012000	/* OTP/GCI core on BCM4360 */
+
+static void dump_sprom_and_otp(struct bcm4360_dev *dev)
 {
 	struct pci_dev *pdev = dev->pdev;
-	u16 i;
-	u32 ctrl;
+	u32 i, val;
 
-	/* Read SROM control register to check capability */
-	ctrl = bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_CTRL);
-	dev_info(&pdev->dev, "[sprom] CC SROM_CTRL=0x%08x\n", ctrl);
+	/* Read SROM control register */
+	val = bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_CTRL);
+	dev_info(&pdev->dev, "[hw] CC SROM_CTRL=0x%08x\n", val);
 
-	/* Dump first 16 SPROM words — these contain board ID info */
-	dev_info(&pdev->dev, "[sprom] First 16 words:\n");
-	for (i = 0; i < 16; i++) {
-		u16 val = sprom_read16(dev, i);
-		dev_info(&pdev->dev, "[sprom]   [%02u] = 0x%04x\n", i, val);
-	}
+	/* Read OTP status/control registers */
+	val = bp_read32(dev, CHIPCOMMON_BASE + CC_OTPST);
+	dev_info(&pdev->dev, "[hw] CC OTP_STATUS=0x%08x\n", val);
+	val = bp_read32(dev, CHIPCOMMON_BASE + CC_OTPCTRL);
+	dev_info(&pdev->dev, "[hw] CC OTP_CONTROL=0x%08x\n", val);
+	val = bp_read32(dev, CHIPCOMMON_BASE + CC_OTPLAYOUT);
+	dev_info(&pdev->dev, "[hw] CC OTP_LAYOUT=0x%08x\n", val);
 
-	/* Also try PCI config space SPROM shadow (offset 0x100+) */
-	dev_info(&pdev->dev, "[sprom] PCI config space 0x100-0x11F:\n");
+	/* ChipCommon capabilities (OTP size is encoded here) */
+	val = bp_read32(dev, CHIPCOMMON_BASE + 0x04); /* CC capabilities */
+	dev_info(&pdev->dev, "[hw] CC caps=0x%08x (OTP size bits[16:12]=0x%x)\n",
+		 val, (val >> 12) & 0x1F);
+
+	/* Try reading OTP via ChipCommon SPROM-compatible interface.
+	 * On some chips, OTP CIS is accessible as "SPROM" words
+	 * via the CC_SROM_DATA register with specific addressing. */
+	dev_info(&pdev->dev, "[hw] SPROM first 8 words:\n");
 	for (i = 0; i < 8; i++) {
-		u32 val;
-		pci_read_config_dword(pdev, 0x100 + i * 4, &val);
-		dev_info(&pdev->dev, "[sprom]   cfg[0x%03x] = 0x%08x\n",
-			 0x100 + i * 4, val);
+		bp_write32(dev, CHIPCOMMON_BASE + CC_SROM_ADDR, i);
+		udelay(10);
+		val = bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_DATA);
+		dev_info(&pdev->dev, "[hw]   SPROM[%u] = 0x%04x\n", i, val & 0xFFFF);
 	}
+
+	/* Read OTP directly — try reading first 64 words from OTP region.
+	 * On BCM4360, OTP data may be accessible via CC offset 0x800+ */
+	dev_info(&pdev->dev, "[hw] OTP direct read (CC+0x800):\n");
+	for (i = 0; i < 32; i++) {
+		val = bp_read32(dev, CHIPCOMMON_BASE + 0x800 + i * 4);
+		if (val != 0 && val != 0xFFFFFFFF)
+			dev_info(&pdev->dev, "[hw]   OTP[%02u] = 0x%08x\n", i, val);
+	}
+
+	/* Also try reading via the OTP core directly if it exists */
+	val = bp_read32(dev, OTP_CORE_BASE);
+	dev_info(&pdev->dev, "[hw] OTP core[0x000] = 0x%08x\n", val);
+	if (val != 0xFFFFFFFF && val != 0) {
+		for (i = 0; i < 16; i++) {
+			val = bp_read32(dev, OTP_CORE_BASE + 0x800 + i * 4);
+			if (val != 0 && val != 0xFFFFFFFF)
+				dev_info(&pdev->dev, "[hw]   OTPcore[%02u] = 0x%08x\n",
+					 i, val);
+		}
+	}
+
+	/* PCI config space at 0x100+ (AER, not SPROM shadow) */
+	dev_info(&pdev->dev, "[hw] PCI cfg[0x100]=0x%08x (AER cap header)\n",
+		 ({u32 v; pci_read_config_dword(pdev, 0x100, &v); v;}));
 }
 
 /* ---- NVRAM loading to TCM ---- */
@@ -1102,8 +1136,8 @@ static int level5_full_init(struct bcm4360_dev *dev)
 		release_firmware(fw);
 	}
 
-	/* Dump SPROM from host side (before firmware can interfere) */
-	dump_sprom(dev);
+	/* Dump SPROM/OTP from host side (before firmware can interfere) */
+	dump_sprom_and_otp(dev);
 
 	/* Load NVRAM to TCM (at end of RAM, brcmfmac format) */
 	ret = load_nvram_to_tcm(dev);
