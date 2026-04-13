@@ -476,9 +476,80 @@ acknowledging. The firmware may be stuck waiting for:
 The mailbox signals (intstatus=0x300, mailboxint=0x03) are the firmware's way of
 saying "I'm here, acknowledge me." Without acking, it may loop waiting forever.
 
+### test.31 — Interrupt unmasking + MAC address + boot sequence fix (2026-04-13)
+
+Changes applied:
+- Added MAC address to shared_info at offset 0x024 (Apple OUI 00:1C:B3 + subsys-derived)
+- Enabled bus mastering BEFORE ARM release (firmware needs DMA immediately)
+- Added boot handshake step 6: write 0x20 to ARM IOCTL before release
+- Cleared/unmasked PCIe interrupts (INTMASK=0xFFFFFFFF) before ARM release
+- Added periodic poll diagnostics (100ms, 500ms, 1000ms, 1500ms)
+
+Result: **Still ETIMEDOUT**. Same behavior — intstatus=0x300, mailboxint=0x03, IRQs=0.
+Firmware alive (IOCTL=0x01, RESET_CTL=0x00) but fw_init_done stays 0.
+
+Key finding: **shared_info[0x010]=0x0009AF88** — firmware WROTE this value. We zeroed
+the entire shared_info, so this is firmware output. It's a TCM pointer.
+
+### test.32 — Comprehensive diagnostic scan (2026-04-13)
+
+Added full shared_info scan (all non-zero words) and TCM pointer dereferencing.
+
+**shared_info scan: only 7 non-zero words out of 3023:**
+
+| Offset | Value | Source |
+|--------|-------|--------|
+| 0x0000 | 0xA5A5A5A5 | Host (magic_start) |
+| 0x0004 | 0x01110000 | Host (olmsg DMA addr) |
+| 0x000C | 0x00010000 | Host (olmsg size 64KB) |
+| 0x0010 | 0x0009AF88 | **FIRMWARE** (console struct ptr) |
+| 0x0024 | 0x01B31C00 | Host (MAC bytes 0-3) |
+| 0x0028 | 0x00000112 | Host (MAC bytes 4-5) |
+| 0x2F38 | 0x5A5A5A5A | Host (magic_end) |
+
+**Firmware console buffer discovered at 0x9AF88:**
+
+```
+[0x9AF88] = 0x00096F78  — text buffer address in TCM
+[0x9AF8C] = 0x00004000  — 16KB buffer size
+[0x9AF90] = 0x0000057C  — 1404 bytes written (console has output!)
+[0x9AF94] = 0x00096F78  — read pointer (matches buf start)
+```
+
+This is a classic Broadcom firmware console log structure. The firmware wrote 1404
+bytes of console text at TCM address 0x96F78. Next step: read it as ASCII.
+
+**Other findings:**
+- olmsg buffer completely empty (fw→host wr=0, rd=0) — firmware never DMA'd
+- Post-firmware TCM (.bss area at 0x6C000) has non-zero data — firmware initialized .bss
+- intmask/mailboxmask report 0x00000000 in diagnostic (after pcie_mask_irqs cleanup)
+- IRQs received: 0 despite INTMASK=0xFFFFFFFF during poll — likely need MSI, not legacy INTx
+
+### Analysis — Why firmware is stuck
+
+The firmware:
+1. Starts running (ARM alive, IOCTL=0x01)
+2. Finds shared_info via magic markers
+3. Stores console pointer at shared_info[0x010]
+4. Sends mailbox signals (intstatus=0x300, mailboxint=0x03)
+5. Writes 1404 bytes to its console log
+6. Gets stuck — never writes fw_init_done, never touches olmsg DMA buffer
+
+Most likely causes:
+- **DMA failure**: Firmware can't reach host memory. The PCIe outbound translation
+  window may need configuration. The firmware reads our DMA address from shared_info
+  but can't actually issue DMA transactions without the PCIe core's address translation
+  registers being programmed.
+- **Missing host response**: Firmware may need the host to acknowledge mailbox signals
+  or respond via some register before it proceeds.
+- **IRQ delivery broken**: Using legacy INTx (IRQ 18 shared) but Broadcom PCIe Gen2
+  devices typically need MSI. Without working interrupts, there's no host-to-firmware
+  signaling path.
+
 ## Next Steps
 
-1. Unmask PCIe interrupts after ARM release so ISR can fire
-2. Service the mailbox signals (clear intstatus/mailboxint)
-3. Check if fw_init_done changes after interrupt servicing
-4. Investigate what the 0x300 / 0x03 interrupt bits mean in Broadcom PCIe core
+1. **Read firmware console** (1404 bytes at TCM 0x96F78) — this will reveal exact
+   error messages or state where firmware is stuck
+2. Investigate MSI vs INTx interrupt delivery
+3. Check if PCIe DMA translation registers need programming
+4. Consider if firmware simply cannot proceed without host MAC stack interaction

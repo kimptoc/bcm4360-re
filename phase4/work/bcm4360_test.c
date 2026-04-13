@@ -1106,27 +1106,66 @@ static int level5_full_init(struct bcm4360_dev *dev)
 			 nz_count, SHARED_INFO_SIZE / 4);
 	}
 
-	/* Check TCM area just after firmware image for .bss/heap activity */
+	/* Read firmware console buffer.
+	 * shared_info[0x010] points to a console structure:
+	 *   +0x00: buf_addr (TCM address of text buffer)
+	 *   +0x04: buf_size
+	 *   +0x08: write_idx (bytes written)
+	 *   +0x0C: read_addr
+	 */
 	{
-		u32 fw_end = 0x6C000; /* round up firmware end 0x6BF79 */
-		dev_info(&pdev->dev, "[level 5] TCM post-fw area (bss/heap check):\n");
-		for (i = 0; i < 16; i++)
-			dev_info(&pdev->dev, "[level 5]   [0x%05x]=0x%08x\n",
-				 fw_end + i * 4, tcm_read32(dev, fw_end + i * 4));
-	}
-
-	/* Check for firmware console buffer — common location near end of RAM.
-	 * Look at address 0x9AF88 (value firmware wrote to shared_info[0x010]) */
-	{
-		u32 console_ptr = tcm_read32(dev, base + 0x010);
-		if (console_ptr > 0 && console_ptr < TCM_RAMSIZE - 64) {
+		u32 cons_struct = tcm_read32(dev, base + 0x010);
+		if (cons_struct > 0 && cons_struct < TCM_RAMSIZE - 16) {
+			u32 buf_addr = tcm_read32(dev, cons_struct);
+			u32 buf_size = tcm_read32(dev, cons_struct + 4);
+			u32 write_idx = tcm_read32(dev, cons_struct + 8);
 			dev_info(&pdev->dev,
-				 "[level 5] FW ptr at shared_info[0x010]=0x%08x, reading:\n",
-				 console_ptr);
-			for (i = 0; i < 16; i++)
-				dev_info(&pdev->dev, "[level 5]   [0x%05x]=0x%08x\n",
-					 console_ptr + i * 4,
-					 tcm_read32(dev, console_ptr + i * 4));
+				 "[level 5] FW console: struct=0x%x buf=0x%x size=%u written=%u\n",
+				 cons_struct, buf_addr, buf_size, write_idx);
+			if (buf_addr > 0 && buf_addr < TCM_RAMSIZE &&
+			    write_idx > 0 && write_idx <= buf_size &&
+			    buf_size <= 0x10000) {
+				/* Read console text as ASCII from TCM */
+				u32 to_read = write_idx;
+				u32 offset;
+				char line[128];
+				int lpos = 0;
+				if (to_read > 2048) {
+					/* Show last 2KB if buffer is large */
+					offset = buf_addr + write_idx - 2048;
+					to_read = 2048;
+					dev_info(&pdev->dev,
+						 "[level 5] FW console (last 2KB of %u):\n",
+						 write_idx);
+				} else {
+					offset = buf_addr;
+					dev_info(&pdev->dev,
+						 "[level 5] FW console (%u bytes):\n",
+						 write_idx);
+				}
+				for (i = 0; i < to_read; i++) {
+					u32 word = tcm_read32(dev,
+							      (offset + i) & ~3);
+					u8 ch = (word >> (8 * ((offset + i) & 3))) & 0xFF;
+					if (ch == '\n' || lpos >= 120) {
+						line[lpos] = '\0';
+						if (lpos > 0)
+							dev_info(&pdev->dev,
+								 "[level 5] CON: %s\n",
+								 line);
+						lpos = 0;
+					} else if (ch >= 0x20 && ch < 0x7F) {
+						line[lpos++] = ch;
+					} else if (ch == '\t') {
+						line[lpos++] = ' ';
+					}
+				}
+				if (lpos > 0) {
+					line[lpos] = '\0';
+					dev_info(&pdev->dev,
+						 "[level 5] CON: %s\n", line);
+				}
+			}
 		}
 	}
 
