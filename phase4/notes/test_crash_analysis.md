@@ -646,14 +646,112 @@ SPROM interface and direct memory-mapped OTP returned no data. Possible causes:
 5. OTP core direct (0x18012000 + 0x800)
 6. CC SROM with OTP CI enable toggle + key SROM11 offsets
 
-## Next Steps
+## Tests 37-42 — OTP scan results (2026-04-13, earlier sessions)
 
-1. **Run test.37** with comprehensive OTP scan to find where board data lives
-2. If OTP has CIS data: parse TLV tuples, extract boardtype/boardrev/calibration
-3. If OTP is truly empty: board data must come from Apple EFI device properties
-   - Can extract from macOS via `ioreg -l | grep RequestedFiles` or IO registry
-   - Or find community NVRAM for MacBookPro11,1 (Apple 106b:0112)
-4. Once board data is found: either write to SPROM shadow registers before ARM
-   release, or patch the firmware's SROM read path
-5. Long-term: reconsider architecture — if this is FullMAC PCI-CDC, brcmfmac
-   might work directly once board data problem is solved
+Key findings from comprehensive OTP probing:
+
+- **CC SROM_ADDR/DATA offsets were WRONG**: had 0x019C/0x01A0, corrected to
+  0x0194/0x0198 for CC rev 43. After fix, reads return 0x0000 (not 0xFFFF).
+- **CC+0x800 OTP shadow is completely empty and read-only** — writes have no effect.
+- **PCIe core SROM shadow (PCIe+0x800) has REAL board data**: 24 non-zero DWORDs
+  including Apple subsystem ID (106b:0112), device ID (43a0), calibration values.
+- **PCIe+0x800 is WRITABLE** — confirmed with 0xDEADBEEF write/readback test.
+- SROM_CTRL=0x23: SRC_PRSNT(bit0)=1 (hardware read-only), SRC_OTPSEL(bit4)=0,
+  SRC_OTPPRESENT(bit5)=1.
+- Setting SRC_OTPSEL had no effect — firmware still reads 0xFFFF.
+
+**Strategy developed**: Write minimal SROM11 image to PCIe+0x800 before ARM
+release. Key fields: boardtype=0x0552, boardrev=0x1101, sromrev=11, devid=0x43a0,
+subvid=0x106B, boardflags, ccode, antenna config.
+
+## Tests 43+ — Level 5 crash cycle (2026-04-13)
+
+### Problem: Level 5 crashes machine every time
+
+Attempted ~10 runs of `test.sh 5` across multiple reboots. Every attempt crashed
+the machine. Crashes occurred at different points in the code path, making
+diagnosis extremely difficult. The conversation context kept expiring between
+code changes and test execution, leading to a frustrating loop.
+
+### b43 blacklist fix
+
+Discovered that `b43` + `bcma` + `ssb` modules were loading at boot and probing
+the BCM4360, leaving it in a bad state:
+```
+b43-phy0: Broadcom 4360 WLAN found (core revision 42)
+bcma-pci-bridge 0000:03:00.0: bus0: HT force timeout
+bcma-pci-bridge 0000:03:00.0: bus0: PLL enable timeout
+b43-phy0 ERROR: FOUND UNSUPPORTED PHY (Analog 12, Type 11 (AC), Revision 1)
+```
+
+**Fix**: Added `b43`, `bcma`, `ssb` to `boot.blacklistedKernelModules` in NixOS
+config (`/etc/nixos/configuration.nix`). Applied via `nixos-rebuild switch`.
+
+### Crash progression (each fix pushed the crash point later)
+
+| Attempt | Last canary/message | Crash point | Fix applied |
+|---------|---------------------|-------------|-------------|
+| 1-3 | Level 4 ARM release | Level 4 ARM release (old code) | Skip level 4 for level 5 |
+| 4-5 | CANARY 6 (bulk write done) | TCM verify read after 442KB write | Skip verify read |
+| 6 | CANARY 6b (verify skipped) | 1s mdelay after bulk write | Skip FW re-download in L5 |
+| 7-8 | CANARY 6b | Same — L3 still downloads FW | Skip FW download in L3 for L5 |
+| 9 | CANARY 4 (ARM halt done) | ~1-2s after arm_halt() | Skip ARM halt in L3 for L5 |
+| 10 | CANARY 1 (BAR2 map) | pci_iomap(BAR2) in L3 | Skip L3 entirely, map BAR2 in L5 |
+| 11 | No kernel output | Module never loaded / insmod crash | — |
+
+### Key observation: Level 3 standalone works fine
+
+`test.sh 3` (level 3 alone) passes reliably on a clean boot — full firmware
+download (442KB), ARM halt, all canaries pass. The crash only happens when
+`max_level=5` is used, even after skipping all level 3 operations.
+
+This is confusing because the code path should be identical — when max_level >= 5,
+level 3 is skipped entirely in the latest code. Yet the machine still crashes.
+Possible explanations:
+1. Module was not rebuilt/reloaded correctly in some attempts
+2. Previous test run on same boot left hardware in bad state
+3. Timing-dependent PCIe instability on this Gen1 x1 link
+4. Level 5 code itself (even just the SROM scan via BAR0 backplane reads) is
+   unstable on fresh boot
+
+### Current code state (committed + pushed)
+
+Level 5 flow when max_level=5:
+1. Levels 0-2 run normally (PCI bind, config space, BAR0 mapping)
+2. Level 3 SKIPPED entirely (just prints "SKIPPED")
+3. Level 4 SKIPPED (only runs when max_level==4)
+4. Level 5 maps BAR2 itself, then does ARM halt + SROM write + ARM release
+
+## Proposed Strategy Change
+
+### Problem
+
+Level 5 crashes the machine every time, preventing testing of the SROM11 write
+hypothesis. The crash appears related to the level 5 code path itself, not just
+bulk TCM writes or ARM halt.
+
+### Proposed approach: Test SROM write from Level 3
+
+Since level 3 works reliably, add the PCIe+0x800 SROM write test at the END
+of level 3 (after firmware download and ARM halt). This tests the core hypothesis
+— can we write valid boardtype to PCIe+0x800 and read it back? — without any of
+the level 5 machinery (ARM release, DMA, interrupt setup).
+
+### Alternative approaches (if SROM write in L3 doesn't help)
+
+1. **Firmware binary patching**: Patch the boardtype check at TCM near 0x4751C
+   (where the "Unsupported Broadcom board type" format string lives). NOP the
+   comparison or hardcode a valid boardtype.
+
+2. **Use brcmfmac driver**: Since the firmware is PCI-CDC FullMAC, brcmfmac
+   should be able to drive it. Focus on providing correct NVRAM/SROM data via
+   the platform data path (device tree / platform firmware) rather than our
+   test module.
+
+3. **Cold power cycle**: The repeated crashes may have left PCIe hardware in a
+   state that warm reboot doesn't fully clear. Unplugging power for 30+ seconds
+   may help level 5 work.
+
+4. **Reduce level 5 to minimal SROM-only test**: Strip all ARM halt/release/DMA
+   code from level 5, leaving ONLY the PCIe+0x800 write and readback. If even
+   that crashes, the problem is in the BAR0 backplane access pattern.
