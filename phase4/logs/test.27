@@ -1,0 +1,444 @@
+Apr 13 14:20:26 nixos kernel: Command line: initrd=\EFI\nixos\bdzzar56fr2ify9g8dlmkd0x4kdz6c0s-initrd-linux-6.12.80-initrd.efi init=/nix/store/5k844l2v34f13f8fvi9mvljw6270x0ra-nixos-system-nixos-25.11.9067.54170c54449e/init loglevel=4 lsm=landlock,yama,bpf
+Apr 13 14:20:26 nixos kernel: Kernel command line: initrd=\EFI\nixos\bdzzar56fr2ify9g8dlmkd0x4kdz6c0s-initrd-linux-6.12.80-initrd.efi init=/nix/store/5k844l2v34f13f8fvi9mvljw6270x0ra-nixos-system-nixos-25.11.9067.54170c54449e/init loglevel=4 lsm=landlock,yama,bpf
+Apr 13 14:24:57 nixos kernel: bcm4360_test: loading out-of-tree module taints kernel.
+Apr 13 16:59:21 nixos kernel: bcm4360_test 0000:03:00.0: === BCM4360 test: max_level=0 ===
+Apr 13 16:59:21 nixos kernel: bcm4360_test 0000:03:00.0: [level 0] PCI bind only — no hardware access
+Apr 13 16:59:21 nixos kernel: bcm4360_test 0000:03:00.0: [level 0] PASS
+Apr 13 16:59:21 nixos kernel: bcm4360_test 0000:03:00.0: === Test complete: level=0 result=0 ===
+Apr 13 16:59:23 nixos kernel: bcm4360_test 0000:03:00.0: BCM4360 test module remove
+Apr 13 16:59:23 nixos kernel: bcm4360_test 0000:03:00.0: BCM4360 test module remove done (device left enabled)
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: === BCM4360 test: max_level=1 ===
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 0] PCI bind only — no hardware access
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 0] PASS
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Reading PCI config space...
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Vendor:Device = 14e4:43a0  Subsys = 106b:0112
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] CMD=0x0002 STATUS=0x0010
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1]   IO=0 MEM=1 BusMaster=0
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] PM cap at 0x48, PMCSR=0x4008, state=D0
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Post-wake CMD=0x0002 (MEM=1)
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN (config 0x80) = 0x18003000
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR0 raw=0xb0600004 phys=0xb0600000 len=0x8000
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18000000 (ChipCommon)...
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18000000
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18003000 (PCIe core)...
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18003000
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR2 raw=0xb0400004 phys=0xb0400000 len=0x200000
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] PCIe link: speed=1 width=1 ctrl=0x0143
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] AER: uncorr=0x00008000 corr=0x00002000
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Cleared AER uncorrectable errors
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Cleared AER correctable errors
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] AER after clear: uncorr=0x00000000 corr=0x00000000
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Enabling bus mastering...
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] CMD after bus master: 0x0006 (MEM=1 MASTER=1)
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] PASS
+Apr 13 16:59:24 nixos kernel: bcm4360_test 0000:03:00.0: === Test complete: level=1 result=0 ===
+Apr 13 16:59:26 nixos kernel: bcm4360_test 0000:03:00.0: BCM4360 test module remove
+Apr 13 16:59:26 nixos kernel: bcm4360_test 0000:03:00.0: BCM4360 test module remove done (device left enabled)
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: === BCM4360 test: max_level=2 ===
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 0] PCI bind only — no hardware access
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 0] PASS
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Reading PCI config space...
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Vendor:Device = 14e4:43a0  Subsys = 106b:0112
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] CMD=0x0002 STATUS=0x0010
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1]   IO=0 MEM=1 BusMaster=0
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] PM cap at 0x48, PMCSR=0x4008, state=D0
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Post-wake CMD=0x0002 (MEM=1)
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN (config 0x80) = 0x18000000
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR0 raw=0xb0600004 phys=0xb0600000 len=0x8000
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18000000 (ChipCommon)...
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18000000
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18003000 (PCIe core)...
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18003000
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR2 raw=0xb0400004 phys=0xb0400000 len=0x200000
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] PCIe link: speed=1 width=1 ctrl=0x0143
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] AER: uncorr=0x00000000 corr=0x00000000
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] AER after clear: uncorr=0x00000000 corr=0x00000000
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Enabling bus mastering...
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] CMD after bus master: 0x0006 (MEM=1 MASTER=1)
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] PASS
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] Mapping BAR0...
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] BAR0 mapped at ffffcdf0c0580000 (32KB)
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] AER pre-read: uncorr=0x00000000 corr=0x00000000
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] BAR0_WIN register = 0x18000000
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] About to do first MMIO read (BAR0+0x00)...
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] BAR0[0x00] (current window) = 0x15034360
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] Chip ID=0x4360 Rev=3 Pkg=0
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] ChipCommon caps = 0x58680001
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] ChipCommon status = 0x1810a000
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] ARM wrapper[0x000] = 0x83828180 (via BAR0 window)
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] ARM wrapper IOCTL(0x408) = 0x00000020
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] PASS
+Apr 13 16:59:28 nixos kernel: bcm4360_test 0000:03:00.0: === Test complete: level=2 result=0 ===
+Apr 13 16:59:30 nixos kernel: bcm4360_test 0000:03:00.0: BCM4360 test module remove
+Apr 13 16:59:30 nixos kernel: bcm4360_test 0000:03:00.0: BCM4360 test module remove done (device left enabled)
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: === BCM4360 test: max_level=3 ===
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 0] PCI bind only — no hardware access
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 0] PASS
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Reading PCI config space...
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Vendor:Device = 14e4:43a0  Subsys = 106b:0112
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] CMD=0x0002 STATUS=0x0010
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1]   IO=0 MEM=1 BusMaster=0
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] PM cap at 0x48, PMCSR=0x4008, state=D0
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Post-wake CMD=0x0002 (MEM=1)
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN (config 0x80) = 0x18000000
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR0 raw=0xb0600004 phys=0xb0600000 len=0x8000
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18000000 (ChipCommon)...
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18000000
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18003000 (PCIe core)...
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18003000
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR2 raw=0xb0400004 phys=0xb0400000 len=0x200000
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] PCIe link: speed=1 width=1 ctrl=0x0143
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] AER: uncorr=0x00000000 corr=0x00000000
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] AER after clear: uncorr=0x00000000 corr=0x00000000
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Enabling bus mastering...
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] CMD after bus master: 0x0006 (MEM=1 MASTER=1)
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] PASS
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] Mapping BAR0...
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] BAR0 mapped at ffffcdf0c0580000 (32KB)
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] AER pre-read: uncorr=0x00000000 corr=0x00000000
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] BAR0_WIN register = 0x18000000
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] About to do first MMIO read (BAR0+0x00)...
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] BAR0[0x00] (current window) = 0x15034360
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] Chip ID=0x4360 Rev=3 Pkg=0
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] ChipCommon caps = 0x58680001
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] ChipCommon status = 0x1810a000
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] ARM wrapper[0x000] = 0x83828180 (via BAR0 window)
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] ARM wrapper IOCTL(0x408) = 0x00000020
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] PASS
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] BAR2 + ARM halt + FW download...
+Apr 13 16:59:31 nixos kernel: bcm4360: CANARY 1 — about to pci_iomap BAR2
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] Mapping BAR2 (TCM, 640KB)...
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] BAR2 mapped at ffffcdf0c1700000
+Apr 13 16:59:31 nixos kernel: bcm4360: CANARY 2 — BAR2 mapped, about to read TCM[0]
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] TCM[0x00] = 0x024d4304
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] TCM[0x04] = 0x005b03e3 (BAR2 sanity check)
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] AER pre-write: uncorr=0x00000000 corr=0x00000000
+Apr 13 16:59:31 nixos kernel: bcm4360: CANARY 3 — AER cleared, about to arm_halt()
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] Halting ARM...
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: Halting ARM CR4...
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: ARM IOCTL after halt: 0x00000021
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: ARM RESET_CTL: 0x00000000
+Apr 13 16:59:31 nixos kernel: bcm4360: CANARY 4 — arm_halt() returned
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] ARM IOCTL after halt = 0x00000021 (expect CPUHALT|CLK=0x21)
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] ARM RESET_CTL after halt = 0x00000000 (expect 0x00)
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] Downloading firmware...
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] Firmware: brcm/brcmfmac4360-pcie.bin (442233 bytes)
+Apr 13 16:59:31 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] Writing 110559 DWORDs (442233 bytes) to TCM...
+Apr 13 16:59:31 nixos kernel: bcm4360: CANARY 5 — starting bulk TCM write (110559 DWORDs)
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 0/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 1024/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 2048/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 3072/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 4096/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 5120/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 6144/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 7168/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 8192/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 9216/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 10240/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 11264/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 12288/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 13312/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 14336/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 15360/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 16384/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 17408/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 18432/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 19456/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 20480/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 21504/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 22528/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 23552/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 24576/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 25600/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 26624/110559
+Apr 13 16:59:31 nixos kernel: bcm4360: TCM write progress: DWORD 27648/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 28672/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 29696/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 30720/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 31744/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 32768/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 33792/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 34816/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 35840/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 36864/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 37888/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 38912/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 39936/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 40960/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 41984/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 43008/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 44032/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 45056/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 46080/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 47104/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 48128/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 49152/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 50176/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 51200/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 52224/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 53248/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 54272/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 55296/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 56320/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 57344/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 58368/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 59392/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 60416/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 61440/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 62464/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 63488/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 64512/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 65536/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 66560/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 67584/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 68608/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 69632/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 70656/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 71680/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 72704/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 73728/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 74752/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 75776/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 76800/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 77824/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 78848/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 79872/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 80896/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 81920/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 82944/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 83968/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 84992/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 86016/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 87040/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 88064/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 89088/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 90112/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 91136/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 92160/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 93184/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 94208/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 95232/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 96256/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 97280/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 98304/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 99328/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 100352/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 101376/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 102400/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 103424/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 104448/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 105472/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 106496/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 107520/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 108544/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: TCM write progress: DWORD 109568/110559
+Apr 13 16:59:32 nixos kernel: bcm4360: CANARY 6 — bulk TCM write complete
+Apr 13 16:59:32 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] FW write complete
+Apr 13 16:59:32 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] FW verify: first=0xb80ef000 (expect 0xb80ef000)
+Apr 13 16:59:32 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] TCM at shared_info offset 0x9d0a4:
+Apr 13 16:59:32 nixos kernel: bcm4360_test 0000:03:00.0: [level 3]   [0x9d0a4] = 0x555c2631
+Apr 13 16:59:32 nixos kernel: bcm4360_test 0000:03:00.0: [level 3]   [0x9d0a8] = 0x236703c4
+Apr 13 16:59:32 nixos kernel: bcm4360_test 0000:03:00.0: [level 3]   [0x9d0ac] = 0x7a3681cd
+Apr 13 16:59:32 nixos kernel: bcm4360_test 0000:03:00.0: [level 3]   [0x9d0b0] = 0xde4cd7ed
+Apr 13 16:59:32 nixos kernel: bcm4360_test 0000:03:00.0: [level 3]   [0x9d0b4] = 0xcfea90bb
+Apr 13 16:59:32 nixos kernel: bcm4360_test 0000:03:00.0: [level 3]   [0x9d0b8] = 0x62918f10
+Apr 13 16:59:32 nixos kernel: bcm4360_test 0000:03:00.0: [level 3]   [0x9d0bc] = 0x5bcfdbeb
+Apr 13 16:59:32 nixos kernel: bcm4360_test 0000:03:00.0: [level 3]   [0x9d0c0] = 0x84f44b2a
+Apr 13 16:59:32 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] PASS — ARM halted, FW downloaded, ready for level 4
+Apr 13 16:59:32 nixos kernel: bcm4360_test 0000:03:00.0: === Test complete: level=3 result=0 ===
+Apr 13 16:59:34 nixos kernel: bcm4360_test 0000:03:00.0: BCM4360 test module remove
+Apr 13 16:59:34 nixos kernel: bcm4360_test 0000:03:00.0: Halting ARM CR4...
+Apr 13 16:59:34 nixos kernel: bcm4360_test 0000:03:00.0: ARM IOCTL after halt: 0x00000021
+Apr 13 16:59:34 nixos kernel: bcm4360_test 0000:03:00.0: ARM RESET_CTL: 0x00000000
+Apr 13 16:59:34 nixos kernel: bcm4360_test 0000:03:00.0: BCM4360 test module remove done (device left enabled)
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: === BCM4360 test: max_level=4 ===
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 0] PCI bind only — no hardware access
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 0] PASS
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Reading PCI config space...
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Vendor:Device = 14e4:43a0  Subsys = 106b:0112
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] CMD=0x0002 STATUS=0x0010
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1]   IO=0 MEM=1 BusMaster=0
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] PM cap at 0x48, PMCSR=0x4008, state=D0
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Post-wake CMD=0x0002 (MEM=1)
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN (config 0x80) = 0x18102000
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR0 raw=0xb0600004 phys=0xb0600000 len=0x8000
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18000000 (ChipCommon)...
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18000000
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Setting BAR0_WIN to 0x18003000 (PCIe core)...
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR0_WIN readback = 0x18003000
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] BAR2 raw=0xb0400004 phys=0xb0400000 len=0x200000
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] PCIe link: speed=1 width=1 ctrl=0x0143
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] AER: uncorr=0x00000000 corr=0x00000000
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] AER after clear: uncorr=0x00000000 corr=0x00000000
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] Enabling bus mastering...
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] CMD after bus master: 0x0006 (MEM=1 MASTER=1)
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 1] PASS
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] Mapping BAR0...
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] BAR0 mapped at ffffcdf0c06d8000 (32KB)
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] AER pre-read: uncorr=0x00000000 corr=0x00000000
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] BAR0_WIN register = 0x18000000
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] About to do first MMIO read (BAR0+0x00)...
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] BAR0[0x00] (current window) = 0x15034360
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] Chip ID=0x4360 Rev=3 Pkg=0
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] ChipCommon caps = 0x58680001
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] ChipCommon status = 0x1810a000
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] ARM wrapper[0x000] = 0x83828180 (via BAR0 window)
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] ARM wrapper IOCTL(0x408) = 0x00000021
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 2] PASS
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] BAR2 + ARM halt + FW download...
+Apr 13 17:05:35 nixos kernel: bcm4360: CANARY 1 — about to pci_iomap BAR2
+Apr 13 17:05:35 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] Mapping BAR2 (TCM, 640KB)...
+Apr 13 17:05:36 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] BAR2 mapped at ffffcdf0c1700000
+Apr 13 17:05:36 nixos kernel: bcm4360: CANARY 2 — BAR2 mapped, about to read TCM[0]
+Apr 13 17:05:36 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] TCM[0x00] = 0xb80ef000
+Apr 13 17:05:36 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] TCM[0x04] = 0xb82ef000 (BAR2 sanity check)
+Apr 13 17:05:36 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] AER pre-write: uncorr=0x00000000 corr=0x00000000
+Apr 13 17:05:36 nixos kernel: bcm4360: CANARY 3 — AER cleared, about to arm_halt()
+Apr 13 17:05:36 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] Halting ARM...
+Apr 13 17:05:36 nixos kernel: bcm4360_test 0000:03:00.0: Halting ARM CR4...
+Apr 13 17:05:36 nixos kernel: bcm4360_test 0000:03:00.0: ARM IOCTL after halt: 0x00000021
+Apr 13 17:05:36 nixos kernel: bcm4360_test 0000:03:00.0: ARM RESET_CTL: 0x00000000
+Apr 13 17:05:36 nixos kernel: bcm4360: CANARY 4 — arm_halt() returned
+Apr 13 17:05:36 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] ARM IOCTL after halt = 0x00000021 (expect CPUHALT|CLK=0x21)
+Apr 13 17:05:36 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] ARM RESET_CTL after halt = 0x00000000 (expect 0x00)
+Apr 13 17:05:36 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] Downloading firmware...
+Apr 13 17:05:36 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] Firmware: brcm/brcmfmac4360-pcie.bin (442233 bytes)
+Apr 13 17:05:36 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] Writing 110559 DWORDs (442233 bytes) to TCM...
+Apr 13 17:05:36 nixos kernel: bcm4360: CANARY 5 — starting bulk TCM write (110559 DWORDs)
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 0/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 1024/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 2048/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 3072/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 4096/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 5120/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 6144/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 7168/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 8192/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 9216/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 10240/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 11264/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 12288/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 13312/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 14336/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 15360/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 16384/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 17408/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 18432/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 19456/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 20480/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 21504/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 22528/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 23552/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 24576/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 25600/110559
+Apr 13 17:05:36 nixos kernel: bcm4360: TCM write progress: DWORD 26624/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 27648/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 28672/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 29696/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 30720/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 31744/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 32768/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 33792/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 34816/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 35840/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 36864/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 37888/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 38912/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 39936/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 40960/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 41984/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 43008/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 44032/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 45056/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 46080/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 47104/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 48128/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 49152/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 50176/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 51200/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 52224/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 53248/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 54272/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 55296/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 56320/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 57344/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 58368/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 59392/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 60416/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 61440/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 62464/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 63488/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 64512/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 65536/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 66560/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 67584/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 68608/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 69632/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 70656/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 71680/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 72704/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 73728/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 74752/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 75776/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 76800/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 77824/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 78848/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 79872/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 80896/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 81920/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 82944/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 83968/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 84992/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 86016/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 87040/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 88064/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 89088/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 90112/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 91136/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 92160/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 93184/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 94208/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 95232/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 96256/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 97280/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 98304/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 99328/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 100352/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 101376/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 102400/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 103424/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 104448/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 105472/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 106496/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 107520/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 108544/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: TCM write progress: DWORD 109568/110559
+Apr 13 17:05:37 nixos kernel: bcm4360: CANARY 6 — bulk TCM write complete
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] FW write complete
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] FW verify: first=0xb80ef000 (expect 0xb80ef000)
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] TCM at shared_info offset 0x9d0a4:
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 3]   [0x9d0a4] = 0x555c2631
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 3]   [0x9d0a8] = 0x236703c4
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 3]   [0x9d0ac] = 0x7a3681cd
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 3]   [0x9d0b0] = 0xde4cd7ed
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 3]   [0x9d0b4] = 0xcfea90bb
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 3]   [0x9d0b8] = 0x62918f10
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 3]   [0x9d0bc] = 0x5bcfdbeb
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 3]   [0x9d0c0] = 0x84f44b2a
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 3] PASS — ARM halted, FW downloaded, ready for level 4
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 4] ARM release (NO DMA, NO bus mastering)...
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 4] IRQ 18 registered, PCIe interrupts masked
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 4] Pre-release TCM snapshot (shared_info area):
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 4]   [0x9d0a4] = 0x555c2631
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 4]   [0x9d0a8] = 0x236703c4
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 4]   [0x9d0ac] = 0x7a3681cd
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 4]   [0x9d0b0] = 0xde4cd7ed
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 4] Pre-release fw_init_done=0x870ca015
+Apr 13 17:05:37 nixos kernel: bcm4360: LEVEL4 — about to release ARM (no DMA, no bus master)
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 4] *** RELEASING ARM (no DMA, no bus master) ***
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: Releasing ARM CR4...
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: ARM IOCTL after release: 0x00000001
+Apr 13 17:05:37 nixos kernel: bcm4360: LEVEL4 — arm_release() returned, still alive
+Apr 13 17:05:37 nixos kernel: bcm4360_test 0000:03:00.0: [level 4] ARM released — still alive
+Apr 13 17:05:37 nixos kernel: bcm4360: LEVEL4 — 100ms post-release, alive

@@ -391,9 +391,31 @@ Cold boot behavior is essentially identical to warm-handoff (post-wl) testing.
 3. **Gen1 x1 is the hardware's native state**, not degradation from wl.
 4. **Test script now handles cold boot** — unbinds bcma-pci-bridge automatically.
 
+## Test.27 — Level 4 crash on cold boot (2026-04-13)
+
+### Result: identical crash ~100-200ms after ARM release
+
+Same pattern as test.18 (warm handoff):
+- ARM released, IOCTL=0x01 (CLK only)
+- "100ms post-release, alive" — last message
+- Hard lockup between 100ms and 300ms
+
+### Conclusion: crash is intrinsic firmware behavior
+
+The level 4 crash is **not caused by wl side-effects**. It occurs identically
+on cold boot (wl never loaded) and warm handoff (after wl unload). The firmware
+itself does something ~100-200ms after starting that kills the PCIe link.
+
+Most likely cause: the offload firmware expects to find a valid shared_info
+structure at TCM offset 0x9D0A4 with magic markers (0xA5A5A5A5 / 0x5A5A5A5A)
+and DMA buffer addresses. Without this, the firmware panics and corrupts host
+PCIe state. This matches the Phase 3 analysis and option_c_feasibility.md
+findings about the boot handshake sequence.
+
 ## Next Steps
 
-1. Try level 4 on cold boot — firmware hasn't been tainted by wl state
-2. If still crashes, try shorter timeout (re-halt at 50ms)
-3. Consider whether this firmware is fundamentally incompatible and if further
-   level 4 work is productive
+1. Write proper shared_info structure before ARM release (magic markers,
+   DMA buffer address) — firmware may stabilize if it finds valid handshake
+2. If firmware stabilizes, poll fw_init_done for initialization status
+3. Consider whether this firmware path is worth pursuing vs alternative
+   approaches (mac80211 SoftMAC driver per issue #5)
