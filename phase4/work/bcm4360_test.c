@@ -1220,7 +1220,40 @@ static int level5_full_init(struct bcm4360_dev *dev)
 		dev_info(&pdev->dev, "[level 5] Continuing without NVRAM file\n");
 
 	/* NOTE: This firmware is PCI-CDC (FullMAC), NOT olmsg offload.
-	 * Firmware reads board config from SROM/OTP via ChipCommon. */
+	 * Firmware reads board config from SROM/OTP. Host CC SROM returns 0x0000,
+	 * firmware gets 0xFFFF. Try multiple approaches to provide board data. */
+
+	/* --- Approach: Switch firmware to OTP CIS path ---
+	 * SROM_CTRL=0x23: SRC_PRSNT(bit0)=1, SRC_OTPSEL(bit4)=0
+	 * Firmware sees "SPROM present" → reads SPROM → gets 0xFFFF.
+	 * Fix: clear SRC_PRSNT, set SRC_OTPSEL → firmware reads OTP CIS.
+	 * OTP CIS data lives at PCIe+0x800 (auto-loaded from OTP at reset). */
+	{
+		u32 srom_ctrl, new_ctrl;
+
+		srom_ctrl = bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_CTRL);
+		dev_info(&pdev->dev, "[level 5] SROM_CTRL before = 0x%08x\n",
+			 srom_ctrl);
+
+		/* Clear SRC_PRSNT (bit 0), set SRC_OTPSEL (bit 4) */
+		new_ctrl = (srom_ctrl & ~0x01) | 0x10;
+		bp_write32(dev, CHIPCOMMON_BASE + CC_SROM_CTRL, new_ctrl);
+		val = bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_CTRL);
+		dev_info(&pdev->dev, "[level 5] SROM_CTRL after = 0x%08x (wrote 0x%08x)\n",
+			 val, new_ctrl);
+
+		/* Verify CC SROM reads changed */
+		bp_write32(dev, CHIPCOMMON_BASE + CC_SROM_ADDR, 0);
+		udelay(10);
+		val = bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_DATA);
+		dev_info(&pdev->dev, "[level 5] CC SROM[0] with OTP mode = 0x%04x\n",
+			 val & 0xFFFF);
+		bp_write32(dev, CHIPCOMMON_BASE + CC_SROM_ADDR, 65);
+		udelay(10);
+		val = bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_DATA);
+		dev_info(&pdev->dev, "[level 5] CC SROM[65] with OTP mode = 0x%04x\n",
+			 val & 0xFFFF);
+	}
 
 	/* Register ISR */
 	ret = request_irq(pdev->irq, bcm4360_isr, IRQF_SHARED, DRV_NAME, dev);
