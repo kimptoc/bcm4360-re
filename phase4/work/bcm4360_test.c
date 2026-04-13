@@ -652,9 +652,9 @@ static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 
 	for (i = 0; i < word_count; i++) {
 		iowrite32(src[i], dev->tcm + (i * 4));
-		/* Pace writes: read-back every 64 DWORDs (256 bytes) to flush
-		 * PCIe write buffers — Gen1 x1 link overflows at 256 DWORDs */
-		if ((i & 0x3F) == 0x3F) {
+		/* Pace writes: read-back every 16 DWORDs (64 bytes) to flush
+		 * PCIe write buffers — Gen1 x1 link overflows at 64 DWORDs (256B) */
+		if ((i & 0x0F) == 0x0F) {
 			val = ioread32(dev->tcm + (i * 4));
 			if (val == 0xFFFFFFFF) {
 				dev_err(&pdev->dev,
@@ -663,8 +663,12 @@ static int level3_tcm_and_fw(struct bcm4360_dev *dev)
 				return -EIO;
 			}
 			/* Let PCIe link drain between chunks */
-			udelay(10);
+			udelay(50);
 		}
+		/* Progress canary every 1024 DWORDs so crash shows how far we got */
+		if ((i & 0x3FF) == 0)
+			pr_emerg("bcm4360: TCM write progress: DWORD %u/%u\n",
+				 i, word_count);
 	}
 	/* Final flush */
 	val = ioread32(dev->tcm + ((word_count - 1) * 4));

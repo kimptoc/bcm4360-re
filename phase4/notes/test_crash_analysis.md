@@ -179,12 +179,41 @@ point in `level3_tcm_and_fw()`:
 physical console even during a hard lockup. Check VT or serial console — dmesg
 log capture may not work if the crash is too fast.
 
+## Canary test result (2026-04-13)
+
+### Result: CANARY 5 was the last message on screen
+
+Ran `sudo ./test.sh 3` with canary-instrumented module. Physical console showed
+CANARY 5 ("starting bulk TCM write") but NOT CANARY 6 ("bulk write complete").
+
+**This confirms the crash is inside the bulk TCM write loop** (lines 653–668 of
+`bcm4360_test.c`). The BAR2 mapping, initial TCM reads, AER clearing, and
+`arm_halt()` all succeed — the machine locks up during the sustained `iowrite32`
+burst to TCM.
+
+### Current pacing (insufficient)
+
+- Readback flush every 64 DWORDs (256 bytes)
+- 10μs `udelay` after each flush
+- Still overflows the Gen1 x1 link write buffers
+
+### Diagnosis
+
+The 64-DWORD chunk size is still too large for the Gen1 x1 link. At ~250 MB/s
+theoretical bandwidth with write-posting, 256 bytes of back-to-back MMIO writes
+can still fill the PCIe write buffer before the read-back completes. The 10μs
+delay is also too short to allow the link to fully drain.
+
+### Fix: tighter pacing + progress canaries
+
+1. **Reduce chunk size**: flush every 16 DWORDs (64 bytes) instead of 64 (256 bytes)
+2. **Increase drain delay**: 50μs instead of 10μs
+3. **Add progress canaries**: `pr_emerg` every 1024 DWORDs so the next crash
+   (if any) reveals exactly how far the write got before dying
+
 ## Next Steps
 
-1. Run `sudo ./test.sh 3` with canary-instrumented module
-2. Check physical console (or serial if available) for last canary seen
-3. Based on canary results, isolate the specific crash-causing operation
-4. If crash is in `arm_halt()` — may need to add pacing/delays to `bp_write32`
-   or verify ARM_WRAP_BASE window math
-5. If crash is in BAR2 map/read — investigate whether BAR2 needs bus mastering
-   or additional AER clearing
+1. Build and test with tighter pacing (16 DWORDs + 50μs)
+2. If still crashing, check progress canaries for how far it gets
+3. If crash is near the start — may need single-word pacing or `wmb()` barriers
+4. If crash is near the end — may be a specific TCM address region issue
