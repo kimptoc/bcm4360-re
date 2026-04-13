@@ -1005,6 +1005,14 @@ static int level5_full_init(struct bcm4360_dev *dev)
 	pci_set_master(pdev);
 	dev_info(&pdev->dev, "[level 5] Bus mastering ON\n");
 
+	/* Clear pending interrupts and unmask — firmware has been sending
+	 * mailbox signals (intstatus=0x300, mailboxint=0x03) that need acking */
+	bp_write32(dev, PCIE_CORE_BASE + PCIE_INTSTATUS, 0xFFFFFFFF);
+	bp_write32(dev, PCIE_CORE_BASE + PCIE_MAILBOXINT, 0xFFFFFFFF);
+	bp_write32(dev, PCIE_CORE_BASE + PCIE_INTMASK, 0xFFFFFFFF);
+	bp_write32(dev, PCIE_CORE_BASE + PCIE_MAILBOXMASK, 0xFFFFFFFF);
+	dev_info(&pdev->dev, "[level 5] PCIe interrupts unmasked\n");
+
 	/* Poll for firmware init */
 	dev_info(&pdev->dev, "[level 5] Polling fw_init_done...\n");
 	for (i = 0; i < FW_INIT_TIMEOUT_MS; i++) {
@@ -1018,7 +1026,8 @@ static int level5_full_init(struct bcm4360_dev *dev)
 		usleep_range(1000, 1500);
 	}
 
-	/* Timeout — disable bus mastering immediately */
+	/* Timeout — mask interrupts and disable bus mastering */
+	pcie_mask_irqs(dev);
 	pci_clear_master(pdev);
 	dev_err(&pdev->dev, "[level 5] FW init TIMEOUT (%dms) — bus master disabled\n",
 		FW_INIT_TIMEOUT_MS);
@@ -1052,7 +1061,8 @@ fw_ok:
 	dev_info(&pdev->dev, "[level 5] IRQs received: %d\n", dev->irq_count);
 	dev_info(&pdev->dev, "[level 5] PASS\n");
 
-	/* Disable bus mastering and halt ARM */
+	/* Disable bus mastering, mask interrupts, halt ARM */
+	pcie_mask_irqs(dev);
 	pci_clear_master(pdev);
 	arm_halt(dev);
 	if (irq_registered)
