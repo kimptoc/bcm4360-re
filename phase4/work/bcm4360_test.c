@@ -758,7 +758,7 @@ static int level4_arm_release_safe(struct bcm4360_dev *dev)
 	bool irq_registered = false;
 	int ret;
 
-	dev_info(&pdev->dev, "[level 4] ARM release (NO DMA, NO bus mastering)...\n");
+	dev_info(&pdev->dev, "[level 4] ARM release with shared_info (NO DMA)...\n");
 
 	if (!dev->tcm || !dev->regs) {
 		dev_err(&pdev->dev, "[level 4] FAIL — BAR0/BAR2 not mapped (run level 2+3 first)\n");
@@ -771,6 +771,61 @@ static int level4_arm_release_safe(struct bcm4360_dev *dev)
 	/* Mask all PCIe core interrupts before ARM release */
 	pcie_mask_irqs(dev);
 
+	/* Allocate DMA buffer for olmsg (firmware needs a valid address
+	 * in shared_info even if bus mastering is off) */
+	if (!dev->olmsg_buf) {
+		dev->olmsg_buf = dma_alloc_coherent(&pdev->dev, OLMSG_BUF_SIZE,
+						    &dev->olmsg_dma, GFP_KERNEL);
+		if (!dev->olmsg_buf) {
+			dev_err(&pdev->dev, "[level 4] FAIL — DMA alloc failed\n");
+			return -ENOMEM;
+		}
+	}
+
+	/* Initialize olmsg ring buffer structure */
+	{
+		u32 *buf = dev->olmsg_buf;
+
+		memset(buf, 0, OLMSG_BUF_SIZE);
+		/* Ring 0 (host→fw): data at offset 0x20, size 0x7800 */
+		buf[0] = OLMSG_HEADER_SIZE;	/* data_offset */
+		buf[1] = OLMSG_RING_SIZE;	/* size */
+		buf[2] = 0;			/* read_ptr */
+		buf[3] = 0;			/* write_ptr */
+		/* Ring 1 (fw→host): data at offset 0x20+0x7800, size 0x7800 */
+		buf[4] = OLMSG_HEADER_SIZE + OLMSG_RING_SIZE;	/* data_offset */
+		buf[5] = OLMSG_RING_SIZE;	/* size */
+		buf[6] = 0;			/* read_ptr */
+		buf[7] = 0;			/* write_ptr */
+	}
+	dev_info(&pdev->dev, "[level 4] olmsg buffer: dma=0x%llx\n",
+		 (u64)dev->olmsg_dma);
+
+	/* Write shared_info to TCM — this is what the firmware looks for
+	 * on boot. Without it, firmware panics ~100ms after ARM release. */
+	base = SHARED_INFO_OFFSET;
+	dev_info(&pdev->dev, "[level 4] Writing shared_info at TCM 0x%x...\n", base);
+	/* Zero the entire shared_info structure first */
+	for (i = 0; i < SHARED_INFO_SIZE / 4; i++)
+		tcm_write32(dev, base + i * 4, 0);
+	/* Write required fields */
+	tcm_write32(dev, base + SI_MAGIC_START, SHARED_MAGIC_START);
+	tcm_write32(dev, base + SI_OLMSG_PHYS_LO, lower_32_bits(dev->olmsg_dma));
+	tcm_write32(dev, base + SI_OLMSG_PHYS_HI, upper_32_bits(dev->olmsg_dma));
+	tcm_write32(dev, base + SI_OLMSG_SIZE, OLMSG_BUF_SIZE);
+	tcm_write32(dev, base + SI_FW_INIT_DONE, 0);
+	tcm_write32(dev, base + SI_MAGIC_END, SHARED_MAGIC_END);
+
+	/* Verify shared_info writes */
+	val = tcm_read32(dev, base + SI_MAGIC_START);
+	dev_info(&pdev->dev, "[level 4] shared_info magic_start=0x%08x (expect 0x%08x)\n",
+		 val, SHARED_MAGIC_START);
+	val = tcm_read32(dev, base + SI_MAGIC_END);
+	dev_info(&pdev->dev, "[level 4] shared_info magic_end=0x%08x (expect 0x%08x)\n",
+		 val, SHARED_MAGIC_END);
+	val = tcm_read32(dev, base + SI_FW_INIT_DONE);
+	dev_info(&pdev->dev, "[level 4] fw_init_done=0x%08x (expect 0)\n", val);
+
 	/* Register ISR as safety net */
 	ret = request_irq(pdev->irq, bcm4360_isr, IRQF_SHARED, DRV_NAME, dev);
 	if (ret) {
@@ -780,42 +835,37 @@ static int level4_arm_release_safe(struct bcm4360_dev *dev)
 	irq_registered = true;
 	dev_info(&pdev->dev, "[level 4] IRQ %d registered, PCIe interrupts masked\n", pdev->irq);
 
-	/* Snapshot TCM near shared_info region before ARM release */
-	base = SHARED_INFO_OFFSET;
-	dev_info(&pdev->dev, "[level 4] Pre-release TCM snapshot (shared_info area):\n");
-	for (i = 0; i < 4; i++)
-		dev_info(&pdev->dev, "[level 4]   [0x%x] = 0x%08x\n",
-			 base + i * 4, tcm_read32(dev, base + i * 4));
-
-	/* Snapshot FW init done location */
-	val = tcm_read32(dev, base + SI_FW_INIT_DONE);
-	dev_info(&pdev->dev, "[level 4] Pre-release fw_init_done=0x%08x\n", val);
-
 	/* === RELEASE ARM === */
-	pr_emerg("bcm4360: LEVEL4 — about to release ARM (no DMA, no bus master)\n");
+	pr_emerg("bcm4360: LEVEL4 — about to release ARM (shared_info written, no DMA)\n");
 	mdelay(100);
-	dev_info(&pdev->dev, "[level 4] *** RELEASING ARM (no DMA, no bus master) ***\n");
+	dev_info(&pdev->dev, "[level 4] *** RELEASING ARM (shared_info written, no bus master) ***\n");
 	arm_release(dev);
 	pr_emerg("bcm4360: LEVEL4 — arm_release() returned, still alive\n");
 	dev_info(&pdev->dev, "[level 4] ARM released — still alive\n");
 
-	/* Wait and observe — firmware runs but cannot DMA */
-	msleep(100);
-	pr_emerg("bcm4360: LEVEL4 — 100ms post-release, alive\n");
-	dev_info(&pdev->dev, "[level 4] 100ms post-release — alive, IRQs=%d\n", dev->irq_count);
+	/* Poll fw_init_done — firmware should write non-zero if it initializes */
+	for (i = 0; i < FW_INIT_TIMEOUT_MS; i++) {
+		val = tcm_read32(dev, SHARED_INFO_OFFSET + SI_FW_INIT_DONE);
+		if (val != 0) {
+			dev_info(&pdev->dev,
+				 "[level 4] *** FW INIT DONE *** val=0x%08x at %dms\n",
+				 val, i);
+			break;
+		}
+		/* Canary at key intervals */
+		if (i == 50 || i == 100 || i == 500 || i == 1000)
+			pr_emerg("bcm4360: LEVEL4 — %dms post-release, alive, fw_init_done=0\n", i);
+		msleep(1);
+	}
+	if (val == 0)
+		dev_info(&pdev->dev, "[level 4] fw_init_done timeout (%dms) — firmware did not signal\n",
+			 FW_INIT_TIMEOUT_MS);
 
-	msleep(200);
-	dev_info(&pdev->dev, "[level 4] 300ms post-release — alive, IRQs=%d\n", dev->irq_count);
+	dev_info(&pdev->dev, "[level 4] IRQs received: %d\n", dev->irq_count);
 
-	msleep(500);
-	dev_info(&pdev->dev, "[level 4] 800ms post-release — alive, IRQs=%d\n", dev->irq_count);
-
-	msleep(1200);
-	dev_info(&pdev->dev, "[level 4] 2000ms post-release — alive, IRQs=%d\n", dev->irq_count);
-
-	/* Read TCM to see what the firmware did */
-	dev_info(&pdev->dev, "[level 4] Post-release TCM snapshot:\n");
-	for (i = 0; i < 4; i++)
+	/* Post-poll TCM snapshot — see what firmware wrote */
+	dev_info(&pdev->dev, "[level 4] Post-release shared_info snapshot:\n");
+	for (i = 0; i < 8; i++)
 		dev_info(&pdev->dev, "[level 4]   [0x%x] = 0x%08x\n",
 			 base + i * 4, tcm_read32(dev, base + i * 4));
 	val = tcm_read32(dev, base + SI_FW_INIT_DONE);
