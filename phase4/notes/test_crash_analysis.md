@@ -446,8 +446,39 @@ The firmware is **alive and communicating**:
 Without valid shared_info, the firmware panics on boot (~100ms) and corrupts
 the PCIe link. With valid shared_info, it runs indefinitely without issues.
 
+## Test.29 — Level 5 no crash, fw_init_done timeout (2026-04-13)
+
+### Result: firmware stable with DMA, but didn't complete init
+
+Level 5 enables bus mastering at 50ms post-release. Firmware ran for 2+ seconds
+with DMA available, no crash, but fw_init_done stayed 0.
+
+### Key observations
+
+| Property | Value | Meaning |
+|---|---|---|
+| Bus mastering | Enabled at 50ms | FW can DMA |
+| fw_init_done | 0x00000000 (timeout) | FW didn't complete init |
+| olmsg fw→host ring | wr=0 rd=0 | FW didn't write to olmsg |
+| PCIe intstatus | 0x00000300 | FW set interrupt bits |
+| PCIe mailboxint | 0x00000003 | FW sent 2 mailbox signals |
+| IRQs received | 0 | Interrupts masked — FW signals not acked |
+| shared_info | Magic markers intact | FW didn't corrupt anything |
+
+### Analysis
+
+Firmware is stable and trying to communicate via PCIe mailbox, but host isn't
+acknowledging. The firmware may be stuck waiting for:
+1. PCIe interrupt acknowledgement (mailbox signals need to be cleared/acked)
+2. Interrupts to be unmasked so the ISR can fire
+3. Some host response in the olmsg buffer
+
+The mailbox signals (intstatus=0x300, mailboxint=0x03) are the firmware's way of
+saying "I'm here, acknowledge me." Without acking, it may loop waiting forever.
+
 ## Next Steps
 
-1. Level 5: enable bus mastering so firmware can DMA to olmsg buffer
-2. If fw_init_done becomes non-zero → firmware fully initialized
-3. Try sending olmsg commands (BCM_OL_SCAN etc.) to test communication
+1. Unmask PCIe interrupts after ARM release so ISR can fire
+2. Service the mailbox signals (clear intstatus/mailboxint)
+3. Check if fw_init_done changes after interrupt servicing
+4. Investigate what the 0x300 / 0x03 interrupt bits mean in Broadcom PCIe core
