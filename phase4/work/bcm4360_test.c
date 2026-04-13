@@ -792,12 +792,16 @@ static int level4_arm_release_safe(struct bcm4360_dev *dev)
 	dev_info(&pdev->dev, "[level 4] Pre-release fw_init_done=0x%08x\n", val);
 
 	/* === RELEASE ARM === */
+	pr_emerg("bcm4360: LEVEL4 — about to release ARM (no DMA, no bus master)\n");
+	mdelay(100);
 	dev_info(&pdev->dev, "[level 4] *** RELEASING ARM (no DMA, no bus master) ***\n");
 	arm_release(dev);
+	pr_emerg("bcm4360: LEVEL4 — arm_release() returned, still alive\n");
 	dev_info(&pdev->dev, "[level 4] ARM released — still alive\n");
 
 	/* Wait and observe — firmware runs but cannot DMA */
 	msleep(100);
+	pr_emerg("bcm4360: LEVEL4 — 100ms post-release, alive\n");
 	dev_info(&pdev->dev, "[level 4] 100ms post-release — alive, IRQs=%d\n", dev->irq_count);
 
 	msleep(200);

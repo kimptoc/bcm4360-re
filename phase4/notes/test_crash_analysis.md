@@ -303,8 +303,65 @@ FW verify: first=0xb80ef000 (expect 0xb80ef000)
 PASS — ARM halted, FW downloaded, ready for level 4
 ```
 
+## Test.18 — Level 4 crash (2026-04-13)
+
+### Result: crash ~100-200ms after ARM release
+
+Level 4 ran with protections: bus mastering OFF, PCIe interrupts masked, ISR
+registered. The ARM was released and the host survived for 100ms, then crashed
+before the 300ms checkpoint. Hard lockup requiring power cycle.
+
+### Timeline (from journal -b -1)
+
+```
+[level 4] ARM release (NO DMA, NO bus mastering)...
+[level 4] IRQ 18 registered, PCIe interrupts masked
+[level 4] Pre-release fw_init_done=0x070ca017
+LEVEL4 — about to release ARM (no DMA, no bus master)
+[level 4] *** RELEASING ARM (no DMA, no bus master) ***
+Releasing ARM CR4...
+ARM IOCTL after release: 0x00000001
+LEVEL4 — arm_release() returned, still alive
+[level 4] ARM released — still alive
+LEVEL4 — 100ms post-release, alive         ← LAST MESSAGE
+  [crash between 100ms and 300ms]
+```
+
+### Analysis
+
+- ARM released successfully (IOCTL=0x01 = CLK only, no CPUHALT)
+- Bus mastering OFF → firmware cannot DMA to host memory
+- PCIe interrupts masked → firmware cannot fire MSIs
+- No IRQs observed in the 100ms window
+- Crash happens during `msleep(200)` between 100ms and 300ms checks
+
+### Likely cause
+
+The firmware is writing to **PCIe control registers** on the backplane that
+affect the host-side link. With bus mastering disabled, the firmware can still
+access the PCIe core's internal registers (INTSTATUS, link control, etc.) via
+the BCMA backplane — these are device-side registers, not DMA. A firmware write
+to e.g. PCIe link control or BAR configuration could cause the host's root
+complex to detect a fatal error and lock up.
+
+This matches the Phase 3 findings (diag tests 6-7) where the same crash
+occurred. The `wl` firmware is designed for FullMAC CDC protocol and likely
+performs PCIe init that's incompatible with our setup.
+
+### Possible mitigations for next attempt
+
+1. **Shorter observation window**: re-halt ARM after 50ms instead of waiting 2s
+2. **Disable PCIe core before release**: put the PCIe core in reset via BCMA
+   wrapper so firmware can't access PCIe registers (but this may prevent TCM
+   access from the host too)
+3. **Monitor AER in a tight loop**: poll AER status immediately after release
+   to catch the fatal error before it propagates
+
 ## Next Steps
 
-1. Level 4: ARM release + firmware boot + shared memory handshake
-2. Consider relaxing single-word pacing to improve download speed (~4x possible)
-3. Clean up canary/pr_emerg debug instrumentation once level 4 is stable
+1. Try level 4 with shorter timeout (re-halt at 50ms) to see if we can catch
+   the firmware alive before it crashes the host
+2. Investigate whether the firmware can be prevented from accessing PCIe
+   core registers while still running
+3. Consider whether this firmware is fundamentally incompatible (FullMAC CDC
+   vs msgbuf protocol) and if further level 4 work is productive
