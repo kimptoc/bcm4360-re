@@ -596,12 +596,64 @@ TRAP 4(9cee8): pc 3e560, lr 68189, sp 9cf40, cpsr 600001df, spsr 600001ff
 - On Apple Macs, NVRAM data comes from EFI device properties or must be extracted
   from macOS IO registry
 
+### test.34 — NVRAM format wrong (2026-04-13)
+
+First NVRAM attempt: raw .txt file with `#` comments written to TCM. Used byte count
+instead of word count in the token. Firmware still reads 0xFFFF.
+
+### test.35 — NVRAM correct format, firmware ignores it (2026-04-13)
+
+Fixed NVRAM loading: stripped comments, null-separated key=value pairs, padded to
+4-byte boundary, proper word-count token `(~words << 16) | words`. Token verified
+correct at TCM 0x9FFFC. But firmware STILL reads boardtype=0xFFFF.
+
+**Root cause:** This wl-based PCI-CDC firmware reads SROM from hardware registers
+(ChipCommon SROM_ADDR/DATA interface), NOT from NVRAM text in TCM. The brcmfmac
+NVRAM-in-TCM protocol is for a different firmware type.
+
+### test.36 — OTP probing (2026-04-13)
+
+Added `dump_sprom_and_otp()` to probe all OTP access methods from host side:
+
+| Register | Value | Meaning |
+|---|---|---|
+| CC SROM_CTRL | 0x00000023 | OTP selected (bit0), OTP present (bit1) |
+| CC OTP_STATUS | 0x00009000 | Init done (bit15), word done (bit12) |
+| CC OTP_CONTROL | 0x00000000 | No active operation |
+| CC OTP_LAYOUT | 0x00115200 | 512 rows (bits[11:0]=0x200) |
+| CC caps | 0x58680001 | OTP size bits[16:12]=0x0 |
+
+**Access methods tried:**
+- CC SROM_ADDR/DATA (8 words) → all 0xFFFF
+- CC+0x800 direct OTP region (32 DWORDs) → all zero
+- OTP core at 0x18012000 → 0xFFFFFFFF (core may not exist)
+
+**Analysis:** OTP IS present and initialized (status bits confirm). But both the
+SPROM interface and direct memory-mapped OTP returned no data. Possible causes:
+
+1. Only scanned 32 of 512 rows — CIS data may be at higher offset
+2. Need to use `otpprog` register with explicit read commands (row-by-row)
+3. PCIe core SROM shadow (PCIe+0x800) might have auto-loaded OTP data
+4. Apple may use CIS format (tag-length-value) in OTP, not SROM format — the
+   SROM_ADDR/DATA interface doesn't handle CIS, need raw OTP row reads
+5. OTP may need explicit enable via otpcontrol register before reads work
+
+**Next test (test.37):** Comprehensive 6-method OTP scan:
+1. CC SROM_ADDR/DATA (existing, 8 words)
+2. Full CC+0x800 scan (256 DWORDs = all 512 rows)
+3. otpprog register read commands (row-by-row, 128 rows)
+4. PCIe core SROM shadow at PCIe+0x800
+5. OTP core direct (0x18012000 + 0x800)
+6. CC SROM with OTP CI enable toggle + key SROM11 offsets
+
 ## Next Steps
 
-1. **Create/obtain NVRAM file** for BCM4360 on MacBookPro11,1 (Apple subsys 106b:0112)
-   - Need at minimum: boardtype, boardrev, macaddr, ccode, regrev
-   - Community may have nvram for this exact board (search broadcom-wl-devel, brcmfmac)
+1. **Run test.37** with comprehensive OTP scan to find where board data lives
+2. If OTP has CIS data: parse TLV tuples, extract boardtype/boardrev/calibration
+3. If OTP is truly empty: board data must come from Apple EFI device properties
    - Can extract from macOS via `ioreg -l | grep RequestedFiles` or IO registry
-2. **Load NVRAM to TCM** alongside firmware (brcmfmac puts nvram at end of RAM)
-3. Once firmware initializes, shift from olmsg to CDC protocol for host communication
-4. Reconsider project architecture — if this is FullMAC, brcmfmac might work directly
+   - Or find community NVRAM for MacBookPro11,1 (Apple 106b:0112)
+4. Once board data is found: either write to SPROM shadow registers before ARM
+   release, or patch the firmware's SROM read path
+5. Long-term: reconsider architecture — if this is FullMAC PCI-CDC, brcmfmac
+   might work directly once board data problem is solved

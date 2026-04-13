@@ -264,6 +264,7 @@ static void dump_sprom_and_otp(struct bcm4360_dev *dev)
 {
 	struct pci_dev *pdev = dev->pdev;
 	u32 i, val;
+	int nz;
 
 	/* Read SROM control register */
 	val = bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_CTRL);
@@ -275,17 +276,18 @@ static void dump_sprom_and_otp(struct bcm4360_dev *dev)
 	val = bp_read32(dev, CHIPCOMMON_BASE + CC_OTPCTRL);
 	dev_info(&pdev->dev, "[hw] CC OTP_CONTROL=0x%08x\n", val);
 	val = bp_read32(dev, CHIPCOMMON_BASE + CC_OTPLAYOUT);
-	dev_info(&pdev->dev, "[hw] CC OTP_LAYOUT=0x%08x\n", val);
+	dev_info(&pdev->dev, "[hw] CC OTP_LAYOUT=0x%08x (rows=%u)\n",
+		 val, val & 0xFFF);
+	val = bp_read32(dev, CHIPCOMMON_BASE + CC_OTPPROG);
+	dev_info(&pdev->dev, "[hw] CC OTP_PROG=0x%08x\n", val);
 
 	/* ChipCommon capabilities (OTP size is encoded here) */
 	val = bp_read32(dev, CHIPCOMMON_BASE + 0x04); /* CC capabilities */
 	dev_info(&pdev->dev, "[hw] CC caps=0x%08x (OTP size bits[16:12]=0x%x)\n",
 		 val, (val >> 12) & 0x1F);
 
-	/* Try reading OTP via ChipCommon SPROM-compatible interface.
-	 * On some chips, OTP CIS is accessible as "SPROM" words
-	 * via the CC_SROM_DATA register with specific addressing. */
-	dev_info(&pdev->dev, "[hw] SPROM first 8 words:\n");
+	/* --- Method 1: CC SPROM interface (8 words) --- */
+	dev_info(&pdev->dev, "[hw] SPROM first 8 words (CC SROM_ADDR/DATA):\n");
 	for (i = 0; i < 8; i++) {
 		bp_write32(dev, CHIPCOMMON_BASE + CC_SROM_ADDR, i);
 		udelay(10);
@@ -293,30 +295,115 @@ static void dump_sprom_and_otp(struct bcm4360_dev *dev)
 		dev_info(&pdev->dev, "[hw]   SPROM[%u] = 0x%04x\n", i, val & 0xFFFF);
 	}
 
-	/* Read OTP directly — try reading first 64 words from OTP region.
-	 * On BCM4360, OTP data may be accessible via CC offset 0x800+ */
-	dev_info(&pdev->dev, "[hw] OTP direct read (CC+0x800):\n");
-	for (i = 0; i < 32; i++) {
+	/* --- Method 2: Full OTP scan at CC+0x800 (512 rows) ---
+	 * IPX OTP on CC rev 43 maps OTP data at ChipCommon + 0x800.
+	 * Each 32-bit read returns two 16-bit OTP words. Scan all 512 rows. */
+	dev_info(&pdev->dev, "[hw] OTP direct scan CC+0x800..0xC00 (256 DWORDs = 512 rows):\n");
+	nz = 0;
+	for (i = 0; i < 256; i++) {
 		val = bp_read32(dev, CHIPCOMMON_BASE + 0x800 + i * 4);
-		if (val != 0 && val != 0xFFFFFFFF)
-			dev_info(&pdev->dev, "[hw]   OTP[%02u] = 0x%08x\n", i, val);
+		if (val != 0 && val != 0xFFFFFFFF) {
+			if (nz < 48) /* cap output */
+				dev_info(&pdev->dev, "[hw]   OTP[%03u] = 0x%08x\n",
+					 i, val);
+			nz++;
+		}
 	}
+	dev_info(&pdev->dev, "[hw] OTP CC+0x800 scan: %d non-zero of 256\n", nz);
 
-	/* Also try reading via the OTP core directly if it exists */
+	/* --- Method 3: otpprog register word-by-word read ---
+	 * IPX OTP read sequence: write (START | READ_CMD | row_addr) to
+	 * otpprog, wait for START bit to clear, read data from otpprog. */
+	dev_info(&pdev->dev, "[hw] OTP via otpprog (first 128 rows):\n");
+	nz = 0;
+	for (i = 0; i < 128; i++) {
+		int timeout = 100;
+		/* Write: bit31=START, bits[30:28]=0 (read), bits[11:0]=row */
+		bp_write32(dev, CHIPCOMMON_BASE + CC_OTPPROG,
+			   0x80000000 | (i & 0xFFF));
+		/* Wait for START/BUSY (bit 31) to clear */
+		do {
+			udelay(10);
+			val = bp_read32(dev, CHIPCOMMON_BASE + CC_OTPPROG);
+		} while ((val & 0x80000000) && --timeout > 0);
+		if (timeout == 0) {
+			dev_info(&pdev->dev, "[hw]   otpprog timeout at row %u\n", i);
+			break;
+		}
+		/* Data in lower bits */
+		if ((val & 0xFFFF) != 0 && (val & 0xFFFF) != 0xFFFF) {
+			if (nz < 48)
+				dev_info(&pdev->dev, "[hw]   OTPprog[%03u] = 0x%08x (data=0x%04x)\n",
+					 i, val, val & 0xFFFF);
+			nz++;
+		}
+	}
+	dev_info(&pdev->dev, "[hw] OTP otpprog scan: %d non-zero of 128\n", nz);
+
+	/* --- Method 4: PCIe core SROM shadow ---
+	 * PCIe core at 0x18003000 may have SROM shadow at +0x0800.
+	 * If OTP auto-loads to SROM shadow, reads here would work. */
+	dev_info(&pdev->dev, "[hw] PCIe SROM shadow (PCIe+0x800, first 16 words):\n");
+	nz = 0;
+	for (i = 0; i < 16; i++) {
+		val = bp_read32(dev, PCIE_CORE_BASE + 0x800 + i * 4);
+		if (val != 0xFFFFFFFF)
+			dev_info(&pdev->dev, "[hw]   PCIeSROM[%02u] = 0x%08x\n",
+				 i, val);
+		if (val != 0 && val != 0xFFFFFFFF)
+			nz++;
+	}
+	dev_info(&pdev->dev, "[hw] PCIe SROM shadow: %d non-zero of 16\n", nz);
+
+	/* --- Method 5: OTP core direct access --- */
 	val = bp_read32(dev, OTP_CORE_BASE);
-	dev_info(&pdev->dev, "[hw] OTP core[0x000] = 0x%08x\n", val);
-	if (val != 0xFFFFFFFF && val != 0) {
-		for (i = 0; i < 16; i++) {
+	dev_info(&pdev->dev, "[hw] OTP core ID = 0x%08x\n", val);
+	if (val != 0xFFFFFFFF) {
+		/* Try OTP core wrapper regs and data area */
+		dev_info(&pdev->dev, "[hw] OTP core+0x400 (wrapper):\n");
+		for (i = 0; i < 4; i++) {
+			val = bp_read32(dev, OTP_CORE_BASE + 0x400 + i * 4);
+			dev_info(&pdev->dev, "[hw]   wrap[%u] = 0x%08x\n", i, val);
+		}
+		dev_info(&pdev->dev, "[hw] OTP core data (core+0x800, 32 DWORDs):\n");
+		nz = 0;
+		for (i = 0; i < 32; i++) {
 			val = bp_read32(dev, OTP_CORE_BASE + 0x800 + i * 4);
-			if (val != 0 && val != 0xFFFFFFFF)
+			if (val != 0 && val != 0xFFFFFFFF) {
 				dev_info(&pdev->dev, "[hw]   OTPcore[%02u] = 0x%08x\n",
 					 i, val);
+				nz++;
+			}
+		}
+		dev_info(&pdev->dev, "[hw] OTP core data: %d non-zero of 32\n", nz);
+	}
+
+	/* --- Method 6: ChipCommon SROM with OTP init ---
+	 * Try toggling OTP control register to trigger a read cycle,
+	 * then re-read via SROM_ADDR/DATA */
+	bp_write32(dev, CHIPCOMMON_BASE + CC_OTPCTRL, 0x00000040); /* CI enable */
+	udelay(100);
+	val = bp_read32(dev, CHIPCOMMON_BASE + CC_OTPST);
+	dev_info(&pdev->dev, "[hw] OTP_STATUS after CI enable = 0x%08x\n", val);
+
+	/* Try reading SROM words at key offsets (sromrev=11 layout) */
+	dev_info(&pdev->dev, "[hw] SROM key offsets after OTP init:\n");
+	{
+		/* SROM11: word 0=first, word 65=boardtype, word 66=boardrev,
+		 * word 87=macaddr, words 202-end=calibration */
+		u16 offsets[] = {0, 1, 2, 64, 65, 66, 67, 87, 88, 100, 200, 202};
+		int noff = sizeof(offsets) / sizeof(offsets[0]);
+		for (i = 0; i < noff; i++) {
+			bp_write32(dev, CHIPCOMMON_BASE + CC_SROM_ADDR, offsets[i]);
+			udelay(10);
+			val = bp_read32(dev, CHIPCOMMON_BASE + CC_SROM_DATA);
+			dev_info(&pdev->dev, "[hw]   SROM[%u] = 0x%04x\n",
+				 offsets[i], val & 0xFFFF);
 		}
 	}
 
-	/* PCI config space at 0x100+ (AER, not SPROM shadow) */
-	dev_info(&pdev->dev, "[hw] PCI cfg[0x100]=0x%08x (AER cap header)\n",
-		 ({u32 v; pci_read_config_dword(pdev, 0x100, &v); v;}));
+	/* Restore OTP control */
+	bp_write32(dev, CHIPCOMMON_BASE + CC_OTPCTRL, 0);
 }
 
 /* ---- NVRAM loading to TCM ---- */
