@@ -6,7 +6,7 @@ The goal is to add BCM4360 support to the Linux kernel's `brcmfmac` driver by re
 
 We have a live BCM4360 device on this machine with the `wl` driver loaded, giving us the ability to trace driver behaviour, read hardware registers, and compare against the existing `brcmfmac` codebase.
 
-## Current Status (updated 2026-04-14, post test.16)
+## Current Status (updated 2026-04-14, post test.17)
 
 **Phases 1, 3, and 4 (partial) are complete. Phase 5 is active.**
 
@@ -16,15 +16,16 @@ BCM4360 firmware. Firmware download works reliably. ARM release crashes the host
 **Current blockers (two related issues):**
 
 1. **ARM release crashes PC** — every ARM release since test.7 instantly kills the
-   host. Tests 8-16 tried: bus mastering on/off, AER/SERR masking, early IRQ handlers,
-   INTx disable, stripping all PCIe safety, ForceHT, warm-up cycles. All crash. The
-   only safe operation is firmware download without ARM release (test.12a PASS).
+   host. Tests 8-17 tried: bus mastering on/off, AER/SERR masking, early IRQ handlers,
+   INTx disable, stripping all PCIe safety, ForceHT, warm-up cycles, early MSI+IRQ
+   registration. All crash. The only safe operation is firmware download without ARM
+   release (test.12a PASS).
 
 2. **Firmware ASSERTs at hndarm.c:397** (HT clock timeout) — observed in test.7
    (the ONLY successful ARM release). The firmware starts, completes `si_kattach`,
    then ASSERTs ~14.5s later. This ASSERT may trigger behavior that crashes the host.
 
-### Crash investigation summary (tests 7-14)
+### Crash investigation summary (tests 7-17)
 
 | Test | Config | Result |
 |------|--------|--------|
@@ -37,15 +38,20 @@ BCM4360 firmware. Firmware download works reliably. ARM release crashes the host
 | 14 | bus_master ON, no PCIe safety | CRASH |
 | 15 | ForceHT before ARM release | CRASH |
 | 16 | warm-up cycle then ARM release | CRASH |
+| 17 | MSI + IRQ handler + bus master before ARM release | CRASH |
 
-**Bus mastering hypothesis DISPROVED** by test.14 — crash occurs with bus mastering
-both enabled and disabled. **Warm-up hypothesis DISPROVED** by test.16 — a load/unload
-cycle before ARM release doesn't help. Something fundamentally different about test.7.
+**Hypotheses disproved:**
+- **Bus mastering** (test.14) — crash with both enabled and disabled
+- **Warm-up** (test.16) — load/unload cycle before ARM release doesn't help
+- **MSI-to-address-0** (test.17) — MSI properly configured before ARM release, still crashes
+
+Something fundamentally different about test.7 (the only success).
 
 **Key discovery:** The `wl` proprietary driver **fails to load** on kernel 6.12.80
 ("Unpatched return thunk" error). Cannot be used as a reference on this system.
 
 > **Central question: Why does ARM release crash the PC, and what was different about test.7?**
+> **Next step: Investigate the crash mechanism itself — MCE/NMI/bus error? Check previous boot logs, IOMMU state, kdump.**
 
 See GitHub issue #9 for architectural assessment.
 
