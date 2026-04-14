@@ -1,0 +1,61 @@
+=== dmesg output ===
+[ 1725.779648] usbcore: registered new interface driver brcmfmac
+[ 1725.779871] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffd4a042800000
+[ 1725.888285] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[ 1725.889707] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.Apple Inc.-MacBookPro11,1.bin failed with error -2
+[ 1725.892929] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+[ 1725.892989] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+[ 1725.893145] brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffd4a042800000
+[ 1725.954283] BUG: kernel NULL pointer dereference, address: 0000000000000020
+[ 1725.954320] #PF: supervisor read access in kernel mode
+[ 1725.954342] #PF: error_code(0x0000) - not-present page
+[ 1725.954363] PGD 0 P4D 0 
+[ 1725.954376] Oops: Oops: 0000 [#1] PREEMPT SMP PTI
+[ 1725.955721] CPU: 1 UID: 0 PID: 60 Comm: kworker/1:1 Tainted: G           O       6.12.80 #1-NixOS
+[ 1725.957079] Tainted: [O]=OOT_MODULE
+[ 1725.958386] Hardware name: Apple Inc. MacBookPro11,1/Mac-189A3D4F975D5FFC, BIOS 478.0.0.0.0 01/13/2023
+[ 1725.959700] Workqueue: events request_firmware_work_func
+[ 1725.960996] RIP: 0010:brcmf_chip_resetcore+0xa/0x20 [brcmfmac]
+[ 1725.962294] Code: 40 68 48 89 e5 5d e9 d5 16 69 d8 cc 0f 1f 40 00 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 66 0f 1f 00 0f 1f 44 00 00 55 <48> 8b 47 20 48 8b 40 70 48 89 e5 5d e9 a5 16 69 d8 cc 0f 1f 40 00
+[ 1725.964895] RSP: 0018:ffffd4a04023fd38 EFLAGS: 00010246
+[ 1725.966159] RAX: 0000000000000000 RBX: ffff8d2083865a20 RCX: 0000000000000000
+[ 1725.967402] RDX: 0000000000000000 RSI: 0000000000000000 RDI: 0000000000000000
+[ 1725.968644] RBP: ffffd4a04023fe00 R08: ffff8d2081ea6100 R09: 0000000000001138
+[ 1725.969901] R10: 00000000000007e0 R11: 0000000000000001 R12: 000000000009ff1c
+[ 1725.971139] R13: ffff8d2082b6a0c0 R14: ffff8d2090d82800 R15: ffff8d2083865a20
+[ 1725.972367] FS:  0000000000000000(0000) GS:ffff8d21e7280000(0000) knlGS:0000000000000000
+[ 1725.973599] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[ 1725.974817] CR2: 0000000000000020 CR3: 00000001119aa006 CR4: 00000000001726f0
+[ 1725.976047] Call Trace:
+[ 1725.977262]  <TASK>
+[ 1725.978463]  brcmf_pcie_setup.cold+0x61e/0xb9c [brcmfmac]
+[ 1725.979683]  ? _request_firmware+0x48b/0x670
+[ 1725.980865]  ? brcmf_fw_request_done+0x91/0x190 [brcmfmac]
+[ 1725.982065]  brcmf_fw_request_done+0x148/0x190 [brcmfmac]
+[ 1725.983264]  request_firmware_work_func+0x55/0xa0
+[ 1725.984426]  process_one_work+0x18d/0x350
+[ 1725.985540]  worker_thread+0x160/0x2c0
+[ 1725.986655]  ? __pfx_worker_thread+0x10/0x10
+[ 1725.987781]  ? __pfx_worker_thread+0x10/0x10
+[ 1725.988898]  kthread+0xd0/0x100
+[ 1725.990008]  ? __pfx_kthread+0x10/0x10
+[ 1725.991114]  ret_from_fork+0x34/0x50
+[ 1725.992216]  ? __pfx_kthread+0x10/0x10
+[ 1725.993304]  ret_from_fork_asm+0x1a/0x30
+[ 1725.994396]  </TASK>
+[ 1725.995467] Modules linked in: brcmfmac_wcc(O) brcmfmac(O) mmc_core brcmutil ccm af_packet btusb btrtl btintel btbcm btmtk bluetooth ecdh_generic ecc mt76x2u mt76x2_common mt76x02_usb mt76_usb mt76x02_lib mt76 mac80211 uas cfg80211 libarc4 usb_storage input_leds rfkill hid_apple joydev mousedev hid_generic usbhid hid bcm5974 apple_mfi_fastcharge snd_hda_codec_hdmi intel_rapl_msr ofpart cmdlinepart intel_rapl_common spi_nor x86_pkg_temp_thermal intel_powerclamp mtd coretemp crct10dif_pclmul crc32_pclmul polyval_clmulni polyval_generic ghash_clmulni_intel sha512_ssse3 sha256_ssse3 sha1_ssse3 aesni_intel iTCO_wdt gf128mul intel_pmc_bxt spi_intel_platform crypto_simd cryptd watchdog spi_intel mei_hdcp mei_pxp mac_hid evdev applesmc nls_iso8859_1 rapl nls_cp437 i915 intel_cstate snd_hda_codec_cirrus intel_uncore vfat thunderbolt snd_hda_codec_generic fat led_class i2c_i801 snd_hda_intel snd_intel_dspcfg i2c_smbus snd_intel_sdw_acpi i2c_mux efi_pstore lpc_ich acpi_als industrialio_triggered_buffer snd_hda_codec drm_buddy
+[ 1725.995521]  sbs ttm snd_hda_core kfifo_buf drm_display_helper snd_hwdep sbshc snd_pcm cec intel_gtt industrialio rtc_cmos mei_me snd_timer i2c_algo_bit tiny_power_button mei snd video soundcore wmi ac button xt_conntrack nf_conntrack nf_defrag_ipv6 nf_defrag_ipv4 ip6t_rpfilter ipt_rpfilter xt_pkttype xt_LOG nf_log_syslog xt_tcpudp nft_compat x_tables nf_tables libcrc32c sch_fq_codel msr loop kvm_intel kvm irqbypass atkbd libps2 serio vivaldi_fmap nfnetlink efivarfs dmi_sysfs autofs4 ext4 crc32c_generic crc16 mbcache jbd2 sd_mod ahci libahci libata crc32c_intel scsi_mod xhci_pci xhci_hcd scsi_common dm_mod dax
+[ 1726.004613] CR2: 0000000000000020
+[ 1726.005982] ---[ end trace 0000000000000000 ]---
+[ 1726.127031] RIP: 0010:brcmf_chip_resetcore+0xa/0x20 [brcmfmac]
+[ 1726.128436] Code: 40 68 48 89 e5 5d e9 d5 16 69 d8 cc 0f 1f 40 00 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 66 0f 1f 00 0f 1f 44 00 00 55 <48> 8b 47 20 48 8b 40 70 48 89 e5 5d e9 a5 16 69 d8 cc 0f 1f 40 00
+[ 1726.131198] RSP: 0018:ffffd4a04023fd38 EFLAGS: 00010246
+[ 1726.132535] RAX: 0000000000000000 RBX: ffff8d2083865a20 RCX: 0000000000000000
+[ 1726.133852] RDX: 0000000000000000 RSI: 0000000000000000 RDI: 0000000000000000
+[ 1726.135161] RBP: ffffd4a04023fe00 R08: ffff8d2081ea6100 R09: 0000000000001138
+[ 1726.136439] R10: 00000000000007e0 R11: 0000000000000001 R12: 000000000009ff1c
+[ 1726.137686] R13: ffff8d2082b6a0c0 R14: ffff8d2090d82800 R15: ffff8d2083865a20
+[ 1726.138927] FS:  0000000000000000(0000) GS:ffff8d21e7280000(0000) knlGS:0000000000000000
+[ 1726.140168] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[ 1726.141389] CR2: 0000000000000020 CR3: 00000001119aa006 CR4: 00000000001726f0
+[ 1726.142619] note: kworker/1:1[60] exited with irqs disabled

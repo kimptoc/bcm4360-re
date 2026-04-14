@@ -773,7 +773,8 @@ static int brcmf_pcie_exit_download_state(struct brcmf_pciedev_info *devinfo,
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID ||
 	    devinfo->ci->chip == BRCM_CC_43602_CHIP_ID) {
 		core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_INTERNAL_MEM);
-		brcmf_chip_resetcore(core, 0, 0, 0);
+		if (core)
+			brcmf_chip_resetcore(core, 0, 0, 0);
 	}
 
 	if (!brcmf_chip_set_active(devinfo->ci, resetintr))

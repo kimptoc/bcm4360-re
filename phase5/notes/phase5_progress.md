@@ -28,7 +28,7 @@ The kernel module alias table confirms: `pci:v000014E4d000043A0` → `bcma` only
 - Added BCM4360 to enter/exit download state handlers (same as 43602 — ARM CR4)
 
 ### chip.c
-- Added `BRCM_CC_4360_CHIP_ID` to `brcmf_chip_tcm_rambase()` → 0x180000
+- Added `BRCM_CC_4360_CHIP_ID` to `brcmf_chip_tcm_rambase()` → 0 (fixed from initial 0x180000)
 
 ## Test 1: Module load and probe (2026-04-14)
 
@@ -105,3 +105,66 @@ BCM4360 firmware speaks BCDC not msgbuf.
 Firmware download should complete without page fault or PCIe hang. After ARM
 release, the msgbuf handshake will timeout (BCM4360 FW speaks BCDC). That
 timeout is expected and non-fatal — it proves the firmware loaded correctly.
+
+## Test 2: After rambase=0 + iowrite32 fix (2026-04-14)
+
+### Result: CRASH — NULL pointer in brcmf_chip_resetcore
+
+```
+BUG: kernel NULL pointer dereference, address: 0x0000000000000020
+RIP: 0010:brcmf_chip_resetcore+0xa/0x20 [brcmfmac]
+Call Trace:
+  brcmf_pcie_setup.cold+0x61e/0xb9c [brcmfmac]
+```
+
+Firmware download completed successfully (no page fault or PCIe hang).
+Crash in `brcmf_pcie_exit_download_state()`: calls
+`brcmf_chip_get_core(BCMA_CORE_INTERNAL_MEM)` which returns NULL for BCM4360
+(no INTERNAL_MEM core — that's a BCM43602 thing), then passes NULL to
+`brcmf_chip_resetcore`.
+
+## Fix 3: NULL-check INTERNAL_MEM core before resetcore
+
+BCM4360 has ARM CR4 with TCM banks, not a separate SOCRAM/INTERNAL_MEM core.
+Added NULL check: `if (core) brcmf_chip_resetcore(core, 0, 0, 0);`
+
+## Test 3: After NULL check fix (2026-04-14)
+
+### Result: SUCCESS — firmware downloaded, ARM released, no crash
+
+```
+brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffd4a042800000
+brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233
+brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: FW failed to initialize
+brcmfmac 0000:03:00.0: brcmf_pcie_setup: Dongle setup failed
+ieee80211 phy2: brcmf_fw_crashed: Firmware has halted or crashed
+```
+
+Key results:
+1. **No crash** — no page fault, no PCIe hang, no kernel oops
+2. **Firmware downloaded** — 442KB written to TCM at offset 0 via iowrite32
+3. **ARM released** — firmware started running
+4. **Expected failure: "FW failed to initialize"** — msgbuf handshake timeout
+
+The "FW failed to initialize" is the BCDC-vs-msgbuf protocol mismatch. The
+firmware doesn't write back to the shared RAM address because it doesn't
+speak the msgbuf protocol. This confirms the Phase 4 finding that BCM4360
+firmware uses BCDC.
+
+### What works now
+
+- brcmfmac recognizes BCM4360 (14e4:43a0)
+- BAR0/BAR2 mapping correct
+- rambase=0, ramsize=0xa0000 (640KB) auto-detected correctly
+- Firmware download via 32-bit iowrite32 (no PCIe hang)
+- ARM release without host crash
+- Module loads/unloads cleanly
+
+### Next steps
+
+The firmware initialization fails because brcmfmac's PCIe backend expects
+msgbuf protocol but BCM4360 firmware speaks BCDC. Options:
+1. Add BCDC-over-PCIe transport to brcmfmac (Phase 4 goal)
+2. Find/build a msgbuf-compatible firmware (unlikely — chip predates msgbuf)
+3. Investigate if firmware has a compatibility mode or alternate handshake
