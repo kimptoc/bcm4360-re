@@ -6,13 +6,25 @@ The goal is to add BCM4360 support to the Linux kernel's `brcmfmac` driver by re
 
 We have a live BCM4360 device on this machine with the `wl` driver loaded, giving us the ability to trace driver behaviour, read hardware registers, and compare against the existing `brcmfmac` codebase.
 
-## Current Status
+## Current Status (updated 2026-04-14)
 
-**Phases 1 and 3 are complete.** Phase 3 proved the brcmfmac driver-side code works end-to-end for BCM4360: chip recognition, BAR mapping, TCM access, firmware download, and ARM release all succeed. The blocker is **firmware protocol incompatibility** — the BCM4360 firmware speaks BCDC, not the msgbuf protocol that brcmfmac's PCIe backend requires. No msgbuf firmware exists for this chip.
+**Phases 1, 3, and 4 (partial) are complete. Phase 5 is active.**
 
-**The project is now in Phase 4** — investigating whether a BCDC-over-PCIe host transport can be reverse-engineered from the `wl` driver and implemented to communicate with the existing BCM4360 firmware. This is a deeper reverse-engineering effort than the original "minimal patch" approach.
+Phase 5 uses brcmfmac as a **debug/bring-up harness** to boot and introspect the
+BCM4360 firmware. Early boot succeeds — firmware downloads, ARM releases, and
+firmware begins execution (`si_kattach` completes, console output visible).
 
-> **Central question: Can we build a host-side BCDC transport that talks to the BCM4360 firmware over PCIe?**
+**Current blocker:** Firmware **ASSERTs at hndarm.c:397** (HT clock timeout)
+during ARM init, before reaching any protocol handshake. The immediate problem
+is not BCDC-vs-msgbuf — it's that the firmware cannot complete its own initialization.
+
+Latest patches (skip watchdog reset, disable ASPM/bus mastering) aim to preserve
+the EFI-initialized PMU/PLL state the firmware needs. These need testing — the
+last test crashed the PC.
+
+> **Central question: Why does the firmware ASSERT during init, and can we provide the environment it needs to complete boot?**
+
+See GitHub issue #9 for architectural assessment.
 
 ---
 
@@ -202,11 +214,24 @@ Based on Phase 4C results, choose direction:
 
 ---
 
-## Phase 5: Patch brcmfmac for BCM4360 ← CURRENT PHASE
+## Phase 5: BCM4360 Bring-up via brcmfmac ← CURRENT PHASE
 
-Rather than building a standalone BCDC transport from scratch, patch the upstream
-`brcmfmac` driver to support BCM4360. The driver already handles PCIe lifecycle,
-interrupts, DMA, and firmware loading — only chip-specific additions are needed.
+> **Important:** brcmfmac is being used as a **debug/bring-up harness**, not
+> necessarily as the final driver architecture. Phase 4A concluded BCM4360
+> behaves as a SoftMAC/offload device. The final driver may require a different
+> approach (host-driven MAC/D11). See "Architecture Tracks" below.
+
+### Architecture Tracks
+
+**Track A — brcmfmac as debug harness (current focus):**
+- Used for firmware boot, introspection, and ASSERT investigation
+- Leverages brcmfmac's PCIe lifecycle, interrupt, and DMA handling
+- May not reflect final driver architecture
+
+**Track B — Driver architecture direction (deferred):**
+- SoftMAC/offload model still under consideration (Phase 4A findings)
+- May require host-driven MAC/D11 implementation
+- Architecture decision depends on ASSERT investigation outcomes
 
 ### 5.1 — Basic chip support patches ✅ COMPLETE
 
@@ -218,14 +243,46 @@ Patches applied to 3 files (brcm_hw_ids.h, pcie.c, chip.c):
 - NULL-check INTERNAL_MEM core in exit_download_state (BCM4360 has no such core)
 - Enter/exit download state handlers (same as BCM43602 — ARM CR4)
 
-**Result:** Firmware downloads, ARM boots, no crash. "FW failed to initialize"
-due to msgbuf handshake timeout — expected, since BCM4360 FW speaks BCDC.
+**Result:** Firmware downloads, ARM boots to early init, then **asserts at
+hndarm.c:397** (HT clock timeout). This is NOT a clean boot — the firmware
+reaches `si_kattach` and emits console output but fails during ARM init.
 
-### 5.2 — Firmware protocol bridge ← NEXT
+### 5.2 — Firmware boot stability & ASSERT investigation ← CURRENT
 
-The firmware boots but doesn't respond to msgbuf's shared memory handshake.
-Need to understand what the firmware actually does after ARM release and how
-to communicate with it. Options:
+Iterative work to stabilize early boot and diagnose the ASSERT:
+
+**Completed work:**
+- Added TCM/console/sharedram debug dumps for firmware introspection
+- Added NVRAM debug logging
+- Disabled bus mastering before ARM release (prevents firmware DMA crash)
+- Skipped watchdog reset for BCM4360 (preserves EFI-initialized PMU/PLL state)
+- Disabled ASPM L0s/L1 before ARM release (prevents PCIe link interference)
+
+**Current failure mode:**
+- Firmware boots, runs `si_kattach`, then **ASSERT at hndarm.c:397**
+- This is an HT clock timeout — firmware cannot bring up the high-throughput clock
+- The last test with these changes crashed the PC — need to investigate whether
+  the ASPM/watchdog changes altered the failure mode
+
+**Next steps (ASSERT-focused):**
+1. **Test with latest patches** — verify skip-watchdog-reset + ASPM-disable
+   changes the failure mode (may resolve ASSERT or shift to new failure)
+2. **Investigate NVRAM data** — is NVRAM loaded correctly? Does the firmware
+   find the board configuration it expects?
+3. **Read TCM state at ASSERT** — what do sharedram markers, console buffer,
+   and key TCM structures look like when the ASSERT fires?
+4. **Console output analysis** — does firmware provide additional context
+   before the ASSERT?
+5. **Consider OTP/SPROM data** — the firmware reads board config from OTP CIS;
+   bcma reports "Invalid SPROM". Is this causing misconfiguration?
+
+**⚠ Note:** Previous hypotheses about "BCDC vs msgbuf" as the primary blocker
+may be premature. The firmware ASSERTs before reaching any protocol handshake.
+The immediate blocker is the firmware's inability to complete its own init.
+
+### 5.3 — Firmware protocol bridge
+
+Once firmware boots past the ASSERT, establish communication:
 
 1. **Investigate firmware's post-boot behavior** — read TCM shared memory region
    to see if firmware wrote anything (BCDC shared info structure, etc.)
@@ -234,10 +291,10 @@ to communicate with it. Options:
 3. **Trace wl driver handshake** — use mmiotrace to capture what wl does after
    ARM release to establish communication
 
-### 5.3 — Test basic functionality
+### 5.4 — Test basic functionality
 Verify scanning, association, and data transfer work.
 
-### 5.4 — Submit upstream
+### 5.5 — Submit upstream
 Submit to `linux-wireless@vger.kernel.org` and `brcm80211@lists.linux.dev`,
 CC Arend van Spriel. Follow kernel patch submission process.
 
