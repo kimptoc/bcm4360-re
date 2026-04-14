@@ -221,13 +221,40 @@ wait completes. This prevents the firmware's ASSERT handler from DMA-ing to host
 memory and crashing the PC. Also removed the H2D doorbell hack (was speculative,
 didn't help).
 
-### Next steps
+## Phase 5.2: Crash investigation (tests 8-11)
 
-1. **Investigate hndarm.c:397 ASSERT** — likely a missing configuration or
-   NVRAM parameter. The `ra` (return address) 0x000641cb and `fa` (frame address)
-   0x0009cfe0 can be resolved against the firmware binary to identify the exact
-   check that fails.
-2. **NVRAM review** — ensure the NVRAM file has the right parameters for BCM4360.
-   The firmware may require specific board-level settings.
-3. **Test with bus mastering disabled** — the uncommitted pcie.c change should
-   prevent host crashes during firmware ASSERT, making iterative testing safer.
+### Tests 8-10: All crashed PC
+- test.8: PMU logging + ForceHT → **crashed PC** (no log)
+- test.9: same as test.8 (commit 3d96dbc) → **crashed PC** (no log)
+- test.10: skip watchdog entirely (commit 72235c4) → **crashed PC** (no log)
+
+**Key conclusion:** Crash is NOT caused by watchdog reset — happens regardless.
+The PMU/ForceHT register writes added in test.8 are the likely crash trigger.
+
+### Test 11: Safe baseline revert (commit a3dbbb3)
+Reverted to test.7 code: read-only PMU, bus mastering disabled, no PMU writes,
+no ASPM disable. **Crashed PC.** Journal (recovered from `journalctl -b -1`)
+shows all output up to ARM release, then system died abruptly. Log saved to
+`phase5/logs/test.11`.
+
+**Critical finding:** Test.7 previously ran without crashing, but the identical
+code (test.11) now crashes. This rules out host-side code as the crash cause.
+Something environmental changed — possibly PCIe link state, thermal, or
+accumulated hardware state from repeated ARM releases across reboots.
+
+### Next steps (for future sessions)
+
+1. **Check test.11 result** — `dmesg`, `journalctl -b -1`, or re-run
+2. **If stable:** incrementally add back changes to isolate crash trigger:
+   - ASPM disable alone
+   - PMU writes alone
+   - ForceHT alone
+3. **Test.11 DID crash** — investigate what differs between test.7 session and test.11
+4. **Long-term options:**
+   - MMIO trace of `wl` driver full init sequence
+   - Register interrupt handler BEFORE ARM release
+   - Set up minimal DMA buffers before ARM release
+   - Investigate NVRAM/SPROM/OTP data correctness
+5. **Investigate hndarm.c:397 ASSERT** — `ra` 0x000641cb, `fa` 0x0009cfe0
+   can be resolved against firmware binary to identify exact failing check
+6. **NVRAM review** — ensure NVRAM file has right parameters for BCM4360

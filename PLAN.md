@@ -6,7 +6,7 @@ The goal is to add BCM4360 support to the Linux kernel's `brcmfmac` driver by re
 
 We have a live BCM4360 device on this machine with the `wl` driver loaded, giving us the ability to trace driver behaviour, read hardware registers, and compare against the existing `brcmfmac` codebase.
 
-## Current Status (updated 2026-04-14)
+## Current Status (updated 2026-04-14, post test.11)
 
 **Phases 1, 3, and 4 (partial) are complete. Phase 5 is active.**
 
@@ -20,8 +20,26 @@ is not BCDC-vs-msgbuf — it's that the firmware cannot complete its own initial
 
 Tests 8-10 all crashed the PC — the crash is NOT caused by the watchdog reset
 specifically. The crash likely occurs when firmware starts executing and interacts
-with PCIe (DMA/interrupts/register writes). Next: isolate what changed between
-test.7 (no crash) and test.8+ (crash), or mmiotrace the `wl` driver.
+with PCIe (DMA/interrupts/register writes).
+
+**Test 11** ran from the safe baseline revert (commit a3dbbb3 — same code as test.7).
+**Result: Crashed PC.** Journal captured all output up to ARM release, then system
+died. This means the test.7 "safe baseline" is no longer safe — something
+environmental changed. The crash happens at ARM release regardless of what
+host-side code changes we make.
+
+**Key insight from test.8-11:** All four tests crash. The crash is NOT caused by
+any specific host-side code change (PMU writes, ForceHT, ASPM, watchdog). The
+crash occurs when the firmware ARM core starts executing and interacts with PCIe.
+Bus mastering is disabled, so this is NOT DMA. The firmware may be writing to
+PCIe config space or triggering a fatal PCIe error through BAR register access.
+
+**Next steps:**
+1. Investigate what environmental change made test.7 safe but test.11 crash
+   (kernel version? PCIe state? BIOS/EFI settings? thermal?)
+2. Try loading with `pci_clear_master()` AND disabling PCIe MSI/INTx before ARM release
+3. MMIO trace `wl` driver to see what PCIe setup it does before ARM release
+4. Consider not releasing ARM at all — just download FW and read back TCM for analysis
 
 > **Central question: Why does the firmware ASSERT during init, and can we provide the environment it needs to complete boot?**
 
@@ -267,12 +285,13 @@ Iterative work to stabilize early boot and diagnose the ASSERT:
 | test.8 | + PMU debug logging, + ForceHT post-reset | **Crashed PC** (no log) |
 | test.9 | same as test.8 (committed at 3d96dbc) | **Crashed PC** (no log) |
 | test.10 | skip watchdog reset entirely (committed 72235c4) | **Crashed PC** (no log) |
+| test.11 | revert to test.7 safe baseline (a3dbbb3) | **Crashed PC** — journal captured up to ARM release |
 
-**Key conclusion from test.8–10:** Three different approaches all crash the PC.
-The crash is NOT caused by the watchdog reset specifically — it happens regardless
-of whether we allow, modify, or skip the watchdog. The crash likely occurs when
-the firmware starts executing and interacts with PCIe (DMA, interrupts, or
-register writes) in ways the host isn't prepared for.
+**Key conclusion from test.8–11:** Four different approaches all crash the PC,
+including a revert to the test.7 "safe baseline" code. The crash is NOT caused
+by any specific host-side code change — it happens regardless. Bus mastering is
+disabled so DMA is ruled out. The firmware's ARM core execution itself causes a
+fatal PCIe interaction (possibly config space writes or BAR register access).
 
 **Next steps (crash investigation):**
 1. **Investigate firmware DMA/interrupt after ARM release** — the crash happens
