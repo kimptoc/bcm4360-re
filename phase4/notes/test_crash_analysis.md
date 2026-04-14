@@ -755,3 +755,81 @@ the level 5 machinery (ARM release, DMA, interrupt setup).
 4. **Reduce level 5 to minimal SROM-only test**: Strip all ARM halt/release/DMA
    code from level 5, leaving ONLY the PCIe+0x800 write and readback. If even
    that crashes, the problem is in the BAR0 backplane access pattern.
+
+## SROM write test relocation (2026-04-14)
+
+### Change
+
+Moved the SROM11 write test from the end of level 3 (after ARM halt + FW
+download) to BEFORE the ARM halt. This ensures the SROM test runs before any
+dangerous operations that might crash the machine. The test:
+
+1. Scans PCIe+0x400/0x800/0xC00/0x1000 for writability
+2. Writes a minimal SROM11 image to PCIe+0x800 (256 DWORDs):
+   - sromrev=11 at word 48 (DWORD 24)
+   - subvid/devid (0x43a0106B) at DWORD 32
+   - boardtype/boardrev (0x11010552) at DWORD 33
+   - boardflags at DWORD 35-36
+   - ccode="X0" at DWORD 44
+   - antenna config at DWORD 49
+3. Reads back key fields to verify write took effect
+4. Cross-checks via CC SROM_ADDR/DATA interface
+
+### Commit: ecc96c8 (pushed before crash)
+
+## Spontaneous crash investigation (2026-04-14)
+
+### Problem: Machine crashes without any test running
+
+After the SROM relocation commit, attempted to run `test.sh 3` multiple times.
+The machine crashed before the test module even loaded — dmesg showed NO
+bcm4360 output at all. The crashes occurred during the 10s quiesce delay in
+test.sh, or even while idle.
+
+Pattern observed across ~3-4 reboots:
+- Machine boots, uptime ~1-5 minutes
+- No bcm4360 test module loaded
+- Hard crash/lockup requiring power cycle
+- No kernel panic messages in dmesg on next boot
+
+### Diagnosis: PCIe AER errors from BCM4360 hardware
+
+The BCM4360 PCI device (03:00.0) is present on the bus with no driver bound.
+Previous testing showed AER uncorrectable errors (0x8000) present even on cold
+boot (test.36 findings). With no driver to handle or suppress these errors,
+the PCIe AER subsystem may be treating them as fatal and crashing the machine.
+
+The device's PCI command register shows 0x0000 (memory space disabled, bus
+mastering disabled) — the device is essentially unclaimed but still electrically
+active on the PCIe bus.
+
+### Fix applied: pci=noaer kernel parameter
+
+Added `boot.kernelParams = [ "pci=noaer" ];` to `/etc/nixos/configuration.nix`.
+This disables PCIe Advanced Error Reporting, preventing AER errors from
+triggering machine-wide fatal responses.
+
+Applied via `nixos-rebuild switch` and confirmed active after reboot:
+```
+$ cat /proc/cmdline
+... pci=noaer ...
+```
+
+### Status (2026-04-14)
+
+- `pci=noaer` is now active on current boot
+- Need to verify machine stability (uptime > 10 minutes without crash)
+- If stable, run `test.sh 3` to finally execute the SROM write test
+- The SROM test code is ready (commit ecc96c8), module is built
+
+### Next steps
+
+1. **Verify stability** — if machine stays up > 10 minutes with `pci=noaer`,
+   the spontaneous crashes were AER-related
+2. **Run test.sh 3** — execute the SROM write test
+3. **Analyze SROM results** — does writing to PCIe+0x800 produce correct
+   readback? Does the CC SROM interface reflect the write?
+4. **If SROM works** — need to solve the level 5 crash to test whether
+   firmware reads from PCIe+0x800 on boot
+5. **If level 5 still crashes with pci=noaer** — the crash cause is different
+   from AER (possibly firmware corrupting PCIe link state directly)
