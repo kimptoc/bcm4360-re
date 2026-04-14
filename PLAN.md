@@ -18,9 +18,10 @@ firmware begins execution (`si_kattach` completes, console output visible).
 during ARM init, before reaching any protocol handshake. The immediate problem
 is not BCDC-vs-msgbuf — it's that the firmware cannot complete its own initialization.
 
-Latest patches (skip watchdog reset, disable ASPM/bus mastering) aim to preserve
-the EFI-initialized PMU/PLL state the firmware needs. These need testing — the
-last test crashed the PC.
+Tests 8-10 all crashed the PC — the crash is NOT caused by the watchdog reset
+specifically. The crash likely occurs when firmware starts executing and interacts
+with PCIe (DMA/interrupts/register writes). Next: isolate what changed between
+test.7 (no crash) and test.8+ (crash), or mmiotrace the `wl` driver.
 
 > **Central question: Why does the firmware ASSERT during init, and can we provide the environment it needs to complete boot?**
 
@@ -257,6 +258,7 @@ Iterative work to stabilize early boot and diagnose the ASSERT:
 - Disabled bus mastering before ARM release (prevents firmware DMA crash)
 - Disabled ASPM L0s/L1 before ARM release (prevents PCIe link interference)
 - (test.8/test.9) Allow watchdog reset, then re-init PMU/HT clock — **both crashed PC**
+- (test.10) Skip watchdog reset entirely, preserve EFI state — **also crashed PC**
 
 **Test log:**
 | Test | Approach | Result |
@@ -264,24 +266,30 @@ Iterative work to stabilize early boot and diagnose the ASSERT:
 | test.7 | bus mastering disabled, watchdog allowed | ASSERT hndarm.c:397, no crash |
 | test.8 | + PMU debug logging, + ForceHT post-reset | **Crashed PC** (no log) |
 | test.9 | same as test.8 (committed at 3d96dbc) | **Crashed PC** (no log) |
-| test.10 | *pending* — skip watchdog reset entirely | Not yet run |
+| test.10 | skip watchdog reset entirely (committed 72235c4) | **Crashed PC** (no log) |
 
-**Current approach (uncommitted in pcie.c):**
-Skip the watchdog reset entirely for BCM4360 — preserve EFI-initialized PMU/PLL
-state. Log EFI state, set resource masks, request ForceHT, then return early
-without triggering the watchdog. Hypothesis: watchdog reset destroys the PCIe
-link state that EFI/wl set up, causing the PC crash.
+**Key conclusion from test.8–10:** Three different approaches all crash the PC.
+The crash is NOT caused by the watchdog reset specifically — it happens regardless
+of whether we allow, modify, or skip the watchdog. The crash likely occurs when
+the firmware starts executing and interacts with PCIe (DMA, interrupts, or
+register writes) in ways the host isn't prepared for.
 
-**Next steps (ASSERT-focused):**
-1. **Commit and test current diff (test.10)** — skip-watchdog approach
-2. If still crashes: crash cause is NOT watchdog reset — investigate firmware
-   DMA/interrupt after ARM release, or PCIe link instability
-3. If doesn't crash but ASSERT persists: analyze PMU log output, investigate
-   whether HT clock request from host side actually takes effect
-4. **Investigate NVRAM data** — is NVRAM loaded correctly? Does the firmware
+**Next steps (crash investigation):**
+1. **Investigate firmware DMA/interrupt after ARM release** — the crash happens
+   ~100-200ms after ARM release. Firmware may be writing to PCIe control regs
+   or initiating DMA to unmapped host memory. Consider:
+   - Registering an interrupt handler BEFORE ARM release
+   - Setting up minimal DMA rings/buffers before ARM release
+   - Tracing what `wl` does between PCIe probe and ARM release
+2. **MMIO trace of `wl` driver** (Phase 2 fallback) — trace the proprietary
+   driver's full init sequence to see what PCIe setup it performs before
+   releasing the ARM core
+3. **Investigate NVRAM data** — is NVRAM loaded correctly? Does the firmware
    find the board configuration it expects?
-5. **Consider OTP/SPROM data** — the firmware reads board config from OTP CIS;
+4. **Consider OTP/SPROM data** — the firmware reads board config from OTP CIS;
    bcma reports "Invalid SPROM". Is this causing misconfiguration?
+5. **Consider firmware DMA region setup** — `wl` may pre-allocate DMA buffers
+   and write their addresses to shared memory before ARM release
 
 **⚠ Note:** Previous hypotheses about "BCDC vs msgbuf" as the primary blocker
 may be premature. The firmware ASSERTs before reaching any protocol handshake.
