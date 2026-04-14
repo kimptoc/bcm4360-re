@@ -1,0 +1,146 @@
+=== test.18: IOMMU-protected ARM release ===
+Date: Tue 14 Apr 21:02:00 BST 2026
+
+=== STEP 0: IOMMU verification ===
+Kernel cmdline:
+initrd=\EFI\nixos\v6bc83nw2h5x85106qkcr1v1qyi1ax7g-initrd-linux-6.12.80-initrd.efi init=/nix/store/89sl4p19x0dckj9zbi2anxl6pwqh9n4a-nixos-system-nixos-25.11.9067.54170c54449e/init pci=noaer intel_iommu=on iommu=strict loglevel=4 lsm=landlock,yama,bpf
+
+IOMMU status:
+[    0.000000] Command line: initrd=\EFI\nixos\v6bc83nw2h5x85106qkcr1v1qyi1ax7g-initrd-linux-6.12.80-initrd.efi init=/nix/store/89sl4p19x0dckj9zbi2anxl6pwqh9n4a-nixos-system-nixos-25.11.9067.54170c54449e/init pci=noaer intel_iommu=on iommu=strict loglevel=4 lsm=landlock,yama,bpf
+[    0.017357] ACPI: DMAR 0x000000008AD62000 000088 (v01 APPLE  HSW      00000001 AAPL 00000001)
+[    0.017379] ACPI: Reserving DMAR table memory at [mem 0x8ad62000-0x8ad62087]
+[    0.040447] Kernel command line: initrd=\EFI\nixos\v6bc83nw2h5x85106qkcr1v1qyi1ax7g-initrd-linux-6.12.80-initrd.efi init=/nix/store/89sl4p19x0dckj9zbi2anxl6pwqh9n4a-nixos-system-nixos-25.11.9067.54170c54449e/init pci=noaer intel_iommu=on iommu=strict loglevel=4 lsm=landlock,yama,bpf
+[    0.040511] DMAR: IOMMU enabled
+[    0.100831] DMAR: Host address width 39
+[    0.100832] DMAR: DRHD base: 0x000000fed90000 flags: 0x0
+[    0.100850] DMAR: dmar0: reg_base_addr fed90000 ver 1:0 cap c0000020660462 ecap f0101a
+[    0.100853] DMAR: DRHD base: 0x000000fed91000 flags: 0x1
+[    0.100857] DMAR: dmar1: reg_base_addr fed91000 ver 1:0 cap d2008020660462 ecap f010da
+[    0.100859] DMAR: RMRR base: 0x0000008b800000 end: 0x0000008f9fffff
+[    0.100863] DMAR-IR: IOAPIC id 2 under DRHD base  0xfed91000 IOMMU 1
+[    0.100864] DMAR-IR: HPET id 0 under DRHD base 0xfed91000
+[    0.100866] DMAR-IR: Queued invalidation will be enabled to support x2apic and Intr-remapping.
+[    0.101505] DMAR-IR: Enabled IRQ remapping in x2apic mode
+[    0.171075] iommu: Default domain type: Translated
+[    0.171077] iommu: DMA domain TLB invalidation policy: lazy mode
+[    0.203055] DMAR: No ATSR found
+[    0.203057] DMAR: No SATC found
+[    0.203059] DMAR: IOMMU feature pgsel_inv inconsistent
+[    0.203060] DMAR: IOMMU feature sc_support inconsistent
+[    0.203062] DMAR: IOMMU feature pass_through inconsistent
+[    0.203064] DMAR: dmar0: Using Queued invalidation
+[    0.203072] DMAR: dmar1: Using Queued invalidation
+[    0.203271] pci 0000:00:02.0: Adding to iommu group 0
+[    0.204326] pci 0000:00:00.0: Adding to iommu group 1
+[    0.204344] pci 0000:00:03.0: Adding to iommu group 2
+[    0.204361] pci 0000:00:14.0: Adding to iommu group 3
+[    0.204383] pci 0000:00:16.0: Adding to iommu group 4
+[    0.204400] pci 0000:00:1b.0: Adding to iommu group 5
+[    0.204446] pci 0000:00:1c.0: Adding to iommu group 6
+[    0.204463] pci 0000:00:1c.1: Adding to iommu group 6
+[    0.204478] pci 0000:00:1c.2: Adding to iommu group 6
+[    0.204493] pci 0000:00:1c.4: Adding to iommu group 6
+[    0.204508] pci 0000:00:1c.5: Adding to iommu group 6
+[    0.204536] pci 0000:00:1f.0: Adding to iommu group 7
+[    0.204553] pci 0000:00:1f.3: Adding to iommu group 7
+[    0.204561] pci 0000:02:00.0: Adding to iommu group 6
+[    0.204570] pci 0000:03:00.0: Adding to iommu group 6
+[    0.204578] pci 0000:05:00.0: Adding to iommu group 6
+[    0.204586] pci 0000:06:00.0: Adding to iommu group 6
+[    0.204593] pci 0000:06:03.0: Adding to iommu group 6
+[    0.204601] pci 0000:06:04.0: Adding to iommu group 6
+[    0.204609] pci 0000:06:05.0: Adding to iommu group 6
+[    0.204617] pci 0000:06:06.0: Adding to iommu group 6
+[    0.204626] pci 0000:07:00.0: Adding to iommu group 6
+[    0.204633] pci 0000:04:00.0: Adding to iommu group 6
+[    0.205452] DMAR: Intel(R) Virtualization Technology for Directed I/O
+[    4.906092] i915 0000:00:02.0: [drm] DMAR active, disabling use of stolen memory
+
+IOMMU groups:
+8
+
+BCM4360 IOMMU group: 6
+
+=== STEP 1: Pre-test PCIe state ===
+03:00.0 Network controller: Broadcom Inc. and subsidiaries BCM4360 802.11ac Dual Band Wireless Network Adapter (rev 03)
+	Subsystem: Apple Inc. Device 0112
+	Control: I/O- Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+	Latency: 0, Cache Line Size: 256 bytes
+	Interrupt: pin A routed to IRQ 0
+	IOMMU group: 6
+	Region 0: Memory at b0600000 (64-bit, non-prefetchable) [size=32K]
+	Region 2: Memory at b0400000 (64-bit, non-prefetchable) [size=2M]
+	Capabilities: [48] Power Management version 3
+		Flags: PMEClk- DSI- D1+ D2+ AuxCurrent=0mA PME(D0+,D1+,D2+,D3hot+,D3cold+)
+		Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=2 PME-
+	Capabilities: [58] MSI: Enable- Count=1/1 Maskable- 64bit+
+		Address: 0000000000000000  Data: 0000
+	Capabilities: [68] Vendor Specific Information: Len=44 <?>
+	Capabilities: [ac] Express (v2) Endpoint, IntMsgNum 0
+		DevCap:	MaxPayload 256 bytes, PhantFunc 0, Latency L0s <4us, L1 unlimited
+			ExtTag- AttnBtn- AttnInd- PwrInd- RBE+ FLReset- SlotPowerLimit 10W TEE-IO-
+		DevCtl:	CorrErr- NonFatalErr- FatalErr- UnsupReq-
+			RlxdOrd+ ExtTag- PhantFunc- AuxPwr+ NoSnoop+
+			MaxPayload 128 bytes, MaxReadReq 512 bytes
+		DevSta:	CorrErr+ NonFatalErr- FatalErr- UnsupReq+ AuxPwr+ TransPend-
+		LnkCap:	Port #0, Speed 2.5GT/s, Width x1, ASPM L0s L1, Exit Latency L0s <2us, L1 <32us
+			ClockPM+ Surprise- LLActRep- BwNot- ASPMOptComp+
+		LnkCtl:	ASPM L0s L1 Enabled; RCB 64 bytes, LnkDisable- CommClk+
+			ExtSynch- ClockPM+ AutWidDis- BWInt- AutBWInt- FltModeDis-
+		LnkSta:	Speed 2.5GT/s, Width x1
+			TrErr- Train- SlotClk+ DLActive- BWMgmt- ABWMgmt-
+		DevCap2: Completion Timeout: Range ABCD, TimeoutDis+ NROPrPrP- LTR+
+			 10BitTagComp- 10BitTagReq- OBFF Via WAKE#, ExtFmt- EETLPPrefix-
+			 EmergencyPowerReduction Not Supported, EmergencyPowerReductionInit-
+			 FRS- TPHComp- ExtTPHComp-
+			 AtomicOpsCap: 32bit- 64bit- 128bitCAS-
+		DevCtl2: Completion Timeout: 50us to 50ms, TimeoutDis-
+			 AtomicOpsCtl: ReqEn-
+			 IDOReq- IDOCompl- LTR+ EmergencyPowerReductionReq-
+			 10BitTagReq- OBFF Disabled, EETLPPrefixBlk-
+		LnkCtl2: Target Link Speed: 2.5GT/s, EnterCompliance- SpeedDis-
+			 Transmit Margin: Normal Operating Range, EnterModifiedCompliance- ComplianceSOS-
+			 Compliance Preset/De-emphasis: -6dB de-emphasis, 0dB preshoot
+		LnkSta2: Current De-emphasis Level: -3.5dB, EqualizationComplete- EqualizationPhase1-
+			 EqualizationPhase2- EqualizationPhase3- LinkEqualizationRequest-
+			 Retimer- 2Retimers- CrosslinkRes: unsupported, FltMode-
+	Capabilities: [100 v1] Advanced Error Reporting
+		UESta:	DLP- SDES- TLP- FCP- CmpltTO- CmpltAbrt- UnxCmplt- RxOF- MalfTLP-
+			ECRC- UnsupReq- ACSViol- UncorrIntErr- BlockedTLP- AtomicOpBlocked- TLPBlockedErr-
+			PoisonTLPBlocked- DMWrReqBlocked- IDECheck- MisIDETLP- PCRC_CHECK- TLPXlatBlocked-
+		UEMsk:	DLP- SDES- TLP- FCP- CmpltTO- CmpltAbrt- UnxCmplt- RxOF- MalfTLP-
+			ECRC- UnsupReq- ACSViol- UncorrIntErr- BlockedTLP- AtomicOpBlocked- TLPBlockedErr-
+			PoisonTLPBlocked- DMWrReqBlocked- IDECheck- MisIDETLP- PCRC_CHECK- TLPXlatBlocked-
+		UESvrt:	DLP+ SDES+ TLP- FCP+ CmpltTO- CmpltAbrt- UnxCmplt- RxOF+ MalfTLP+
+			ECRC- UnsupReq- ACSViol- UncorrIntErr- BlockedTLP- AtomicOpBlocked- TLPBlockedErr-
+			PoisonTLPBlocked- DMWrReqBlocked- IDECheck- MisIDETLP- PCRC_CHECK- TLPXlatBlocked-
+		CESta:	RxErr- BadTLP- BadDLLP- Rollover- Timeout- AdvNonFatalErr+ CorrIntErr- HeaderOF-
+		CEMsk:	RxErr- BadTLP- BadDLLP- Rollover- Timeout- AdvNonFatalErr+ CorrIntErr- HeaderOF-
+		AERCap:	First Error Pointer: 00, ECRCGenCap+ ECRCGenEn- ECRCChkCap+ ECRCChkEn-
+			MultHdrRecCap- MultHdrRecEn- TLPPfxPres- HdrLogCap-
+		HeaderLog: 00000000 00000000 00000000 00000000
+	Capabilities: [13c v1] Device Serial Number 3c-15-00-ff-ff-00-00-01
+	Capabilities: [150 v1] Power Budgeting <?>
+	Capabilities: [160 v1] Virtual Channel
+		Caps:	LPEVC=0 RefClk=100ns PATEntryBits=1
+		Arb:	Fixed- WRR32- WRR64- WRR128-
+		Ctrl:	ArbSelect=Fixed
+		Status:	InProgress-
+		VC0:	Caps:	PATOffset=00 MaxTimeSlots=1 RejSnoopTrans-
+			Arb:	Fixed- WRR32- WRR64- WRR128- TWRR128- WRR256-
+			Ctrl:	Enable+ ID=0 ArbSelect=Fixed TC/VC=ff
+			Status:	NegoPending- InProgress-
+	Capabilities: [1b0 v1] Latency Tolerance Reporting
+		Max snoop latency: 3145728ns
+		Max no snoop latency: 3145728ns
+	Capabilities: [220 v1] Physical Resizable BAR
+		BAR 2: current size: 2MB, supported: 1MB 2MB
+	Kernel modules: bcma, wl
+
+
+=== STEP 2: Flushing to disk ===
+Flush complete.
+
+=== STEP 3: Loading brcmfmac (ARM RELEASE with IOMMU protection) ===
+If IOMMU catches rogue DMA, look for DMAR fault messages in dmesg.
