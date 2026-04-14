@@ -6,38 +6,43 @@ The goal is to add BCM4360 support to the Linux kernel's `brcmfmac` driver by re
 
 We have a live BCM4360 device on this machine with the `wl` driver loaded, giving us the ability to trace driver behaviour, read hardware registers, and compare against the existing `brcmfmac` codebase.
 
-## Current Status (updated 2026-04-14, post test.13)
+## Current Status (updated 2026-04-14, post test.14)
 
 **Phases 1, 3, and 4 (partial) are complete. Phase 5 is active.**
 
 Phase 5 uses brcmfmac as a **debug/bring-up harness** to boot and introspect the
-BCM4360 firmware. Early boot succeeds — firmware downloads, ARM releases, and
-firmware begins execution (`si_kattach` completes, console output visible).
+BCM4360 firmware. Firmware download works reliably. ARM release crashes the host PC.
 
-**Current blocker:** Firmware **ASSERTs at hndarm.c:397** (HT clock timeout)
-during ARM init, before reaching any protocol handshake. The immediate problem
-is not BCDC-vs-msgbuf — it's that the firmware cannot complete its own initialization.
+**Current blockers (two related issues):**
 
-### Crash investigation summary (tests 8-13)
+1. **ARM release crashes PC** — every ARM release since test.7 instantly kills the
+   host. Tests 8-14 tried: bus mastering on/off, AER/SERR masking, early IRQ handlers,
+   INTx disable, stripping all PCIe safety. All crash. The only safe operation is
+   firmware download without ARM release (test.12a PASS).
 
-Tests 8-13 all crashed the PC when the ARM was released. Each test added
-progressively more PCIe "safety" measures, all of which failed to prevent the crash.
+2. **Firmware ASSERTs at hndarm.c:397** (HT clock timeout) — observed in test.7
+   (the ONLY successful ARM release). The firmware starts, completes `si_kattach`,
+   then ASSERTs ~14.5s later. This ASSERT may trigger behavior that crashes the host.
 
-**Critical discovery (post test.13):** The `wl` proprietary driver **fails to load**
-on kernel 6.12.80 ("Unpatched return thunk" error). It never initialized the BCM4360.
-So `wl` cannot be used as a reference implementation on this system.
+### Crash investigation summary (tests 7-14)
 
-**Root cause hypothesis:** Review of git history revealed that test.7 (the ONLY
-successful ARM release, no crash) had **no bus mastering disable** and no PCIe
-safety measures. The `pci_clear_master()` call was added in commit `ade69cf` AFTER
-test.7, and every test since then has crashed. When bus mastering is disabled and
-the firmware tries DMA, the PCIe root complex rejects the transaction, causing a
-fatal bus error (NMI/MCE/bus hang) that crashes the host.
+| Test | Config | Result |
+|------|--------|--------|
+| 7 | bus_master OFF, no PCIe safety | **PASS** (FW ran, ASSERT, no PC crash) |
+| 8-10 | various PMU/watchdog changes | CRASH |
+| 11 | identical to test.7 | CRASH |
+| 12a | skip ARM release | PASS |
+| 12b | AER/SERR masking | CRASH |
+| 13 | early IRQ + INTx disable | CRASH |
+| 14 | bus_master ON, no PCIe safety | CRASH |
 
-**test.14** strips ALL PCIe modifications and releases ARM with bus mastering
-ENABLED (default state from EFI), matching the test.7 configuration that succeeded.
+**Bus mastering hypothesis DISPROVED** by test.14 — crash occurs with bus mastering
+both enabled and disabled. Something environmental changed between test.7 and test.11+.
 
-> **Central question: Why does the firmware ASSERT during init, and can we provide the environment it needs to complete boot?**
+**Key discovery:** The `wl` proprietary driver **fails to load** on kernel 6.12.80
+("Unpatched return thunk" error). Cannot be used as a reference on this system.
+
+> **Central question: Why does ARM release crash the PC, and what was different about test.7?**
 
 See GitHub issue #9 for architectural assessment.
 

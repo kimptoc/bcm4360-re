@@ -242,19 +242,64 @@ code (test.11) now crashes. This rules out host-side code as the crash cause.
 Something environmental changed — possibly PCIe link state, thermal, or
 accumulated hardware state from repeated ARM releases across reboots.
 
-### Next steps (for future sessions)
+### Tests 12a-12b: PCIe safety measures (commits 81afaf3, ba216a1)
+- test.12a: skip_arm=1, FW download only → **PASS** (no crash, confirms download is safe)
+- test.12b: AER/SERR masking before ARM release → **crashed PC**
 
-1. **Check test.11 result** — `dmesg`, `journalctl -b -1`, or re-run
-2. **If stable:** incrementally add back changes to isolate crash trigger:
-   - ASPM disable alone
-   - PMU writes alone
-   - ForceHT alone
-3. **Test.11 DID crash** — investigate what differs between test.7 session and test.11
-4. **Long-term options:**
-   - MMIO trace of `wl` driver full init sequence
-   - Register interrupt handler BEFORE ARM release
-   - Set up minimal DMA buffers before ARM release
-   - Investigate NVRAM/SPROM/OTP data correctness
-5. **Investigate hndarm.c:397 ASSERT** — `ra` 0x000641cb, `fa` 0x0009cfe0
-   can be resolved against firmware binary to identify exact failing check
-6. **NVRAM review** — ensure NVRAM file has right parameters for BCM4360
+### Test 13: Early IRQ handler + INTx disable (commit d1181a8)
+- Registered IRQ handler BEFORE ARM release, disabled INTx at PCI config level
+- **Crashed PC** — IRQ handler never fired, crash is pre-interrupt
+
+### Test 14: Strip all PCIe safety, bus mastering ON (commit 60574c6)
+- Hypothesis: bus mastering disable was the crash cause (added after test.7)
+- Stripped ALL PCIe modifications, released ARM with bus_master=ON (EFI default)
+- PCI_COMMAND=0x0006 (memory space + bus master enabled)
+- **Crashed PC** — log saved to `phase5/logs/test.14`
+- Last message: "releasing ARM as-is" then instant death
+
+**Critical conclusion:** Bus mastering hypothesis is WRONG. Tests 11-14 all crash
+regardless of PCIe safety measures, bus mastering state, IRQ handlers, or AER masking.
+The crash is immediate upon ARM release. Something changed between test.7 (which
+worked) and all subsequent tests.
+
+### Crash pattern summary (tests 8-14)
+
+| Test | Bus Master | PCIe Safety | IRQ Handler | Result |
+|------|-----------|-------------|-------------|--------|
+| 7    | disabled  | none        | none        | **PASS** |
+| 8-10 | disabled  | various     | none        | CRASH |
+| 11   | disabled  | none (=test.7) | none     | CRASH |
+| 12a  | N/A       | skip_arm=1  | none        | PASS  |
+| 12b  | disabled  | AER/SERR    | none        | CRASH |
+| 13   | disabled  | INTx disable| early IRQ   | CRASH |
+| 14   | **ON**    | **none**    | none        | CRASH |
+
+**Every ARM release since test.7 crashes the PC.** The only safe operation is
+firmware download without ARM release (test.12a).
+
+### Working hypotheses for crash
+
+1. **Hardware state accumulation:** Repeated ARM releases across reboots may have
+   left the BCM4360 in a state that EFI doesn't fully reset. Test.7 worked because
+   it was the first ARM release after a cold boot / extended power-off.
+
+2. **Firmware DMA on boot:** The firmware immediately initiates DMA upon ARM release,
+   targeting host memory addresses that aren't mapped. With bus mastering ON (test.14),
+   this corrupts host memory. With bus mastering OFF (tests 8-13), the PCIe root
+   complex rejects the DMA and generates a fatal error.
+
+3. **Missing interrupt/DMA infrastructure:** The firmware expects MSI/MSI-X vectors
+   and DMA ring buffers to be configured BEFORE ARM release. Without them, the
+   firmware's first PCIe transaction causes a fatal bus error.
+
+### Next steps
+
+1. **Cold boot test:** Power off completely (not reboot), wait 30+ seconds, then
+   try ARM release — test whether cold reset fixes the crash
+2. **Pre-configure MSI + DMA rings:** Set up minimal msgbuf ring buffers and MSI
+   vectors BEFORE ARM release, even though we don't plan to use msgbuf
+3. **Firmware binary analysis of hndarm.c:397:** Resolve ASSERT addresses against
+   firmware binary to understand what the firmware checks at boot
+4. **NVRAM deep review:** Ensure NVRAM parameters match what the firmware expects
+5. **Consider fresh firmware:** The extracted firmware may be corrupted or may need
+   specific initialization that only the macOS wl driver provides
