@@ -81,12 +81,14 @@ static int bcm4360_skip_arm;
 module_param(bcm4360_skip_arm, int, 0644);
 MODULE_PARM_DESC(bcm4360_skip_arm, "BCM4360: skip ARM release (1=skip, 0=normal)");
 
-/* BCM4360 debug: test.19 — release ARM from reset but keep CPUHALT set.
- * Isolates whether crash comes from reset-clear itself (hardware/link event)
- * or from ARM executing firmware code. */
-static int bcm4360_halt_only;
-module_param(bcm4360_halt_only, int, 0644);
-MODULE_PARM_DESC(bcm4360_halt_only, "BCM4360: clear reset but keep CPUHALT (1=halt, 0=normal)");
+/* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
+ * stage=0: read-only (dump ARM CR4 wrapper registers)
+ * stage=1: write IOCTL = FGC|CLK (coredisable in_reset_configure step)
+ * stage=2: stage 1 + write RESET_CTL = 0 (clear reset)
+ * stage=3: stage 2 + write IOCTL = CPUHALT|CLK (final config) */
+static int bcm4360_reset_stage = -1;
+module_param(bcm4360_reset_stage, int, 0644);
+MODULE_PARM_DESC(bcm4360_reset_stage, "BCM4360: staged reset (0=read-only, 1=IOCTL, 2=+RESET_CTL, 3=+final IOCTL)");
 
 /* per-board firmware binaries */
 MODULE_FIRMWARE(BRCMF_FW_DEFAULT_PATH "brcmfmac*-pcie.*.bin");
@@ -821,30 +823,70 @@ static int brcmf_pcie_exit_download_state(struct brcmf_pciedev_info *devinfo,
 			brcmf_chip_resetcore(core, 0, 0, 0);
 	}
 
-	/* test.19: clear ARM reset but keep CPUHALT set.
-	 * ARM core leaves reset state (electrically active) but cannot
-	 * execute instructions. Discriminates hardware reset event vs
-	 * firmware execution as crash cause.
+	/* test.20: staged reset — step through resetcore register writes
+	 * one at a time to isolate which write crashes the PCIe link.
+	 * Each stage syncs to disk before the write so journal captures
+	 * exactly how far we got.
 	 */
-	if (bcm4360_halt_only &&
+	if (bcm4360_reset_stage >= 0 &&
 	    devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.19: halt_only mode — writing reset vector, clearing reset with CPUHALT\n");
-		/* Write reset vector to TCM[0] (same as activate callback) */
+		u32 ioctl_val, iost_val, resetctl_val;
+
+		/* Write reset vector to TCM[0] */
 		brcmf_pcie_write_tcm32(devinfo, 0, resetintr);
-		/* Reset ARM CR4 core with CPUHALT kept in postreset.
-		 * Normal: resetcore(core, CPUHALT, 0, 0) → postreset=0 → ARM runs
-		 * test.19: resetcore(core, CPUHALT, 0, CPUHALT) → postreset=CPUHALT → ARM halted
-		 */
-		core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_ARM_CR4);
-		if (!core)
-			return -EIO;
-		brcmf_chip_resetcore(core, ARMCR4_BCMA_IOCTL_CPUHALT, 0,
-				     ARMCR4_BCMA_IOCTL_CPUHALT);
+
+		/* Select ARM CR4 core for direct register access */
+		brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
+
+		/* Stage 0: read-only dump of ARM CR4 wrapper registers */
+		ioctl_val = ioread32(devinfo->regs + 0x408);
+		iost_val = ioread32(devinfo->regs + 0x500);
+		resetctl_val = ioread32(devinfo->regs + 0x800);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.19: ARM CR4 out of reset, CPUHALT set — ARM NOT executing\n");
+			 "BCM4360 test.20 stage=0: ARM CR4 IOCTL=0x%08x IOST=0x%08x RESETCTL=0x%08x\n",
+			 ioctl_val, iost_val, resetctl_val);
+		if (bcm4360_reset_stage == 0) {
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.20: stage=0 done (read-only). PC survived.\n");
+			return 0;
+		}
+
+		/* Stage 1: write IOCTL = FGC|CLK (coredisable in_reset_configure) */
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.19: if PC survives, crash is from firmware execution\n");
+			 "BCM4360 test.20 stage=1: about to write IOCTL = FGC|CLK (0x0003)\n");
+		iowrite32(0x0003, devinfo->regs + 0x408);  /* FGC=0x2 | CLK=0x1 */
+		ioctl_val = ioread32(devinfo->regs + 0x408);  /* readback */
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 test.20 stage=1: IOCTL readback=0x%08x\n", ioctl_val);
+		if (bcm4360_reset_stage == 1) {
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.20: stage=1 done. PC survived.\n");
+			return 0;
+		}
+
+		/* Stage 2: write RESET_CTL = 0 (clear reset — the suspected killer) */
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 test.20 stage=2: about to write RESET_CTL = 0 (clear reset)\n");
+		iowrite32(0, devinfo->regs + 0x800);  /* RESET_CTL = 0 */
+		udelay(60);
+		resetctl_val = ioread32(devinfo->regs + 0x800);
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 test.20 stage=2: RESET_CTL readback=0x%08x\n",
+			 resetctl_val);
+		if (bcm4360_reset_stage == 2) {
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.20: stage=2 done. PC survived.\n");
+			return 0;
+		}
+
+		/* Stage 3: write IOCTL = CPUHALT|CLK (final config, ARM halted) */
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 test.20 stage=3: about to write IOCTL = CPUHALT|CLK (0x0021)\n");
+		iowrite32(0x0021, devinfo->regs + 0x408);  /* CPUHALT=0x20 | CLK=0x1 */
+		ioctl_val = ioread32(devinfo->regs + 0x408);
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 test.20 stage=3: IOCTL readback=0x%08x. Full sequence done.\n",
+			 ioctl_val);
 		return 0;
 	}
 
