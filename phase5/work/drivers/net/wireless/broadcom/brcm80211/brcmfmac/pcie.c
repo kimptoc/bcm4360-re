@@ -1864,26 +1864,54 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			return -ENODEV; /* clean abort, no crash */
 		}
 
-		/* test.14: MINIMAL ARM release — no PCIe modifications.
-		 * Tests 8-13 all crashed PC. Key insight: test.7 (the only
-		 * successful ARM release) had NO bus mastering disable and
-		 * NO PCIe safety measures. All "safety" code was added AFTER
-		 * test.7 and correlated perfectly with the crash onset.
-		 * Hypothesis: disabling bus mastering causes the crash, not
-		 * prevents it. When firmware tries DMA with bus mastering
-		 * disabled, the PCIe root complex rejects the transaction,
-		 * causing a fatal bus error (NMI/MCE).
-		 * test.14: release ARM with bus mastering ENABLED (default
-		 * state), no AER masking, no INTx changes — exactly like
-		 * test.7 but with better diagnostic logging.
+		/* test.15: ForceHT before ARM release.
+		 * Firmware binary analysis of hndarm.c:397 ASSERT shows it
+		 * checks HT_AVAIL (bit 16) in ClockCtlSt and asserts if not
+		 * set. test.7 worked because prior module load/unload cycles
+		 * left HT clock running. Fresh boots start with HT=NO.
+		 * Solution: set FORCEHT (bit 1) in ChipCommon clk_ctl_st
+		 * BEFORE ARM release, wait for HT to come up. If HT doesn't
+		 * come up, abort safely (like test.12a).
 		 */
 		{
-			u16 cmd;
+			u32 ccs;
+			int ht_wait;
 
-			pci_read_config_word(devinfo->pdev, PCI_COMMAND, &cmd);
+			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+			ccs = READCC32(devinfo, clk_ctl_st);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.14: PCI_COMMAND=0x%04x (bus_master=%s) — releasing ARM as-is\n",
-				 cmd, (cmd & PCI_COMMAND_MASTER) ? "ON" : "OFF");
+				 "BCM4360 test.15: clk_ctl_st before ForceHT = 0x%08x\n",
+				 ccs);
+
+			/* Set FORCEHT (bit 1) to request HT clock */
+			WRITECC32(devinfo, clk_ctl_st, ccs | 0x2);
+
+			/* Wait up to 100ms for HT_AVAIL (bit 16) */
+			for (ht_wait = 0; ht_wait < 100; ht_wait++) {
+				ccs = READCC32(devinfo, clk_ctl_st);
+				if (ccs & 0x10000)
+					break;
+				udelay(1000); /* 1ms */
+			}
+
+			ccs = READCC32(devinfo, clk_ctl_st);
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.15: clk_ctl_st after ForceHT = 0x%08x (waited %d ms) HT=%s BP_ON_HT=%s\n",
+				 ccs, ht_wait,
+				 (ccs & 0x10000) ? "YES" : "NO",
+				 (ccs & 0x20000) ? "YES" : "NO");
+
+			if (!(ccs & 0x10000)) {
+				dev_err(&devinfo->pdev->dev,
+					"BCM4360 test.15: HT clock did NOT come up — aborting ARM release (safe abort)\n");
+				/* Clear FORCEHT before bailing */
+				ccs = READCC32(devinfo, clk_ctl_st);
+				WRITECC32(devinfo, clk_ctl_st, ccs & ~0x2);
+				return -ENODEV;
+			}
+
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.15: HT clock available — proceeding with ARM release\n");
 		}
 	}
 
@@ -1913,7 +1941,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		/* If we got here, the ARM release didn't crash! */
 		pci_read_config_word(devinfo->pdev, PCI_COMMAND, &cmd);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.14: survived ARM release! PCI_COMMAND=0x%04x\n",
+			 "BCM4360 test.15: survived ARM release! PCI_COMMAND=0x%04x\n",
 			 cmd);
 
 		aer = pci_find_ext_capability(devinfo->pdev,
@@ -1923,13 +1951,13 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					      aer + PCI_ERR_UNCOR_STATUS,
 					      &aer_status);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.14: AER UESta after FW wait=0x%08x\n",
+				 "BCM4360 test.15: AER UESta after FW wait=0x%08x\n",
 				 aer_status);
 			pci_read_config_dword(devinfo->pdev,
 					      aer + PCI_ERR_COR_STATUS,
 					      &aer_status);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.14: AER CESta after FW wait=0x%08x\n",
+				 "BCM4360 test.15: AER CESta after FW wait=0x%08x\n",
 				 aer_status);
 		}
 	}
