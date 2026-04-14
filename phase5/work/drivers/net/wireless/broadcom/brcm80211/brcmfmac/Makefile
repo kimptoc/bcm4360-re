@@ -7,9 +7,17 @@
 
 ccflags-y += \
 	-I $(src) \
-	-I $(src)/../include
+	-I $(src)/../include \
+	-include $(src)/pcie_only.h
 
-obj-$(CONFIG_BRCMFMAC) += brcmfmac.o
+# Force PCIe-only build for BCM4360 out-of-tree testing
+CONFIG_BRCMFMAC_SDIO :=
+CONFIG_BRCMFMAC_USB :=
+CONFIG_BRCMFMAC_PCIE := m
+CONFIG_BRCMFMAC_PROTO_BCDC := m
+CONFIG_BRCMFMAC_PROTO_MSGBUF := m
+
+obj-m += brcmfmac.o
 brcmfmac-objs += \
 		cfg80211.o \
 		chip.o \
@@ -51,12 +59,6 @@ brcmfmac-$(CONFIG_DMI) += \
 brcmfmac-$(CONFIG_ACPI) += \
 		acpi.o
 
-ifeq ($(CONFIG_BRCMFMAC),m)
 obj-m += wcc/
 obj-m += cyw/
 obj-m += bca/
-else
-brcmfmac-$(CONFIG_BRCMFMAC) += wcc/core.o
-brcmfmac-$(CONFIG_BRCMFMAC) += cyw/core.o
-brcmfmac-$(CONFIG_BRCMFMAC) += bca/core.o
-endif

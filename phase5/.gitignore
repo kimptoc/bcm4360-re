@@ -15,4 +15,5 @@ work/drivers/net/wireless/broadcom/brcm80211/include/*
 !work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 !work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/chip.c
 !work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/Makefile
+!work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie_only.h
 !work/drivers/net/wireless/broadcom/brcm80211/include/brcm_hw_ids.h
