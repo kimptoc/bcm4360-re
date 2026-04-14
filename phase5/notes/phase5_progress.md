@@ -353,7 +353,7 @@ The BCM4360 may require:
 | 20.0 | Read ARM CR4 registers | PASS |
 | 20.1 | Write IOCTL = FGC\|CLK | **CRASH** |
 
-### Next steps
+### Next steps (after test.20)
 
 1. **Examine how `brcmf_pcie_select_core()` works** -- verify the core selection
    is correct for BCM4360 and that the register window is properly mapped
@@ -365,3 +365,99 @@ The BCM4360 may require:
 4. **Try indirect core access** -- use ChipCommon backplane access registers
    instead of direct core wrapper writes
 5. **Power-cycle test** -- full AC power removal to ensure clean hardware state
+
+## Phase 5.2: Isolating the crash trigger (tests 21-25)
+
+### Test 21: chip.c bus ops read path (commit bf4167a)
+
+Rewrote staged reset to use chip.c bus ops path (`buscore_prep_addr`) for correct
+wrapbase addressing. Stage=0 was **read-only**: called `brcmf_chip_iscoreup()` which
+reads wrapper IOCTL and RESET_CTL via the bus abstraction layer. **Crashed PC.**
+
+**Finding:** Even READ access through the chip.c bus ops path crashes. This rules out
+the "test.20 crash was write-specific" interpretation for that code path.
+
+### Test 22: Pure canary (commit bd07eaa) — KEY FINDING
+
+Stage=0 was a pure canary: just `dev_emerg()` and `return 0` from
+`exit_download_state`. **No register reads, no chip ops, no core selection.**
+**PC still crashed.**
+
+**Critical conclusion:** The crash is NOT in `exit_download_state` code at all.
+It is in code that runs AFTER exit_download_state returns 0 — specifically the
+FW wait loop in `brcmf_pcie_download_fw_nvram` (line ~1993), which calls
+`brcmf_pcie_read_ram32()` every 50ms reading BAR2 offset `ramsize-4`.
+
+The ARM was never released (stage=0 returns 0 before any ARM IOCTL write). The
+chip is in download mode (enter_download_state ran), and BAR2 reads to frozen
+TCM cause PCIe completion timeouts → host crash.
+
+### Test 23: return -ENODEV (commit c8d9bef)
+
+Stage=0 returned `-ENODEV` from `exit_download_state`. Probe aborts before the
+FW wait loop runs. **PC survived.**
+
+**Confirms:** The FW wait loop's BAR2 reads are the crash trigger. Skipping them
+entirely is safe.
+
+### Test 24: ASPM hypothesis (commit ec3d358)
+
+Stage=0 disabled PCIe ASPM L0s/L1 before returning 0. Hypothesis: ASPM link
+power transitions while reading unresponsive device cause hang. **Crashed PC.**
+
+**ASPM hypothesis disproved.** The crash is not link-state related.
+
+### Test 25: INTERNAL_MEM reset hypothesis (uncommitted)
+
+Stage=0 skipped `brcmf_chip_resetcore(BCMA_CORE_INTERNAL_MEM)` entirely before
+returning 0. Hypothesis: INTERNAL_MEM reset makes TCM inaccessible. **Crashed PC.**
+
+**INTERNAL_MEM reset hypothesis disproved.** Log truncated after "Loading brcmfmac"
+— crash occurred before any dmesg output, consistent with crash happening in the
+wait loop ~50ms after module probe starts (before log flush).
+
+### Consolidated crash pattern (tests 7-25)
+
+| Test | exit_download_state action | Returns | Wait loop runs | Result |
+|------|---------------------------|---------|----------------|--------|
+| 7    | full ARM release           | 0       | yes            | **PASS** |
+| 8-20 | various ARM release attempts | 0    | yes            | CRASH |
+| 21   | chip.c read via bus ops    | 0       | yes            | CRASH |
+| 22   | canary only (no ops)       | 0       | yes            | CRASH |
+| **23** | canary only (no ops)   | **-ENODEV** | **NO**     | **PASS** |
+| 24   | ASPM disable + return 0    | 0       | yes            | CRASH |
+| 25   | skip INTERNAL_MEM reset    | 0       | yes            | CRASH |
+
+**The decisive variable is whether the FW wait loop runs.** Every test where the
+wait loop's BAR2 reads execute crashes the host (except test.7, the first-ever
+ARM release where firmware actually ran and responded promptly).
+
+### Root cause (revised)
+
+The FW wait loop reads `tcm + rambase + (ramsize-4)` every 50ms. When firmware
+is not running (ARM in reset, or ARM released but firmware ASSERTs quickly),
+this BAR2 read causes a PCIe completion timeout, crashing the host. In test.7,
+the firmware ran long enough to write the shared memory marker before ASSERT,
+so the first wait loop iteration succeeded and the loop exited before firmware
+died.
+
+The ARM CR4 IOCTL write finding from test.20 may be a secondary issue: it
+crashes during the ARM release attempt. When we skip ARM release (tests 22-25),
+we avoid that crash but fall into the wait loop crash instead.
+
+### Next steps (after test.25)
+
+1. **Skip the FW wait loop for BCM4360** — instead of returning 0 from
+   `exit_download_state`, return 0 but also bypass the wait loop entirely in
+   `brcmf_pcie_download_fw_nvram`. This confirms whether the wait loop is the
+   sole remaining crash source.
+
+2. **Fix the ARM release crash** — the IOCTL write crash (test.20) needs to be
+   addressed separately. Options:
+   - Consult Phase 3/4 MMIO traces for the correct macOS reset sequence
+   - Try ChipCommon indirect backplane access instead of direct core wrapper writes
+   - Check if `enter_download_state` is the problem (it also writes ARM IOCTL)
+
+3. **Once ARM can be released without crashing**, re-enable the FW wait loop
+   with a short timeout and appropriate error handling, then investigate the
+   firmware ASSERT at `hndarm.c:397` and NVRAM configuration.

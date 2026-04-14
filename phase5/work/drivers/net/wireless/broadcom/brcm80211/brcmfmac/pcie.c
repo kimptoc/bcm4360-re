@@ -816,78 +816,68 @@ static int brcmf_pcie_exit_download_state(struct brcmf_pciedev_info *devinfo,
 {
 	struct brcmf_core *core;
 
-	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID ||
-	    devinfo->ci->chip == BRCM_CC_43602_CHIP_ID) {
-		core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_INTERNAL_MEM);
-		if (core)
-			brcmf_chip_resetcore(core, 0, 0, 0);
-	}
-
-	/* test.24: disable ASPM before returning 0.
+	/* test.25: hypothesis — INTERNAL_MEM reset makes TCM inaccessible.
 	 *
-	 * test.23 confirmed: return -ENODEV (probe stops) survives,
-	 * return 0 (probe continues) crashes (test.22). The crash is
-	 * in the post-exit_download_state probe path which tries to read
-	 * device shared memory while firmware isn't running.
+	 * test.24 disproved ASPM: disabling ASPM + return 0 still crashed.
+	 * The crash happens on the first brcmf_pcie_read_ram32 in the FW
+	 * wait loop, ~50ms after exit_download_state returns 0.
 	 *
-	 * ASPM L0s/L1 is enabled (lspci shows "ASPM L0s L1 Enabled").
-	 * Hypothesis: ASPM link power transitions while reading from a
-	 * device that can't respond (no firmware) cause the PCIe link
-	 * to hang/drop, crashing the host.
+	 * The only code that runs before our return (inside exit_download_state)
+	 * is brcmf_chip_resetcore(BCMA_CORE_INTERNAL_MEM, 0, 0, 0) for BCM4360.
+	 * Hypothesis: this reset leaves TCM inaccessible via PCIe (postreset=0
+	 * may leave the memory controller clocks off). Reads to inaccessible
+	 * TCM generate a PCIe completion timeout → machine crash.
 	 *
-	 * stage=0: disable ASPM + return 0 (probe continues with ASPM off)
-	 * stage=1: keep ASPM + return 0 (control — expected crash)
-	 * stage=2: return -ENODEV (safe baseline, repeats test.23)
+	 * stage=0: SKIP INTERNAL_MEM reset + return 0
+	 *          FW wait loop should survive 5s of TCM reads if hypothesis true.
+	 * stage=1: DO INTERNAL_MEM reset + return 0
+	 *          Expected crash — reproduces test.22.
+	 * stage=2: DO INTERNAL_MEM reset + return -ENODEV
+	 *          Safe baseline — reproduces test.23.
 	 */
 	if (bcm4360_reset_stage >= 0 &&
 	    devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+		struct brcmf_core *imem;
+
+		imem = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_INTERNAL_MEM);
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.24: exit_download_state reached, stage=%d\n",
-			  bcm4360_reset_stage);
+			  "BCM4360 test.25: stage=%d INTERNAL_MEM core=%s\n",
+			  bcm4360_reset_stage,
+			  imem ? "FOUND" : "NULL");
 
 		if (bcm4360_reset_stage == 0) {
-			u16 lnkctl;
-			int pos;
-
-			pos = pci_find_capability(devinfo->pdev, PCI_CAP_ID_EXP);
-			if (pos) {
-				pci_read_config_word(devinfo->pdev,
-						     pos + PCI_EXP_LNKCTL,
-						     &lnkctl);
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.24: LnkCtl before=0x%04x\n",
-					  lnkctl);
-				/* Clear ASPM L0s (bit 0) and L1 (bit 1) */
-				lnkctl &= ~PCI_EXP_LNKCTL_ASPMC;
-				pci_write_config_word(devinfo->pdev,
-						      pos + PCI_EXP_LNKCTL,
-						      lnkctl);
-				pci_read_config_word(devinfo->pdev,
-						     pos + PCI_EXP_LNKCTL,
-						     &lnkctl);
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.24: LnkCtl after=0x%04x (ASPM disabled)\n",
-					  lnkctl);
-			} else {
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.24: PCIe capability not found!\n");
-			}
+			/* Skip INTERNAL_MEM reset entirely, return 0.
+			 * If TCM reads in the FW wait loop survive: hypothesis confirmed.
+			 * Note: FW wait loop will time out after 5s then the diagnostic
+			 * code runs (all reads, safe) and returns -ENODEV.
+			 */
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.24: stage=0 — ASPM disabled, returning 0.\n");
+				  "BCM4360 test.25: stage=0 — skipping INTERNAL_MEM reset, returning 0\n");
 			return 0;
 		}
 
+		/* stage=1 and stage=2: do the INTERNAL_MEM reset, then return */
+		if (imem)
+			brcmf_chip_resetcore(imem, 0, 0, 0);
+
 		if (bcm4360_reset_stage == 1) {
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.24: stage=1 — ASPM kept, returning 0.\n");
+				  "BCM4360 test.25: stage=1 — INTERNAL_MEM reset done, returning 0\n");
 			return 0;
 		}
 
 		if (bcm4360_reset_stage == 2) {
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.24: stage=2 — returning -ENODEV (safe).\n");
+				  "BCM4360 test.25: stage=2 — INTERNAL_MEM reset done, returning -ENODEV\n");
 			return -ENODEV;
 		}
+	}
+
+	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID ||
+	    devinfo->ci->chip == BRCM_CC_43602_CHIP_ID) {
+		core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_INTERNAL_MEM);
+		if (core)
+			brcmf_chip_resetcore(core, 0, 0, 0);
 	}
 
 	if (!brcmf_chip_set_active(devinfo->ci, resetintr))

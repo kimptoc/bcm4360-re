@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.24: Disable ASPM before returning 0
+# Phase 5.2 test.25: Skip INTERNAL_MEM reset to test TCM accessibility hypothesis
 #
-# test.23: return -ENODEV (probe stops) survives. return 0 (probe
-# continues) crashes. ASPM L0s/L1 is enabled. Hypothesis: link power
-# transitions while reading from unresponsive device crash the host.
+# test.24 disproved ASPM: disabling ASPM + return 0 still crashed.
+# Hypothesis: brcmf_chip_resetcore(BCMA_CORE_INTERNAL_MEM, 0, 0, 0)
+# inside exit_download_state makes TCM inaccessible via PCIe. The FW
+# wait loop reads TCM 50ms later → PCIe completion timeout → crash.
 #
-# stage=0: disable ASPM + return 0 (probe continues, ASPM off)
-# stage=1: keep ASPM + return 0 (control — expected crash)
-# stage=2: return -ENODEV (safe baseline)
+# stage=0: SKIP INTERNAL_MEM reset + return 0 (should survive 5s wait)
+# stage=1: DO INTERNAL_MEM reset + return 0 (expected crash — control)
+# stage=2: DO INTERNAL_MEM reset + return -ENODEV (safe baseline)
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
-# Default stage is 0 (ASPM disabled + return 0)
+# Default stage is 0 (skip INTERNAL_MEM reset + return 0)
 set -e
 
 STAGE="${1:-0}"
@@ -21,16 +22,16 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.24.stage${STAGE}"
+LOG="$LOG_DIR/test.25.stage${STAGE}"
 
-echo "=== test.24: Canary test — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.25: INTERNAL_MEM reset hypothesis — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: disable ASPM + return 0 (probe continues, ASPM off)" | tee -a "$LOG" ;;
-    1) echo "Stage 1: keep ASPM + return 0 (control — expected crash)" | tee -a "$LOG" ;;
-    2) echo "Stage 2: return -ENODEV (safe baseline)" | tee -a "$LOG" ;;
+    0) echo "Stage 0: skip INTERNAL_MEM reset + return 0 (FW wait loop runs ~5s)" | tee -a "$LOG" ;;
+    1) echo "Stage 1: do INTERNAL_MEM reset + return 0 (expected crash — control)" | tee -a "$LOG" ;;
+    2) echo "Stage 2: do INTERNAL_MEM reset + return -ENODEV (safe baseline)" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage $STAGE (use 0-2)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -87,8 +88,8 @@ modprobe cfg80211 2>/dev/null || true
 insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
-echo "Module loaded. Waiting 10s..." | tee -a "$LOG"
-sleep 10
+echo "Module loaded. Waiting 15s (stage=0 has 5s FW wait loop)..." | tee -a "$LOG"
+sleep 15
 
 # Capture results
 echo "" | tee -a "$LOG"
