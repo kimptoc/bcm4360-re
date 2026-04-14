@@ -161,10 +161,66 @@ firmware uses BCDC.
 - ARM release without host crash
 - Module loads/unloads cleanly
 
+## Phase 5.2: Firmware console debugging (tests 3-7)
+
+### Tests 3-6: Incomplete captures
+
+Tests 3-6 captured only the initial firmware load (rambase, ramsize, fw_size)
+but no post-ARM-release output. These were intermediate iterations while adding
+debug dumps and NVRAM logging to pcie.c.
+
+### Test 7: Firmware ASSERT at hndarm.c:397
+
+The most informative test. Added TCM debug dumps and firmware console extraction.
+
+**Console output decoded:**
+```
+Found chip type AI (0x15034360)
+125888.000 Chipc: rev 43, caps 0x58680001, chipst 0x824d pmurev 17, pmucaps 0x10a22b11
+125888.000 si_kattach done. ccrev = 43, wd_msticks = 32
+140386.225 ASSERT in file hndarm.c line 397 (ra 000641cb, fa 0009cfe0)
+```
+
+**Analysis:**
+1. Firmware boots successfully — identifies BCM4360 chip, initializes ChipCommon
+2. `si_kattach` (Silicon Interface kernel attach) completes — BCMA backplane init done
+3. Firmware ASSERTs in `hndarm.c:397` ~14.5 seconds after first log (possibly a
+   firmware watchdog or timeout)
+4. The ASSERT happens during ARM initialization, likely related to:
+   - Missing/incorrect NVRAM parameters
+   - PCIe DMA/mailbox configuration the firmware expects but we haven't set up
+   - A hardware configuration mismatch
+
+**TCM scan results:**
+- Shared memory marker at TCM end (0x9fffc) = 0xffc70038 — contains NVRAM footer data,
+  not a pcie_shared address → firmware never wrote the msgbuf shared struct
+- Console struct found at 0x96f70: buf_addr=0x4000, size=0 (unusual — size should be >0)
+- Console text found at 0x96f78 by following `next` pointer at 0x9af94
+- pcie_shared candidate at 0x9af90: flags=0xfa — this may be a pre-existing structure
+  from firmware's data section, not a runtime-initialized shared memory area
+
+### PC crash note
+
+The last test (test 7 or a subsequent attempt) crashed the PC. This is likely due to
+the firmware's ASSERT handler triggering a trap or the ARM entering an undefined state
+that corrupts PCIe transactions. The 5-second timeout in `brcmf_pcie_download_fw_nvram`
+may not be sufficient to safely handle the crash — the firmware may still be
+writing to PCIe-visible memory during the timeout window.
+
+### Uncommitted pcie.c changes
+
+Added debug logging for:
+- NVRAM load confirmation (len and TCM write address)
+- Warning when no NVRAM is loaded
+- Sharedram marker value before ARM release (to verify it's cleared to 0)
+
 ### Next steps
 
-The firmware initialization fails because brcmfmac's PCIe backend expects
-msgbuf protocol but BCM4360 firmware speaks BCDC. Options:
-1. Add BCDC-over-PCIe transport to brcmfmac (Phase 4 goal)
-2. Find/build a msgbuf-compatible firmware (unlikely — chip predates msgbuf)
-3. Investigate if firmware has a compatibility mode or alternate handshake
+1. **Investigate hndarm.c:397 ASSERT** — likely a missing configuration or
+   NVRAM parameter. The `ra` (return address) 0x000641cb and `fa` (frame address)
+   0x0009cfe0 can be resolved against the firmware binary to identify the exact
+   check that fails.
+2. **NVRAM review** — ensure the NVRAM file has the right parameters for BCM4360.
+   The firmware may require specific board-level settings.
+3. **Reduce crash risk** — add a shorter timeout or disable bus mastering before
+   ARM release to prevent firmware from corrupting host memory if it ASSERTs.

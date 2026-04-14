@@ -1745,9 +1745,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	brcmf_pcie_write_ram32(devinfo, devinfo->ci->ramsize - 4, 0);
 
 	if (nvram) {
-		brcmf_dbg(PCIE, "Download NVRAM %s\n", devinfo->nvram_name);
 		address = devinfo->ci->rambase + devinfo->ci->ramsize -
 			  nvram_len;
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 debug: NVRAM loaded, len=%u, writing to TCM 0x%x\n",
+			 nvram_len, address);
 		brcmf_pcie_copy_mem_todev(devinfo, address, nvram, nvram_len);
 		brcmf_fw_nvram_free(nvram);
 
@@ -1771,13 +1773,16 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			brcmf_pcie_provide_random_bytes(devinfo, address);
 		}
 	} else {
-		brcmf_dbg(PCIE, "No matching NVRAM file found %s\n",
-			  devinfo->nvram_name);
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 debug: WARNING - no NVRAM loaded!\n");
 	}
 
 	sharedram_addr_written = brcmf_pcie_read_ram32(devinfo,
 						       devinfo->ci->ramsize -
 						       4);
+	dev_info(&devinfo->pdev->dev,
+		 "BCM4360 debug: sharedram marker before ARM release = 0x%08x\n",
+		 sharedram_addr_written);
 	brcmf_dbg(PCIE, "Bring ARM in running state\n");
 	err = brcmf_pcie_exit_download_state(devinfo, resetintr);
 	if (err)
