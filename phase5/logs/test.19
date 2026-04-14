@@ -1,0 +1,14 @@
+=== test.19: CPUHALT isolation — reset-clear without ARM execution ===
+Date: Tue 14 Apr 21:12:20 BST 2026
+
+=== STEP 0: Module parameter ===
+bcm4360_halt_only=1 — ARM will be taken out of reset but CPUHALT prevents execution
+
+=== STEP 1: Pre-test PCIe state ===
+03:00.0 Network controller [0280]: Broadcom Inc. and subsidiaries BCM4360 802.11ac Dual Band Wireless Network Adapter [14e4:43a0] (rev 03)
+
+=== STEP 2: Flushing to disk ===
+Flush complete.
+
+=== STEP 3: Loading brcmfmac (bcm4360_halt_only=1) ===
+ARM CR4 will be taken out of reset but CPUHALT keeps it from executing.

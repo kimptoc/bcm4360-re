@@ -6,7 +6,7 @@ The goal is to add BCM4360 support to the Linux kernel's `brcmfmac` driver by re
 
 We have a live BCM4360 device on this machine with the `wl` driver loaded, giving us the ability to trace driver behaviour, read hardware registers, and compare against the existing `brcmfmac` codebase.
 
-## Current Status (updated 2026-04-14, post test.17)
+## Current Status (updated 2026-04-14, post test.19)
 
 **Phases 1, 3, and 4 (partial) are complete. Phase 5 is active.**
 
@@ -15,15 +15,20 @@ BCM4360 firmware. Firmware download works reliably. ARM release crashes the host
 
 **Current blockers (two related issues):**
 
-1. **ARM release crashes PC** — every ARM release since test.7 instantly kills the
-   host. Tests 8-17 tried: bus mastering on/off, AER/SERR masking, early IRQ handlers,
-   INTx disable, stripping all PCIe safety, ForceHT, warm-up cycles, early MSI+IRQ
-   registration. All crash. The only safe operation is firmware download without ARM
-   release (test.12a PASS).
+1. **ARM reset-clear crashes PC** — every ARM release since test.7 instantly kills
+   the host. Tests 8-19 tried: bus mastering on/off, AER/SERR masking, early IRQ
+   handlers, INTx disable, stripping all PCIe safety, ForceHT, warm-up cycles,
+   MSI+IRQ registration, IOMMU, and **CPUHALT isolation** (test.19). All crash.
+   
+   **Critical finding (test.19):** Clearing ARM reset with CPUHALT set (ARM
+   electrically active but cannot execute instructions) **still crashes the PC**.
+   This proves the crash is from the **reset-clear hardware event itself**, not
+   from firmware executing code. The BCMA resetcore register sequence is the culprit.
 
 2. **Firmware ASSERTs at hndarm.c:397** (HT clock timeout) — observed in test.7
    (the ONLY successful ARM release). The firmware starts, completes `si_kattach`,
-   then ASSERTs ~14.5s later. This ASSERT may trigger behavior that crashes the host.
+   then ASSERTs ~14.5s later. This is a secondary issue; the primary blocker is
+   that the reset-clear itself crashes the host.
 
 ### Crash investigation summary (tests 7-17)
 
@@ -39,13 +44,18 @@ BCM4360 firmware. Firmware download works reliably. ARM release crashes the host
 | 15 | ForceHT before ARM release | CRASH |
 | 16 | warm-up cycle then ARM release | CRASH |
 | 17 | MSI + IRQ handler + bus master before ARM release | CRASH |
+| 18 | IOMMU-protected ARM release | CRASH |
+| 19 | CPUHALT isolation (reset-clear, ARM cannot execute) | **CRASH** |
 
 **Hypotheses disproved:**
 - **Bus mastering** (test.14) — crash with both enabled and disabled
 - **Warm-up** (test.16) — load/unload cycle before ARM release doesn't help
 - **MSI-to-address-0** (test.17) — MSI properly configured before ARM release, still crashes
+- **Rogue DMA** (test.18) — IOMMU protection doesn't help
+- **Firmware execution** (test.19) — ARM held in CPUHALT, still crashes → **crash is from reset-clear itself**
 
 Something fundamentally different about test.7 (the only success).
+**The crash is in the BCMA resetcore register sequence, not in firmware behavior.**
 
 **Key discovery:** The `wl` proprietary driver **fails to load** on kernel 6.12.80
 ("Unpatched return thunk" error). Cannot be used as a reference on this system.
@@ -301,36 +311,42 @@ Iterative work to stabilize early boot and diagnose the ASSERT:
 | test.13 | early IRQ handler + INTx disable | **Crashed PC** (no log) |
 | test.14 | bus mastering ON, no PCIe safety | **Crashed PC** — bus mastering hypothesis disproved |
 | test.15 | ForceHT before ARM release | **Crashed PC** — HT_AVAIL already set (0x10000), ForceHT was no-op |
-| test.16 | warm-up cycle (skip_arm load/unload then ARM release) | **Crashed PC** — lspci missing so no PCIe diff captured; warm-up hypothesis disproved |
+| test.16 | warm-up cycle (skip_arm load/unload then ARM release) | **Crashed PC** — warm-up hypothesis disproved |
+| test.17 | MSI + IRQ handler + bus master before ARM release | **Crashed PC** — MSI hypothesis disproved |
+| test.18 | IOMMU-protected ARM release | **Crashed PC** — rogue DMA hypothesis disproved |
+| test.19 | CPUHALT isolation (clear reset, ARM halted) | **Crashed PC** — **firmware execution disproved as cause** |
 
-**Key conclusions from test.8–16:**
-- All tests that release the ARM crash the PC (tests 8-16)
+**Key conclusions from test.8–19:**
+- All tests that clear ARM reset crash the PC (tests 8-19)
 - Skipping ARM release (test.12a) is safe
-- Bus mastering on/off doesn't matter (test.14 vs earlier tests)
+- Bus mastering on/off doesn't matter (test.14)
 - PCIe error masking doesn't help (test.12b)
 - IRQ handlers don't help (test.13)
-- ForceHT irrelevant — HT_AVAIL already set before ARM release (test.15)
-- **Warm-up hypothesis DISPROVED** — test.16 did a full load/unload cycle before ARM release, still crashed
+- ForceHT irrelevant — HT_AVAIL already set (test.15)
+- Warm-up hypothesis disproved (test.16)
+- MSI configuration doesn't help (test.17)
+- IOMMU protection doesn't help (test.18)
+- **CPUHALT isolation proves crash is from BCMA resetcore register writes, not firmware** (test.19)
 - **test.7 was the ONLY success — run at uptime ~6041s after 6 prior module loads**
-- test.16 also revealed lspci is not available on this NixOS system (needs `pciutils` in PATH)
+- lspci not in default NixOS PATH (needs `pciutils`)
 
-**Next steps (warm-up failed):**
-1. **MMIO trace of `wl` driver** — trace what PCIe setup `wl` does before ARM
-   release. The `wl` driver loads this firmware successfully, so it must set up
-   the PCIe environment correctly. Key question: what does `wl` do that we don't?
-2. **Consider firmware DMA region setup** — `wl` may pre-allocate DMA buffers
-   and write their addresses to shared memory before ARM release. The firmware
-   may immediately attempt DMA to an expected host address on boot.
-3. **Try `pci=nomsi,noaer` kernel parameters** — boot with PCIe error handling
-   fully disabled at kernel level, not just per-device
-4. **Try keeping interrupts registered** — the firmware may fire an interrupt
-   immediately, and with no handler the CPU takes an unhandled interrupt/NMI
-5. **Consider virtual machine isolation** — run the test in a VM with PCIe
-   passthrough so the crash doesn't take down the host
+**Next steps (resetcore identified as crash source):**
+1. **Decompose brcmf_chip_resetcore** — the BCMA reset sequence writes to
+   RESET_CTL, IOCTL, and IOST registers. One of these register writes crashes
+   the PCIe link. Need to isolate WHICH register write is fatal.
+2. **Test: skip resetcore entirely** — write IOCTL directly without going
+   through reset/enable cycle. If ARM is already in reset (from FW download),
+   can we just clear the halt bit?
+3. **Test: step through reset sequence** — add delays and disk flushes between
+   each BCMA register write to identify the exact crashing write.
+4. **Compare wl driver reset sequence** — `wl` successfully releases the ARM.
+   Disassemble to see if it uses a different register sequence.
+5. **Check test.7 code path** — git diff to see if resetcore was called
+   differently in the only successful test.
 
-**⚠ Note:** Previous hypotheses about "BCDC vs msgbuf" as the primary blocker
-may be premature. The firmware ASSERTs before reaching any protocol handshake.
-The immediate blocker is the firmware's inability to complete its own init.
+**⚠ Note:** The crash is a hardware-level event from the BCMA core reset
+sequence, not from firmware behavior. The `wl` driver presumably uses a
+different or additional register sequence to safely release the ARM.
 
 ### 5.3 — Firmware protocol bridge
 
