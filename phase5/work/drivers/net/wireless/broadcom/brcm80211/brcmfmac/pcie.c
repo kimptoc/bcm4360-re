@@ -1783,25 +1783,24 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	dev_info(&devinfo->pdev->dev,
 		 "BCM4360 debug: sharedram marker before ARM release = 0x%08x\n",
 		 sharedram_addr_written);
+
+	/* BCM4360 safety: disable bus mastering before ARM release to prevent
+	 * firmware DMA to host memory. The firmware's ASSERT handler at
+	 * hndarm.c:397 previously caused host crashes by corrupting PCIe state.
+	 * We re-enable bus mastering only after confirming firmware is alive.
+	 */
+	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 debug: disabling bus mastering before ARM release\n");
+		pci_clear_master(devinfo->pdev);
+	}
+
 	brcmf_dbg(PCIE, "Bring ARM in running state\n");
 	err = brcmf_pcie_exit_download_state(devinfo, resetintr);
 	if (err)
 		return err;
 
 	brcmf_dbg(PCIE, "Wait for FW init\n");
-
-	/* BCM4360: try sending doorbell signals to unstick firmware.
-	 * The firmware may be waiting for a host-ready indication
-	 * before completing its shared memory initialization.
-	 */
-	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 debug: sending H2D doorbell after ARM release\n");
-		brcmf_pcie_write_reg32(devinfo,
-				       devinfo->reginfo->h2d_mailbox_0, 1);
-		brcmf_pcie_write_reg32(devinfo,
-				       devinfo->reginfo->h2d_mailbox_1, 1);
-	}
 
 	sharedram_addr = sharedram_addr_written;
 	loop_counter = BRCMF_PCIE_FW_UP_TIMEOUT / 50;
@@ -1812,6 +1811,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						       4);
 		loop_counter--;
 	}
+
+	/* Re-enable bus mastering now that firmware wait is done */
+	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 debug: re-enabling bus mastering after FW wait\n");
+		pci_set_master(devinfo->pdev);
+	}
+
 	if (sharedram_addr == sharedram_addr_written) {
 		brcmf_err(bus, "FW failed to initialize\n");
 		/* Debug: dump firmware console and shared struct */

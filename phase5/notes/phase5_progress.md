@@ -214,6 +214,13 @@ Added debug logging for:
 - Warning when no NVRAM is loaded
 - Sharedram marker value before ARM release (to verify it's cleared to 0)
 
+### Fix: disable bus mastering before ARM release (uncommitted until now)
+
+Added `pci_clear_master()` before ARM release and `pci_set_master()` after FW
+wait completes. This prevents the firmware's ASSERT handler from DMA-ing to host
+memory and crashing the PC. Also removed the H2D doorbell hack (was speculative,
+didn't help).
+
 ### Next steps
 
 1. **Investigate hndarm.c:397 ASSERT** — likely a missing configuration or
@@ -222,5 +229,5 @@ Added debug logging for:
    check that fails.
 2. **NVRAM review** — ensure the NVRAM file has the right parameters for BCM4360.
    The firmware may require specific board-level settings.
-3. **Reduce crash risk** — add a shorter timeout or disable bus mastering before
-   ARM release to prevent firmware from corrupting host memory if it ASSERTs.
+3. **Test with bus mastering disabled** — the uncommitted pcie.c change should
+   prevent host crashes during firmware ASSERT, making iterative testing safer.
