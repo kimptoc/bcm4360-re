@@ -697,16 +697,64 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 	if (!devinfo->ci)
 		return;
 
-	/* BCM4360: log PMU state before watchdog reset for diagnostics */
+	/* BCM4360: skip watchdog reset to preserve EFI-initialized PMU/PLL
+	 * state. Test.8 proved that the watchdog reset crashes the PC — it
+	 * likely disrupts the PCIe link. Instead, we log the EFI-preserved
+	 * PMU state and request ForceHT on that preserved state.
+	 *
+	 * PMU register offsets (ChipCommon):
+	 *   0x618 = min_res_mask
+	 *   0x61C = max_res_mask
+	 *   0x1e0 = clk_ctl_st (bit 1 = ForceHT, bit 17 = HT available)
+	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+		u32 ccs;
+		int htcnt = 0;
+
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+
+		/* Log EFI-preserved PMU state */
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 pre-reset: clk_ctl_st=0x%08x min_res=0x%08x max_res=0x%08x res_state=0x%08x\n",
+			 "BCM4360 EFI state: clk_ctl_st=0x%08x min_res=0x%08x max_res=0x%08x res_state=0x%08x\n",
 			 READCC32(devinfo, clk_ctl_st),
 			 READCC32(devinfo, min_res_mask),
 			 READCC32(devinfo, max_res_mask),
 			 READCC32(devinfo, res_state));
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 EFI PMU: pmustatus=0x%08x pmucontrol=0x%08x\n",
+			 READCC32(devinfo, pmustatus),
+			 READCC32(devinfo, pmucontrol));
+
+		/* Ensure all PMU resources are requested (17 resources for
+		 * BCM4360 pmurev 17). This may already be set by EFI/wl.
+		 */
+		WRITECC32(devinfo, max_res_mask, 0x0001ffff);
+		WRITECC32(devinfo, min_res_mask, 0x0001ffff);
+
+		/* Request HT clock via ClockControlStatus ForceHT bit */
+		ccs = READCC32(devinfo, clk_ctl_st);
+		WRITECC32(devinfo, clk_ctl_st, ccs | 0x2); /* ForceHT */
+
+		/* Wait for HT clock to become available (bit 17) */
+		for (htcnt = 0; htcnt < 100; htcnt++) {
+			ccs = READCC32(devinfo, clk_ctl_st);
+			if (ccs & 0x20000) /* HT available */
+				break;
+			msleep(10);
+		}
+
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 PMU init: clk_ctl_st=0x%08x after %dms, HT %s\n",
+			 ccs, htcnt * 10,
+			 (ccs & 0x20000) ? "AVAILABLE" : "NOT AVAILABLE");
+
+		/* Skip watchdog reset — return early */
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360: skipping watchdog reset (crashes PC)\n");
+		return;
 	}
+
+	/* Non-BCM4360: standard watchdog reset path */
 
 	/* Disable ASPM */
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
@@ -740,63 +788,6 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 					       BRCMF_PCIE_PCIE2REG_CONFIGDATA,
 					       val);
 		}
-	}
-
-	/* BCM4360: After watchdog reset, initialize PMU resources and
-	 * request HT clock from the host side. The firmware ASSERTs at
-	 * hndarm.c:397 (HT clock timeout) if HT clock is not available
-	 * when it tries to request it. By bringing up PMU resources and
-	 * requesting HT clock before firmware download, we ensure the
-	 * PLL is locked and HT clock is ready before the firmware starts.
-	 *
-	 * PMU register offsets (ChipCommon):
-	 *   0x618 = min_res_mask
-	 *   0x61C = max_res_mask
-	 *   0x1e0 = clk_ctl_st (bit 1 = ForceHT, bit 17 = HT available)
-	 */
-	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-		u32 ccs;
-		int htcnt = 0;
-
-		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 post-reset: clk_ctl_st=0x%08x min_res=0x%08x max_res=0x%08x res_state=0x%08x\n",
-			 READCC32(devinfo, clk_ctl_st),
-			 READCC32(devinfo, min_res_mask),
-			 READCC32(devinfo, max_res_mask),
-			 READCC32(devinfo, res_state));
-
-		/* Set PMU min/max resource masks to all resources (17 resources
-		 * for BCM4360 pmurev 17). This tells the PMU to bring up
-		 * everything including PLL and HT clock.
-		 */
-		WRITECC32(devinfo, max_res_mask, 0x0001ffff);
-		WRITECC32(devinfo, min_res_mask, 0x0001ffff);
-
-		/* Request HT clock via ClockControlStatus */
-		ccs = READCC32(devinfo, clk_ctl_st);
-		WRITECC32(devinfo, clk_ctl_st, ccs | 0x2); /* ForceHT */
-
-		/* Wait for HT clock to become available (bit 17) */
-		for (htcnt = 0; htcnt < 100; htcnt++) {
-			ccs = READCC32(devinfo, clk_ctl_st);
-			if (ccs & 0x20000) /* HT available */
-				break;
-			msleep(10);
-		}
-
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 PMU init: clk_ctl_st=0x%08x after %dms, HT %s\n",
-			 ccs, htcnt * 10,
-			 (ccs & 0x20000) ? "AVAILABLE" : "NOT AVAILABLE");
-
-		/* Also log PMU status and PLL control for diagnostics */
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 PMU: pmustatus=0x%08x res_state=0x%08x pmucontrol=0x%08x\n",
-			 READCC32(devinfo, pmustatus),
-			 READCC32(devinfo, res_state),
-			 READCC32(devinfo, pmucontrol));
 	}
 }
 

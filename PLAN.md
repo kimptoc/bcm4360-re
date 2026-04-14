@@ -255,25 +255,31 @@ Iterative work to stabilize early boot and diagnose the ASSERT:
 - Added TCM/console/sharedram debug dumps for firmware introspection
 - Added NVRAM debug logging
 - Disabled bus mastering before ARM release (prevents firmware DMA crash)
-- Allow watchdog reset, then re-initialize PMU resources and request HT clock
-  from the host side (set min/max resource masks, ForceHT via clk_ctl_st)
 - Disabled ASPM L0s/L1 before ARM release (prevents PCIe link interference)
+- (test.8/test.9) Allow watchdog reset, then re-init PMU/HT clock — **both crashed PC**
 
-**Current failure mode:**
-- Firmware boots, runs `si_kattach`, then **ASSERT at hndarm.c:397**
-- This is an HT clock timeout — firmware cannot bring up the high-throughput clock
-- The last test with these changes crashed the PC — need to investigate whether
-  the ASPM/watchdog changes altered the failure mode
+**Test log:**
+| Test | Approach | Result |
+|------|----------|--------|
+| test.7 | bus mastering disabled, watchdog allowed | ASSERT hndarm.c:397, no crash |
+| test.8 | + PMU debug logging, + ForceHT post-reset | **Crashed PC** (no log) |
+| test.9 | same as test.8 (committed at 3d96dbc) | **Crashed PC** (no log) |
+| test.10 | *pending* — skip watchdog reset entirely | Not yet run |
+
+**Current approach (uncommitted in pcie.c):**
+Skip the watchdog reset entirely for BCM4360 — preserve EFI-initialized PMU/PLL
+state. Log EFI state, set resource masks, request ForceHT, then return early
+without triggering the watchdog. Hypothesis: watchdog reset destroys the PCIe
+link state that EFI/wl set up, causing the PC crash.
 
 **Next steps (ASSERT-focused):**
-1. **Test with latest patches** — verify skip-watchdog-reset + ASPM-disable
-   changes the failure mode (may resolve ASSERT or shift to new failure)
-2. **Investigate NVRAM data** — is NVRAM loaded correctly? Does the firmware
+1. **Commit and test current diff (test.10)** — skip-watchdog approach
+2. If still crashes: crash cause is NOT watchdog reset — investigate firmware
+   DMA/interrupt after ARM release, or PCIe link instability
+3. If doesn't crash but ASSERT persists: analyze PMU log output, investigate
+   whether HT clock request from host side actually takes effect
+4. **Investigate NVRAM data** — is NVRAM loaded correctly? Does the firmware
    find the board configuration it expects?
-3. **Read TCM state at ASSERT** — what do sharedram markers, console buffer,
-   and key TCM structures look like when the ASSERT fires?
-4. **Console output analysis** — does firmware provide additional context
-   before the ASSERT?
 5. **Consider OTP/SPROM data** — the firmware reads board config from OTP CIS;
    bcma reports "Invalid SPROM". Is this causing misconfiguration?
 
