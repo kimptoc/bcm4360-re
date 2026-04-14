@@ -1864,10 +1864,116 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			return -ENODEV; /* clean abort, no crash */
 		}
 
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 debug: disabling bus mastering + interrupts before ARM release (test.12)\n");
-		pci_clear_master(devinfo->pdev);
-		pci_disable_device(devinfo->pdev);
+		/* test.12b: Comprehensive PCIe safety before ARM release.
+		 * Tests 8-11 all crashed — the firmware's ARM execution
+		 * causes fatal PCIe errors. Strategy: mask AER errors as
+		 * non-fatal, disable bus mastering, and disable SERR
+		 * forwarding so firmware PCIe interactions can't crash host.
+		 */
+		{
+			int aer;
+			u16 cmd, devctl;
+			u32 ue_sev;
+			int pcie_cap;
+
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.12b: applying PCIe safety measures before ARM release\n");
+
+			/* 1. Disable bus mastering (prevent DMA) */
+			pci_clear_master(devinfo->pdev);
+
+			/* 2. Disable SERR in PCI command register — prevents
+			 * PCIe errors from propagating to system error handler */
+			pci_read_config_word(devinfo->pdev, PCI_COMMAND, &cmd);
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.12b: PCI_COMMAND before=0x%04x\n", cmd);
+			cmd &= ~PCI_COMMAND_SERR;
+			pci_write_config_word(devinfo->pdev, PCI_COMMAND, cmd);
+
+			/* 3. Disable PCIe error reporting in DevCtl */
+			pcie_cap = pci_find_capability(devinfo->pdev, PCI_CAP_ID_EXP);
+			if (pcie_cap) {
+				pci_read_config_word(devinfo->pdev,
+						     pcie_cap + PCI_EXP_DEVCTL,
+						     &devctl);
+				dev_info(&devinfo->pdev->dev,
+					 "BCM4360 test.12b: DevCtl before=0x%04x\n",
+					 devctl);
+				/* Clear error reporting bits */
+				devctl &= ~(PCI_EXP_DEVCTL_CERE |
+					    PCI_EXP_DEVCTL_NFERE |
+					    PCI_EXP_DEVCTL_FERE |
+					    PCI_EXP_DEVCTL_URRE);
+				pci_write_config_word(devinfo->pdev,
+						      pcie_cap + PCI_EXP_DEVCTL,
+						      devctl);
+			}
+
+			/* 4. Mask all AER uncorrectable errors as non-fatal */
+			aer = pci_find_ext_capability(devinfo->pdev,
+						      PCI_EXT_CAP_ID_ERR);
+			if (aer) {
+				/* Clear existing error status first */
+				pci_read_config_dword(devinfo->pdev,
+						      aer + PCI_ERR_UNCOR_STATUS,
+						      &ue_sev);
+				dev_info(&devinfo->pdev->dev,
+					 "BCM4360 test.12b: AER UESta=0x%08x (clearing)\n",
+					 ue_sev);
+				pci_write_config_dword(devinfo->pdev,
+						       aer + PCI_ERR_UNCOR_STATUS,
+						       ue_sev); /* W1C */
+
+				/* Set severity to 0 — all errors non-fatal */
+				pci_read_config_dword(devinfo->pdev,
+						      aer + PCI_ERR_UNCOR_SEVER,
+						      &ue_sev);
+				dev_info(&devinfo->pdev->dev,
+					 "BCM4360 test.12b: AER UESvrt before=0x%08x\n",
+					 ue_sev);
+				pci_write_config_dword(devinfo->pdev,
+						       aer + PCI_ERR_UNCOR_SEVER,
+						       0);
+
+				/* Clear correctable error status too */
+				pci_read_config_dword(devinfo->pdev,
+						      aer + PCI_ERR_COR_STATUS,
+						      &ue_sev);
+				pci_write_config_dword(devinfo->pdev,
+						       aer + PCI_ERR_COR_STATUS,
+						       ue_sev); /* W1C */
+			} else {
+				dev_warn(&devinfo->pdev->dev,
+					 "BCM4360 test.12b: no AER capability found\n");
+			}
+
+			/* 5. Also mask errors on the upstream bridge/root port */
+			if (devinfo->pdev->bus && devinfo->pdev->bus->self) {
+				struct pci_dev *bridge = devinfo->pdev->bus->self;
+				int bridge_aer;
+
+				bridge_aer = pci_find_ext_capability(bridge,
+								     PCI_EXT_CAP_ID_ERR);
+				if (bridge_aer) {
+					dev_info(&devinfo->pdev->dev,
+						 "BCM4360 test.12b: masking bridge AER errors too\n");
+					/* Mask bridge root error command */
+					pci_write_config_dword(bridge,
+							       bridge_aer + PCI_ERR_ROOT_COMMAND,
+							       0);
+				}
+
+				/* Disable SERR forwarding on bridge too */
+				pci_read_config_word(bridge, PCI_BRIDGE_CONTROL,
+						     &cmd);
+				cmd &= ~PCI_BRIDGE_CTL_SERR;
+				pci_write_config_word(bridge, PCI_BRIDGE_CONTROL,
+						      cmd);
+			}
+
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.12b: PCIe safety applied — releasing ARM\n");
+		}
 	}
 
 	brcmf_dbg(PCIE, "Bring ARM in running state\n");
@@ -1887,13 +1993,25 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		loop_counter--;
 	}
 
-	/* Re-enable PCI device and bus mastering now that firmware wait is done */
+	/* Re-enable bus mastering after firmware wait */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+		u32 aer_status;
+		int aer;
+
+		/* Log AER state after FW execution attempt */
+		aer = pci_find_ext_capability(devinfo->pdev,
+					      PCI_EXT_CAP_ID_ERR);
+		if (aer) {
+			pci_read_config_dword(devinfo->pdev,
+					      aer + PCI_ERR_UNCOR_STATUS,
+					      &aer_status);
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.12b: AER UESta after FW wait=0x%08x\n",
+				 aer_status);
+		}
+
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 debug: re-enabling PCI device + bus mastering after FW wait\n");
-		if (pci_enable_device(devinfo->pdev))
-			dev_warn(&devinfo->pdev->dev,
-				 "BCM4360: failed to re-enable PCI device\n");
+			 "BCM4360 debug: re-enabling bus mastering after FW wait\n");
 		pci_set_master(devinfo->pdev);
 	}
 

@@ -1,0 +1,28 @@
+=== test.12a: skip_arm=1 (no ARM release, FW download + TCM dump only) ===
+Date: 2026-04-14
+Commit: de08ae5
+Result: PASS — no crash, firmware download verified
+
+[  115.931823] brcmfmac: loading out-of-tree module taints kernel.
+[  115.945034] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffd13682000000
+[  115.945775] brcmfmac 0000:03:00.0: BCM4360 EFI state: clk_ctl_st=0x00010040 min_res=0x0000013b max_res=0x0000013f res_state=0x0000013b
+[  115.945787] brcmfmac 0000:03:00.0: BCM4360 EFI PMU: pmustatus=0x0000002a pmucontrol=0x01770181
+[  115.945790] brcmfmac 0000:03:00.0: BCM4360: skipping watchdog reset, no PMU writes (test.11 safe baseline)
+[  115.946087] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[  115.952359] brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffd13682000000
+[  116.012839] brcmfmac 0000:03:00.0: BCM4360 debug: NVRAM loaded, len=228, writing to TCM 0x9ff1c
+[  116.012903] brcmfmac 0000:03:00.0: BCM4360 debug: sharedram marker before ARM release = 0xffc70038
+[  116.012918] brcmfmac 0000:03:00.0: BCM4360 pre-ARM: clk_ctl_st=0x00010040 res_state=0x0000013b HT=NO
+[  116.012920] brcmfmac 0000:03:00.0: BCM4360 test.12: skipping ARM release (bcm4360_skip_arm=1)
+[  116.012921] brcmfmac 0000:03:00.0: BCM4360 test.12: FW downloaded OK, dumping TCM state
+[  116.012933] brcmfmac 0000:03:00.0: BCM4360 TCM[0x0000]: b80ef000 b82ef000 b839f000 b844f000
+[  116.012954] brcmfmac 0000:03:00.0: BCM4360 TCM[0x0010]: b852f000 b860f000 b86ef000 b87cf000
+[  116.012975] brcmfmac 0000:03:00.0: BCM4360 TCM[0x0020]: 4601480e 46034602 46054604 46074606
+[  116.012995] brcmfmac 0000:03:00.0: BCM4360 TCM[0x0030]: 46814680 46834682 46854684 f3ef4686
+[  116.013006] brcmfmac 0000:03:00.0: BCM4360 test.12: sharedram[0x9fffc] = 0xffc70038
+[  116.013008] brcmfmac 0000:03:00.0: brcmf_pcie_setup: Dongle setup failed
+
+=== Analysis ===
+TCM[0x0000-0x001f]: ARM interrupt vector table (branch instructions)
+TCM[0x0020-0x003f]: Thumb-2 code (register moves + MSR instruction)
+FW download verified working. NVRAM at 0x9ff1c. Sharedram unchanged (ARM never ran).
