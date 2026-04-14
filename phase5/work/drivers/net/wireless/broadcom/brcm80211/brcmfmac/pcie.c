@@ -1830,19 +1830,24 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 "BCM4360 debug: sharedram marker before ARM release = 0x%08x\n",
 		 sharedram_addr_written);
 
-	/* test.34: intact NVRAM + pci_set_master + pci_enable_msi before ARM release.
+	/* test.35: isolate pci_set_master vs IOMMU group as crash-prevention factor.
 	 *
-	 * test.33 result: PC survived, val=0xffc70038 all 100 iters — FW did NOT
-	 * write pcie_shared. Bus mastering alone was not enough.
+	 * test.34 result: PC survived, val=0xffc70038 all 100 iters — FW silent.
+	 * MSI before ARM release made no difference vs test.33.
 	 *
-	 * tests.26/27 both PASSED (FW wrote pcie_shared, loop exited early). Those
-	 * tests had bus mastering ON + MSI enabled before ARM release. test.33 had
-	 * bus mastering but NO MSI. Therefore MSI is the next variable to isolate.
+	 * CONFOUND: test.29 (crash) had IOMMU group 6, no pci_set_master.
+	 *           tests.33/34 (survived) had IOMMU group 8, with pci_set_master.
+	 *           PCIe remove+rescan between test.29 and test.30 changed BOTH.
+	 *           Cannot tell which variable prevented the crash.
 	 *
-	 * test.34: add pci_enable_msi() before ARM release. Keep NVRAM intact.
-	 * Keep original detection (compare against pre-ARM value, 0xffc70038).
-	 * Return -ENODEV immediately on timeout — no post-loop MMIO reads.
-	 * NOTE: may crash the PC if firmware triggers a link event.
+	 * test.35: remove pci_set_master AND pci_enable_msi (back to test.29
+	 * baseline conditions) but run on current hardware (IOMMU group 8, IRQ 18).
+	 * Disambiguates:
+	 *   crash → pci_set_master was the protective factor
+	 *   survive, FW silent → IOMMU group 8 is the protective factor
+	 *   survive, FW writes pcie_shared → pci_set_master was suppressing FW
+	 *
+	 * Add post-timeout diagnostics to see if ARM executed at all.
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		/* Read-only: log PMU/HT state just before ARM release */
@@ -1885,15 +1890,12 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			return -ENODEV; /* clean abort, no crash */
 		}
 
-		/* test.34: enable bus mastering + MSI BEFORE ARM release. Do NOT touch
-		 * TCM[ramsize-4] — that's the NVRAM length token, zeroing it kills FW.
-		 * sharedram_addr_written already holds the pre-ARM value (0xffc70038).
-		 * MSI isolates whether firmware needs MSI routing to write pcie_shared.
+		/* test.35: NO pci_set_master, NO MSI — back to test.29 baseline
+		 * conditions on current hardware (IOMMU group 8, IRQ 18).
+		 * NVRAM intact. May crash PC if pci_set_master was protective.
 		 */
-		pci_set_master(devinfo->pdev);
-		pci_enable_msi(devinfo->pdev);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.34: pci_set_master+MSI done; NVRAM intact, sentinel=0x%08x\n",
+			 "BCM4360 test.35: NO pci_set_master, NO MSI; NVRAM intact, sentinel=0x%08x\n",
 			 sharedram_addr_written);
 	}
 
@@ -1911,7 +1913,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		/* Per-iteration log: last visible entry before any crash tells us timing */
 		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID)
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.34: wait iter %d val=0x%08x\n",
+				  "BCM4360 test.35: wait iter %d val=0x%08x\n",
 				  (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 50) - (int)loop_counter + 1,
 				  sharedram_addr);
 		sharedram_addr = brcmf_pcie_read_ram32(devinfo,
@@ -1920,19 +1922,59 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		loop_counter--;
 	}
 
-	/* test.34: On timeout (sharedram_addr unchanged from pre-ARM value), return
-	 * -ENODEV immediately. Do NOT do any MMIO reads — firmware may have crashed
-	 * or triggered a PCIe link event.
+	/* test.35: On timeout, log diagnostics BEFORE returning -ENODEV.
+	 * These reads tell us if ARM executed even when FW didn't write pcie_shared.
 	 */
 	if (sharedram_addr == sharedram_addr_written) {
-		brcmf_err(bus, "BCM4360 test.34: FW timeout — did not write sharedram ptr in 5s\n");
+		struct brcmf_core *arm_core;
+		u32 i, tcm_val;
+
+		brcmf_err(bus, "BCM4360 test.35: FW timeout — did not write sharedram ptr in 5s\n");
+
+		/* Diagnostic 1: clk_ctl_st after ARM release. If HT=YES, ARM ran and
+		 * initialized clocks. Before ARM release, HT=NO (clk_ctl_st=0x00050040).
+		 */
+		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 test.35 post-timeout: clk_ctl_st=0x%08x res_state=0x%08x HT=%s\n",
+			 READCC32(devinfo, clk_ctl_st),
+			 READCC32(devinfo, res_state),
+			 (READCC32(devinfo, clk_ctl_st) & 0x20000) ? "YES" : "NO");
+
+		/* Diagnostic 2: is the ARM CR4 core still up? If iscoreup returns true,
+		 * ARM is running (not in reset). If false, ARM halted or reset.
+		 */
+		arm_core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_ARM_CR4);
+		if (arm_core) {
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.35 post-timeout: ARM CR4 iscoreup=%s\n",
+				 brcmf_chip_iscoreup(arm_core) ? "YES" : "NO");
+		}
+
+		/* Diagnostic 3: read TCM[0..15] — if ARM ran, it may have modified
+		 * these early init bytes vs what the driver wrote during FW download.
+		 */
+		for (i = 0; i < 16; i += 4) {
+			tcm_val = brcmf_pcie_read_ram32(devinfo, i);
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.35 post-timeout: TCM[0x%04x]=0x%08x\n",
+				 i, tcm_val);
+		}
+		/* Also read TCM[ramsize-8..ramsize-1] to check NVRAM area */
+		for (i = devinfo->ci->ramsize - 8; i < devinfo->ci->ramsize; i += 4) {
+			tcm_val = brcmf_pcie_read_ram32(devinfo, i);
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.35 post-timeout: TCM[0x%05x]=0x%08x\n",
+				 i, tcm_val);
+		}
+
 		return -ENODEV;
 	}
 
 	/* Firmware initialized: log the detected shared pointer */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.34: FW init detected! sharedram_addr=0x%08x\n",
+			 "BCM4360 test.35: FW init detected! sharedram_addr=0x%08x\n",
 			 sharedram_addr);
 	}
 

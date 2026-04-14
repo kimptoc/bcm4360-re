@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.34: intact NVRAM + pci_set_master + pci_enable_msi before ARM release
+# Phase 5.2 test.35: NO pci_set_master, NO MSI — isolate crash-prevention variable
 #
-# test.34 SURVIVED: val=0xffc70038 all 100 iters, FW still silent.
-# Bus mastering alone was not enough. tests.26/27 PASSED had both mastering + MSI.
-#
-# test.34: add pci_enable_msi before ARM release. NVRAM intact. -ENODEV on timeout.
-# MAY CRASH the PC (firmware booting + MSI + link event).
+# test.35 SURVIVED: val=0xffc70038 all 100 iters, FW silent. MSI irrelevant.
+# CONFOUND: test.29 (crash) had IOMMU group 6 + no pci_set_master.
+#           tests.33/34 (survived) had IOMMU group 8 + pci_set_master.
+# test.35: remove pci_set_master/MSI on current hardware (IOMMU group 8).
+# If crash → pci_set_master was protective. If survive → IOMMU group 8 is protective.
+# MAY CRASH the PC.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0 (full 5000ms wait loop)
@@ -19,14 +20,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.34.stage${STAGE}"
+LOG="$LOG_DIR/test.35.stage${STAGE}"
 
-echo "=== test.34: Intact NVRAM + pci_set_master before ARM — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.35: Intact NVRAM + pci_set_master before ARM — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: intact NVRAM; pci_set_master+MSI before ARM; -ENODEV on timeout; may crash PC" | tee -a "$LOG" ;;
+    0) echo "Stage 0: NO pci_set_master, NO MSI; NVRAM intact; -ENODEV on timeout; MAY CRASH PC" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
