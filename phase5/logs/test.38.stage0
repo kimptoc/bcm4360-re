@@ -1,0 +1,182 @@
+=== test.38: PMU min_res_mask write before ARM release — stage=0 ===
+Date: Wed 15 Apr 00:42:40 BST 2026
+
+Stage 0: NO pci_set_master, NO MSI; NVRAM intact; -ENODEV on timeout; min_res_mask=max_res_mask written before ARM release
+
+Removing existing brcmfmac...
+=== Pre-test PCIe state ===
+03:00.0 Network controller [0280]: Broadcom Inc. and subsidiaries BCM4360 802.11ac Dual Band Wireless Network Adapter [14e4:43a0] (rev 03)
+	Subsystem: Apple Inc. Device [106b:0112]
+	Control: I/O- Mem+ BusMaster- SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx+
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+	Interrupt: pin A routed to IRQ -22
+	IOMMU group: 8
+	Region 0: Memory at b0600000 (64-bit, non-prefetchable) [size=32K]
+	Region 2: Memory at b0400000 (64-bit, non-prefetchable) [size=2M]
+	Capabilities: [48] Power Management version 3
+		Flags: PMEClk- DSI- D1+ D2+ AuxCurrent=0mA PME(D0+,D1+,D2+,D3hot+,D3cold+)
+		Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=2 PME-
+	Capabilities: [58] MSI: Enable+ Count=1/1 Maskable- 64bit+
+		Address: 00000000fee00738  Data: 0000
+	Capabilities: [68] Vendor Specific Information: Len=44 <?>
+	Capabilities: [ac] Express (v2) Endpoint, IntMsgNum 0
+		DevCap:	MaxPayload 256 bytes, PhantFunc 0, Latency L0s <4us, L1 unlimited
+			ExtTag- AttnBtn- AttnInd- PwrInd- RBE+ FLReset- SlotPowerLimit 10W TEE-IO-
+		DevCtl:	CorrErr- NonFatalErr- FatalErr- UnsupReq-
+			RlxdOrd+ ExtTag- PhantFunc- AuxPwr+ NoSnoop+
+			MaxPayload 128 bytes, MaxReadReq 512 bytes
+		DevSta:	CorrErr+ NonFatalErr- FatalErr- UnsupReq+ AuxPwr+ TransPend-
+		LnkCap:	Port #0, Speed 2.5GT/s, Width x1, ASPM L0s L1, Exit Latency L0s <2us, L1 <32us
+			ClockPM+ Surprise- LLActRep- BwNot- ASPMOptComp+
+		LnkCtl:	ASPM L0s L1 Enabled; RCB 64 bytes, LnkDisable- CommClk+
+			ExtSynch- ClockPM+ AutWidDis- BWInt- AutBWInt- FltModeDis-
+		LnkSta:	Speed 2.5GT/s, Width x1
+			TrErr- Train- SlotClk+ DLActive- BWMgmt- ABWMgmt-
+		DevCap2: Completion Timeout: Range ABCD, TimeoutDis+ NROPrPrP- LTR+
+			 10BitTagComp- 10BitTagReq- OBFF Via WAKE#, ExtFmt- EETLPPrefix-
+			 EmergencyPowerReduction Not Supported, EmergencyPowerReductionInit-
+
+=== Flushing to disk ===
+Flush complete.
+
+=== Loading brcmfmac (bcm4360_reset_stage=0) — test.38 ===
+Module loaded. Waiting 15s (5s FW wait loop + 10s diagnostics)...
+
+=== Post-test dmesg ===
+[ 4862.302943] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffd5bd02400000
+[ 4862.303357] brcmfmac 0000:03:00.0: BCM4360 EFI state: clk_ctl_st=0x00050042 min_res=0x0000013b max_res=0x0000013f res_state=0x0000013b
+[ 4862.303365] brcmfmac 0000:03:00.0: BCM4360 EFI PMU: pmustatus=0x0000002a pmucontrol=0x01770381
+[ 4862.303368] brcmfmac 0000:03:00.0: BCM4360: skipping watchdog reset, no PMU writes (test.11 safe baseline)
+[ 4862.303556] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[ 4862.303971] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.Apple Inc.-MacBookPro11,1.bin failed with error -2
+[ 4862.306540] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+[ 4862.306618] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+[ 4862.307360] brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffd5bd02400000
+[ 4862.367847] brcmfmac 0000:03:00.0: BCM4360 debug: NVRAM loaded, len=228, writing to TCM 0x9ff1c
+[ 4862.367885] brcmfmac 0000:03:00.0: BCM4360 debug: sharedram marker before ARM release = 0xffc70038
+[ 4862.367895] brcmfmac 0000:03:00.0: BCM4360 pre-ARM: clk_ctl_st=0x00050042 res_state=0x0000013b HT=NO
+[ 4862.367906] brcmfmac 0000:03:00.0: BCM4360 test.38 pre-ARM: min_res=0x0000013b max_res=0x0000013f res_state=0x0000013b clk=0x00050042 — writing min_res=max_res
+[ 4862.369323] brcmfmac 0000:03:00.0: BCM4360 test.38 pre-ARM: after min_res write: res_state=0x0000013f clk=0x00050042 HT=NO res_changed=YES
+[ 4862.420370] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 1 val=0xffc70038
+[ 4862.471400] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 2 val=0xffc70038
+[ 4862.522398] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 3 val=0xffc70038
+[ 4862.573400] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 4 val=0xffc70038
+[ 4862.624447] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 5 val=0xffc70038
+[ 4862.675385] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 6 val=0xffc70038
+[ 4862.726428] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 7 val=0xffc70038
+[ 4862.777306] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 8 val=0xffc70038
+[ 4862.828382] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 9 val=0xffc70038
+[ 4862.879369] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 10 val=0xffc70038
+[ 4862.930345] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 11 val=0xffc70038
+[ 4862.981355] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 12 val=0xffc70038
+[ 4863.032548] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 13 val=0xffc70038
+[ 4863.083288] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 14 val=0xffc70038
+[ 4863.134412] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 15 val=0xffc70038
+[ 4863.185371] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 16 val=0xffc70038
+[ 4863.236407] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 17 val=0xffc70038
+[ 4863.287279] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 18 val=0xffc70038
+[ 4863.338333] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 19 val=0xffc70038
+[ 4863.389301] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 20 val=0xffc70038
+[ 4863.440358] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 21 val=0xffc70038
+[ 4863.491278] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 22 val=0xffc70038
+[ 4863.542398] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 23 val=0xffc70038
+[ 4863.593291] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 24 val=0xffc70038
+[ 4863.644372] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 25 val=0xffc70038
+[ 4863.695295] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 26 val=0xffc70038
+[ 4863.746325] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 27 val=0xffc70038
+[ 4863.797313] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 28 val=0xffc70038
+[ 4863.848274] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 29 val=0xffc70038
+[ 4863.899294] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 30 val=0xffc70038
+[ 4863.950301] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 31 val=0xffc70038
+[ 4864.001263] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 32 val=0xffc70038
+[ 4864.052358] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 33 val=0xffc70038
+[ 4864.103265] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 34 val=0xffc70038
+[ 4864.154306] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 35 val=0xffc70038
+[ 4864.205354] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 36 val=0xffc70038
+[ 4864.256353] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 37 val=0xffc70038
+[ 4864.307334] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 38 val=0xffc70038
+[ 4864.358295] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 39 val=0xffc70038
+[ 4864.409313] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 40 val=0xffc70038
+[ 4864.460344] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 41 val=0xffc70038
+[ 4864.512353] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 42 val=0xffc70038
+[ 4864.564236] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 43 val=0xffc70038
+[ 4864.615283] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 44 val=0xffc70038
+[ 4864.666342] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 45 val=0xffc70038
+[ 4864.717255] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 46 val=0xffc70038
+[ 4864.768345] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 47 val=0xffc70038
+[ 4864.819337] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 48 val=0xffc70038
+[ 4864.870312] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 49 val=0xffc70038
+[ 4864.921327] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 50 val=0xffc70038
+[ 4864.972304] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 51 val=0xffc70038
+[ 4865.023291] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 52 val=0xffc70038
+[ 4865.074271] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 53 val=0xffc70038
+[ 4865.125317] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 54 val=0xffc70038
+[ 4865.176317] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 55 val=0xffc70038
+[ 4865.227299] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 56 val=0xffc70038
+[ 4865.278252] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 57 val=0xffc70038
+[ 4865.329224] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 58 val=0xffc70038
+[ 4865.380287] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 59 val=0xffc70038
+[ 4865.431226] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 60 val=0xffc70038
+[ 4865.482243] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 61 val=0xffc70038
+[ 4865.533301] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 62 val=0xffc70038
+[ 4865.584254] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 63 val=0xffc70038
+[ 4865.635245] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 64 val=0xffc70038
+[ 4865.686295] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 65 val=0xffc70038
+[ 4865.737310] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 66 val=0xffc70038
+[ 4865.788285] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 67 val=0xffc70038
+[ 4865.839270] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 68 val=0xffc70038
+[ 4865.890228] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 69 val=0xffc70038
+[ 4865.941265] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 70 val=0xffc70038
+[ 4865.992232] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 71 val=0xffc70038
+[ 4866.043281] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 72 val=0xffc70038
+[ 4866.094162] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 73 val=0xffc70038
+[ 4866.145302] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 74 val=0xffc70038
+[ 4866.196223] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 75 val=0xffc70038
+[ 4866.247221] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 76 val=0xffc70038
+[ 4866.298161] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 77 val=0xffc70038
+[ 4866.350165] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 78 val=0xffc70038
+[ 4866.401217] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 79 val=0xffc70038
+[ 4866.452214] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 80 val=0xffc70038
+[ 4866.503213] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 81 val=0xffc70038
+[ 4866.554208] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 82 val=0xffc70038
+[ 4866.605253] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 83 val=0xffc70038
+[ 4866.656275] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 84 val=0xffc70038
+[ 4866.707161] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 85 val=0xffc70038
+[ 4866.758189] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 86 val=0xffc70038
+[ 4866.809159] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 87 val=0xffc70038
+[ 4866.860213] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 88 val=0xffc70038
+[ 4866.911229] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 89 val=0xffc70038
+[ 4866.962258] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 90 val=0xffc70038
+[ 4867.013192] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 91 val=0xffc70038
+[ 4867.064241] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 92 val=0xffc70038
+[ 4867.115186] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 93 val=0xffc70038
+[ 4867.166235] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 94 val=0xffc70038
+[ 4867.217230] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 95 val=0xffc70038
+[ 4867.268148] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 96 val=0xffc70038
+[ 4867.319214] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 97 val=0xffc70038
+[ 4867.370210] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 98 val=0xffc70038
+[ 4867.421180] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 99 val=0xffc70038
+[ 4867.472177] brcmfmac 0000:03:00.0: BCM4360 test.38: wait iter 100 val=0xffc70038
+[ 4867.472231] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: BCM4360 test.38: FW timeout — did not write sharedram ptr in 5s
+[ 4867.472300] brcmfmac 0000:03:00.0: BCM4360 test.38 post-timeout: clk_ctl_st=0x00050042 res_state=0x0000013f HT=NO
+[ 4867.472314] brcmfmac 0000:03:00.0: BCM4360 test.38 post-timeout: ARM_CR4=UP PCIE2=UP
+[ 4867.472318] brcmfmac 0000:03:00.0: BCM4360 test.38 post-timeout: TCM[0x0000]=0xb80ef000
+[ 4867.472321] brcmfmac 0000:03:00.0: BCM4360 test.38 post-timeout: TCM[0x0004]=0xb82ef000
+[ 4867.472325] brcmfmac 0000:03:00.0: BCM4360 test.38 post-timeout: TCM[0x0008]=0xb839f000
+[ 4867.472328] brcmfmac 0000:03:00.0: BCM4360 test.38 post-timeout: TCM[0x000c]=0xb844f000
+[ 4867.472331] brcmfmac 0000:03:00.0: BCM4360 test.38 post-timeout: TCM[0x9fff8]=0x0000373d
+[ 4867.472334] brcmfmac 0000:03:00.0: BCM4360 test.38 post-timeout: TCM[0x9fffc]=0xffc70038
+[ 4867.472336] brcmfmac 0000:03:00.0: brcmf_pcie_setup: Dongle setup failed
+[ 4867.474179] ieee80211 phy11: brcmf_fw_crashed: Firmware has halted or crashed
+[ 4867.485138] brcmfmac 0000:03:00.0: BCM4360 EFI state: clk_ctl_st=0x00050042 min_res=0x0000013f max_res=0x0000013f res_state=0x0000013f
+[ 4867.485147] brcmfmac 0000:03:00.0: BCM4360 EFI PMU: pmustatus=0x0000002a pmucontrol=0x01770381
+[ 4867.485149] brcmfmac 0000:03:00.0: BCM4360: skipping watchdog reset, no PMU writes (test.11 safe baseline)
+
+=== Module state ===
+brcmfmac_wcc           12288  0
+brcmfmac              430080  1 brcmfmac_wcc
+brcmutil               16384  1 brcmfmac
+cfg80211             1413120  6 mt76,mt76x02_lib,brcmfmac,mac80211,mt76x02_usb,mt76x2_common
+
+*** test.38: PC SURVIVED stage=0! ***
+Log saved to /home/kimptoc/bcm4360-re/phase5/work/../logs/test.38.stage0
