@@ -81,6 +81,13 @@ static int bcm4360_skip_arm;
 module_param(bcm4360_skip_arm, int, 0644);
 MODULE_PARM_DESC(bcm4360_skip_arm, "BCM4360: skip ARM release (1=skip, 0=normal)");
 
+/* BCM4360 debug: test.19 — release ARM from reset but keep CPUHALT set.
+ * Isolates whether crash comes from reset-clear itself (hardware/link event)
+ * or from ARM executing firmware code. */
+static int bcm4360_halt_only;
+module_param(bcm4360_halt_only, int, 0644);
+MODULE_PARM_DESC(bcm4360_halt_only, "BCM4360: clear reset but keep CPUHALT (1=halt, 0=normal)");
+
 /* per-board firmware binaries */
 MODULE_FIRMWARE(BRCMF_FW_DEFAULT_PATH "brcmfmac*-pcie.*.bin");
 MODULE_FIRMWARE(BRCMF_FW_DEFAULT_PATH "brcmfmac*-pcie.*.clm_blob");
@@ -131,6 +138,9 @@ static const struct brcmf_firmware_mapping brcmf_pcie_fwnames[] = {
 
 #define BRCMF_PCIE_ARMCR4REG_BANKIDX		0x40
 #define BRCMF_PCIE_ARMCR4REG_BANKPDA		0x4C
+
+/* ARM CR4 IOCTL flags (from chip.c, needed for test.19 halt_only) */
+#define ARMCR4_BCMA_IOCTL_CPUHALT		0x0020
 
 #define BRCMF_PCIE_REG_INTSTATUS		0x90
 #define BRCMF_PCIE_REG_INTMASK			0x94
@@ -809,6 +819,33 @@ static int brcmf_pcie_exit_download_state(struct brcmf_pciedev_info *devinfo,
 		core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_INTERNAL_MEM);
 		if (core)
 			brcmf_chip_resetcore(core, 0, 0, 0);
+	}
+
+	/* test.19: clear ARM reset but keep CPUHALT set.
+	 * ARM core leaves reset state (electrically active) but cannot
+	 * execute instructions. Discriminates hardware reset event vs
+	 * firmware execution as crash cause.
+	 */
+	if (bcm4360_halt_only &&
+	    devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 test.19: halt_only mode — writing reset vector, clearing reset with CPUHALT\n");
+		/* Write reset vector to TCM[0] (same as activate callback) */
+		brcmf_pcie_write_tcm32(devinfo, 0, resetintr);
+		/* Reset ARM CR4 core with CPUHALT kept in postreset.
+		 * Normal: resetcore(core, CPUHALT, 0, 0) → postreset=0 → ARM runs
+		 * test.19: resetcore(core, CPUHALT, 0, CPUHALT) → postreset=CPUHALT → ARM halted
+		 */
+		core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_ARM_CR4);
+		if (!core)
+			return -EIO;
+		brcmf_chip_resetcore(core, ARMCR4_BCMA_IOCTL_CPUHALT, 0,
+				     ARMCR4_BCMA_IOCTL_CPUHALT);
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 test.19: ARM CR4 out of reset, CPUHALT set — ARM NOT executing\n");
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 test.19: if PC survives, crash is from firmware execution\n");
+		return 0;
 	}
 
 	if (!brcmf_chip_set_active(devinfo->ci, resetintr))
