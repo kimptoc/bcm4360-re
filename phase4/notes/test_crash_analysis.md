@@ -914,15 +914,37 @@ The repeated crash/reboot cycle with diminishing returns matches the "repeating
 power/reset experiments without new outcomes" warning sign. The SROM write
 test is the last hypothesis to test before moving on.
 
-### Recommendation
+### Recommendations for closing Phase 4
+
+#### Remaining Phase 4 work (crash mitigation)
 
 1. **One more attempt**: Run test.sh 3 immediately after boot (skip 10s delay).
    If SROM write results are captured, document them and close Phase 4.
 2. **If crashes continue**: Accept that the hardware instability is a blocking
-   issue for this specific machine. Document findings and move to Phase 5
-   using a different approach (brcmfmac with proper NVRAM, or firmware
-   patching on a more stable platform).
-3. **Consider brcmfmac path**: Since we confirmed the firmware is PCI-CDC
-   FullMAC, the standard brcmfmac driver should work IF we provide correct
-   SROM/NVRAM data. This could be tested by creating a platform NVRAM file
-   and loading brcmfmac instead of our test module.
+   issue for this specific machine. Document findings and move to Phase 5.
+3. **Physical intervention**: Try removing the BCM4360 mini-PCIe card to
+   confirm it's the crash source. If stable without it, the card itself is
+   electrically unstable. Try cold power cycle (30s+ unplug) to fully reset
+   PCIe link state.
+4. **Different kernel**: Try Linux 6.6.x LTS (NixOS 24.05 default) — the
+   crash may be kernel-version-specific.
+
+#### Phase 5 approaches (post Phase 4)
+
+1. **brcmfmac with NVRAM**: Since we confirmed the firmware is PCI-CDC
+   FullMAC (RTE 6.30.223), the standard `brcmfmac` kernel driver should be
+   able to drive it. The key missing piece is SROM/NVRAM board data. Phase 5
+   would create a platform NVRAM file (`brcmfmac4360-pcie.txt`) with the
+   correct boardtype (0x0552), subsystem IDs (106b:0112), antenna config,
+   and calibration data — then load brcmfmac instead of our test module.
+   This sidesteps our test module's crash issues entirely.
+
+2. **Firmware binary patching**: Patch the boardtype check in the firmware
+   binary at TCM near 0x4751C (where "Unsupported Broadcom board type" lives).
+   NOP the comparison or hardcode a valid boardtype. This is more invasive
+   but would work even if SROM/NVRAM data can't be provided correctly.
+
+3. **SROM write before firmware boot**: If the SROM write test (PCIe+0x800)
+   shows that boardtype can be written and read back, a minimal module could
+   write SROM data and then let brcmfmac take over the device. This combines
+   our Phase 4 SROM research with the brcmfmac driver path.
