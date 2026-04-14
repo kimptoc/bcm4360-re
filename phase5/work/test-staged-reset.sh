@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.35: NO pci_set_master, NO MSI — isolate crash-prevention variable
+# Phase 5.2 test.36: backplane core state check before ARM release
 #
-# test.35 SURVIVED: val=0xffc70038 all 100 iters, FW silent. MSI irrelevant.
-# CONFOUND: test.29 (crash) had IOMMU group 6 + no pci_set_master.
-#           tests.33/34 (survived) had IOMMU group 8 + pci_set_master.
-# test.35: remove pci_set_master/MSI on current hardware (IOMMU group 8).
-# If crash → pci_set_master was protective. If survive → IOMMU group 8 is protective.
+# test.35 SURVIVED: IOMMU group 8 is crash-protective. ARM CR4 iscoreup=YES
+# but HT=NO and res_state unchanged — ARM executed but hung before PMU code.
+# Hypothesis: PCIE2 core is DOWN when ARM releases → AXI stall on first access.
+# test.36: log iscoreup() for PCIE2, D11, IMEM before ARM release.
+# If PCIE2=DOWN → AXI stall hypothesis confirmed.
 # MAY CRASH the PC.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
@@ -20,14 +20,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.35.stage${STAGE}"
+LOG="$LOG_DIR/test.36.stage${STAGE}"
 
-echo "=== test.35: Intact NVRAM + pci_set_master before ARM — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.36: Backplane core state check before ARM release — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: NO pci_set_master, NO MSI; NVRAM intact; -ENODEV on timeout; MAY CRASH PC" | tee -a "$LOG" ;;
+    0) echo "Stage 0: NO pci_set_master, NO MSI; NVRAM intact; -ENODEV on timeout; PCIE2/D11/IMEM core state logged" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -75,7 +75,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.36 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -97,5 +97,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "*** test.36: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
 echo "Log saved to $LOG" | tee -a "$LOG"

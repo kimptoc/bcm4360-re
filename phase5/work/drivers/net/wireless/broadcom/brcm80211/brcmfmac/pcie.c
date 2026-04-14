@@ -1830,24 +1830,21 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 "BCM4360 debug: sharedram marker before ARM release = 0x%08x\n",
 		 sharedram_addr_written);
 
-	/* test.35: isolate pci_set_master vs IOMMU group as crash-prevention factor.
+	/* test.36: check backplane core states before ARM release.
 	 *
-	 * test.34 result: PC survived, val=0xffc70038 all 100 iters — FW silent.
-	 * MSI before ARM release made no difference vs test.33.
+	 * test.35 result: PC survived (IOMMU group 8 is crash-protective factor).
+	 * ARM CR4 iscoreup=YES but HT=NO and res_state unchanged — ARM starts
+	 * executing but never reaches PMU clock-request code.
 	 *
-	 * CONFOUND: test.29 (crash) had IOMMU group 6, no pci_set_master.
-	 *           tests.33/34 (survived) had IOMMU group 8, with pci_set_master.
-	 *           PCIe remove+rescan between test.29 and test.30 changed BOTH.
-	 *           Cannot tell which variable prevented the crash.
+	 * Hypothesis: ARM firmware's early init accesses the PCIE2 backplane core.
+	 * If PCIE2 is not "up" (in reset or without clock), ARM's first AXI access
+	 * causes a backplane stall → ARM hangs forever. This exactly matches:
+	 *   iscoreup=YES  (ARM was released from reset)
+	 *   HT=NO         (never reached PMU code to request HT clocks)
+	 *   res_state unchanged (no PMU resource transitions)
 	 *
-	 * test.35: remove pci_set_master AND pci_enable_msi (back to test.29
-	 * baseline conditions) but run on current hardware (IOMMU group 8, IRQ 18).
-	 * Disambiguates:
-	 *   crash → pci_set_master was the protective factor
-	 *   survive, FW silent → IOMMU group 8 is the protective factor
-	 *   survive, FW writes pcie_shared → pci_set_master was suppressing FW
-	 *
-	 * Add post-timeout diagnostics to see if ARM executed at all.
+	 * test.36: log iscoreup() for PCIE2, D11, and INTERNAL_MEM before releasing
+	 * the ARM. If PCIE2=DOWN → AXI stall hypothesis confirmed.
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		/* Read-only: log PMU/HT state just before ARM release */
@@ -1890,13 +1887,23 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			return -ENODEV; /* clean abort, no crash */
 		}
 
-		/* test.35: NO pci_set_master, NO MSI — back to test.29 baseline
-		 * conditions on current hardware (IOMMU group 8, IRQ 18).
-		 * NVRAM intact. May crash PC if pci_set_master was protective.
+		/* test.36: log backplane core states before ARM release.
+		 * If PCIE2=DOWN, ARM's first access to it causes an AXI stall.
 		 */
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.35: NO pci_set_master, NO MSI; NVRAM intact, sentinel=0x%08x\n",
-			 sharedram_addr_written);
+		{
+			struct brcmf_core *pcie2_core, *d11_core, *imem_core;
+
+			pcie2_core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_PCIE2);
+			d11_core    = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_80211);
+			imem_core   = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_INTERNAL_MEM);
+
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.36 pre-ARM: PCIE2=%s D11=%s IMEM=%s sentinel=0x%08x\n",
+				 pcie2_core ? (brcmf_chip_iscoreup(pcie2_core) ? "UP" : "DOWN") : "NULL",
+				 d11_core   ? (brcmf_chip_iscoreup(d11_core)   ? "UP" : "DOWN") : "NULL",
+				 imem_core  ? (brcmf_chip_iscoreup(imem_core)  ? "UP" : "DOWN") : "NULL",
+				 sharedram_addr_written);
+		}
 	}
 
 	brcmf_dbg(PCIE, "Bring ARM in running state\n");
@@ -1913,7 +1920,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		/* Per-iteration log: last visible entry before any crash tells us timing */
 		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID)
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.35: wait iter %d val=0x%08x\n",
+				  "BCM4360 test.36: wait iter %d val=0x%08x\n",
 				  (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 50) - (int)loop_counter + 1,
 				  sharedram_addr);
 		sharedram_addr = brcmf_pcie_read_ram32(devinfo,
@@ -1922,34 +1929,32 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		loop_counter--;
 	}
 
-	/* test.35: On timeout, log diagnostics BEFORE returning -ENODEV.
+	/* test.36: On timeout, log diagnostics BEFORE returning -ENODEV.
 	 * These reads tell us if ARM executed even when FW didn't write pcie_shared.
 	 */
 	if (sharedram_addr == sharedram_addr_written) {
-		struct brcmf_core *arm_core;
+		struct brcmf_core *arm_core, *pcie2_core;
 		u32 i, tcm_val;
 
-		brcmf_err(bus, "BCM4360 test.35: FW timeout — did not write sharedram ptr in 5s\n");
+		brcmf_err(bus, "BCM4360 test.36: FW timeout — did not write sharedram ptr in 5s\n");
 
 		/* Diagnostic 1: clk_ctl_st after ARM release. If HT=YES, ARM ran and
 		 * initialized clocks. Before ARM release, HT=NO (clk_ctl_st=0x00050040).
 		 */
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.35 post-timeout: clk_ctl_st=0x%08x res_state=0x%08x HT=%s\n",
+			 "BCM4360 test.36 post-timeout: clk_ctl_st=0x%08x res_state=0x%08x HT=%s\n",
 			 READCC32(devinfo, clk_ctl_st),
 			 READCC32(devinfo, res_state),
 			 (READCC32(devinfo, clk_ctl_st) & 0x20000) ? "YES" : "NO");
 
-		/* Diagnostic 2: is the ARM CR4 core still up? If iscoreup returns true,
-		 * ARM is running (not in reset). If false, ARM halted or reset.
-		 */
-		arm_core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_ARM_CR4);
-		if (arm_core) {
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.35 post-timeout: ARM CR4 iscoreup=%s\n",
-				 brcmf_chip_iscoreup(arm_core) ? "YES" : "NO");
-		}
+		/* Diagnostic 2: ARM CR4 and PCIE2 core states after timeout */
+		arm_core   = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_ARM_CR4);
+		pcie2_core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_PCIE2);
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 test.36 post-timeout: ARM_CR4=%s PCIE2=%s\n",
+			 arm_core   ? (brcmf_chip_iscoreup(arm_core)   ? "UP" : "DOWN") : "NULL",
+			 pcie2_core ? (brcmf_chip_iscoreup(pcie2_core) ? "UP" : "DOWN") : "NULL");
 
 		/* Diagnostic 3: read TCM[0..15] — if ARM ran, it may have modified
 		 * these early init bytes vs what the driver wrote during FW download.
@@ -1957,14 +1962,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		for (i = 0; i < 16; i += 4) {
 			tcm_val = brcmf_pcie_read_ram32(devinfo, i);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.35 post-timeout: TCM[0x%04x]=0x%08x\n",
+				 "BCM4360 test.36 post-timeout: TCM[0x%04x]=0x%08x\n",
 				 i, tcm_val);
 		}
 		/* Also read TCM[ramsize-8..ramsize-1] to check NVRAM area */
 		for (i = devinfo->ci->ramsize - 8; i < devinfo->ci->ramsize; i += 4) {
 			tcm_val = brcmf_pcie_read_ram32(devinfo, i);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.35 post-timeout: TCM[0x%05x]=0x%08x\n",
+				 "BCM4360 test.36 post-timeout: TCM[0x%05x]=0x%08x\n",
 				 i, tcm_val);
 		}
 
@@ -1974,7 +1979,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	/* Firmware initialized: log the detected shared pointer */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.35: FW init detected! sharedram_addr=0x%08x\n",
+			 "BCM4360 test.36: FW init detected! sharedram_addr=0x%08x\n",
 			 sharedram_addr);
 	}
 
