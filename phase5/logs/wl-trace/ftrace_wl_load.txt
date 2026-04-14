@@ -1,0 +1,112 @@
+# tracer: function_graph
+#
+# CPU  DURATION                  FUNCTION CALLS
+# |     |   |                     |   |   |   |
+ 1)               |  pci_enable_device() {
+ 1)               |    pci_enable_device_flags() {
+ 1) + 33.995 us   |      pci_bus_read_config_word();
+ 1)   1.423 us    |      pci_bus_read_config_word();
+ 1) + 33.614 us   |      pci_bus_read_config_byte();
+ 1)   2.059 us    |      pci_bus_read_config_word();
+ 1) ! 132.414 us  |    }
+ 1) ! 134.699 us  |  }
+ 1)               |  pci_set_master() {
+ 1)   1.425 us    |    pci_bus_read_config_word();
+ 1)   1.863 us    |  }
+ 1)   1.897 us    |  pci_bus_read_config_dword();
+ 1) + 33.491 us   |  pci_bus_read_config_dword();
+ 1)   2.020 us    |  pci_bus_read_config_dword();
+ 1)   2.081 us    |  pci_bus_write_config_dword();
+ 1)   2.154 us    |  pci_bus_read_config_dword();
+ 1) + 10.388 us   |  pci_bus_read_config_dword();
+ 1)   3.365 us    |  pci_bus_read_config_dword();
+ 1)   1.961 us    |  pci_bus_read_config_dword();
+ 1)   1.955 us    |  pci_bus_read_config_dword();
+ 1)   2.040 us    |  pci_bus_read_config_dword();
+ 1)   2.202 us    |  pci_bus_read_config_dword();
+ 1)   1.877 us    |  pci_bus_read_config_dword();
+ 1)   2.036 us    |  pci_bus_read_config_dword();
+ 1)   2.066 us    |  pci_bus_read_config_dword();
+ 1)   2.054 us    |  pci_bus_read_config_dword();
+ 1)   2.049 us    |  pci_bus_read_config_dword();
+ 1)   2.080 us    |  pci_bus_write_config_dword();
+ 1)   2.079 us    |  pci_bus_read_config_dword();
+ 1)   1.942 us    |  pci_bus_write_config_dword();
+ 1)   2.134 us    |  pci_bus_read_config_dword();
+ 1)   2.070 us    |  pci_bus_write_config_dword();
+ 1)   2.061 us    |  pci_bus_write_config_dword();
+ 1)   2.022 us    |  pci_bus_read_config_dword();
+ 1)   1.988 us    |  pci_bus_write_config_dword();
+ 1)   2.001 us    |  pci_bus_write_config_dword();
+ 1)   2.075 us    |  pci_bus_read_config_dword();
+ 1)   2.007 us    |  pci_bus_write_config_dword();
+ 1)   2.013 us    |  pci_bus_write_config_dword();
+ 1)   2.117 us    |  pci_bus_read_config_dword();
+ 1)   2.037 us    |  pci_bus_write_config_dword();
+ 1)   2.043 us    |  pci_bus_write_config_dword();
+ 1)   2.063 us    |  pci_bus_read_config_dword();
+ 1)   2.026 us    |  pci_bus_write_config_dword();
+ 1)   2.005 us    |  pci_bus_write_config_dword();
+ 1)   2.248 us    |  pci_bus_read_config_dword();
+ 1)   1.875 us    |  pci_bus_write_config_dword();
+ 1)   1.578 us    |  pci_bus_read_config_dword();
+ 1)   2.011 us    |  pci_bus_read_config_dword();
+ 1)   2.047 us    |  pci_bus_read_config_dword();
+ 1)   1.970 us    |  pci_bus_read_config_dword();
+ 1)   2.022 us    |  pci_bus_read_config_dword();
+ 1)   3.071 us    |  pci_bus_read_config_dword();
+ 1)   1.940 us    |  pci_bus_read_config_dword();
+ 1)   2.216 us    |  pci_bus_read_config_dword();
+ 1)   1.856 us    |  pci_bus_read_config_dword();
+ 1)   2.041 us    |  pci_bus_read_config_dword();
+ 1)   1.729 us    |  pci_bus_write_config_dword();
+ 1)   1.993 us    |  pci_bus_read_config_dword();
+ 1)   1.932 us    |  pci_bus_write_config_dword();
+ 1)   2.417 us    |  pci_bus_write_config_dword();
+ 1)   1.977 us    |  pci_bus_read_config_dword();
+ 1)   2.083 us    |  pci_bus_write_config_dword();
+ 1)   1.647 us    |  pci_bus_write_config_dword();
+ 1)   1.961 us    |  pci_bus_read_config_dword();
+ 1)   2.179 us    |  pci_bus_write_config_dword();
+ 1)   3.619 us    |  pci_bus_write_config_dword();
+ 1)   1.839 us    |  pci_bus_read_config_dword();
+ 1)   2.265 us    |  pci_bus_write_config_dword();
+ 1)   2.162 us    |  pci_bus_write_config_dword();
+ 1)   2.027 us    |  pci_bus_read_config_dword();
+ 1)   1.942 us    |  pci_bus_write_config_dword();
+ 1)   1.698 us    |  pci_bus_write_config_dword();
+ 1)   2.245 us    |  pci_bus_read_config_dword();
+ 1)   1.910 us    |  pci_bus_write_config_dword();
+ 1)   2.137 us    |  pci_bus_write_config_dword();
+ 1)   2.174 us    |  pci_bus_read_config_dword();
+ 1)   2.081 us    |  pci_bus_write_config_dword();
+ 1)   4.817 us    |  pci_bus_write_config_dword();
+ 1)   1.848 us    |  pci_bus_read_config_dword();
+ 1)   1.868 us    |  pci_bus_write_config_dword();
+ 1)   1.982 us    |  pci_bus_write_config_dword();
+ 1)   2.095 us    |  pci_bus_read_config_dword();
+ 1)   1.959 us    |  pci_bus_write_config_dword();
+ 1)   1.882 us    |  pci_bus_write_config_dword();
+ 1)   2.065 us    |  pci_bus_read_config_dword();
+ 1)   1.952 us    |  pci_bus_write_config_dword();
+ 1)   2.201 us    |  pci_bus_write_config_dword();
+ 1)   2.042 us    |  pci_bus_read_config_dword();
+ 1)   1.945 us    |  pci_bus_write_config_dword();
+ 1)   3.423 us    |  pci_bus_write_config_dword();
+ 1)   1.765 us    |  pci_bus_read_config_dword();
+ 1)   2.124 us    |  pci_bus_write_config_dword();
+ 1)   2.041 us    |  pci_bus_write_config_dword();
+ 1)   1.899 us    |  pci_bus_read_config_dword();
+ 1)   2.136 us    |  pci_bus_write_config_dword();
+ 1)   1.697 us    |  pci_bus_write_config_dword();
+ 1)   2.176 us    |  pci_bus_read_config_dword();
+ 1)   2.120 us    |  pci_bus_write_config_dword();
+ 1)   2.385 us    |  pci_bus_write_config_dword();
+ 1)   1.612 us    |  pci_bus_read_config_dword();
+ 1)   2.158 us    |  pci_bus_write_config_dword();
+ 1)   3.389 us    |  pci_bus_write_config_dword();
+ 1)   1.778 us    |  pci_bus_read_config_dword();
+ 1)   2.046 us    |  pci_bus_write_config_dword();
+ 1)   2.210 us    |  pci_bus_write_config_dword();
+ 1)   1.919 us    |  pci_bus_read_config_dword();
+ 1)   2.162 us    |  pci_bus_write_config_dword();

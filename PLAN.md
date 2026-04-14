@@ -6,7 +6,7 @@ The goal is to add BCM4360 support to the Linux kernel's `brcmfmac` driver by re
 
 We have a live BCM4360 device on this machine with the `wl` driver loaded, giving us the ability to trace driver behaviour, read hardware registers, and compare against the existing `brcmfmac` codebase.
 
-## Current Status (updated 2026-04-14, post test.12b)
+## Current Status (updated 2026-04-14, post test.13)
 
 **Phases 1, 3, and 4 (partial) are complete. Phase 5 is active.**
 
@@ -18,26 +18,24 @@ firmware begins execution (`si_kattach` completes, console output visible).
 during ARM init, before reaching any protocol handshake. The immediate problem
 is not BCDC-vs-msgbuf — it's that the firmware cannot complete its own initialization.
 
-Tests 8-10 all crashed the PC — the crash is NOT caused by the watchdog reset
-specifically. The crash likely occurs when firmware starts executing and interacts
-with PCIe (DMA/interrupts/register writes).
+### Crash investigation summary (tests 8-13)
 
-**Test 12a** (skip ARM release, bcm4360_skip_arm=1) confirmed firmware download
-works without crash. TCM dump verified correct vector table and code at offset 0.
-NVRAM written at 0x9ff1c. Sharedram marker unchanged (ARM never ran). This proves
-the crash is specifically caused by ARM execution, not firmware download or PCIe
-mapping.
+Tests 8-13 all crashed the PC when the ARM was released. Each test added
+progressively more PCIe "safety" measures, all of which failed to prevent the crash.
 
-**Test 12b** (comprehensive PCIe AER/SERR masking before ARM release) **crashed
-the PC**. Despite disabling SERR, all PCIe error reporting in DevCtl, masking all
-AER uncorrectable errors as non-fatal, clearing AER status, and masking errors on
-the upstream bridge/root port — the crash still occurred. No journal captured.
+**Critical discovery (post test.13):** The `wl` proprietary driver **fails to load**
+on kernel 6.12.80 ("Unpatched return thunk" error). It never initialized the BCM4360.
+So `wl` cannot be used as a reference implementation on this system.
 
-**Key insight from test.8-12b:** The crash is NOT caused by PCIe error propagation
-(AER/SERR). Even with all error reporting disabled on both device and bridge, the
-crash still occurs. The firmware's ARM execution causes a hard system crash through
-a mechanism that bypasses PCIe error handling — likely an NMI, MCE (machine check
-exception), or direct PCIe bus hang that freezes the CPU.
+**Root cause hypothesis:** Review of git history revealed that test.7 (the ONLY
+successful ARM release, no crash) had **no bus mastering disable** and no PCIe
+safety measures. The `pci_clear_master()` call was added in commit `ade69cf` AFTER
+test.7, and every test since then has crashed. When bus mastering is disabled and
+the firmware tries DMA, the PCIe root complex rejects the transaction, causing a
+fatal bus error (NMI/MCE/bus hang) that crashes the host.
+
+**test.14** strips ALL PCIe modifications and releases ARM with bus mastering
+ENABLED (default state from EFI), matching the test.7 configuration that succeeded.
 
 > **Central question: Why does the firmware ASSERT during init, and can we provide the environment it needs to complete boot?**
 

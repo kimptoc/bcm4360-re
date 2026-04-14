@@ -1864,149 +1864,26 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			return -ENODEV; /* clean abort, no crash */
 		}
 
-		/* test.13: Full PCIe isolation + early interrupt handler.
-		 * test.12b proved AER/SERR masking alone doesn't prevent crash.
-		 * Hypothesis: firmware fires an interrupt immediately on boot,
-		 * and with no handler registered, the CPU takes an unhandled
-		 * interrupt fault (NMI or MCE). Strategy:
-		 * 1. All test.12b AER/SERR masking (keep it)
-		 * 2. Disable INTx at PCI command level
-		 * 3. Register MSI interrupt handler BEFORE ARM release
-		 * 4. Disable bus mastering (prevent DMA)
+		/* test.14: MINIMAL ARM release — no PCIe modifications.
+		 * Tests 8-13 all crashed PC. Key insight: test.7 (the only
+		 * successful ARM release) had NO bus mastering disable and
+		 * NO PCIe safety measures. All "safety" code was added AFTER
+		 * test.7 and correlated perfectly with the crash onset.
+		 * Hypothesis: disabling bus mastering causes the crash, not
+		 * prevents it. When firmware tries DMA with bus mastering
+		 * disabled, the PCIe root complex rejects the transaction,
+		 * causing a fatal bus error (NMI/MCE).
+		 * test.14: release ARM with bus mastering ENABLED (default
+		 * state), no AER masking, no INTx changes — exactly like
+		 * test.7 but with better diagnostic logging.
 		 */
 		{
-			int aer;
-			u16 cmd, devctl;
-			u32 ue_sev;
-			int pcie_cap;
-			int irq_ret;
+			u16 cmd;
 
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.13: full PCIe isolation + early IRQ handler\n");
-
-			/* 1. Disable bus mastering (prevent DMA) */
-			pci_clear_master(devinfo->pdev);
-
-			/* 2. Disable SERR + disable INTx in PCI command register */
 			pci_read_config_word(devinfo->pdev, PCI_COMMAND, &cmd);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.13: PCI_COMMAND before=0x%04x\n", cmd);
-			cmd &= ~PCI_COMMAND_SERR;
-			cmd |= PCI_COMMAND_INTX_DISABLE; /* disable legacy INTx */
-			pci_write_config_word(devinfo->pdev, PCI_COMMAND, cmd);
-
-			/* 3. Disable PCIe error reporting in DevCtl */
-			pcie_cap = pci_find_capability(devinfo->pdev, PCI_CAP_ID_EXP);
-			if (pcie_cap) {
-				pci_read_config_word(devinfo->pdev,
-						     pcie_cap + PCI_EXP_DEVCTL,
-						     &devctl);
-				dev_info(&devinfo->pdev->dev,
-					 "BCM4360 test.13: DevCtl before=0x%04x\n",
-					 devctl);
-				devctl &= ~(PCI_EXP_DEVCTL_CERE |
-					    PCI_EXP_DEVCTL_NFERE |
-					    PCI_EXP_DEVCTL_FERE |
-					    PCI_EXP_DEVCTL_URRE);
-				pci_write_config_word(devinfo->pdev,
-						      pcie_cap + PCI_EXP_DEVCTL,
-						      devctl);
-			}
-
-			/* 4. Mask all AER uncorrectable errors as non-fatal */
-			aer = pci_find_ext_capability(devinfo->pdev,
-						      PCI_EXT_CAP_ID_ERR);
-			if (aer) {
-				pci_read_config_dword(devinfo->pdev,
-						      aer + PCI_ERR_UNCOR_STATUS,
-						      &ue_sev);
-				dev_info(&devinfo->pdev->dev,
-					 "BCM4360 test.13: AER UESta=0x%08x (clearing)\n",
-					 ue_sev);
-				pci_write_config_dword(devinfo->pdev,
-						       aer + PCI_ERR_UNCOR_STATUS,
-						       ue_sev);
-				pci_read_config_dword(devinfo->pdev,
-						      aer + PCI_ERR_UNCOR_SEVER,
-						      &ue_sev);
-				dev_info(&devinfo->pdev->dev,
-					 "BCM4360 test.13: AER UESvrt before=0x%08x\n",
-					 ue_sev);
-				pci_write_config_dword(devinfo->pdev,
-						       aer + PCI_ERR_UNCOR_SEVER,
-						       0);
-				pci_read_config_dword(devinfo->pdev,
-						      aer + PCI_ERR_COR_STATUS,
-						      &ue_sev);
-				pci_write_config_dword(devinfo->pdev,
-						       aer + PCI_ERR_COR_STATUS,
-						       ue_sev);
-			}
-
-			/* 5. Mask errors on upstream bridge/root port */
-			if (devinfo->pdev->bus && devinfo->pdev->bus->self) {
-				struct pci_dev *bridge = devinfo->pdev->bus->self;
-				int bridge_aer;
-
-				bridge_aer = pci_find_ext_capability(bridge,
-								     PCI_EXT_CAP_ID_ERR);
-				if (bridge_aer) {
-					dev_info(&devinfo->pdev->dev,
-						 "BCM4360 test.13: masking bridge AER+root errors\n");
-					pci_write_config_dword(bridge,
-							       bridge_aer + PCI_ERR_ROOT_COMMAND,
-							       0);
-					/* Clear bridge uncorrectable error status */
-					pci_read_config_dword(bridge,
-							      bridge_aer + PCI_ERR_UNCOR_STATUS,
-							      &ue_sev);
-					pci_write_config_dword(bridge,
-							       bridge_aer + PCI_ERR_UNCOR_STATUS,
-							       ue_sev);
-					/* Zero bridge severity too */
-					pci_write_config_dword(bridge,
-							       bridge_aer + PCI_ERR_UNCOR_SEVER,
-							       0);
-				}
-
-				pci_read_config_word(bridge, PCI_BRIDGE_CONTROL,
-						     &cmd);
-				cmd &= ~PCI_BRIDGE_CTL_SERR;
-				pci_write_config_word(bridge, PCI_BRIDGE_CONTROL,
-						      cmd);
-			}
-
-			/* 6. Register early MSI interrupt handler BEFORE ARM release.
-			 * The firmware may fire an interrupt immediately on boot.
-			 * Without a handler, the CPU takes an unhandled interrupt
-			 * which can cause NMI/MCE/crash. */
-			pci_enable_msi(devinfo->pdev);
-			irq_ret = request_irq(devinfo->pdev->irq,
-					      brcmf_pcie_quick_check_isr,
-					      IRQF_SHARED,
-					      "brcmf_pcie_early", devinfo);
-			if (irq_ret) {
-				dev_warn(&devinfo->pdev->dev,
-					 "BCM4360 test.13: early IRQ request failed (%d), trying without MSI\n",
-					 irq_ret);
-				pci_disable_msi(devinfo->pdev);
-				/* Try legacy IRQ */
-				irq_ret = request_irq(devinfo->pdev->irq,
-						      brcmf_pcie_quick_check_isr,
-						      IRQF_SHARED,
-						      "brcmf_pcie_early", devinfo);
-				if (irq_ret)
-					dev_warn(&devinfo->pdev->dev,
-						 "BCM4360 test.13: legacy IRQ also failed (%d)\n",
-						 irq_ret);
-			}
-			if (!irq_ret)
-				dev_info(&devinfo->pdev->dev,
-					 "BCM4360 test.13: early IRQ %d registered OK\n",
-					 devinfo->pdev->irq);
-
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.13: PCIe isolation applied — releasing ARM\n");
+				 "BCM4360 test.14: PCI_COMMAND=0x%04x (bus_master=%s) — releasing ARM as-is\n",
+				 cmd, (cmd & PCI_COMMAND_MASTER) ? "ON" : "OFF");
 		}
 	}
 
@@ -2027,14 +1904,17 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		loop_counter--;
 	}
 
-	/* Post-FW-wait diagnostics and cleanup for BCM4360 */
+	/* Post-FW-wait diagnostics for BCM4360 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		u32 aer_status;
 		int aer;
+		u16 cmd;
 
-		/* If we got here, the ARM release didn't crash! Log everything */
+		/* If we got here, the ARM release didn't crash! */
+		pci_read_config_word(devinfo->pdev, PCI_COMMAND, &cmd);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.13: survived ARM release! Checking AER state...\n");
+			 "BCM4360 test.14: survived ARM release! PCI_COMMAND=0x%04x\n",
+			 cmd);
 
 		aer = pci_find_ext_capability(devinfo->pdev,
 					      PCI_EXT_CAP_ID_ERR);
@@ -2043,27 +1923,15 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					      aer + PCI_ERR_UNCOR_STATUS,
 					      &aer_status);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.13: AER UESta after FW wait=0x%08x\n",
+				 "BCM4360 test.14: AER UESta after FW wait=0x%08x\n",
 				 aer_status);
 			pci_read_config_dword(devinfo->pdev,
 					      aer + PCI_ERR_COR_STATUS,
 					      &aer_status);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.13: AER CESta after FW wait=0x%08x\n",
+				 "BCM4360 test.14: AER CESta after FW wait=0x%08x\n",
 				 aer_status);
 		}
-
-		/* Free early IRQ handler, re-enable bus mastering */
-		if (devinfo->pdev->irq) {
-			free_irq(devinfo->pdev->irq, devinfo);
-			pci_disable_msi(devinfo->pdev);
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.13: early IRQ freed\n");
-		}
-
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 debug: re-enabling bus mastering after FW wait\n");
-		pci_set_master(devinfo->pdev);
 	}
 
 	if (sharedram_addr == sharedram_addr_written) {

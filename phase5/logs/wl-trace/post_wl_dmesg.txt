@@ -1,0 +1,50 @@
+[  628.993277] wl: loading out-of-tree module taints kernel.
+[  628.993286] wl: module license 'MIXED/Proprietary' taints kernel.
+[  628.993288] Disabling lock debugging due to kernel taint
+[  628.993290] wl: module license taints kernel.
+[  629.001031] You are using the Broadcom STA wireless driver, which is not maintained and is incompatible with Linux kernel security mitigations. It is heavily recommended to replace the hardware and remove the driver. Proceed at your own risk!
+[  629.001034] ------------[ cut here ]------------
+[  629.001036] Unpatched return thunk in use. This should not happen!
+[  629.001038] WARNING: CPU: 1 PID: 2063 at arch/x86/kernel/cpu/bugs.c:3484 __warn_thunk+0x2c/0x40
+[  629.001044] Modules linked in: wl(PO+) ccm af_packet btusb btrtl btintel btbcm btmtk bluetooth ecdh_generic ecc mt76x2u mt76x2_common mt76x02_usb mt76_usb mt76x02_lib mt76 mac80211 joydev cfg80211 libarc4 mousedev input_leds bcm5974 rfkill apple_mfi_fastcharge uas snd_hda_codec_hdmi ofpart cmdlinepart spi_nor intel_rapl_msr intel_rapl_common mtd x86_pkg_temp_thermal intel_powerclamp coretemp crct10dif_pclmul crc32_pclmul polyval_clmulni polyval_generic ghash_clmulni_intel sha512_ssse3 sha256_ssse3 sha1_ssse3 aesni_intel gf128mul crypto_simd cryptd iTCO_wdt spi_intel_platform rapl intel_pmc_bxt intel_cstate watchdog spi_intel mei_pxp mei_hdcp evdev mac_hid applesmc intel_uncore i915 snd_hda_codec_cirrus snd_hda_codec_generic nls_iso8859_1 thunderbolt nls_cp437 efi_pstore i2c_i801 vfat i2c_smbus lpc_ich i2c_mux fat sbs mei_me snd_hda_intel mei snd_intel_dspcfg snd_intel_sdw_acpi snd_hda_codec drm_buddy snd_hda_core ttm snd_hwdep sbshc acpi_als snd_pcm drm_display_helper rtc_cmos industrialio_triggered_buffer kfifo_buf
+[  629.001096]  cec snd_timer industrialio snd intel_gtt i2c_algo_bit video tiny_power_button wmi ac soundcore button xt_conntrack nf_conntrack nf_defrag_ipv6 nf_defrag_ipv4 ip6t_rpfilter ipt_rpfilter xt_pkttype xt_LOG nf_log_syslog xt_tcpudp nft_compat x_tables nf_tables libcrc32c sch_fq_codel msr loop kvm_intel kvm irqbypass atkbd libps2 serio vivaldi_fmap nfnetlink efivarfs dmi_sysfs autofs4 ext4 crc32c_generic crc16 mbcache jbd2 usb_storage hid_apple led_class hid_generic usbhid hid sd_mod ahci libahci libata scsi_mod crc32c_intel xhci_pci scsi_common xhci_hcd dm_mod dax
+[  629.001130] CPU: 1 UID: 0 PID: 2063 Comm: modprobe Tainted: P           O       6.12.80 #1-NixOS
+[  629.001133] Tainted: [P]=PROPRIETARY_MODULE, [O]=OOT_MODULE
+[  629.001134] Hardware name: Apple Inc. MacBookPro11,1/Mac-189A3D4F975D5FFC, BIOS 478.0.0.0.0 01/13/2023
+[  629.001136] RIP: 0010:__warn_thunk+0x2c/0x40
+[  629.001137] Code: 1f 00 0f 1f 44 00 00 80 3d f7 33 fd 01 00 74 05 c3 cc cc cc cc c6 05 e9 33 fd 01 01 90 48 c7 c7 18 a3 a0 94 e8 35 20 06 00 90 <0f> 0b 90 90 c3 cc cc cc cc 66 2e 0f 1f 84 00 00 00 00 00 90 90 90
+[  629.001139] RSP: 0018:ffffd327c142fc88 EFLAGS: 00010282
+[  629.001141] RAX: 0000000000000000 RBX: 0000000000000000 RCX: 0000000000000027
+[  629.001143] RDX: ffff8b7ee72a3ac8 RSI: 0000000000000001 RDI: ffff8b7ee72a3ac0
+[  629.001144] RBP: ffffd327c142fcd8 R08: 0000000000000000 R09: ffffd327c142fb18
+[  629.001145] R10: ffffffff9530d1e8 R11: 0000000000000003 R12: ffffffffc2023ba4
+[  629.001146] R13: ffffd327c142fd28 R14: ffff8b7d90a50240 R15: ffff8b7e7e074520
+[  629.001147] FS:  00007f64bd565740(0000) GS:ffff8b7ee7280000(0000) knlGS:0000000000000000
+[  629.001149] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  629.001150] CR2: 00007fffa6e4de68 CR3: 00000001ff422005 CR4: 00000000001726f0
+[  629.001152] Call Trace:
+[  629.001153]  <TASK>
+[  629.001154]  warn_thunk_thunk+0x1a/0x30
+[  629.001160]  getvar+0x20/0x70 [wl]
+[  629.001190]  ? orc_header+0x1660/0x1660 [wl]
+[  629.001214]  wl_module_init+0x27/0xb0 [wl]
+[  629.001236]  do_one_initcall+0x5b/0x310
+[  629.001240]  do_init_module+0xad/0x280
+[  629.001243]  init_module_from_file+0x86/0xc0
+[  629.001247]  idempotent_init_module+0x11e/0x310
+[  629.001250]  __x64_sys_finit_module+0x5e/0xb0
+[  629.001253]  do_syscall_64+0xb7/0x200
+[  629.001257]  entry_SYSCALL_64_after_hwframe+0x77/0x7f
+[  629.001261] RIP: 0033:0x7f64bd3208bd
+[  629.001272] Code: ff c3 66 2e 0f 1f 84 00 00 00 00 00 90 f3 0f 1e fa 48 89 f8 48 89 f7 48 89 d6 48 89 ca 4d 89 c2 4d 89 c8 4c 8b 4c 24 08 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 8b 0d 3b 85 0d 00 f7 d8 64 89 01 48
+[  629.001274] RSP: 002b:00007fffa6e50e88 EFLAGS: 00000246 ORIG_RAX: 0000000000000139
+[  629.001276] RAX: ffffffffffffffda RBX: 0000558c5990baf0 RCX: 00007f64bd3208bd
+[  629.001277] RDX: 0000000000000000 RSI: 0000558c56ea21d7 RDI: 0000000000000003
+[  629.001278] RBP: 00007fffa6e50ed0 R08: 0000000000000000 R09: 0000558c5990fab0
+[  629.001279] R10: 0000000000000000 R11: 0000000000000246 R12: 0000000000000000
+[  629.001280] R13: 0000558c56ea21d7 R14: 0000000000040000 R15: 0000558c5990bc00
+[  629.001283]  </TASK>
+[  629.001283] ---[ end trace 0000000000000000 ]---
+[  629.044080] wl driver 6.30.223.271 (r587334) failed with code 1
+[  629.044084] ERROR @wl_cfg80211_detach : 
+[  629.044086] NULL ndev->ieee80211ptr, unable to deref wl
