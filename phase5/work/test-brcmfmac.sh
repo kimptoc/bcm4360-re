@@ -70,6 +70,10 @@ fi
 echo "Loading patched brcmfmac modules..."
 dmesg -C  # Clear kernel log
 
+# Ensure dependencies are loaded
+modprobe brcmutil 2>/dev/null || true
+modprobe cfg80211 2>/dev/null || true
+
 # Load brcmfmac + vendor module (WCC = Broadcom WCC)
 insmod "$FMAC_DIR/brcmfmac.ko"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
