@@ -1830,24 +1830,20 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 "BCM4360 debug: sharedram marker before ARM release = 0x%08x\n",
 		 sharedram_addr_written);
 
-	/* test.30: zero TCM[ramsize-4] before ARM release.
+	/* test.33: intact NVRAM + pci_set_master before ARM release.
 	 *
-	 * test.29 crashed: same test.7 baseline, sharedram marker before ARM =
-	 * 0xffc70038 (stale TCM from prior run — NOT a valid pcie_shared ptr,
-	 * valid range is 0..ramsize=0xa0000). Loop ran all 100 iters (firmware
-	 * never changed the value). Crash during iter 100 msleep — firmware
-	 * triggered a PCIe link-level event ~5s after ARM release when driver
-	 * didn't respond to its mailbox.
+	 * tests.30/31/32 all zeroed TCM[ramsize-4] as a "sentinel". WRONG: that
+	 * location IS the last 4 bytes of the NVRAM written by the driver. Value
+	 * 0xffc70038 is the NVRAM length token: low16=0x0038=56 words=224 bytes,
+	 * high16=~0x0038=0xffc7. Firmware reads this token to locate NVRAM. Zeroing
+	 * it made NVRAM invisible to firmware → firmware silently failed to init →
+	 * val=0x00000000 all 100 iters in tests 30-32. Those results are invalid.
 	 *
-	 * Tests 26/27 also had 0xffc70038 pre-ARM but PASSED: firmware overwrote
-	 * it with the actual pcie_shared pointer, loop exited early, init proceeded.
-	 * Test.29: firmware either didn't run, or wrote something but we couldn't
-	 * detect it (same value already there).
-	 *
-	 * Fix: write 0 to TCM[ramsize-4] before ARM release. Any non-zero write
-	 * by the firmware will be detected. On timeout: return -ENODEV immediately
-	 * (no post-loop MMIO reads or pci_set_master — those are unreachable with
-	 * a dead/confused firmware and would trigger additional PCIe errors).
+	 * test.33: do NOT zero TCM[ramsize-4]. Leave NVRAM intact. Keep pci_set_master
+	 * before ARM release. Use original detection (compare against pre-ARM value).
+	 * Return -ENODEV immediately on timeout — no post-loop MMIO reads.
+	 * NOTE: may crash the PC (firmware boots and causes link event). That is
+	 * informative — it shows bus mastering ON is not sufficient alone.
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		/* Read-only: log PMU/HT state just before ARM release */
@@ -1890,14 +1886,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			return -ENODEV; /* clean abort, no crash */
 		}
 
-		/* test.30: zero TCM[ramsize-4] so we detect any non-zero write by FW.
-		 * Also disable bus mastering (test.7 baseline — no DMA during wait).
+		/* test.33: enable bus mastering BEFORE ARM release. Do NOT touch
+		 * TCM[ramsize-4] — that's the NVRAM length token, zeroing it kills FW.
+		 * sharedram_addr_written already holds the pre-ARM value (0xffc70038).
 		 */
-		brcmf_pcie_write_ram32(devinfo, devinfo->ci->ramsize - 4, 0);
-		sharedram_addr_written = 0; /* sentinel: any FW write is detectable */
+		pci_set_master(devinfo->pdev);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.30: zeroed TCM[ramsize-4], sentinel=0; disabling bus mastering\n");
-		pci_clear_master(devinfo->pdev);
+			 "BCM4360 test.33: pci_set_master done; NVRAM intact, sentinel=0x%08x\n",
+			 sharedram_addr_written);
 	}
 
 	brcmf_dbg(PCIE, "Bring ARM in running state\n");
@@ -1914,7 +1910,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		/* Per-iteration log: last visible entry before any crash tells us timing */
 		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID)
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.30: wait iter %d val=0x%08x\n",
+				  "BCM4360 test.33: wait iter %d val=0x%08x\n",
 				  (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 50) - (int)loop_counter + 1,
 				  sharedram_addr);
 		sharedram_addr = brcmf_pcie_read_ram32(devinfo,
@@ -1923,24 +1919,20 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		loop_counter--;
 	}
 
-	/* test.30: On timeout, return -ENODEV immediately.
-	 * Do NOT call pci_set_master or do any MMIO reads — the firmware may have
-	 * crashed or triggered a PCIe link event; any MMIO access would cause
-	 * additional fatal errors. (test.29 crashed during iter 100 msleep when
-	 * firmware killed the link ~5s after ARM release.)
+	/* test.33: On timeout (sharedram_addr unchanged from pre-ARM value), return
+	 * -ENODEV immediately. Do NOT do any MMIO reads — firmware may have crashed
+	 * or triggered a PCIe link event. (test.29 crashed during iter 100 msleep.)
 	 */
-	if (sharedram_addr == 0) {
-		brcmf_err(bus, "BCM4360 test.30: FW timeout — did not write sharedram ptr in 5s\n");
+	if (sharedram_addr == sharedram_addr_written) {
+		brcmf_err(bus, "BCM4360 test.33: FW timeout — did not write sharedram ptr in 5s\n");
 		return -ENODEV;
 	}
 
 	/* Firmware initialized: log the detected shared pointer */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.30: FW init detected! sharedram_addr=0x%08x\n",
+			 "BCM4360 test.33: FW init detected! sharedram_addr=0x%08x\n",
 			 sharedram_addr);
-		/* Re-enable bus mastering now that firmware is ready */
-		pci_set_master(devinfo->pdev);
 	}
 
 	if (sharedram_addr < devinfo->ci->rambase ||

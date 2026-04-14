@@ -1,18 +1,13 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.30: Zero TCM[ramsize-4] before ARM release
+# Phase 5.2 test.33: intact NVRAM + pci_set_master before ARM release
 #
-# test.29 crashed: test.7 baseline, sharedram marker = 0xffc70038 (stale).
-# Loop ran all 100 iters — value never changed. Crash during iter 100 msleep,
-# ~5s after ARM release. Firmware triggered PCIe link event when driver didn't
-# respond to its mailbox.
+# tests.30/31/32 all zeroed TCM[ramsize-4] = WRONG. That IS the NVRAM length
+# token (0xffc70038). Zeroing it killed firmware silently. All three tests had
+# dead firmware — results invalid.
 #
-# Tests 26/27 also had 0xffc70038 pre-ARM but PASSED: firmware overwrote it
-# with the actual pcie_shared pointer, loop exited early, init proceeded.
-# test.29: something prevented firmware from updating the value.
-#
-# test.30: write 0 to TCM[ramsize-4] before ARM release so any non-zero write
-# by firmware is detected. On timeout: return -ENODEV immediately (no MMIO
-# reads or pci_set_master that would trigger additional PCIe errors).
+# test.33: do NOT touch TCM[ramsize-4]. Keep pci_set_master before ARM release.
+# Use original detection (compare against pre-ARM value). -ENODEV on timeout.
+# MAY CRASH the PC (firmware booting + link event = informative result).
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0 (full 5000ms wait loop)
@@ -26,14 +21,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.30.stage${STAGE}"
+LOG="$LOG_DIR/test.33.stage${STAGE}"
 
-echo "=== test.30: Zero TCM[ramsize-4] before ARM release — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.33: Intact NVRAM + pci_set_master before ARM — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: TCM[ramsize-4]=0 before ARM; return -ENODEV immediately on timeout" | tee -a "$LOG" ;;
+    0) echo "Stage 0: intact NVRAM; pci_set_master before ARM; -ENODEV on timeout; may crash PC" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
