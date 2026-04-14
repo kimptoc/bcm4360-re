@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.22: Canary test — isolate what crashes module load
+# Phase 5.2 test.23: Return -ENODEV to stop probe immediately
 #
-# test.21 stage=0 crashed despite being "read-only". Need to confirm
-# our code is even reached and isolate the crashing operation.
+# test.23 stage=0 (canary + return 0) crashed — probe continues and
+# tries to talk to firmware that never started. test.12a (return error)
+# survived. This test confirms the crash is in post-exit_download_state.
 #
-# stage=0: canary — just print and return (confirms exit_download_state reached)
-# stage=1: get ARM core + print base address, return
-# stage=2: get ARM core + call iscoreup, return
-# stage=3: full chip.c coredisable + resetcore + set_active
+# stage=0: canary + return -ENODEV (probe stops — should survive)
+# stage=1: canary + return 0 (probe continues — expected crash)
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
-# Default stage is 0 (canary only)
+# Default stage is 0 (return -ENODEV)
 set -e
 
 STAGE="${1:-0}"
@@ -21,18 +20,16 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.22.stage${STAGE}"
+LOG="$LOG_DIR/test.23.stage${STAGE}"
 
-echo "=== test.22: Canary test — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.23: Canary test — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: CANARY — just print and return (confirm exit_download_state reached)" | tee -a "$LOG" ;;
-    1) echo "Stage 1: get ARM core + print base address" | tee -a "$LOG" ;;
-    2) echo "Stage 2: get ARM core + call iscoreup" | tee -a "$LOG" ;;
-    3) echo "Stage 3: full chip.c coredisable + resetcore + set_active" | tee -a "$LOG" ;;
-    *) echo "ERROR: Invalid stage $STAGE (use 0-3)" | tee -a "$LOG"; exit 1 ;;
+    0) echo "Stage 0: canary + return -ENODEV (probe stops — should survive)" | tee -a "$LOG" ;;
+    1) echo "Stage 1: canary + return 0 (probe continues — expected crash)" | tee -a "$LOG" ;;
+    *) echo "ERROR: Invalid stage $STAGE (use 0-1)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
 

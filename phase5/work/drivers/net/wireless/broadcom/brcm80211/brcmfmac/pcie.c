@@ -823,86 +823,37 @@ static int brcmf_pcie_exit_download_state(struct brcmf_pciedev_info *devinfo,
 			brcmf_chip_resetcore(core, 0, 0, 0);
 	}
 
-	/* test.22: canary test — isolate what operation crashes module load.
+	/* test.23: return -ENODEV to stop probe immediately.
 	 *
-	 * test.21 stage=0 crashed despite being "read-only". But chip
-	 * enumeration in brcmf_pcie_probe uses the same buscore_prep_addr
-	 * path many times. So either: (a) the crash isn't in our code,
-	 * (b) device state matters (post-FW-download), or (c) something
-	 * else entirely.
+	 * test.22 stage=0 (pure canary: print + return 0) crashed the PC.
+	 * test.20 stage=0 (register reads + return 0) survived.
+	 * test.12a (skip ARM release, return error) survived.
 	 *
-	 * stage=0: canary — just print and return (confirms we get here)
-	 * stage=1: get ARM core + print base address, return
-	 * stage=2: get ARM core + call iscoreup, return
-	 * stage=3: full chip.c coredisable + resetcore + set_active
+	 * Hypothesis: returning 0 lets probe continue, which tries to
+	 * communicate with firmware that was never started. Those PCIe
+	 * transactions to uninitialized device memory crash the host.
+	 *
+	 * stage=0: canary + return -ENODEV (probe stops immediately)
+	 * stage=1: same as stage=0 but return 0 (probe continues — crash?)
+	 *
+	 * If stage=0 survives and stage=1 crashes, the crash is confirmed
+	 * to be in the post-exit_download_state probe path.
 	 */
 	if (bcm4360_reset_stage >= 0 &&
 	    devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.22: CANARY — exit_download_state reached, stage=%d\n",
+			  "BCM4360 test.23: exit_download_state reached, stage=%d\n",
 			  bcm4360_reset_stage);
 
 		if (bcm4360_reset_stage == 0) {
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.22: stage=0 done (canary only). Returning.\n");
-			return 0;
+				  "BCM4360 test.23: stage=0 — returning -ENODEV to stop probe.\n");
+			return -ENODEV;
 		}
 
-		if (bcm4360_reset_stage >= 1) {
-			struct brcmf_core *arm_core;
-
-			arm_core = brcmf_chip_get_core(devinfo->ci,
-						       BCMA_CORE_ARM_CR4);
-			if (!arm_core) {
-				dev_err(&devinfo->pdev->dev,
-					"BCM4360 test.22: ARM CR4 core not found!\n");
-				return -ENODEV;
-			}
+		if (bcm4360_reset_stage == 1) {
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.22: ARM CR4 core base=0x%08x\n",
-				  arm_core->base);
-
-			if (bcm4360_reset_stage == 1) {
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.22: stage=1 done (get_core only). Returning.\n");
-				return 0;
-			}
-
-			if (bcm4360_reset_stage >= 2) {
-				int up;
-
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.22: stage=2 about to call iscoreup\n");
-				up = brcmf_chip_iscoreup(arm_core);
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.22: stage=2 iscoreup=%d\n", up);
-
-				if (bcm4360_reset_stage == 2) {
-					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.22: stage=2 done (iscoreup only). Returning.\n");
-					return 0;
-				}
-			}
-
-			/* Stage 3: full reset sequence via chip.c */
-			brcmf_pcie_write_tcm32(devinfo, 0, resetintr);
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.22: stage=3 calling coredisable\n");
-			brcmf_chip_coredisable(arm_core, 0, 0);
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.22: stage=3 calling resetcore(CPUHALT)\n");
-			brcmf_chip_resetcore(arm_core,
-					     ARMCR4_BCMA_IOCTL_CPUHALT, 0,
-					     ARMCR4_BCMA_IOCTL_CPUHALT);
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.22: stage=3 calling set_active\n");
-			if (!brcmf_chip_set_active(devinfo->ci, resetintr)) {
-				dev_err(&devinfo->pdev->dev,
-					"BCM4360 test.22: stage=3 set_active failed\n");
-				return -EIO;
-			}
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.22: stage=3 done. PC survived.\n");
+				  "BCM4360 test.23: stage=1 — returning 0 (probe continues).\n");
 			return 0;
 		}
 	}
