@@ -75,7 +75,33 @@ correct (0x180000) but the BAR2 mapping size may not cover the full TCM range.
 
 ### Next steps
 
-1. Add debug prints to capture ramsize, rambase, and BAR2 mapping range
-2. Compare with Phase 4 findings (FW was 442KB, console at 0x96F78, shared_info
-   at 0x9D0A4 — suggesting ~640KB TCM from 0x180000 to ~0x220000)
-3. May need to add BCM4360-specific ramsize override if auto-detection fails
+1. ~~Add debug prints to capture ramsize, rambase, and BAR2 mapping range~~ ✅ done
+2. ~~Compare with Phase 4 findings~~ ✅ rambase fixed to 0
+3. ~~May need to add BCM4360-specific ramsize override if auto-detection fails~~ — TBD
+
+## Fix 1: rambase=0 (commit d872ae2)
+
+Phase 4 proved BAR2 maps TCM directly at offset 0 (no 0x180000 offset).
+Changed `brcmf_chip_tcm_rambase()` for `BRCM_CC_4360_CHIP_ID` to return 0.
+
+## Fix 2: Replace memcpy_toio with 32-bit iowrite32 writes
+
+Phase 3/4 proved BCM4360 hangs on 64-bit `rep movsq` (which x86 `memcpy_toio`
+uses). Added `brcmf_pcie_copy_mem_todev()` helper in `pcie.c` — a 32-bit
+`iowrite32` loop with trailing-byte handling.
+
+Replaced all `memcpy_toio` calls in the firmware download path:
+- Firmware data write (fw->data, ~442KB)
+- NVRAM write
+- Random seed footer write
+- Random bytes write
+
+One `memcpy_toio` remains in the msgbuf ring setup path (line ~1334) — this
+won't be reached until after ARM release, and will likely fail anyway since
+BCM4360 firmware speaks BCDC not msgbuf.
+
+### Expected test result
+
+Firmware download should complete without page fault or PCIe hang. After ARM
+release, the msgbuf handshake will timeout (BCM4360 FW speaks BCDC). That
+timeout is expected and non-fatal — it proves the firmware loaded correctly.

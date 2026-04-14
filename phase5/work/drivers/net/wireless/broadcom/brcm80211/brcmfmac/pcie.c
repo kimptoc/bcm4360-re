@@ -617,6 +617,32 @@ brcmf_pcie_copy_dev_tomem(struct brcmf_pciedev_info *devinfo, u32 mem_offset,
 }
 
 
+static void
+brcmf_pcie_copy_mem_todev(struct brcmf_pciedev_info *devinfo, u32 mem_offset,
+			  const void *srcaddr, u32 len)
+{
+	void __iomem *address = devinfo->tcm + mem_offset;
+	const __le32 *src32;
+	u32 i;
+
+	/* BCM4360 requires strict 32-bit MMIO writes — 64-bit memcpy_toio
+	 * (rep movsq on x86) hangs the PCIe bus.  Use iowrite32 for all
+	 * chips; it's correct everywhere and only marginally slower.
+	 */
+	src32 = (const __le32 *)srcaddr;
+	for (i = 0; i < len / 4; i++)
+		iowrite32(le32_to_cpu(src32[i]), address + i * 4);
+
+	/* Handle trailing bytes (NVRAM may not be 4-byte aligned) */
+	if (len & 3) {
+		u32 tmp = 0;
+
+		memcpy(&tmp, (const u8 *)srcaddr + (len & ~3u), len & 3);
+		iowrite32(tmp, address + (len & ~3u));
+	}
+}
+
+
 #define READCC32(devinfo, reg) brcmf_pcie_read_reg32(devinfo, \
 		CHIPCREGOFFS(reg))
 #define WRITECC32(devinfo, reg, value) brcmf_pcie_write_reg32(devinfo, \
@@ -1680,7 +1706,8 @@ brcmf_pcie_provide_random_bytes(struct brcmf_pciedev_info *devinfo, u32 address)
 	u8 randbuf[BRCMF_RANDOM_SEED_LENGTH];
 
 	get_random_bytes(randbuf, BRCMF_RANDOM_SEED_LENGTH);
-	memcpy_toio(devinfo->tcm + address, randbuf, BRCMF_RANDOM_SEED_LENGTH);
+	brcmf_pcie_copy_mem_todev(devinfo, address, randbuf,
+				  BRCMF_RANDOM_SEED_LENGTH);
 }
 
 static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
@@ -1705,8 +1732,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 devinfo->ci->rambase, devinfo->ci->ramsize,
 		 devinfo->ci->srsize, fw->size, devinfo->tcm);
 	brcmf_dbg(PCIE, "Download FW %s\n", devinfo->fw_name);
-	memcpy_toio(devinfo->tcm + devinfo->ci->rambase,
-		    (void *)fw->data, fw->size);
+	brcmf_pcie_copy_mem_todev(devinfo, devinfo->ci->rambase,
+				  fw->data, fw->size);
 
 	resetintr = get_unaligned_le32(fw->data);
 	release_firmware(fw);
@@ -1720,7 +1747,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		brcmf_dbg(PCIE, "Download NVRAM %s\n", devinfo->nvram_name);
 		address = devinfo->ci->rambase + devinfo->ci->ramsize -
 			  nvram_len;
-		memcpy_toio(devinfo->tcm + address, nvram, nvram_len);
+		brcmf_pcie_copy_mem_todev(devinfo, address, nvram, nvram_len);
 		brcmf_fw_nvram_free(nvram);
 
 		if (devinfo->otp.valid) {
@@ -1736,8 +1763,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			brcmf_dbg(PCIE, "Download random seed\n");
 
 			address -= sizeof(footer);
-			memcpy_toio(devinfo->tcm + address, &footer,
-				    sizeof(footer));
+			brcmf_pcie_copy_mem_todev(devinfo, address, &footer,
+						  sizeof(footer));
 
 			address -= rand_len;
 			brcmf_pcie_provide_random_bytes(devinfo, address);
