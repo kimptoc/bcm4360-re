@@ -823,128 +823,88 @@ static int brcmf_pcie_exit_download_state(struct brcmf_pciedev_info *devinfo,
 			brcmf_chip_resetcore(core, 0, 0, 0);
 	}
 
-	/* test.20: staged reset — step through resetcore register writes
-	 * one at a time to isolate which write crashes the PCIe link.
-	 * Each stage syncs to disk before the write so journal captures
-	 * exactly how far we got.
-	 */
-	/* test.21: staged reset using correct bus ops path.
+	/* test.22: canary test — isolate what operation crashes module load.
 	 *
-	 * IMPORTANT: test.20 had a BAR0 window bug — brcmf_pcie_select_core()
-	 * sets BAR0_WINDOW to core->base, but wrapper registers (IOCTL, IOST,
-	 * RESET_CTL) are at core->wrapbase. These are different addresses.
-	 * test.20 stage=1 crash was writing to a random ARM core register,
-	 * NOT the wrapper IOCTL register.
+	 * test.21 stage=0 crashed despite being "read-only". But chip
+	 * enumeration in brcmf_pcie_probe uses the same buscore_prep_addr
+	 * path many times. So either: (a) the crash isn't in our code,
+	 * (b) device state matters (post-FW-download), or (c) something
+	 * else entirely.
 	 *
-	 * test.21 uses brcmf_pcie_buscore_prep_addr() via chip ops, which
-	 * correctly sets BAR0_WINDOW for any backplane address. The stage
-	 * logic is in chip.c's brcmf_chip_ai_coredisable/resetcore.
-	 *
-	 * stage=0: read-only — dump core base, wrapbase, and wrapper regs
-	 * stage=1: coredisable only (IOCTL write + RESET_CTL set)
-	 * stage=2: coredisable + clear RESET_CTL
-	 * stage=3: full resetcore sequence
+	 * stage=0: canary — just print and return (confirms we get here)
+	 * stage=1: get ARM core + print base address, return
+	 * stage=2: get ARM core + call iscoreup, return
+	 * stage=3: full chip.c coredisable + resetcore + set_active
 	 */
 	if (bcm4360_reset_stage >= 0 &&
 	    devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-		struct brcmf_core *arm_core;
-		u32 bar0_win, ioctl_val, iost_val, resetctl_val;
-
-		arm_core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_ARM_CR4);
-		if (!arm_core) {
-			dev_err(&devinfo->pdev->dev,
-				"BCM4360 test.21: ARM CR4 core not found!\n");
-			return -ENODEV;
-		}
-
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.21: ARM CR4 core base=0x%08x\n",
-			 arm_core->base);
-
-		/* Read wrapper registers using buscore ops path.
-		 * chip.c accesses wrapbase via ops->read32(ctx, wrapbase+offset)
-		 * which calls buscore_prep_addr to set BAR0_WINDOW correctly.
-		 * We can't access wrapbase from here (it's in brcmf_core_priv),
-		 * but we CAN read BAR0_WRAPPERBASE from PCI config to see what
-		 * the current wrapper window is, and we can read BAR0_WINDOW
-		 * to compare with core->base.
-		 */
-		pci_read_config_dword(devinfo->pdev, BRCMF_PCIE_BAR0_WINDOW,
-				      &bar0_win);
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.21: current BAR0_WINDOW=0x%08x\n",
-			 bar0_win);
-
-		/* Stage 0: read-only via chip.c — just check if core is up
-		 * and dump wrapper register state through the bus ops path.
-		 * brcmf_chip_iscoreup() reads wrapbase+IOCTL and wrapbase+RESET_CTL
-		 * through the correct bus ops, which also sets BAR0_WINDOW.
-		 */
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.21 stage=0: iscoreup=%d\n",
-			 brcmf_chip_iscoreup(arm_core));
-
-		/* Now BAR0_WINDOW should be set to the wrapbase by iscoreup's
-		 * reads. Capture it so we know the wrapbase address.
-		 */
-		pci_read_config_dword(devinfo->pdev, BRCMF_PCIE_BAR0_WINDOW,
-				      &bar0_win);
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.21: after iscoreup BAR0_WINDOW=0x%08x (=wrapbase)\n",
-			 bar0_win);
-
-		/* Now read the wrapper registers directly (BAR0 window is
-		 * already set to wrapbase by iscoreup) */
-		ioctl_val = ioread32(devinfo->regs + 0x408);
-		iost_val = ioread32(devinfo->regs + 0x500);
-		resetctl_val = ioread32(devinfo->regs + 0x800);
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.21 stage=0: wrapper IOCTL=0x%08x IOST=0x%08x RESETCTL=0x%08x\n",
-			 ioctl_val, iost_val, resetctl_val);
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.22: CANARY — exit_download_state reached, stage=%d\n",
+			  bcm4360_reset_stage);
 
 		if (bcm4360_reset_stage == 0) {
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.21: stage=0 done (read-only). PC survived.\n");
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.22: stage=0 done (canary only). Returning.\n");
 			return 0;
 		}
 
-		/* Write reset vector to TCM[0] before any reset attempts */
-		brcmf_pcie_write_tcm32(devinfo, 0, resetintr);
+		if (bcm4360_reset_stage >= 1) {
+			struct brcmf_core *arm_core;
 
-		/* Stage 1: call brcmf_chip_coredisable() — this writes
-		 * IOCTL=FGC|CLK then RESET_CTL=RESET through correct path */
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.21 stage=1: calling brcmf_chip_coredisable()\n");
-		brcmf_chip_coredisable(arm_core, 0, 0);
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.21 stage=1: coredisable returned. PC survived.\n");
-		if (bcm4360_reset_stage == 1) {
+			arm_core = brcmf_chip_get_core(devinfo->ci,
+						       BCMA_CORE_ARM_CR4);
+			if (!arm_core) {
+				dev_err(&devinfo->pdev->dev,
+					"BCM4360 test.22: ARM CR4 core not found!\n");
+				return -ENODEV;
+			}
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.22: ARM CR4 core base=0x%08x\n",
+				  arm_core->base);
+
+			if (bcm4360_reset_stage == 1) {
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.22: stage=1 done (get_core only). Returning.\n");
+				return 0;
+			}
+
+			if (bcm4360_reset_stage >= 2) {
+				int up;
+
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.22: stage=2 about to call iscoreup\n");
+				up = brcmf_chip_iscoreup(arm_core);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.22: stage=2 iscoreup=%d\n", up);
+
+				if (bcm4360_reset_stage == 2) {
+					dev_emerg(&devinfo->pdev->dev,
+						  "BCM4360 test.22: stage=2 done (iscoreup only). Returning.\n");
+					return 0;
+				}
+			}
+
+			/* Stage 3: full reset sequence via chip.c */
+			brcmf_pcie_write_tcm32(devinfo, 0, resetintr);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.22: stage=3 calling coredisable\n");
+			brcmf_chip_coredisable(arm_core, 0, 0);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.22: stage=3 calling resetcore(CPUHALT)\n");
+			brcmf_chip_resetcore(arm_core,
+					     ARMCR4_BCMA_IOCTL_CPUHALT, 0,
+					     ARMCR4_BCMA_IOCTL_CPUHALT);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.22: stage=3 calling set_active\n");
+			if (!brcmf_chip_set_active(devinfo->ci, resetintr)) {
+				dev_err(&devinfo->pdev->dev,
+					"BCM4360 test.22: stage=3 set_active failed\n");
+				return -EIO;
+			}
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.22: stage=3 done. PC survived.\n");
 			return 0;
 		}
-
-		/* Stage 2: call brcmf_chip_resetcore() — full reset sequence
-		 * with CPUHALT to keep ARM stopped */
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.21 stage=2: calling brcmf_chip_resetcore(CPUHALT)\n");
-		brcmf_chip_resetcore(arm_core, ARMCR4_BCMA_IOCTL_CPUHALT, 0,
-				     ARMCR4_BCMA_IOCTL_CPUHALT);
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.21 stage=2: resetcore returned. PC survived.\n");
-		if (bcm4360_reset_stage == 2) {
-			return 0;
-		}
-
-		/* Stage 3: full set_active (normal ARM release path) */
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.21 stage=3: calling brcmf_chip_set_active()\n");
-		if (!brcmf_chip_set_active(devinfo->ci, resetintr)) {
-			dev_err(&devinfo->pdev->dev,
-				"BCM4360 test.21 stage=3: set_active failed\n");
-			return -EIO;
-		}
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.21 stage=3: set_active returned. PC survived.\n");
-		return 0;
 	}
 
 	if (!brcmf_chip_set_active(devinfo->ci, resetintr))

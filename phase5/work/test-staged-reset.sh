@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.21: Staged reset using correct bus ops path
+# Phase 5.2 test.22: Canary test — isolate what crashes module load
 #
-# test.20 had BAR0 window bug — used core->base instead of wrapbase.
-# test.21 uses chip.c functions which access wrapbase correctly.
+# test.21 stage=0 crashed despite being "read-only". Need to confirm
+# our code is even reached and isolate the crashing operation.
 #
-# stage=0: read-only — dump core base, wrapbase, wrapper regs (safe)
-# stage=1: coredisable only (IOCTL + RESET_CTL through correct path)
-# stage=2: full resetcore with CPUHALT
-# stage=3: full set_active (normal ARM release)
+# stage=0: canary — just print and return (confirms exit_download_state reached)
+# stage=1: get ARM core + print base address, return
+# stage=2: get ARM core + call iscoreup, return
+# stage=3: full chip.c coredisable + resetcore + set_active
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
-# Default stage is 0 (read-only)
+# Default stage is 0 (canary only)
 set -e
 
 STAGE="${1:-0}"
@@ -21,17 +21,17 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.21.stage${STAGE}"
+LOG="$LOG_DIR/test.22.stage${STAGE}"
 
-echo "=== test.21: Staged reset (correct bus ops) — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.22: Canary test — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: READ-ONLY — dump core base, wrapbase, wrapper regs (safe)" | tee -a "$LOG" ;;
-    1) echo "Stage 1: brcmf_chip_coredisable() — IOCTL+RESET_CTL via correct wrapbase" | tee -a "$LOG" ;;
-    2) echo "Stage 2: brcmf_chip_resetcore(CPUHALT) — full reset with ARM halted" | tee -a "$LOG" ;;
-    3) echo "Stage 3: brcmf_chip_set_active() — full ARM release" | tee -a "$LOG" ;;
+    0) echo "Stage 0: CANARY — just print and return (confirm exit_download_state reached)" | tee -a "$LOG" ;;
+    1) echo "Stage 1: get ARM core + print base address" | tee -a "$LOG" ;;
+    2) echo "Stage 2: get ARM core + call iscoreup" | tee -a "$LOG" ;;
+    3) echo "Stage 3: full chip.c coredisable + resetcore + set_active" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage $STAGE (use 0-3)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
