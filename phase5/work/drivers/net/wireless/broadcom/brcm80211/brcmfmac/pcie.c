@@ -1870,6 +1870,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		dev_info(&devinfo->pdev->dev,
 			 "BCM4360 debug: ASPM disabled, bus mastering disabled before ARM release\n");
 		pci_clear_master(devinfo->pdev);
+
+		/* Log PMU/HT state just before ARM release */
+		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 pre-ARM: clk_ctl_st=0x%08x res_state=0x%08x HT=%s\n",
+			 READCC32(devinfo, clk_ctl_st),
+			 READCC32(devinfo, res_state),
+			 (READCC32(devinfo, clk_ctl_st) & 0x20000) ? "YES" : "NO");
 	}
 
 	brcmf_dbg(PCIE, "Bring ARM in running state\n");
@@ -1903,6 +1911,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			u32 i;
 			char line[256];
 			u32 lpos = 0;
+
+			/* PMU/HT state after failure */
+			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 post-fail: clk_ctl_st=0x%08x res_state=0x%08x pmustatus=0x%08x\n",
+				 READCC32(devinfo, clk_ctl_st),
+				 READCC32(devinfo, res_state),
+				 READCC32(devinfo, pmustatus));
 
 			/* Read console text from 0x96f78 line by line.
 			 * Console log starts directly at this address
