@@ -255,7 +255,8 @@ Iterative work to stabilize early boot and diagnose the ASSERT:
 - Added TCM/console/sharedram debug dumps for firmware introspection
 - Added NVRAM debug logging
 - Disabled bus mastering before ARM release (prevents firmware DMA crash)
-- Skipped watchdog reset for BCM4360 (preserves EFI-initialized PMU/PLL state)
+- Allow watchdog reset, then re-initialize PMU resources and request HT clock
+  from the host side (set min/max resource masks, ForceHT via clk_ctl_st)
 - Disabled ASPM L0s/L1 before ARM release (prevents PCIe link interference)
 
 **Current failure mode:**
