@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.37: ForceHT before ARM release
+# Phase 5.2 test.38: direct PMU min_res_mask write before ARM release
 #
-# test.36 SURVIVED: PCIE2=UP before ARM release — AXI stall hypothesis disproved.
-# ARM CR4 UP, HT=NO, res_state unchanged after 5s. Tests 26/27 (PASS) ran on
-# warm hardware where HT was already up (retained from prior ARM execution).
-# Cold-boot: HT=NO, FW may need HT clocks to be asserted before it starts.
-# test.37: assert ForceHT (clk_ctl_st bit 1 = 0x2), poll HT_AVAIL (bit 17)
-# for 200ms, then release ARM. If FW writes sharedram → ForceHT was the key.
+# test.37 SURVIVED: ForceHT (clk_ctl_st bit 1) was accepted but PMU ignored
+# it — res_state stayed at 0x13b the entire time. HT_AVAIL never appeared.
+# ForceHT via clk_ctl_st alone does not drive the PMU resource sequencer.
+# test.38: write min_res_mask=max_res_mask (0x13f), poll res_state for
+# change (up to 500ms). If res_state changes → PMU alive, resource approach
+# is the fix. If frozen → PMU locked; watchdog reset required.
 # MAY CRASH the PC.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
@@ -21,14 +21,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.37.stage${STAGE}"
+LOG="$LOG_DIR/test.38.stage${STAGE}"
 
-echo "=== test.37: ForceHT before ARM release — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.38: PMU min_res_mask write before ARM release — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: NO pci_set_master, NO MSI; NVRAM intact; -ENODEV on timeout; ForceHT asserted before ARM release" | tee -a "$LOG" ;;
+    0) echo "Stage 0: NO pci_set_master, NO MSI; NVRAM intact; -ENODEV on timeout; min_res_mask=max_res_mask written before ARM release" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -76,7 +76,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.37 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.38 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -98,5 +98,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.37: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "*** test.38: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
 echo "Log saved to $LOG" | tee -a "$LOG"

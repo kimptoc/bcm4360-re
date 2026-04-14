@@ -1830,24 +1830,22 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 "BCM4360 debug: sharedram marker before ARM release = 0x%08x\n",
 		 sharedram_addr_written);
 
-	/* test.37: ForceHT before ARM release.
+	/* test.38: direct PMU min_res_mask write before ARM release.
 	 *
-	 * test.36 result: PCIE2=UP, D11=DOWN, IMEM=NULL. PCIE2 AXI stall disproved.
-	 * ARM is UP after release, PCIE2=UP, HT=NO, res_state unchanged after 5s.
-	 * Tests 26/27 (PASS) ran on warm hardware that had already been through ARM
-	 * execution — chip retained PMU/clock state from that run (HT was up).
-	 * Cold-boot hardware: clk_ctl_st=0x00050040, HT=NO.
+	 * test.37 result: ForceHT (clk_ctl_st bit 1) was accepted but PMU ignored
+	 * it — res_state stayed at 0x13b the entire time. HT_AVAIL never appeared.
+	 * ForceHT via clk_ctl_st alone does not drive the PMU resource sequencer.
 	 *
-	 * Hypothesis: firmware needs HT clocks available from the start.
-	 * On warm hardware (tests 26/27), HT was already up → FW ran fine.
-	 * On cold hardware, FW requests HT itself, but at ILP speed (~32kHz) the
-	 * PMU state machine takes longer than the 5s timeout allows — or the FW
-	 * stalls waiting for HT before it can proceed further.
+	 * Hypothesis: the PMU resource sequencer is alive but needs a direct
+	 * min_res_mask write to raise resources. On cold hardware, min_res=0x13b
+	 * (EFI default). max_res=0x13f (bit 2 extra). Writing min_res_mask=0x13f
+	 * should force the PMU to bring up the missing resource and trigger HT.
+	 * If res_state transitions 0x13b → 0x13f → PMU is alive, resource-based
+	 * approach is the fix. If res_state stays frozen → PMU state machine is
+	 * locked from EFI; only a watchdog reset can unblock it.
 	 *
-	 * test.37: assert ForceHT (clk_ctl_st bit 1 = 0x2) before ARM release.
-	 * Poll bit 17 (0x20000 = HT_AVAIL) for up to 200ms. Log result.
-	 * Release ARM regardless of whether HT came up.
-	 * If FW writes sharedram → ForceHT was the missing piece.
+	 * test.38: write min_res_mask=0x13f (same as max_res), poll res_state
+	 * for up to 500ms, log result, then release ARM.
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		/* Read-only: log PMU/HT state just before ARM release */
@@ -1890,41 +1888,41 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			return -ENODEV; /* clean abort, no crash */
 		}
 
-		/* test.37: assert ForceHT before ARM release, poll for HT_AVAIL. */
+		/* test.38: write min_res_mask=max_res_mask, poll res_state for change. */
 		{
-			u32 clk;
+			u32 max_res, cur_res;
 			unsigned long end_jiffies;
-			int ht_came_up = 0;
+			int res_changed = 0;
 
 			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 
-			/* Assert ForceHT request (bit 1) */
-			clk = READCC32(devinfo, clk_ctl_st);
+			max_res = READCC32(devinfo, max_res_mask);
+			cur_res = READCC32(devinfo, res_state);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.37 pre-ARM: clk_ctl_st=0x%08x res_state=0x%08x HT=%s — asserting ForceHT\n",
-				 clk,
-				 READCC32(devinfo, res_state),
-				 (clk & 0x20000) ? "YES" : "NO");
+				 "BCM4360 test.38 pre-ARM: min_res=0x%08x max_res=0x%08x res_state=0x%08x clk=0x%08x — writing min_res=max_res\n",
+				 READCC32(devinfo, min_res_mask),
+				 max_res, cur_res,
+				 READCC32(devinfo, clk_ctl_st));
 
-			WRITECC32(devinfo, clk_ctl_st, clk | 0x2); /* BCMA_CLKCTLST_FORCEHT */
+			WRITECC32(devinfo, min_res_mask, max_res);
 
-			/* Poll bit 17 (HT_AVAIL = 0x20000) for up to 200ms */
-			end_jiffies = jiffies + msecs_to_jiffies(200);
+			/* Poll res_state for up to 500ms */
+			end_jiffies = jiffies + msecs_to_jiffies(500);
 			while (time_before(jiffies, end_jiffies)) {
-				clk = READCC32(devinfo, clk_ctl_st);
-				if (clk & 0x20000) {
-					ht_came_up = 1;
+				cur_res = READCC32(devinfo, res_state);
+				if (cur_res != 0x0000013b) {
+					res_changed = 1;
 					break;
 				}
 				usleep_range(1000, 2000);
 			}
 
-			clk = READCC32(devinfo, clk_ctl_st);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.37 pre-ARM: after ForceHT poll: clk_ctl_st=0x%08x res_state=0x%08x HT_AVAIL=%s\n",
-				 clk,
+				 "BCM4360 test.38 pre-ARM: after min_res write: res_state=0x%08x clk=0x%08x HT=%s res_changed=%s\n",
 				 READCC32(devinfo, res_state),
-				 ht_came_up ? "YES" : "NO");
+				 READCC32(devinfo, clk_ctl_st),
+				 (READCC32(devinfo, clk_ctl_st) & 0x20000) ? "YES" : "NO",
+				 res_changed ? "YES" : "NO");
 		}
 	}
 
@@ -1942,7 +1940,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		/* Per-iteration log: last visible entry before any crash tells us timing */
 		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID)
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.37: wait iter %d val=0x%08x\n",
+				  "BCM4360 test.38: wait iter %d val=0x%08x\n",
 				  (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 50) - (int)loop_counter + 1,
 				  sharedram_addr);
 		sharedram_addr = brcmf_pcie_read_ram32(devinfo,
@@ -1958,14 +1956,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		struct brcmf_core *arm_core, *pcie2_core;
 		u32 i, tcm_val;
 
-		brcmf_err(bus, "BCM4360 test.37: FW timeout — did not write sharedram ptr in 5s\n");
+		brcmf_err(bus, "BCM4360 test.38: FW timeout — did not write sharedram ptr in 5s\n");
 
 		/* Diagnostic 1: clk_ctl_st after ARM release. If HT=YES, ARM ran and
-		 * initialized clocks. test.37: HT was forced before ARM — check if still up.
+		 * initialized clocks. test.38: min_res raised to max_res — check if PMU granted HT.
 		 */
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.37 post-timeout: clk_ctl_st=0x%08x res_state=0x%08x HT=%s\n",
+			 "BCM4360 test.38 post-timeout: clk_ctl_st=0x%08x res_state=0x%08x HT=%s\n",
 			 READCC32(devinfo, clk_ctl_st),
 			 READCC32(devinfo, res_state),
 			 (READCC32(devinfo, clk_ctl_st) & 0x20000) ? "YES" : "NO");
@@ -1974,7 +1972,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		arm_core   = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_ARM_CR4);
 		pcie2_core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_PCIE2);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.37 post-timeout: ARM_CR4=%s PCIE2=%s\n",
+			 "BCM4360 test.38 post-timeout: ARM_CR4=%s PCIE2=%s\n",
 			 arm_core   ? (brcmf_chip_iscoreup(arm_core)   ? "UP" : "DOWN") : "NULL",
 			 pcie2_core ? (brcmf_chip_iscoreup(pcie2_core) ? "UP" : "DOWN") : "NULL");
 
@@ -1984,14 +1982,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		for (i = 0; i < 16; i += 4) {
 			tcm_val = brcmf_pcie_read_ram32(devinfo, i);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.37 post-timeout: TCM[0x%04x]=0x%08x\n",
+				 "BCM4360 test.38 post-timeout: TCM[0x%04x]=0x%08x\n",
 				 i, tcm_val);
 		}
 		/* Also read TCM[ramsize-8..ramsize-1] to check NVRAM area */
 		for (i = devinfo->ci->ramsize - 8; i < devinfo->ci->ramsize; i += 4) {
 			tcm_val = brcmf_pcie_read_ram32(devinfo, i);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.37 post-timeout: TCM[0x%05x]=0x%08x\n",
+				 "BCM4360 test.38 post-timeout: TCM[0x%05x]=0x%08x\n",
 				 i, tcm_val);
 		}
 
@@ -2001,7 +1999,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	/* Firmware initialized: log the detected shared pointer */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.37: FW init detected! sharedram_addr=0x%08x\n",
+			 "BCM4360 test.38: FW init detected! sharedram_addr=0x%08x\n",
 			 sharedram_addr);
 	}
 
