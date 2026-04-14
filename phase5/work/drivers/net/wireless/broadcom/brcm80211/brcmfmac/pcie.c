@@ -697,23 +697,16 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 	if (!devinfo->ci)
 		return;
 
-	/* BCM4360: skip watchdog reset to preserve EFI-initialized PMU/PLL
-	 * state. Test.8 proved that the watchdog reset crashes the PC — it
-	 * likely disrupts the PCIe link. Instead, we log the EFI-preserved
-	 * PMU state and request ForceHT on that preserved state.
-	 *
-	 * PMU register offsets (ChipCommon):
-	 *   0x618 = min_res_mask
-	 *   0x61C = max_res_mask
-	 *   0x1e0 = clk_ctl_st (bit 1 = ForceHT, bit 17 = HT available)
+	/* BCM4360: skip watchdog reset entirely. Tests 8-10 all crashed the PC
+	 * when we wrote PMU registers (ForceHT, resource masks). Test.7 proved
+	 * that READ-ONLY access + skip watchdog + disable bus mastering is safe.
+	 * This test (test.11) reverts to that safe baseline with read-only
+	 * PMU diagnostics to confirm stability before adding changes back.
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-		u32 ccs;
-		int htcnt = 0;
-
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 
-		/* Log EFI-preserved PMU state */
+		/* Read-only: log EFI-preserved PMU state for diagnostics */
 		dev_info(&devinfo->pdev->dev,
 			 "BCM4360 EFI state: clk_ctl_st=0x%08x min_res=0x%08x max_res=0x%08x res_state=0x%08x\n",
 			 READCC32(devinfo, clk_ctl_st),
@@ -725,36 +718,13 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 			 READCC32(devinfo, pmustatus),
 			 READCC32(devinfo, pmucontrol));
 
-		/* Ensure all PMU resources are requested (17 resources for
-		 * BCM4360 pmurev 17). This may already be set by EFI/wl.
+		/* NO PMU writes — tests 8-10 crashed when writing res masks
+		 * and ForceHT. Skip watchdog reset, return early.
 		 */
-		WRITECC32(devinfo, max_res_mask, 0x0001ffff);
-		WRITECC32(devinfo, min_res_mask, 0x0001ffff);
-
-		/* Request HT clock via ClockControlStatus ForceHT bit */
-		ccs = READCC32(devinfo, clk_ctl_st);
-		WRITECC32(devinfo, clk_ctl_st, ccs | 0x2); /* ForceHT */
-
-		/* Wait for HT clock to become available (bit 17) */
-		for (htcnt = 0; htcnt < 100; htcnt++) {
-			ccs = READCC32(devinfo, clk_ctl_st);
-			if (ccs & 0x20000) /* HT available */
-				break;
-			msleep(10);
-		}
-
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 PMU init: clk_ctl_st=0x%08x after %dms, HT %s\n",
-			 ccs, htcnt * 10,
-			 (ccs & 0x20000) ? "AVAILABLE" : "NOT AVAILABLE");
-
-		/* Skip watchdog reset — return early */
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360: skipping watchdog reset (crashes PC)\n");
+			 "BCM4360: skipping watchdog reset, no PMU writes (test.11 safe baseline)\n");
 		return;
 	}
-
-	/* Non-BCM4360: standard watchdog reset path */
 
 	/* Disable ASPM */
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
@@ -1843,26 +1813,19 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 "BCM4360 debug: sharedram marker before ARM release = 0x%08x\n",
 		 sharedram_addr_written);
 
-	/* BCM4360 safety measures before ARM release:
-	 * 1. Disable ASPM L0s/L1 — prevents PCIe link power states from
-	 *    interfering with the firmware's HT clock bring-up.
-	 * 2. Disable bus mastering — prevents firmware's ASSERT crash handler
-	 *    from DMA-ing to host memory if it fails.
+	/* BCM4360 safety: disable bus mastering before ARM release to prevent
+	 * firmware DMA to host memory. The firmware's ASSERT handler at
+	 * hndarm.c:397 previously caused host crashes by corrupting PCIe state.
+	 * Test.7 proved this approach is safe (no PC crash).
+	 * NOTE: ASPM disable was added in test.8+ and correlated with crashes,
+	 * so it is NOT included here. Adding it back is a future test step.
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-		u32 lsc;
-
-		brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
-		pci_read_config_dword(devinfo->pdev,
-				      BRCMF_PCIE_REG_LINK_STATUS_CTRL, &lsc);
-		lsc &= ~BRCMF_PCIE_LINK_STATUS_CTRL_ASPM_ENAB;
-		pci_write_config_dword(devinfo->pdev,
-				      BRCMF_PCIE_REG_LINK_STATUS_CTRL, lsc);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 debug: ASPM disabled, bus mastering disabled before ARM release\n");
+			 "BCM4360 debug: disabling bus mastering before ARM release (test.11)\n");
 		pci_clear_master(devinfo->pdev);
 
-		/* Log PMU/HT state just before ARM release */
+		/* Read-only: log PMU/HT state just before ARM release */
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 		dev_info(&devinfo->pdev->dev,
 			 "BCM4360 pre-ARM: clk_ctl_st=0x%08x res_state=0x%08x HT=%s\n",
