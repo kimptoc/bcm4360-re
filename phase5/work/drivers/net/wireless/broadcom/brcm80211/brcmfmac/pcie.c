@@ -1864,55 +1864,19 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			return -ENODEV; /* clean abort, no crash */
 		}
 
-		/* test.15: ForceHT before ARM release.
-		 * Firmware binary analysis of hndarm.c:397 ASSERT shows it
-		 * checks HT_AVAIL (bit 16) in ClockCtlSt and asserts if not
-		 * set. test.7 worked because prior module load/unload cycles
-		 * left HT clock running. Fresh boots start with HT=NO.
-		 * Solution: set FORCEHT (bit 1) in ChipCommon clk_ctl_st
-		 * BEFORE ARM release, wait for HT to come up. If HT doesn't
-		 * come up, abort safely (like test.12a).
+		/* test.16: warm-up hypothesis test.
+		 * test.7 (the ONLY successful ARM release) ran after 6 prior
+		 * module load/unload cycles. All post-reboot tests crash.
+		 * Hypothesis: probe/teardown cycle leaves PCIe config in a
+		 * beneficial state. Test by loading with skip_arm=1 first,
+		 * unloading, then loading again with ARM release.
+		 *
+		 * ForceHT removed — HT_AVAIL (bit 16) is already set in
+		 * clk_ctl_st=0x00010040 before ARM release (test.15 proved
+		 * ForceHT was a no-op).
 		 */
-		{
-			u32 ccs;
-			int ht_wait;
-
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-			ccs = READCC32(devinfo, clk_ctl_st);
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.15: clk_ctl_st before ForceHT = 0x%08x\n",
-				 ccs);
-
-			/* Set FORCEHT (bit 1) to request HT clock */
-			WRITECC32(devinfo, clk_ctl_st, ccs | 0x2);
-
-			/* Wait up to 100ms for HT_AVAIL (bit 16) */
-			for (ht_wait = 0; ht_wait < 100; ht_wait++) {
-				ccs = READCC32(devinfo, clk_ctl_st);
-				if (ccs & 0x10000)
-					break;
-				udelay(1000); /* 1ms */
-			}
-
-			ccs = READCC32(devinfo, clk_ctl_st);
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.15: clk_ctl_st after ForceHT = 0x%08x (waited %d ms) HT=%s BP_ON_HT=%s\n",
-				 ccs, ht_wait,
-				 (ccs & 0x10000) ? "YES" : "NO",
-				 (ccs & 0x20000) ? "YES" : "NO");
-
-			if (!(ccs & 0x10000)) {
-				dev_err(&devinfo->pdev->dev,
-					"BCM4360 test.15: HT clock did NOT come up — aborting ARM release (safe abort)\n");
-				/* Clear FORCEHT before bailing */
-				ccs = READCC32(devinfo, clk_ctl_st);
-				WRITECC32(devinfo, clk_ctl_st, ccs & ~0x2);
-				return -ENODEV;
-			}
-
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.15: HT clock available — proceeding with ARM release\n");
-		}
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 test.16: proceeding with ARM release (warm-up hypothesis test)\n");
 	}
 
 	brcmf_dbg(PCIE, "Bring ARM in running state\n");

@@ -289,13 +289,32 @@ Iterative work to stabilize early boot and diagnose the ASSERT:
 | test.11 | revert to test.7 safe baseline (a3dbbb3) | **Crashed PC** — journal captured up to ARM release |
 | test.12a | skip ARM release (bcm4360_skip_arm=1) | **PASS** — FW download verified, no crash |
 | test.12b | PCIe AER/SERR masking before ARM release | **Crashed PC** (no log) |
+| test.13 | early IRQ handler + INTx disable | **Crashed PC** (no log) |
+| test.14 | bus mastering ON, no PCIe safety | **Crashed PC** — bus mastering hypothesis disproved |
+| test.15 | ForceHT before ARM release | **Crashed PC** — HT_AVAIL already set (0x10000), ForceHT was no-op |
 
-**Key conclusion from test.8–12b:** All tests that release the ARM crash the PC.
-Skipping ARM release (test.12a) is safe. The crash is NOT caused by PCIe error
-propagation — even comprehensive AER/SERR masking doesn't prevent it. The crash
-mechanism is likely an NMI, MCE, or PCIe bus hang.
+**Key conclusions from test.8–15:**
+- All tests that release the ARM crash the PC (tests 8-15)
+- Skipping ARM release (test.12a) is safe
+- Bus mastering on/off doesn't matter (test.14 vs earlier tests)
+- PCIe error masking doesn't help (test.12b)
+- IRQ handlers don't help (test.13)
+- ForceHT irrelevant — HT_AVAIL already set before ARM release (test.15)
+- **test.7 was the ONLY success — run at uptime ~6041s after 6 prior module loads**
 
-**Next steps:**
+**Warm-up hypothesis:** test.7 succeeded because prior module load/unload cycles
+left PCIe device config in a beneficial state. Fresh-boot state is hostile.
+
+**Current test (test.16): warm-up + PCIe config diff**
+1. Dump cold PCIe config space (lspci -xxx)
+2. Load with skip_arm=1 (safe), wait for probe, unload
+3. Dump warm PCIe config space, diff against cold
+4. Flush all state to disk
+5. Load again WITHOUT skip_arm (ARM release attempt)
+6. If succeeds: the diff shows which config registers matter
+7. If crashes: warm-up hypothesis disproved, move to next approach
+
+**Remaining next steps (if warm-up fails):**
 1. **MMIO trace of `wl` driver** — trace what PCIe setup `wl` does before ARM
    release. The `wl` driver loads this firmware successfully, so it must set up
    the PCIe environment correctly. Key question: what does `wl` do that we don't?
