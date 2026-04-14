@@ -1830,20 +1830,19 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 "BCM4360 debug: sharedram marker before ARM release = 0x%08x\n",
 		 sharedram_addr_written);
 
-	/* test.33: intact NVRAM + pci_set_master before ARM release.
+	/* test.34: intact NVRAM + pci_set_master + pci_enable_msi before ARM release.
 	 *
-	 * tests.30/31/32 all zeroed TCM[ramsize-4] as a "sentinel". WRONG: that
-	 * location IS the last 4 bytes of the NVRAM written by the driver. Value
-	 * 0xffc70038 is the NVRAM length token: low16=0x0038=56 words=224 bytes,
-	 * high16=~0x0038=0xffc7. Firmware reads this token to locate NVRAM. Zeroing
-	 * it made NVRAM invisible to firmware → firmware silently failed to init →
-	 * val=0x00000000 all 100 iters in tests 30-32. Those results are invalid.
+	 * test.33 result: PC survived, val=0xffc70038 all 100 iters — FW did NOT
+	 * write pcie_shared. Bus mastering alone was not enough.
 	 *
-	 * test.33: do NOT zero TCM[ramsize-4]. Leave NVRAM intact. Keep pci_set_master
-	 * before ARM release. Use original detection (compare against pre-ARM value).
+	 * tests.26/27 both PASSED (FW wrote pcie_shared, loop exited early). Those
+	 * tests had bus mastering ON + MSI enabled before ARM release. test.33 had
+	 * bus mastering but NO MSI. Therefore MSI is the next variable to isolate.
+	 *
+	 * test.34: add pci_enable_msi() before ARM release. Keep NVRAM intact.
+	 * Keep original detection (compare against pre-ARM value, 0xffc70038).
 	 * Return -ENODEV immediately on timeout — no post-loop MMIO reads.
-	 * NOTE: may crash the PC (firmware boots and causes link event). That is
-	 * informative — it shows bus mastering ON is not sufficient alone.
+	 * NOTE: may crash the PC if firmware triggers a link event.
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		/* Read-only: log PMU/HT state just before ARM release */
@@ -1886,13 +1885,15 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			return -ENODEV; /* clean abort, no crash */
 		}
 
-		/* test.33: enable bus mastering BEFORE ARM release. Do NOT touch
+		/* test.34: enable bus mastering + MSI BEFORE ARM release. Do NOT touch
 		 * TCM[ramsize-4] — that's the NVRAM length token, zeroing it kills FW.
 		 * sharedram_addr_written already holds the pre-ARM value (0xffc70038).
+		 * MSI isolates whether firmware needs MSI routing to write pcie_shared.
 		 */
 		pci_set_master(devinfo->pdev);
+		pci_enable_msi(devinfo->pdev);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.33: pci_set_master done; NVRAM intact, sentinel=0x%08x\n",
+			 "BCM4360 test.34: pci_set_master+MSI done; NVRAM intact, sentinel=0x%08x\n",
 			 sharedram_addr_written);
 	}
 
@@ -1910,7 +1911,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		/* Per-iteration log: last visible entry before any crash tells us timing */
 		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID)
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.33: wait iter %d val=0x%08x\n",
+				  "BCM4360 test.34: wait iter %d val=0x%08x\n",
 				  (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 50) - (int)loop_counter + 1,
 				  sharedram_addr);
 		sharedram_addr = brcmf_pcie_read_ram32(devinfo,
@@ -1919,19 +1920,19 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		loop_counter--;
 	}
 
-	/* test.33: On timeout (sharedram_addr unchanged from pre-ARM value), return
+	/* test.34: On timeout (sharedram_addr unchanged from pre-ARM value), return
 	 * -ENODEV immediately. Do NOT do any MMIO reads — firmware may have crashed
-	 * or triggered a PCIe link event. (test.29 crashed during iter 100 msleep.)
+	 * or triggered a PCIe link event.
 	 */
 	if (sharedram_addr == sharedram_addr_written) {
-		brcmf_err(bus, "BCM4360 test.33: FW timeout — did not write sharedram ptr in 5s\n");
+		brcmf_err(bus, "BCM4360 test.34: FW timeout — did not write sharedram ptr in 5s\n");
 		return -ENODEV;
 	}
 
 	/* Firmware initialized: log the detected shared pointer */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.33: FW init detected! sharedram_addr=0x%08x\n",
+			 "BCM4360 test.34: FW init detected! sharedram_addr=0x%08x\n",
 			 sharedram_addr);
 	}
 

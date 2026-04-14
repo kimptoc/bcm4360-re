@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.33: intact NVRAM + pci_set_master before ARM release
+# Phase 5.2 test.34: intact NVRAM + pci_set_master + pci_enable_msi before ARM release
 #
-# tests.30/31/32 all zeroed TCM[ramsize-4] = WRONG. That IS the NVRAM length
-# token (0xffc70038). Zeroing it killed firmware silently. All three tests had
-# dead firmware — results invalid.
+# test.34 SURVIVED: val=0xffc70038 all 100 iters, FW still silent.
+# Bus mastering alone was not enough. tests.26/27 PASSED had both mastering + MSI.
 #
-# test.33: do NOT touch TCM[ramsize-4]. Keep pci_set_master before ARM release.
-# Use original detection (compare against pre-ARM value). -ENODEV on timeout.
-# MAY CRASH the PC (firmware booting + link event = informative result).
+# test.34: add pci_enable_msi before ARM release. NVRAM intact. -ENODEV on timeout.
+# MAY CRASH the PC (firmware booting + MSI + link event).
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0 (full 5000ms wait loop)
@@ -21,14 +19,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.33.stage${STAGE}"
+LOG="$LOG_DIR/test.34.stage${STAGE}"
 
-echo "=== test.33: Intact NVRAM + pci_set_master before ARM — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.34: Intact NVRAM + pci_set_master before ARM — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: intact NVRAM; pci_set_master before ARM; -ENODEV on timeout; may crash PC" | tee -a "$LOG" ;;
+    0) echo "Stage 0: intact NVRAM; pci_set_master+MSI before ARM; -ENODEV on timeout; may crash PC" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
