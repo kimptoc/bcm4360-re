@@ -1864,19 +1864,53 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			return -ENODEV; /* clean abort, no crash */
 		}
 
-		/* test.16: warm-up hypothesis test.
-		 * test.7 (the ONLY successful ARM release) ran after 6 prior
-		 * module load/unload cycles. All post-reboot tests crash.
-		 * Hypothesis: probe/teardown cycle leaves PCIe config in a
-		 * beneficial state. Test by loading with skip_arm=1 first,
-		 * unloading, then loading again with ARM release.
+		/* test.17: MSI hypothesis test.
+		 * In cold state, MSI address/data registers are all zeros.
+		 * brcmfmac normally enables MSI AFTER ARM release (in
+		 * brcmf_pcie_setup). If firmware fires an MSI on boot,
+		 * the device writes to physical address 0x0 — instant
+		 * machine check exception.
 		 *
-		 * ForceHT removed — HT_AVAIL (bit 16) is already set in
-		 * clk_ctl_st=0x00010040 before ARM release (test.15 proved
-		 * ForceHT was a no-op).
+		 * Fix: enable MSI and register IRQ handler BEFORE ARM release.
 		 */
+		{
+			u16 msi_ctrl;
+			u32 msi_addr_lo, msi_addr_hi;
+			u16 msi_data;
+
+			pci_enable_msi(devinfo->pdev);
+			if (request_threaded_irq(devinfo->pdev->irq,
+						 brcmf_pcie_quick_check_isr,
+						 brcmf_pcie_isr_thread,
+						 IRQF_SHARED,
+						 "brcmf_pcie_intr", devinfo)) {
+				dev_err(&devinfo->pdev->dev,
+					"BCM4360 test.17: failed to register IRQ\n");
+				pci_disable_msi(devinfo->pdev);
+			} else {
+				devinfo->irq_allocated = true;
+			}
+
+			/* Log MSI state after enable */
+			pci_read_config_word(devinfo->pdev, 0x5a, &msi_ctrl);
+			pci_read_config_dword(devinfo->pdev, 0x5c, &msi_addr_lo);
+			pci_read_config_dword(devinfo->pdev, 0x60, &msi_addr_hi);
+			pci_read_config_word(devinfo->pdev, 0x64, &msi_data);
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.17: MSI ctrl=0x%04x addr=0x%08x:%08x data=0x%04x irq=%d\n",
+				 msi_ctrl, msi_addr_hi, msi_addr_lo, msi_data,
+				 devinfo->pdev->irq);
+
+			/* Also enable bus mastering so DMA works if needed */
+			pci_set_master(devinfo->pdev);
+			pci_read_config_word(devinfo->pdev, PCI_COMMAND, &msi_ctrl);
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.17: PCI_COMMAND=0x%04x (bus master + MSI before ARM release)\n",
+				 msi_ctrl);
+		}
+
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.16: proceeding with ARM release (warm-up hypothesis test)\n");
+			 "BCM4360 test.17: proceeding with ARM release (MSI enabled before ARM)\n");
 	}
 
 	brcmf_dbg(PCIE, "Bring ARM in running state\n");
