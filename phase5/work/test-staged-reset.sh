@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.38: direct PMU min_res_mask write before ARM release
+# Phase 5.2 test.39: PMU watchdog reset enabled for BCM4360
 #
-# test.37 SURVIVED: ForceHT (clk_ctl_st bit 1) was accepted but PMU ignored
-# it — res_state stayed at 0x13b the entire time. HT_AVAIL never appeared.
-# ForceHT via clk_ctl_st alone does not drive the PMU resource sequencer.
-# test.38: write min_res_mask=max_res_mask (0x13f), poll res_state for
-# change (up to 500ms). If res_state changes → PMU alive, resource approach
-# is the fix. If frozen → PMU locked; watchdog reset required.
-# MAY CRASH the PC.
+# test.38 SURVIVED: PMU alive (res_state 0x13b→0x13f instantly) but BBPLL
+# is off. HT never appeared even with all resources raised. TCM unchanged.
+# Root cause: without BBPLL, ARM core has no execution clock.
+# test.39: remove BCM4360 early-return from brcmf_pcie_reset_device.
+# Standard watchdog reset (watchdog=4) resets full chip including BBPLL.
+# PMU startup relocks BBPLL. ARM then has execution clock → FW should run.
+# MAY CRASH the PC (PCIe link-down during watchdog reset).
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0 (full 5000ms wait loop)
@@ -21,14 +21,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.38.stage${STAGE}"
+LOG="$LOG_DIR/test.39.stage${STAGE}"
 
-echo "=== test.38: PMU min_res_mask write before ARM release — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.39: PMU watchdog reset enabled for BCM4360 — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: NO pci_set_master, NO MSI; NVRAM intact; -ENODEV on timeout; min_res_mask=max_res_mask written before ARM release" | tee -a "$LOG" ;;
+    0) echo "Stage 0: NO pci_set_master, NO MSI; NVRAM intact; -ENODEV on timeout; BCM4360 watchdog reset enabled" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -76,7 +76,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.38 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.39 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -98,5 +98,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.38: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "*** test.39: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
 echo "Log saved to $LOG" | tee -a "$LOG"
