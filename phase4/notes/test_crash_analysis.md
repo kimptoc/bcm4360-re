@@ -948,3 +948,65 @@ test is the last hypothesis to test before moving on.
    shows that boardtype can be written and read back, a minimal module could
    write SROM data and then let brcmfmac take over the device. This combines
    our Phase 4 SROM research with the brcmfmac driver path.
+
+## Final attempt: quick test.sh 3 (2026-04-14)
+
+### Result: CRASHED — module never loaded
+
+Attempted to run test.sh 3 immediately after boot with `pci=noaer` active.
+Machine crashed before the module loaded — no bcm4360 output in dmesg at all.
+
+This confirms recommendation #2: the hardware instability on this machine is
+a blocking issue that cannot be worked around from software. The BCM4360 is
+crashing the machine spontaneously regardless of:
+- Whether any driver is loaded
+- Whether AER is enabled or disabled
+- How quickly we attempt to run tests after boot
+
+### SROM write test: UNTESTED
+
+The SROM11 write test (commit ecc96c8) was never executed. The code is ready
+and correct but we cannot run it due to hardware instability. The hypothesis
+— that writing boardtype=0x0552 to PCIe+0x800 would be visible to firmware
+via the SROM interface — remains unverified.
+
+## Phase 4 Conclusion (2026-04-14)
+
+### What we achieved
+
+1. **Firmware identification**: PCI-CDC FullMAC, RTE 6.30.223 (r), FWID
+   01-9413fb21. This is a complete wl stack running on the ARM CR4 core.
+
+2. **Root cause of firmware failure**: `wlc_bmac_attach` reads boardtype from
+   SROM hardware registers and gets 0xFFFF. The firmware then TRAPs (data
+   abort at 0xB80EF234). Apple hardware has board data in OTP/PCIe SROM
+   shadow but the firmware's SROM read path doesn't find it.
+
+3. **Boot handshake protocol**: Host writes shared_info with magic markers
+   (0xA5A5A5A5/0x5A5A5A5A) and DMA buffer address to TCM. Firmware finds
+   it, writes console pointer back, sends PCIe mailbox signals. Without
+   valid shared_info, firmware panics ~100ms after release and kills PCIe.
+
+4. **Hardware characteristics**: PCIe Gen1 x1 link, BAR0 (backplane) and
+   BAR2 (TCM direct) both functional. PCIe+0x800 SROM shadow is writable.
+   CC SROM_ADDR/DATA returns 0x0000 (not useful). OTP is present but
+   inaccessible via standard interfaces.
+
+5. **Cold boot = warm boot**: No functional difference between cold boot
+   and post-wl-unload states. The wl driver's only artifact is cosmetic
+   (SSE status bit).
+
+### What remains unresolved
+
+1. **SROM write hypothesis**: Can writing to PCIe+0x800 provide boardtype
+   to firmware? Untested due to crashes.
+2. **Spontaneous crashes**: Machine unstable with BCM4360 on PCIe bus,
+   no driver needed to trigger. Cause unknown — not AER.
+3. **Level 5 instability**: Even when machine was stable enough for level 3,
+   level 5 (max_level=5) always crashed. Root cause unclear.
+
+### Phase 4 → Phase 5 transition
+
+Phase 4 exit criteria (issue #8) are substantially met. Moving to Phase 5
+with focus on the brcmfmac driver path — providing correct NVRAM board data
+to the standard kernel driver rather than continuing with the test module.
