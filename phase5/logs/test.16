@@ -1,0 +1,51 @@
+=== test.16: warm-up hypothesis test ===
+Date: Tue 14 Apr 20:35:11 BST 2026
+
+
+=== STEP 1: Cold PCIe config space ===
+/home/kimptoc/bcm4360-re/phase5/work/test-warmup.sh: line 61: lspci: command not found
+
+=== STEP 2: Loading brcmfmac with bcm4360_skip_arm=1 (warm-up) ===
+Waiting 10s for probe to complete...
+--- warm-up dmesg ---
+[  572.936539] brcmfmac: loading out-of-tree module taints kernel.
+[  572.942079] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcbae02400000
+[  572.942759] brcmfmac 0000:03:00.0: BCM4360 EFI state: clk_ctl_st=0x00010040 min_res=0x0000013b max_res=0x0000013f res_state=0x0000013b
+[  572.942767] brcmfmac 0000:03:00.0: BCM4360 EFI PMU: pmustatus=0x0000002a pmucontrol=0x01770181
+[  572.942769] brcmfmac 0000:03:00.0: BCM4360: skipping watchdog reset, no PMU writes (test.11 safe baseline)
+[  572.943052] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[  572.945659] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.Apple Inc.-MacBookPro11,1.bin failed with error -2
+[  572.950972] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+[  572.951079] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+[  572.951245] brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffcbae02400000
+[  573.011779] brcmfmac 0000:03:00.0: BCM4360 debug: NVRAM loaded, len=228, writing to TCM 0x9ff1c
+[  573.011843] brcmfmac 0000:03:00.0: BCM4360 debug: sharedram marker before ARM release = 0xffc70038
+[  573.011858] brcmfmac 0000:03:00.0: BCM4360 pre-ARM: clk_ctl_st=0x00010040 res_state=0x0000013b HT=NO
+[  573.011860] brcmfmac 0000:03:00.0: BCM4360 test.12: skipping ARM release (bcm4360_skip_arm=1)
+[  573.011861] brcmfmac 0000:03:00.0: BCM4360 test.12: FW downloaded OK, dumping TCM state
+[  573.011873] brcmfmac 0000:03:00.0: BCM4360 TCM[0x0000]: b80ef000 b82ef000 b839f000 b844f000
+[  573.011893] brcmfmac 0000:03:00.0: BCM4360 TCM[0x0010]: b852f000 b860f000 b86ef000 b87cf000
+[  573.011914] brcmfmac 0000:03:00.0: BCM4360 TCM[0x0020]: 4601480e 46034602 46054604 46074606
+[  573.011933] brcmfmac 0000:03:00.0: BCM4360 TCM[0x0030]: 46814680 46834682 46854684 f3ef4686
+[  573.011944] brcmfmac 0000:03:00.0: BCM4360 test.12: sharedram[0x9fffc] = 0xffc70038
+[  573.011946] brcmfmac 0000:03:00.0: brcmf_pcie_setup: Dongle setup failed
+[  573.011981] ieee80211 phy1: brcmf_fw_crashed: Firmware has halted or crashed
+[  573.017780] brcmfmac 0000:03:00.0: BCM4360 EFI state: clk_ctl_st=0x00010040 min_res=0x0000013b max_res=0x0000013f res_state=0x0000013b
+[  573.017792] brcmfmac 0000:03:00.0: BCM4360 EFI PMU: pmustatus=0x0000002a pmucontrol=0x01770181
+[  573.017794] brcmfmac 0000:03:00.0: BCM4360: skipping watchdog reset, no PMU writes (test.11 safe baseline)
+
+=== STEP 3: Unloading brcmfmac (warm-up complete) ===
+=== STEP 4: Warm PCIe config space ===
+/home/kimptoc/bcm4360-re/phase5/work/test-warmup.sh: line 87: lspci: command not found
+
+=== PCIe config diff (cold -> warm) ===
+1c1
+< /home/kimptoc/bcm4360-re/phase5/work/test-warmup.sh: line 61: lspci: command not found
+---
+> /home/kimptoc/bcm4360-re/phase5/work/test-warmup.sh: line 87: lspci: command not found
+
+=== STEP 5: Flushing all data to disk ===
+Flush complete.
+
+=== STEP 6: Loading brcmfmac WITHOUT skip_arm (ARM RELEASE!) ===
+WARNING: If the warm-up hypothesis is wrong, this WILL crash the PC.

@@ -6,7 +6,7 @@ The goal is to add BCM4360 support to the Linux kernel's `brcmfmac` driver by re
 
 We have a live BCM4360 device on this machine with the `wl` driver loaded, giving us the ability to trace driver behaviour, read hardware registers, and compare against the existing `brcmfmac` codebase.
 
-## Current Status (updated 2026-04-14, post test.14)
+## Current Status (updated 2026-04-14, post test.16)
 
 **Phases 1, 3, and 4 (partial) are complete. Phase 5 is active.**
 
@@ -16,9 +16,9 @@ BCM4360 firmware. Firmware download works reliably. ARM release crashes the host
 **Current blockers (two related issues):**
 
 1. **ARM release crashes PC** — every ARM release since test.7 instantly kills the
-   host. Tests 8-14 tried: bus mastering on/off, AER/SERR masking, early IRQ handlers,
-   INTx disable, stripping all PCIe safety. All crash. The only safe operation is
-   firmware download without ARM release (test.12a PASS).
+   host. Tests 8-16 tried: bus mastering on/off, AER/SERR masking, early IRQ handlers,
+   INTx disable, stripping all PCIe safety, ForceHT, warm-up cycles. All crash. The
+   only safe operation is firmware download without ARM release (test.12a PASS).
 
 2. **Firmware ASSERTs at hndarm.c:397** (HT clock timeout) — observed in test.7
    (the ONLY successful ARM release). The firmware starts, completes `si_kattach`,
@@ -35,9 +35,12 @@ BCM4360 firmware. Firmware download works reliably. ARM release crashes the host
 | 12b | AER/SERR masking | CRASH |
 | 13 | early IRQ + INTx disable | CRASH |
 | 14 | bus_master ON, no PCIe safety | CRASH |
+| 15 | ForceHT before ARM release | CRASH |
+| 16 | warm-up cycle then ARM release | CRASH |
 
 **Bus mastering hypothesis DISPROVED** by test.14 — crash occurs with bus mastering
-both enabled and disabled. Something environmental changed between test.7 and test.11+.
+both enabled and disabled. **Warm-up hypothesis DISPROVED** by test.16 — a load/unload
+cycle before ARM release doesn't help. Something fundamentally different about test.7.
 
 **Key discovery:** The `wl` proprietary driver **fails to load** on kernel 6.12.80
 ("Unpatched return thunk" error). Cannot be used as a reference on this system.
@@ -292,29 +295,20 @@ Iterative work to stabilize early boot and diagnose the ASSERT:
 | test.13 | early IRQ handler + INTx disable | **Crashed PC** (no log) |
 | test.14 | bus mastering ON, no PCIe safety | **Crashed PC** — bus mastering hypothesis disproved |
 | test.15 | ForceHT before ARM release | **Crashed PC** — HT_AVAIL already set (0x10000), ForceHT was no-op |
+| test.16 | warm-up cycle (skip_arm load/unload then ARM release) | **Crashed PC** — lspci missing so no PCIe diff captured; warm-up hypothesis disproved |
 
-**Key conclusions from test.8–15:**
-- All tests that release the ARM crash the PC (tests 8-15)
+**Key conclusions from test.8–16:**
+- All tests that release the ARM crash the PC (tests 8-16)
 - Skipping ARM release (test.12a) is safe
 - Bus mastering on/off doesn't matter (test.14 vs earlier tests)
 - PCIe error masking doesn't help (test.12b)
 - IRQ handlers don't help (test.13)
 - ForceHT irrelevant — HT_AVAIL already set before ARM release (test.15)
+- **Warm-up hypothesis DISPROVED** — test.16 did a full load/unload cycle before ARM release, still crashed
 - **test.7 was the ONLY success — run at uptime ~6041s after 6 prior module loads**
+- test.16 also revealed lspci is not available on this NixOS system (needs `pciutils` in PATH)
 
-**Warm-up hypothesis:** test.7 succeeded because prior module load/unload cycles
-left PCIe device config in a beneficial state. Fresh-boot state is hostile.
-
-**Current test (test.16): warm-up + PCIe config diff**
-1. Dump cold PCIe config space (lspci -xxx)
-2. Load with skip_arm=1 (safe), wait for probe, unload
-3. Dump warm PCIe config space, diff against cold
-4. Flush all state to disk
-5. Load again WITHOUT skip_arm (ARM release attempt)
-6. If succeeds: the diff shows which config registers matter
-7. If crashes: warm-up hypothesis disproved, move to next approach
-
-**Remaining next steps (if warm-up fails):**
+**Next steps (warm-up failed):**
 1. **MMIO trace of `wl` driver** — trace what PCIe setup `wl` does before ARM
    release. The `wl` driver loads this firmware successfully, so it must set up
    the PCIe environment correctly. Key question: what does `wl` do that we don't?
