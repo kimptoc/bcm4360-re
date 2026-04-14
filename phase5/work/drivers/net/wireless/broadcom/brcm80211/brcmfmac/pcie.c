@@ -1784,6 +1784,20 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		return err;
 
 	brcmf_dbg(PCIE, "Wait for FW init\n");
+
+	/* BCM4360: try sending doorbell signals to unstick firmware.
+	 * The firmware may be waiting for a host-ready indication
+	 * before completing its shared memory initialization.
+	 */
+	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 debug: sending H2D doorbell after ARM release\n");
+		brcmf_pcie_write_reg32(devinfo,
+				       devinfo->reginfo->h2d_mailbox_0, 1);
+		brcmf_pcie_write_reg32(devinfo,
+				       devinfo->reginfo->h2d_mailbox_1, 1);
+	}
+
 	sharedram_addr = sharedram_addr_written;
 	loop_counter = BRCMF_PCIE_FW_UP_TIMEOUT / 50;
 	while ((sharedram_addr == sharedram_addr_written) && (loop_counter)) {
@@ -1795,6 +1809,160 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	}
 	if (sharedram_addr == sharedram_addr_written) {
 		brcmf_err(bus, "FW failed to initialize\n");
+		/* Debug: dump key TCM locations to see what firmware wrote */
+		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+			u32 i;
+
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 debug: RAM end (last 32 bytes at 0x%x):\n",
+				 devinfo->ci->ramsize - 32);
+			for (i = 0; i < 32; i += 4)
+				dev_info(&devinfo->pdev->dev,
+					 "  [0x%x] = 0x%08x\n",
+					 devinfo->ci->ramsize - 32 + i,
+					 ioread32(devinfo->tcm +
+						  devinfo->ci->ramsize - 32 + i));
+
+			/* Phase 4 found shared_info at 0x9D0A4 */
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 debug: shared_info area (0x9D0A0):\n");
+			for (i = 0; i < 32; i += 4)
+				dev_info(&devinfo->pdev->dev,
+					 "  [0x%x] = 0x%08x\n",
+					 0x9D0A0 + i,
+					 ioread32(devinfo->tcm + 0x9D0A0 + i));
+
+			/* Read firmware console log buffer */
+			{
+				u32 cons_addr;
+				char consbuf[512];
+				u32 j;
+
+				/* Console struct: base_addr, buf_addr, bufsize, read_idx
+				 * Scan around 0x96F70 from Phase 4 */
+				dev_info(&devinfo->pdev->dev,
+					 "BCM4360 debug: console struct (0x96F70):\n");
+				for (i = 0; i < 16; i += 4)
+					dev_info(&devinfo->pdev->dev,
+						 "  [0x%x] = 0x%08x\n",
+						 0x96F70 + i,
+						 ioread32(devinfo->tcm + 0x96F70 + i));
+
+				/* Try reading console buffer */
+				cons_addr = ioread32(devinfo->tcm + 0x96F70);
+				if (cons_addr > 0 && cons_addr < devinfo->ci->ramsize) {
+					u32 bufsize = ioread32(devinfo->tcm + 0x96F74);
+					u32 read_sz = (bufsize < 500) ? bufsize : 500;
+
+					dev_info(&devinfo->pdev->dev,
+						 "BCM4360 debug: console buf at 0x%x size %u\n",
+						 cons_addr, bufsize);
+					for (j = 0; j < read_sz; j++)
+						consbuf[j] = ioread8(devinfo->tcm +
+								     cons_addr + j);
+					consbuf[read_sz] = '\0';
+					dev_info(&devinfo->pdev->dev,
+						 "BCM4360 console: %.500s\n", consbuf);
+				}
+			}
+
+			/* Read BAR0 (PCIe core) registers */
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 debug: BAR0 PCIe core registers:\n");
+			{
+				u32 offsets[] = {
+					0x00, 0x04, 0x08, 0x0c,  /* basic */
+					0x20, 0x24, 0x28, 0x2c,  /* intmask area */
+					0x40, 0x44, 0x48, 0x4c,  /* mailbox area */
+					0x50, 0x54, 0x58, 0x5c,
+					0x60, 0x64,
+					0x120, 0x124,            /* config addr/data */
+					0x140, 0x144,            /* H2D mailbox */
+				};
+				u32 k;
+
+				for (k = 0; k < ARRAY_SIZE(offsets); k++)
+					dev_info(&devinfo->pdev->dev,
+						 "  BAR0[0x%03x] = 0x%08x\n",
+						 offsets[k],
+						 ioread32(devinfo->regs + offsets[k]));
+			}
+
+			/* Search firmware binary for pcie_shared structure.
+			 * Look for words in range 0x00001-0x000FF in low TCM
+			 * (likely flags field with version 1-7) followed by
+			 * plausible TCM addresses.
+			 */
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 debug: scanning TCM for pcie_shared candidates...\n");
+			{
+				u32 val, val2, scan_start, scan_end;
+
+				/* Scan the firmware's data section (after code).
+				 * FW is 442KB = 0x6BDE9. Data typically follows. */
+				scan_start = 0x60000;
+				scan_end = devinfo->ci->ramsize - 256;
+				for (i = scan_start; i < scan_end; i += 4) {
+					val = ioread32(devinfo->tcm + i);
+					/* Look for small values (flags with version) */
+					if (val >= 1 && val <= 0xFF) {
+						/* Check if next few words look like
+						 * TCM addresses or plausible lengths */
+						val2 = ioread32(devinfo->tcm + i + 4);
+						if (val2 >= 0x1000 &&
+						    val2 < devinfo->ci->ramsize)
+							dev_info(&devinfo->pdev->dev,
+								 "  [0x%x] flags=0x%x next=0x%x\n",
+								 i, val, val2);
+					}
+				}
+			}
+
+			/* Dump candidate pcie_shared at 0x9af90
+			 * (flags=0xfa, next word points to console at 0x96f78)
+			 */
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 debug: candidate shared struct at 0x9af90:\n");
+			for (i = 0; i < 128; i += 4)
+				dev_info(&devinfo->pdev->dev,
+					 "  [0x%x] = 0x%08x\n",
+					 0x9af90 + i,
+					 ioread32(devinfo->tcm + 0x9af90 + i));
+
+			/* Also dump from 0x96f60 to get console struct context */
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 debug: console area (0x96f60):\n");
+			for (i = 0; i < 64; i += 4)
+				dev_info(&devinfo->pdev->dev,
+					 "  [0x%x] = 0x%08x\n",
+					 0x96f60 + i,
+					 ioread32(devinfo->tcm + 0x96f60 + i));
+
+			/* Try reading actual console log text starting at
+			 * various offsets from the console struct */
+			{
+				u32 cons_buf_addr;
+				char buf[512];
+				u32 j;
+
+				/* The console struct at 0x96f78 may have:
+				 * +0: buf_size
+				 * +4: buf_addr or log_addr
+				 * +8: log_idx
+				 * Or the text starts directly at 0x96f78 */
+				cons_buf_addr = ioread32(devinfo->tcm + 0x96f68);
+				dev_info(&devinfo->pdev->dev,
+					 "BCM4360 debug: trying console at word[0x96f68]=0x%x\n",
+					 cons_buf_addr);
+
+				/* Just read 500 bytes from 0x96f78 directly as text */
+				for (j = 0; j < 500; j++)
+					buf[j] = ioread8(devinfo->tcm + 0x96f78 + j);
+				buf[500] = '\0';
+				dev_info(&devinfo->pdev->dev,
+					 "BCM4360 console text at 0x96f78: %.500s\n", buf);
+			}
+		}
 		return -ENODEV;
 	}
 	if (sharedram_addr < devinfo->ci->rambase ||
