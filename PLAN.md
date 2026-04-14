@@ -6,7 +6,7 @@ The goal is to add BCM4360 support to the Linux kernel's `brcmfmac` driver by re
 
 We have a live BCM4360 device on this machine with the `wl` driver loaded, giving us the ability to trace driver behaviour, read hardware registers, and compare against the existing `brcmfmac` codebase.
 
-## Current Status (updated 2026-04-14, post test.11)
+## Current Status (updated 2026-04-14, post test.12b)
 
 **Phases 1, 3, and 4 (partial) are complete. Phase 5 is active.**
 
@@ -22,24 +22,22 @@ Tests 8-10 all crashed the PC — the crash is NOT caused by the watchdog reset
 specifically. The crash likely occurs when firmware starts executing and interacts
 with PCIe (DMA/interrupts/register writes).
 
-**Test 11** ran from the safe baseline revert (commit a3dbbb3 — same code as test.7).
-**Result: Crashed PC.** Journal captured all output up to ARM release, then system
-died. This means the test.7 "safe baseline" is no longer safe — something
-environmental changed. The crash happens at ARM release regardless of what
-host-side code changes we make.
+**Test 12a** (skip ARM release, bcm4360_skip_arm=1) confirmed firmware download
+works without crash. TCM dump verified correct vector table and code at offset 0.
+NVRAM written at 0x9ff1c. Sharedram marker unchanged (ARM never ran). This proves
+the crash is specifically caused by ARM execution, not firmware download or PCIe
+mapping.
 
-**Key insight from test.8-11:** All four tests crash. The crash is NOT caused by
-any specific host-side code change (PMU writes, ForceHT, ASPM, watchdog). The
-crash occurs when the firmware ARM core starts executing and interacts with PCIe.
-Bus mastering is disabled, so this is NOT DMA. The firmware may be writing to
-PCIe config space or triggering a fatal PCIe error through BAR register access.
+**Test 12b** (comprehensive PCIe AER/SERR masking before ARM release) **crashed
+the PC**. Despite disabling SERR, all PCIe error reporting in DevCtl, masking all
+AER uncorrectable errors as non-fatal, clearing AER status, and masking errors on
+the upstream bridge/root port — the crash still occurred. No journal captured.
 
-**Next steps:**
-1. Investigate what environmental change made test.7 safe but test.11 crash
-   (kernel version? PCIe state? BIOS/EFI settings? thermal?)
-2. Try loading with `pci_clear_master()` AND disabling PCIe MSI/INTx before ARM release
-3. MMIO trace `wl` driver to see what PCIe setup it does before ARM release
-4. Consider not releasing ARM at all — just download FW and read back TCM for analysis
+**Key insight from test.8-12b:** The crash is NOT caused by PCIe error propagation
+(AER/SERR). Even with all error reporting disabled on both device and bridge, the
+crash still occurs. The firmware's ARM execution causes a hard system crash through
+a mechanism that bypasses PCIe error handling — likely an NMI, MCE (machine check
+exception), or direct PCIe bus hang that freezes the CPU.
 
 > **Central question: Why does the firmware ASSERT during init, and can we provide the environment it needs to complete boot?**
 
@@ -286,29 +284,27 @@ Iterative work to stabilize early boot and diagnose the ASSERT:
 | test.9 | same as test.8 (committed at 3d96dbc) | **Crashed PC** (no log) |
 | test.10 | skip watchdog reset entirely (committed 72235c4) | **Crashed PC** (no log) |
 | test.11 | revert to test.7 safe baseline (a3dbbb3) | **Crashed PC** — journal captured up to ARM release |
+| test.12a | skip ARM release (bcm4360_skip_arm=1) | **PASS** — FW download verified, no crash |
+| test.12b | PCIe AER/SERR masking before ARM release | **Crashed PC** (no log) |
 
-**Key conclusion from test.8–11:** Four different approaches all crash the PC,
-including a revert to the test.7 "safe baseline" code. The crash is NOT caused
-by any specific host-side code change — it happens regardless. Bus mastering is
-disabled so DMA is ruled out. The firmware's ARM core execution itself causes a
-fatal PCIe interaction (possibly config space writes or BAR register access).
+**Key conclusion from test.8–12b:** All tests that release the ARM crash the PC.
+Skipping ARM release (test.12a) is safe. The crash is NOT caused by PCIe error
+propagation — even comprehensive AER/SERR masking doesn't prevent it. The crash
+mechanism is likely an NMI, MCE, or PCIe bus hang.
 
-**Next steps (crash investigation):**
-1. **Investigate firmware DMA/interrupt after ARM release** — the crash happens
-   ~100-200ms after ARM release. Firmware may be writing to PCIe control regs
-   or initiating DMA to unmapped host memory. Consider:
-   - Registering an interrupt handler BEFORE ARM release
-   - Setting up minimal DMA rings/buffers before ARM release
-   - Tracing what `wl` does between PCIe probe and ARM release
-2. **MMIO trace of `wl` driver** (Phase 2 fallback) — trace the proprietary
-   driver's full init sequence to see what PCIe setup it performs before
-   releasing the ARM core
-3. **Investigate NVRAM data** — is NVRAM loaded correctly? Does the firmware
-   find the board configuration it expects?
-4. **Consider OTP/SPROM data** — the firmware reads board config from OTP CIS;
-   bcma reports "Invalid SPROM". Is this causing misconfiguration?
-5. **Consider firmware DMA region setup** — `wl` may pre-allocate DMA buffers
-   and write their addresses to shared memory before ARM release
+**Next steps:**
+1. **MMIO trace of `wl` driver** — trace what PCIe setup `wl` does before ARM
+   release. The `wl` driver loads this firmware successfully, so it must set up
+   the PCIe environment correctly. Key question: what does `wl` do that we don't?
+2. **Consider firmware DMA region setup** — `wl` may pre-allocate DMA buffers
+   and write their addresses to shared memory before ARM release. The firmware
+   may immediately attempt DMA to an expected host address on boot.
+3. **Try `pci=nomsi,noaer` kernel parameters** — boot with PCIe error handling
+   fully disabled at kernel level, not just per-device
+4. **Try keeping interrupts registered** — the firmware may fire an interrupt
+   immediately, and with no handler the CPU takes an unhandled interrupt/NMI
+5. **Consider virtual machine isolation** — run the test in a VM with PCIe
+   passthrough so the crash doesn't take down the host
 
 **⚠ Note:** Previous hypotheses about "BCDC vs msgbuf" as the primary blocker
 may be premature. The firmware ASSERTs before reaching any protocol handshake.
