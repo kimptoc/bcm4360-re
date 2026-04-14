@@ -816,63 +816,6 @@ static int brcmf_pcie_exit_download_state(struct brcmf_pciedev_info *devinfo,
 {
 	struct brcmf_core *core;
 
-	/* test.25: hypothesis — INTERNAL_MEM reset makes TCM inaccessible.
-	 *
-	 * test.24 disproved ASPM: disabling ASPM + return 0 still crashed.
-	 * The crash happens on the first brcmf_pcie_read_ram32 in the FW
-	 * wait loop, ~50ms after exit_download_state returns 0.
-	 *
-	 * The only code that runs before our return (inside exit_download_state)
-	 * is brcmf_chip_resetcore(BCMA_CORE_INTERNAL_MEM, 0, 0, 0) for BCM4360.
-	 * Hypothesis: this reset leaves TCM inaccessible via PCIe (postreset=0
-	 * may leave the memory controller clocks off). Reads to inaccessible
-	 * TCM generate a PCIe completion timeout → machine crash.
-	 *
-	 * stage=0: SKIP INTERNAL_MEM reset + return 0
-	 *          FW wait loop should survive 5s of TCM reads if hypothesis true.
-	 * stage=1: DO INTERNAL_MEM reset + return 0
-	 *          Expected crash — reproduces test.22.
-	 * stage=2: DO INTERNAL_MEM reset + return -ENODEV
-	 *          Safe baseline — reproduces test.23.
-	 */
-	if (bcm4360_reset_stage >= 0 &&
-	    devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-		struct brcmf_core *imem;
-
-		imem = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_INTERNAL_MEM);
-		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.25: stage=%d INTERNAL_MEM core=%s\n",
-			  bcm4360_reset_stage,
-			  imem ? "FOUND" : "NULL");
-
-		if (bcm4360_reset_stage == 0) {
-			/* Skip INTERNAL_MEM reset entirely, return 0.
-			 * If TCM reads in the FW wait loop survive: hypothesis confirmed.
-			 * Note: FW wait loop will time out after 5s then the diagnostic
-			 * code runs (all reads, safe) and returns -ENODEV.
-			 */
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.25: stage=0 — skipping INTERNAL_MEM reset, returning 0\n");
-			return 0;
-		}
-
-		/* stage=1 and stage=2: do the INTERNAL_MEM reset, then return */
-		if (imem)
-			brcmf_chip_resetcore(imem, 0, 0, 0);
-
-		if (bcm4360_reset_stage == 1) {
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.25: stage=1 — INTERNAL_MEM reset done, returning 0\n");
-			return 0;
-		}
-
-		if (bcm4360_reset_stage == 2) {
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.25: stage=2 — INTERNAL_MEM reset done, returning -ENODEV\n");
-			return -ENODEV;
-		}
-	}
-
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID ||
 	    devinfo->ci->chip == BRCM_CC_43602_CHIP_ID) {
 		core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_INTERNAL_MEM);
@@ -1986,6 +1929,45 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	err = brcmf_pcie_exit_download_state(devinfo, resetintr);
 	if (err)
 		return err;
+
+	/* test.27: timing probe — when does TCM become inaccessible after ARM release?
+	 *
+	 * test.26 confirmed: ARM release (brcmf_chip_set_active) is safe.
+	 * The crash is in the wait loop: brcmf_pcie_read_ram32(ramsize-4)
+	 * after msleep(50). This test probes HOW SOON after ARM release the
+	 * BAR2 reads start failing.
+	 *
+	 * We try reads at T=0, 1, 5, 10, 20, 50ms. Each read is preceded by
+	 * a dev_emerg log so if a crash occurs, the last log tells us the delay.
+	 *
+	 * stage=0: timing probe (T=0..50ms reads, then return -ENODEV)
+	 *   All reads survive → TCM stays accessible (wait loop issue is elsewhere)
+	 *   Crash at T=Xms → firmware reconfigures TCM between T-1ms and T.
+	 * stage=1: ARM released, run wait loop → expected crash (control).
+	 */
+	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID &&
+	    bcm4360_reset_stage == 0) {
+		static const int delays_ms[] = {0, 1, 5, 10, 20, 50};
+		int i;
+
+		for (i = 0; i < ARRAY_SIZE(delays_ms); i++) {
+			u32 val;
+
+			if (delays_ms[i] > 0)
+				msleep(delays_ms[i]);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.27: T=%dms — reading TCM[ramsize-4]...\n",
+				  delays_ms[i]);
+			val = brcmf_pcie_read_ram32(devinfo,
+						    devinfo->ci->ramsize - 4);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.27: T=%dms — read OK = 0x%08x\n",
+				  delays_ms[i], val);
+		}
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.27: all timing reads survived → returning -ENODEV\n");
+		return -ENODEV;
+	}
 
 	brcmf_dbg(PCIE, "Wait for FW init\n");
 
