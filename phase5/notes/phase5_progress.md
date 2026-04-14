@@ -292,14 +292,76 @@ firmware download without ARM release (test.12a).
    and DMA ring buffers to be configured BEFORE ARM release. Without them, the
    firmware's first PCIe transaction causes a fatal bus error.
 
+## Phase 5.2: Narrowing the crash (tests 15-20)
+
+### Tests 15-18: Hypotheses disproved
+
+| Test | Hypothesis | Mitigation | Result |
+|------|-----------|------------|--------|
+| 15   | ForceHT needed before ARM | ForceHT set | CRASH |
+| 16   | Warm-up needed | Read-only warm-up first | CRASH |
+| 16   | PCIe cold/warm state | Cold boot comparison | CRASH |
+| 17   | MSI needed before ARM | MSI + IRQ handler | CRASH |
+| 18   | Rogue DMA | IOMMU protection | CRASH |
+
+### Test 19: CPUHALT isolation (commit 1ccf441)
+
+**Key finding:** Used CPUHALT bit (0x20) in ARM CR4 IOCTL to keep ARM halted
+even after reset-clear. ARM never executed firmware, yet **PC still crashed**.
+
+**Critical conclusion:** The crash is caused by the `brcmf_chip_resetcore()`
+register write sequence itself, NOT by ARM firmware execution. The act of
+clearing the ARM's reset state (writing to RESET_CTL and IOCTL registers)
+triggers a PCIe bus error that kills the host.
+
+### Test 20: Staged reset (commits c6bfdc4, a92a15c)
+
+Broke `brcmf_chip_resetcore()` into individual register writes to find exactly
+which one crashes:
+
+- **Stage 0** (read-only ARM CR4 register dump): **PASS** -- reads are safe
+  - IOCTL, IOST, RESET_CTL values captured (pre-reset state)
+- **Stage 1** (write IOCTL = FGC|CLK = 0x0003): **CRASH**
+  - Log shows module loaded, then instant PC death
+  - The very first register WRITE to the ARM CR4 core wrapper crashes the host
+
+### Root cause identified
+
+**Writing to the ARM CR4 core wrapper's IOCTL register (offset 0x408) crashes
+the PCIe bus.** This is the first step of `brcmf_chip_resetcore()` -- it writes
+FGC|CLK to configure the core before clearing reset. Reading the same register
+is perfectly safe (stage 0).
+
+This means the BCM4360's ARM CR4 core wrapper registers are NOT writable via
+the standard BCMA core wrapper mechanism that works for 43602 and other chips.
+The BCM4360 may require:
+1. A different core selection/access method
+2. Indirect register access via ChipCommon or PMU
+3. A specific backplane configuration before core wrapper writes are allowed
+4. The reset sequence from the macOS `wl` driver may use a completely different
+   register access path
+
+### Updated crash pattern summary (tests 7-20)
+
+| Test | What happened | Result |
+|------|---------------|--------|
+| 7    | Full ARM release (first time) | **PASS** |
+| 8-14 | Various ARM release approaches | CRASH |
+| 12a  | FW download only, no ARM | PASS |
+| 15-18| Various pre-ARM mitigations | CRASH |
+| 19   | CPUHALT (ARM never runs) | CRASH |
+| 20.0 | Read ARM CR4 registers | PASS |
+| 20.1 | Write IOCTL = FGC\|CLK | **CRASH** |
+
 ### Next steps
 
-1. **Cold boot test:** Power off completely (not reboot), wait 30+ seconds, then
-   try ARM release — test whether cold reset fixes the crash
-2. **Pre-configure MSI + DMA rings:** Set up minimal msgbuf ring buffers and MSI
-   vectors BEFORE ARM release, even though we don't plan to use msgbuf
-3. **Firmware binary analysis of hndarm.c:397:** Resolve ASSERT addresses against
-   firmware binary to understand what the firmware checks at boot
-4. **NVRAM deep review:** Ensure NVRAM parameters match what the firmware expects
-5. **Consider fresh firmware:** The extracted firmware may be corrupted or may need
-   specific initialization that only the macOS wl driver provides
+1. **Examine how `brcmf_pcie_select_core()` works** -- verify the core selection
+   is correct for BCM4360 and that the register window is properly mapped
+2. **Check what test.7 did differently** -- was it using `brcmf_chip_set_active()`
+   which goes through the chip.c abstraction layer? The staged test bypasses
+   that and does direct register writes
+3. **Trace the macOS wl driver's reset sequence** -- use Phase 3/4 MMIO traces
+   to see exactly how the proprietary driver resets the ARM core
+4. **Try indirect core access** -- use ChipCommon backplane access registers
+   instead of direct core wrapper writes
+5. **Power-cycle test** -- full AC power removal to ensure clean hardware state
