@@ -1700,6 +1700,10 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	if (err)
 		return err;
 
+	dev_info(&devinfo->pdev->dev,
+		 "BCM4360 debug: rambase=0x%x ramsize=0x%x srsize=0x%x fw_size=%zu tcm=%px\n",
+		 devinfo->ci->rambase, devinfo->ci->ramsize,
+		 devinfo->ci->srsize, fw->size, devinfo->tcm);
 	brcmf_dbg(PCIE, "Download FW %s\n", devinfo->fw_name);
 	memcpy_toio(devinfo->tcm + devinfo->ci->rambase,
 		    (void *)fw->data, fw->size);
@@ -1818,6 +1822,9 @@ static int brcmf_pcie_get_resource(struct brcmf_pciedev_info *devinfo)
 	brcmf_dbg(PCIE, "Phys addr : mem space = %p base addr %#016llx size 0x%x\n",
 		  devinfo->tcm, (unsigned long long)bar1_addr,
 		  (unsigned int)bar1_size);
+	dev_info(&pdev->dev, "BCM4360 debug: BAR0=%#llx BAR2=%#llx BAR2_size=0x%lx tcm=%px\n",
+		 (unsigned long long)bar0_addr, (unsigned long long)bar1_addr,
+		 bar1_size, devinfo->tcm);
 
 	return 0;
 }
