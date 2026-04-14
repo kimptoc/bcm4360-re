@@ -105,13 +105,19 @@ See: `phase3/results/diagnostic_findings.md`, `phase3/logs/diag.1-14`
 
 ---
 
-## Phase 4: BCDC-over-PCIe Host Transport ← CURRENT PHASE
+## Phase 4: BCDC-over-PCIe Host Transport ✅ PARTIALLY COMPLETE
 
 Phase 3 proved the driver-side PCIe bring-up works. The blocker is that brcmfmac speaks
-msgbuf but the BCM4360 firmware speaks BCDC. This phase investigates whether a BCDC-over-PCIe
+msgbuf but the BCM4360 firmware speaks BCDC. This phase investigated whether a BCDC-over-PCIe
 host transport can be built to communicate with the existing BCM4360 firmware.
 
 See: GitHub issue #4 for the original proposal.
+
+**Phase 4 Outcome:** The standalone test harness (Phase 4B) proved firmware download and
+ARM release work, but the firmware crashes the host ~100-200ms after ARM release — likely
+due to firmware writing to PCIe control registers or initiating DMA without host-side rings
+being set up. The decision was made to pivot to Phase 5 (patching brcmfmac directly) since
+brcmfmac already handles interrupt registration, DMA setup, and chip lifecycle properly.
 
 ### 4A — Transport Discovery
 
@@ -196,19 +202,42 @@ Based on Phase 4C results, choose direction:
 
 ---
 
-## Phase 5: Driver Development and Upstreaming
+## Phase 5: Patch brcmfmac for BCM4360 ← CURRENT PHASE
 
-Contingent on Phase 4 success.
+Rather than building a standalone BCDC transport from scratch, patch the upstream
+`brcmfmac` driver to support BCM4360. The driver already handles PCIe lifecycle,
+interrupts, DMA, and firmware loading — only chip-specific additions are needed.
 
-### 5.1 — Harden the implementation
-- Clean up the prototype into review-ready code
-- Handle edge cases, error paths, teardown
-- Test stability under sustained use
+### 5.1 — Basic chip support patches ✅ COMPLETE
 
-### 5.2 — Test basic functionality
+Patches applied to 3 files (brcm_hw_ids.h, pcie.c, chip.c):
+- PCI device ID 14e4:43a0, chip ID 0x4360
+- Firmware mapping `brcmfmac4360-pcie`
+- rambase=0 (BAR2 maps TCM directly, no offset)
+- 32-bit iowrite32 for firmware/NVRAM download (memcpy_toio hangs BCM4360)
+- NULL-check INTERNAL_MEM core in exit_download_state (BCM4360 has no such core)
+- Enter/exit download state handlers (same as BCM43602 — ARM CR4)
+
+**Result:** Firmware downloads, ARM boots, no crash. "FW failed to initialize"
+due to msgbuf handshake timeout — expected, since BCM4360 FW speaks BCDC.
+
+### 5.2 — Firmware protocol bridge ← NEXT
+
+The firmware boots but doesn't respond to msgbuf's shared memory handshake.
+Need to understand what the firmware actually does after ARM release and how
+to communicate with it. Options:
+
+1. **Investigate firmware's post-boot behavior** — read TCM shared memory region
+   to see if firmware wrote anything (BCDC shared info structure, etc.)
+2. **Add BCDC-over-PCIe transport to brcmfmac** — bypass msgbuf, use the BCDC
+   protocol that the firmware expects (similar to how brcmfmac handles USB/SDIO)
+3. **Trace wl driver handshake** — use mmiotrace to capture what wl does after
+   ARM release to establish communication
+
+### 5.3 — Test basic functionality
 Verify scanning, association, and data transfer work.
 
-### 5.3 — Submit upstream
+### 5.4 — Submit upstream
 Submit to `linux-wireless@vger.kernel.org` and `brcm80211@lists.linux.dev`,
 CC Arend van Spriel. Follow kernel patch submission process.
 
