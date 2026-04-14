@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.23: Return -ENODEV to stop probe immediately
+# Phase 5.2 test.24: Disable ASPM before returning 0
 #
-# test.23 stage=0 (canary + return 0) crashed — probe continues and
-# tries to talk to firmware that never started. test.12a (return error)
-# survived. This test confirms the crash is in post-exit_download_state.
+# test.23: return -ENODEV (probe stops) survives. return 0 (probe
+# continues) crashes. ASPM L0s/L1 is enabled. Hypothesis: link power
+# transitions while reading from unresponsive device crash the host.
 #
-# stage=0: canary + return -ENODEV (probe stops — should survive)
-# stage=1: canary + return 0 (probe continues — expected crash)
+# stage=0: disable ASPM + return 0 (probe continues, ASPM off)
+# stage=1: keep ASPM + return 0 (control — expected crash)
+# stage=2: return -ENODEV (safe baseline)
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
-# Default stage is 0 (return -ENODEV)
+# Default stage is 0 (ASPM disabled + return 0)
 set -e
 
 STAGE="${1:-0}"
@@ -20,16 +21,17 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.23.stage${STAGE}"
+LOG="$LOG_DIR/test.24.stage${STAGE}"
 
-echo "=== test.23: Canary test — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.24: Canary test — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: canary + return -ENODEV (probe stops — should survive)" | tee -a "$LOG" ;;
-    1) echo "Stage 1: canary + return 0 (probe continues — expected crash)" | tee -a "$LOG" ;;
-    *) echo "ERROR: Invalid stage $STAGE (use 0-1)" | tee -a "$LOG"; exit 1 ;;
+    0) echo "Stage 0: disable ASPM + return 0 (probe continues, ASPM off)" | tee -a "$LOG" ;;
+    1) echo "Stage 1: keep ASPM + return 0 (control — expected crash)" | tee -a "$LOG" ;;
+    2) echo "Stage 2: return -ENODEV (safe baseline)" | tee -a "$LOG" ;;
+    *) echo "ERROR: Invalid stage $STAGE (use 0-2)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
 

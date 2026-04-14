@@ -823,38 +823,70 @@ static int brcmf_pcie_exit_download_state(struct brcmf_pciedev_info *devinfo,
 			brcmf_chip_resetcore(core, 0, 0, 0);
 	}
 
-	/* test.23: return -ENODEV to stop probe immediately.
+	/* test.24: disable ASPM before returning 0.
 	 *
-	 * test.22 stage=0 (pure canary: print + return 0) crashed the PC.
-	 * test.20 stage=0 (register reads + return 0) survived.
-	 * test.12a (skip ARM release, return error) survived.
+	 * test.23 confirmed: return -ENODEV (probe stops) survives,
+	 * return 0 (probe continues) crashes (test.22). The crash is
+	 * in the post-exit_download_state probe path which tries to read
+	 * device shared memory while firmware isn't running.
 	 *
-	 * Hypothesis: returning 0 lets probe continue, which tries to
-	 * communicate with firmware that was never started. Those PCIe
-	 * transactions to uninitialized device memory crash the host.
+	 * ASPM L0s/L1 is enabled (lspci shows "ASPM L0s L1 Enabled").
+	 * Hypothesis: ASPM link power transitions while reading from a
+	 * device that can't respond (no firmware) cause the PCIe link
+	 * to hang/drop, crashing the host.
 	 *
-	 * stage=0: canary + return -ENODEV (probe stops immediately)
-	 * stage=1: same as stage=0 but return 0 (probe continues — crash?)
-	 *
-	 * If stage=0 survives and stage=1 crashes, the crash is confirmed
-	 * to be in the post-exit_download_state probe path.
+	 * stage=0: disable ASPM + return 0 (probe continues with ASPM off)
+	 * stage=1: keep ASPM + return 0 (control — expected crash)
+	 * stage=2: return -ENODEV (safe baseline, repeats test.23)
 	 */
 	if (bcm4360_reset_stage >= 0 &&
 	    devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.23: exit_download_state reached, stage=%d\n",
+			  "BCM4360 test.24: exit_download_state reached, stage=%d\n",
 			  bcm4360_reset_stage);
 
 		if (bcm4360_reset_stage == 0) {
+			u16 lnkctl;
+			int pos;
+
+			pos = pci_find_capability(devinfo->pdev, PCI_CAP_ID_EXP);
+			if (pos) {
+				pci_read_config_word(devinfo->pdev,
+						     pos + PCI_EXP_LNKCTL,
+						     &lnkctl);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.24: LnkCtl before=0x%04x\n",
+					  lnkctl);
+				/* Clear ASPM L0s (bit 0) and L1 (bit 1) */
+				lnkctl &= ~PCI_EXP_LNKCTL_ASPMC;
+				pci_write_config_word(devinfo->pdev,
+						      pos + PCI_EXP_LNKCTL,
+						      lnkctl);
+				pci_read_config_word(devinfo->pdev,
+						     pos + PCI_EXP_LNKCTL,
+						     &lnkctl);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.24: LnkCtl after=0x%04x (ASPM disabled)\n",
+					  lnkctl);
+			} else {
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.24: PCIe capability not found!\n");
+			}
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.23: stage=0 — returning -ENODEV to stop probe.\n");
-			return -ENODEV;
+				  "BCM4360 test.24: stage=0 — ASPM disabled, returning 0.\n");
+			return 0;
 		}
 
 		if (bcm4360_reset_stage == 1) {
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.23: stage=1 — returning 0 (probe continues).\n");
+				  "BCM4360 test.24: stage=1 — ASPM kept, returning 0.\n");
 			return 0;
+		}
+
+		if (bcm4360_reset_stage == 2) {
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.24: stage=2 — returning -ENODEV (safe).\n");
+			return -ENODEV;
 		}
 	}
 
