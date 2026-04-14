@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.20: Staged reset — isolate crashing register write
+# Phase 5.2 test.21: Staged reset using correct bus ops path
 #
-# stage=0: read-only dump of ARM CR4 wrapper registers (safe)
-# stage=1: write IOCTL = FGC|CLK
-# stage=2: stage 1 + write RESET_CTL = 0 (clear reset — suspected crash cause)
-# stage=3: full sequence through final IOCTL write
+# test.20 had BAR0 window bug — used core->base instead of wrapbase.
+# test.21 uses chip.c functions which access wrapbase correctly.
+#
+# stage=0: read-only — dump core base, wrapbase, wrapper regs (safe)
+# stage=1: coredisable only (IOCTL + RESET_CTL through correct path)
+# stage=2: full resetcore with CPUHALT
+# stage=3: full set_active (normal ARM release)
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0 (read-only)
@@ -18,17 +21,17 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.20.stage${STAGE}"
+LOG="$LOG_DIR/test.21.stage${STAGE}"
 
-echo "=== test.20: Staged reset — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.21: Staged reset (correct bus ops) — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: READ-ONLY — dump ARM CR4 wrapper registers (safe)" | tee -a "$LOG" ;;
-    1) echo "Stage 1: Write IOCTL = FGC|CLK (coredisable in_reset_configure)" | tee -a "$LOG" ;;
-    2) echo "Stage 2: Stage 1 + write RESET_CTL = 0 (clear reset)" | tee -a "$LOG" ;;
-    3) echo "Stage 3: Full reset sequence with CPUHALT" | tee -a "$LOG" ;;
+    0) echo "Stage 0: READ-ONLY — dump core base, wrapbase, wrapper regs (safe)" | tee -a "$LOG" ;;
+    1) echo "Stage 1: brcmf_chip_coredisable() — IOCTL+RESET_CTL via correct wrapbase" | tee -a "$LOG" ;;
+    2) echo "Stage 2: brcmf_chip_resetcore(CPUHALT) — full reset with ARM halted" | tee -a "$LOG" ;;
+    3) echo "Stage 3: brcmf_chip_set_active() — full ARM release" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage $STAGE (use 0-3)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
