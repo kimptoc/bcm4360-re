@@ -1830,22 +1830,24 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 "BCM4360 debug: sharedram marker before ARM release = 0x%08x\n",
 		 sharedram_addr_written);
 
-	/* test.29: revert to test.7 baseline behavior.
+	/* test.30: zero TCM[ramsize-4] before ARM release.
 	 *
-	 * test.28 crashed: full wait loop with test.17 code (MSI+IRQ+bus master
-	 * enabled BEFORE ARM release) crashed the PC on clean hardware.
-	 * test.7 (stock code) survived the full wait loop: IRQ registered AFTER
-	 * wait loop (in brcmf_pcie_setup), bus mastering DISABLED during wait.
+	 * test.29 crashed: same test.7 baseline, sharedram marker before ARM =
+	 * 0xffc70038 (stale TCM from prior run — NOT a valid pcie_shared ptr,
+	 * valid range is 0..ramsize=0xa0000). Loop ran all 100 iters (firmware
+	 * never changed the value). Crash during iter 100 msleep — firmware
+	 * triggered a PCIe link-level event ~5s after ARM release when driver
+	 * didn't respond to its mailbox.
 	 *
-	 * Two differences between test.7 and test.28:
-	 *   1. Early IRQ handler with uninitialized devinfo->shared
-	 *      (brcmf_pcie_handle_mb_data reads dtoh_mb_data_addr=0 → TCM[0])
-	 *   2. Bus mastering on during wait → firmware can DMA to bad addresses
+	 * Tests 26/27 also had 0xffc70038 pre-ARM but PASSED: firmware overwrote
+	 * it with the actual pcie_shared pointer, loop exited early, init proceeded.
+	 * Test.29: firmware either didn't run, or wrote something but we couldn't
+	 * detect it (same value already there).
 	 *
-	 * test.29: remove both — restore test.7 baseline. Per-iteration
-	 * dev_emerg logging added so last surviving iteration is visible if crash.
-	 * If survived: root cause confirmed as test.17 additions.
-	 * If crashed: something else changed — need further investigation.
+	 * Fix: write 0 to TCM[ramsize-4] before ARM release. Any non-zero write
+	 * by the firmware will be detected. On timeout: return -ENODEV immediately
+	 * (no post-loop MMIO reads or pci_set_master — those are unreachable with
+	 * a dead/confused firmware and would trigger additional PCIe errors).
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		/* Read-only: log PMU/HT state just before ARM release */
@@ -1888,11 +1890,13 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			return -ENODEV; /* clean abort, no crash */
 		}
 
-		/* test.29: disable bus mastering before ARM release (test.7 baseline).
-		 * No MSI, no early IRQ — same as stock driver behavior during wait.
+		/* test.30: zero TCM[ramsize-4] so we detect any non-zero write by FW.
+		 * Also disable bus mastering (test.7 baseline — no DMA during wait).
 		 */
+		brcmf_pcie_write_ram32(devinfo, devinfo->ci->ramsize - 4, 0);
+		sharedram_addr_written = 0; /* sentinel: any FW write is detectable */
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.29: disabling bus mastering before ARM release\n");
+			 "BCM4360 test.30: zeroed TCM[ramsize-4], sentinel=0; disabling bus mastering\n");
 		pci_clear_master(devinfo->pdev);
 	}
 
@@ -1910,7 +1914,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		/* Per-iteration log: last visible entry before any crash tells us timing */
 		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID)
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.29: wait iter %d val=0x%08x\n",
+				  "BCM4360 test.30: wait iter %d val=0x%08x\n",
 				  (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 50) - (int)loop_counter + 1,
 				  sharedram_addr);
 		sharedram_addr = brcmf_pcie_read_ram32(devinfo,
@@ -1919,123 +1923,26 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		loop_counter--;
 	}
 
-	/* Re-enable bus mastering after wait (test.7 baseline) */
+	/* test.30: On timeout, return -ENODEV immediately.
+	 * Do NOT call pci_set_master or do any MMIO reads — the firmware may have
+	 * crashed or triggered a PCIe link event; any MMIO access would cause
+	 * additional fatal errors. (test.29 crashed during iter 100 msleep when
+	 * firmware killed the link ~5s after ARM release.)
+	 */
+	if (sharedram_addr == 0) {
+		brcmf_err(bus, "BCM4360 test.30: FW timeout — did not write sharedram ptr in 5s\n");
+		return -ENODEV;
+	}
+
+	/* Firmware initialized: log the detected shared pointer */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.29: re-enabling bus mastering after FW wait\n");
+			 "BCM4360 test.30: FW init detected! sharedram_addr=0x%08x\n",
+			 sharedram_addr);
+		/* Re-enable bus mastering now that firmware is ready */
 		pci_set_master(devinfo->pdev);
 	}
 
-	/* Post-FW-wait diagnostics for BCM4360 */
-	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-		u32 aer_status;
-		int aer;
-		u16 cmd;
-
-		/* If we got here, the ARM release didn't crash! */
-		pci_read_config_word(devinfo->pdev, PCI_COMMAND, &cmd);
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.15: survived ARM release! PCI_COMMAND=0x%04x\n",
-			 cmd);
-
-		aer = pci_find_ext_capability(devinfo->pdev,
-					      PCI_EXT_CAP_ID_ERR);
-		if (aer) {
-			pci_read_config_dword(devinfo->pdev,
-					      aer + PCI_ERR_UNCOR_STATUS,
-					      &aer_status);
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.15: AER UESta after FW wait=0x%08x\n",
-				 aer_status);
-			pci_read_config_dword(devinfo->pdev,
-					      aer + PCI_ERR_COR_STATUS,
-					      &aer_status);
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.15: AER CESta after FW wait=0x%08x\n",
-				 aer_status);
-		}
-	}
-
-	if (sharedram_addr == sharedram_addr_written) {
-		brcmf_err(bus, "FW failed to initialize\n");
-		/* Debug: dump firmware console and shared struct */
-		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-			u32 i;
-			char line[256];
-			u32 lpos = 0;
-
-			/* PMU/HT state after failure */
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 post-fail: clk_ctl_st=0x%08x res_state=0x%08x pmustatus=0x%08x\n",
-				 READCC32(devinfo, clk_ctl_st),
-				 READCC32(devinfo, res_state),
-				 READCC32(devinfo, pmustatus));
-
-			/* Read console text from 0x96f78 line by line.
-			 * Console log starts directly at this address
-			 * (found in test.7: "Found chip type AI...").
-			 */
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 debug: firmware console log:\n");
-			for (i = 0; i < 4096; i++) {
-				char c = ioread8(devinfo->tcm + 0x96f78 + i);
-
-				if (c == '\0') {
-					if (lpos > 0) {
-						line[lpos] = '\0';
-						dev_info(&devinfo->pdev->dev,
-							 "  FW: %s\n", line);
-					}
-					break;
-				}
-				if (c == '\n' || c == '\r') {
-					if (lpos > 0) {
-						line[lpos] = '\0';
-						dev_info(&devinfo->pdev->dev,
-							 "  FW: %s\n", line);
-						lpos = 0;
-					}
-					continue;
-				}
-				if (lpos < 254)
-					line[lpos++] = c;
-			}
-
-			/* Dump shared struct at 0x9af90 (flags=0xfa, console=0x96f78) */
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 debug: shared struct at 0x9af90:\n");
-			for (i = 0; i < 64; i += 4)
-				dev_info(&devinfo->pdev->dev,
-					 "  [0x%x] = 0x%08x\n",
-					 0x9af90 + i,
-					 ioread32(devinfo->tcm + 0x9af90 + i));
-
-			/* Dump ARM CR4 wrapper via BAR0 window.
-			 * ARM CR4 wrapper base = 0x18102000 (from Phase 4).
-			 * IOCTL=+0x408, IOSTATUS=+0x500, RESETCTL=+0x800.
-			 */
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 debug: ARM CR4 wrapper:\n");
-			dev_info(&devinfo->pdev->dev,
-				 "  IOCTL=0x%08x IOSTATUS=0x%08x RESETCTL=0x%08x\n",
-				 ioread32(devinfo->regs + 0x408),
-				 ioread32(devinfo->regs + 0x500),
-				 ioread32(devinfo->regs + 0x800));
-
-			/* Also check D11 core state */
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_80211);
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 debug: D11 core wrapper:\n");
-			dev_info(&devinfo->pdev->dev,
-				 "  IOCTL=0x%08x IOSTATUS=0x%08x RESETCTL=0x%08x\n",
-				 ioread32(devinfo->regs + 0x408),
-				 ioread32(devinfo->regs + 0x500),
-				 ioread32(devinfo->regs + 0x800));
-		}
-		return -ENODEV;
-	}
 	if (sharedram_addr < devinfo->ci->rambase ||
 	    sharedram_addr >= devinfo->ci->rambase + devinfo->ci->ramsize) {
 		brcmf_err(bus, "Invalid shared RAM address 0x%08x\n",

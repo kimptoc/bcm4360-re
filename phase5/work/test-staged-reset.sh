@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.29: Revert to test.7 baseline — no early IRQ/MSI/bus master
+# Phase 5.2 test.30: Zero TCM[ramsize-4] before ARM release
 #
-# test.28 crashed: full wait loop with test.17 code (MSI+IRQ+bus master
-# before ARM) crashed PC on clean hardware.
-# test.7 (stock code) survived: IRQ registered AFTER wait loop, bus mastering
-# DISABLED during wait (pci_clear_master before ARM, pci_set_master after).
+# test.29 crashed: test.7 baseline, sharedram marker = 0xffc70038 (stale).
+# Loop ran all 100 iters — value never changed. Crash during iter 100 msleep,
+# ~5s after ARM release. Firmware triggered PCIe link event when driver didn't
+# respond to its mailbox.
 #
-# test.29: remove test.17 additions, restore test.7 baseline behavior.
-# Per-iteration dev_emerg logging shows last surviving iteration if crash.
+# Tests 26/27 also had 0xffc70038 pre-ARM but PASSED: firmware overwrote it
+# with the actual pcie_shared pointer, loop exited early, init proceeded.
+# test.29: something prevented firmware from updating the value.
 #
-# If survived: root cause confirmed as test.17 additions (early IRQ/MSI/DMA).
-# If crashed: something else changed since test.7.
+# test.30: write 0 to TCM[ramsize-4] before ARM release so any non-zero write
+# by firmware is detected. On timeout: return -ENODEV immediately (no MMIO
+# reads or pci_set_master that would trigger additional PCIe errors).
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0 (full 5000ms wait loop)
@@ -24,14 +26,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.29.stage${STAGE}"
+LOG="$LOG_DIR/test.30.stage${STAGE}"
 
-echo "=== test.29: Test.7 baseline (no early IRQ/MSI/bus master) — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.30: Zero TCM[ramsize-4] before ARM release — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: full 5000ms wait loop, test.7 baseline (pci_clear_master before ARM)" | tee -a "$LOG" ;;
+    0) echo "Stage 0: TCM[ramsize-4]=0 before ARM; return -ENODEV immediately on timeout" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
