@@ -1930,44 +1930,20 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	if (err)
 		return err;
 
-	/* test.27: timing probe — when does TCM become inaccessible after ARM release?
+	/* test.28: full wait loop with properly released ARM.
 	 *
-	 * test.26 confirmed: ARM release (brcmf_chip_set_active) is safe.
-	 * The crash is in the wait loop: brcmf_pcie_read_ram32(ramsize-4)
-	 * after msleep(50). This test probes HOW SOON after ARM release the
-	 * BAR2 reads start failing.
+	 * test.26: ARM release (brcmf_chip_set_active) is safe.
+	 * test.27: TCM reads work at all timings T=0..50ms after ARM release.
+	 * Both confirmed clean state after test.25 crash reboot.
 	 *
-	 * We try reads at T=0, 1, 5, 10, 20, 50ms. Each read is preceded by
-	 * a dev_emerg log so if a crash occurs, the last log tells us the delay.
+	 * Now run the full 5000ms wait loop to reproduce test.7 in clean state.
+	 * If firmware writes to ramsize-4 (pcie_shared address), the loop exits
+	 * early and we proceed with init. If not (ASSERT), loop times out, then
+	 * diagnostics run (console dump from 0x96f78).
 	 *
-	 * stage=0: timing probe (T=0..50ms reads, then return -ENODEV)
-	 *   All reads survive → TCM stays accessible (wait loop issue is elsewhere)
-	 *   Crash at T=Xms → firmware reconfigures TCM between T-1ms and T.
-	 * stage=1: ARM released, run wait loop → expected crash (control).
+	 * bcm4360_reset_stage=0: full wait loop (normal path, same as default)
+	 * bcm4360_reset_stage=-1: same (default, no stage override)
 	 */
-	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID &&
-	    bcm4360_reset_stage == 0) {
-		static const int delays_ms[] = {0, 1, 5, 10, 20, 50};
-		int i;
-
-		for (i = 0; i < ARRAY_SIZE(delays_ms); i++) {
-			u32 val;
-
-			if (delays_ms[i] > 0)
-				msleep(delays_ms[i]);
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.27: T=%dms — reading TCM[ramsize-4]...\n",
-				  delays_ms[i]);
-			val = brcmf_pcie_read_ram32(devinfo,
-						    devinfo->ci->ramsize - 4);
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.27: T=%dms — read OK = 0x%08x\n",
-				  delays_ms[i], val);
-		}
-		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.27: all timing reads survived → returning -ENODEV\n");
-		return -ENODEV;
-	}
 
 	brcmf_dbg(PCIE, "Wait for FW init\n");
 

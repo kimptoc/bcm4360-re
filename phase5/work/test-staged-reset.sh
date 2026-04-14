@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.27: Timing probe — when does TCM become inaccessible?
+# Phase 5.2 test.28: Full wait loop with properly released ARM
 #
-# test.26 confirmed: ARM release (brcmf_chip_set_active) is safe.
-# The crash is the FW wait loop's brcmf_pcie_read_ram32 at T=50ms.
+# test.26: ARM release (brcmf_chip_set_active) is safe.
+# test.27: TCM reads work at T=0..50ms after ARM release (all survived).
+# Both confirmed device is in clean state after test.25 crash reboot.
 #
-# This test probes HOW SOON after ARM release the BAR2 reads fail.
-# Reads at T=0, 1, 5, 10, 20, 50ms. Last surviving log = crash point.
+# Previous crashes (tests 8-25) were from hardware state accumulated
+# during test.7's long 20s firmware run + bad cleanup after ASSERT.
 #
-# stage=0: timing probe (T=0..50ms reads, return -ENODEV after all)
-#   All survive → TCM always accessible (timing not the issue)
-#   Crash at T=Xms → firmware reconfigures TCM between T-1ms and T.
-# stage=1: ARM released, run wait loop → expected crash (control).
+# Now run the full 5000ms wait loop to reproduce test.7 in clean state.
+# ARM is released, wait loop reads every 50ms, diagnostics run after.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
-# Default stage is 0 (timing probe)
+# Default stage is 0 (full wait loop — normal path)
 set -e
 
 STAGE="${1:-0}"
@@ -24,16 +23,15 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.27.stage${STAGE}"
+LOG="$LOG_DIR/test.28.stage${STAGE}"
 
-echo "=== test.27: TCM timing probe after ARM release — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.28: Full wait loop with properly released ARM — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: timing probe (T=0,1,5,10,20,50ms reads, then -ENODEV)" | tee -a "$LOG" ;;
-    1) echo "Stage 1: ARM released + run wait loop (expected crash — control)" | tee -a "$LOG" ;;
-    *) echo "ERROR: Invalid stage $STAGE (use 0-1)" | tee -a "$LOG"; exit 1 ;;
+    0) echo "Stage 0: full 5000ms wait loop (normal path — same as no stage override)" | tee -a "$LOG" ;;
+    *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
 
@@ -89,8 +87,8 @@ modprobe cfg80211 2>/dev/null || true
 insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
-echo "Module loaded. Waiting 10s..." | tee -a "$LOG"
-sleep 10
+echo "Module loaded. Waiting 15s (5s FW wait loop + 10s diagnostics)..." | tee -a "$LOG"
+sleep 15
 
 # Capture results
 echo "" | tee -a "$LOG"
