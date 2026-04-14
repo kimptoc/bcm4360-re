@@ -76,6 +76,11 @@ BRCMF_FW_CLM_DEF(4387C2, "brcmfmac4387c2-pcie");
 MODULE_FIRMWARE(BRCMF_FW_DEFAULT_PATH "brcmfmac*-pcie.txt");
 MODULE_FIRMWARE(BRCMF_FW_DEFAULT_PATH "brcmfmac*-pcie.*.txt");
 
+/* BCM4360 debug: skip ARM release to safely test firmware download without crash */
+static int bcm4360_skip_arm;
+module_param(bcm4360_skip_arm, int, 0644);
+MODULE_PARM_DESC(bcm4360_skip_arm, "BCM4360: skip ARM release (1=skip, 0=normal)");
+
 /* per-board firmware binaries */
 MODULE_FIRMWARE(BRCMF_FW_DEFAULT_PATH "brcmfmac*-pcie.*.bin");
 MODULE_FIRMWARE(BRCMF_FW_DEFAULT_PATH "brcmfmac*-pcie.*.clm_blob");
@@ -1813,18 +1818,12 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 "BCM4360 debug: sharedram marker before ARM release = 0x%08x\n",
 		 sharedram_addr_written);
 
-	/* BCM4360 safety: disable bus mastering before ARM release to prevent
-	 * firmware DMA to host memory. The firmware's ASSERT handler at
-	 * hndarm.c:397 previously caused host crashes by corrupting PCIe state.
-	 * Test.7 proved this approach is safe (no PC crash).
-	 * NOTE: ASPM disable was added in test.8+ and correlated with crashes,
-	 * so it is NOT included here. Adding it back is a future test step.
+	/* BCM4360 safety measures before ARM release.
+	 * Tests 8-11 all crashed the PC. Bus mastering disable alone is not
+	 * enough — the firmware ARM execution triggers a fatal PCIe interaction
+	 * even without DMA. Also disable MSI and legacy interrupts.
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 debug: disabling bus mastering before ARM release (test.11)\n");
-		pci_clear_master(devinfo->pdev);
-
 		/* Read-only: log PMU/HT state just before ARM release */
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 		dev_info(&devinfo->pdev->dev,
@@ -1832,6 +1831,43 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			 READCC32(devinfo, clk_ctl_st),
 			 READCC32(devinfo, res_state),
 			 (READCC32(devinfo, clk_ctl_st) & 0x20000) ? "YES" : "NO");
+
+		if (bcm4360_skip_arm) {
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.12: skipping ARM release (bcm4360_skip_arm=1)\n");
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.12: FW downloaded OK, dumping TCM state\n");
+
+			/* Dump first 64 bytes of TCM to verify FW was written */
+			{
+				u32 i, val;
+
+				for (i = 0; i < 64; i += 4) {
+					val = brcmf_pcie_read_ram32(devinfo, i);
+					if (i % 16 == 0)
+						dev_info(&devinfo->pdev->dev,
+							 "BCM4360 TCM[0x%04x]: %08x %08x %08x %08x\n",
+							 i,
+							 val,
+							 brcmf_pcie_read_ram32(devinfo, i + 4),
+							 brcmf_pcie_read_ram32(devinfo, i + 8),
+							 brcmf_pcie_read_ram32(devinfo, i + 12));
+				}
+			}
+
+			/* Read back NVRAM area to verify it was written */
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.12: sharedram[0x%x] = 0x%08x\n",
+				 devinfo->ci->ramsize - 4,
+				 brcmf_pcie_read_ram32(devinfo,
+						       devinfo->ci->ramsize - 4));
+			return -ENODEV; /* clean abort, no crash */
+		}
+
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 debug: disabling bus mastering + interrupts before ARM release (test.12)\n");
+		pci_clear_master(devinfo->pdev);
+		pci_disable_device(devinfo->pdev);
 	}
 
 	brcmf_dbg(PCIE, "Bring ARM in running state\n");
@@ -1851,10 +1887,13 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		loop_counter--;
 	}
 
-	/* Re-enable bus mastering now that firmware wait is done */
+	/* Re-enable PCI device and bus mastering now that firmware wait is done */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 debug: re-enabling bus mastering after FW wait\n");
+			 "BCM4360 debug: re-enabling PCI device + bus mastering after FW wait\n");
+		if (pci_enable_device(devinfo->pdev))
+			dev_warn(&devinfo->pdev->dev,
+				 "BCM4360: failed to re-enable PCI device\n");
 		pci_set_master(devinfo->pdev);
 	}
 
