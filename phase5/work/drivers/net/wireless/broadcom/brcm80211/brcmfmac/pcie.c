@@ -697,6 +697,19 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 	if (!devinfo->ci)
 		return;
 
+	/* BCM4360: skip watchdog reset to preserve EFI-initialized PMU/PLL
+	 * state. The BCM4360 firmware reads board config from OTP CIS which
+	 * bcma cannot parse ("Invalid SPROM"). After a watchdog reset, the
+	 * PMU loses its configuration and the firmware cannot re-derive PLL
+	 * settings, causing HT clock timeout (ASSERT hndarm.c:397).
+	 * By skipping the reset, we keep the EFI-initialized PMU state intact.
+	 */
+	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360: skipping watchdog reset to preserve PMU state\n");
+		return;
+	}
+
 	/* Disable ASPM */
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
 	pci_read_config_dword(devinfo->pdev, BRCMF_PCIE_REG_LINK_STATUS_CTRL,
@@ -1784,14 +1797,23 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 "BCM4360 debug: sharedram marker before ARM release = 0x%08x\n",
 		 sharedram_addr_written);
 
-	/* BCM4360 safety: disable bus mastering before ARM release to prevent
-	 * firmware DMA to host memory. The firmware's ASSERT handler at
-	 * hndarm.c:397 previously caused host crashes by corrupting PCIe state.
-	 * We re-enable bus mastering only after confirming firmware is alive.
+	/* BCM4360 safety measures before ARM release:
+	 * 1. Disable ASPM L0s/L1 — prevents PCIe link power states from
+	 *    interfering with the firmware's HT clock bring-up.
+	 * 2. Disable bus mastering — prevents firmware's ASSERT crash handler
+	 *    from DMA-ing to host memory if it fails.
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+		u32 lsc;
+
+		brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
+		pci_read_config_dword(devinfo->pdev,
+				      BRCMF_PCIE_REG_LINK_STATUS_CTRL, &lsc);
+		lsc &= ~BRCMF_PCIE_LINK_STATUS_CTRL_ASPM_ENAB;
+		pci_write_config_dword(devinfo->pdev,
+				      BRCMF_PCIE_REG_LINK_STATUS_CTRL, lsc);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 debug: disabling bus mastering before ARM release\n");
+			 "BCM4360 debug: ASPM disabled, bus mastering disabled before ARM release\n");
 		pci_clear_master(devinfo->pdev);
 	}
 
