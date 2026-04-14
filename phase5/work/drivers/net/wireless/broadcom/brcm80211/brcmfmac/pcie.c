@@ -1830,10 +1830,22 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 "BCM4360 debug: sharedram marker before ARM release = 0x%08x\n",
 		 sharedram_addr_written);
 
-	/* BCM4360 safety measures before ARM release.
-	 * Tests 8-11 all crashed the PC. Bus mastering disable alone is not
-	 * enough — the firmware ARM execution triggers a fatal PCIe interaction
-	 * even without DMA. Also disable MSI and legacy interrupts.
+	/* test.29: revert to test.7 baseline behavior.
+	 *
+	 * test.28 crashed: full wait loop with test.17 code (MSI+IRQ+bus master
+	 * enabled BEFORE ARM release) crashed the PC on clean hardware.
+	 * test.7 (stock code) survived the full wait loop: IRQ registered AFTER
+	 * wait loop (in brcmf_pcie_setup), bus mastering DISABLED during wait.
+	 *
+	 * Two differences between test.7 and test.28:
+	 *   1. Early IRQ handler with uninitialized devinfo->shared
+	 *      (brcmf_pcie_handle_mb_data reads dtoh_mb_data_addr=0 → TCM[0])
+	 *   2. Bus mastering on during wait → firmware can DMA to bad addresses
+	 *
+	 * test.29: remove both — restore test.7 baseline. Per-iteration
+	 * dev_emerg logging added so last surviving iteration is visible if crash.
+	 * If survived: root cause confirmed as test.17 additions.
+	 * If crashed: something else changed — need further investigation.
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		/* Read-only: log PMU/HT state just before ARM release */
@@ -1876,53 +1888,12 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			return -ENODEV; /* clean abort, no crash */
 		}
 
-		/* test.17: MSI hypothesis test.
-		 * In cold state, MSI address/data registers are all zeros.
-		 * brcmfmac normally enables MSI AFTER ARM release (in
-		 * brcmf_pcie_setup). If firmware fires an MSI on boot,
-		 * the device writes to physical address 0x0 — instant
-		 * machine check exception.
-		 *
-		 * Fix: enable MSI and register IRQ handler BEFORE ARM release.
+		/* test.29: disable bus mastering before ARM release (test.7 baseline).
+		 * No MSI, no early IRQ — same as stock driver behavior during wait.
 		 */
-		{
-			u16 msi_ctrl;
-			u32 msi_addr_lo, msi_addr_hi;
-			u16 msi_data;
-
-			pci_enable_msi(devinfo->pdev);
-			if (request_threaded_irq(devinfo->pdev->irq,
-						 brcmf_pcie_quick_check_isr,
-						 brcmf_pcie_isr_thread,
-						 IRQF_SHARED,
-						 "brcmf_pcie_intr", devinfo)) {
-				dev_err(&devinfo->pdev->dev,
-					"BCM4360 test.17: failed to register IRQ\n");
-				pci_disable_msi(devinfo->pdev);
-			} else {
-				devinfo->irq_allocated = true;
-			}
-
-			/* Log MSI state after enable */
-			pci_read_config_word(devinfo->pdev, 0x5a, &msi_ctrl);
-			pci_read_config_dword(devinfo->pdev, 0x5c, &msi_addr_lo);
-			pci_read_config_dword(devinfo->pdev, 0x60, &msi_addr_hi);
-			pci_read_config_word(devinfo->pdev, 0x64, &msi_data);
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.17: MSI ctrl=0x%04x addr=0x%08x:%08x data=0x%04x irq=%d\n",
-				 msi_ctrl, msi_addr_hi, msi_addr_lo, msi_data,
-				 devinfo->pdev->irq);
-
-			/* Also enable bus mastering so DMA works if needed */
-			pci_set_master(devinfo->pdev);
-			pci_read_config_word(devinfo->pdev, PCI_COMMAND, &msi_ctrl);
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.17: PCI_COMMAND=0x%04x (bus master + MSI before ARM release)\n",
-				 msi_ctrl);
-		}
-
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.17: proceeding with ARM release (MSI enabled before ARM)\n");
+			 "BCM4360 test.29: disabling bus mastering before ARM release\n");
+		pci_clear_master(devinfo->pdev);
 	}
 
 	brcmf_dbg(PCIE, "Bring ARM in running state\n");
@@ -1930,31 +1901,29 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	if (err)
 		return err;
 
-	/* test.28: full wait loop with properly released ARM.
-	 *
-	 * test.26: ARM release (brcmf_chip_set_active) is safe.
-	 * test.27: TCM reads work at all timings T=0..50ms after ARM release.
-	 * Both confirmed clean state after test.25 crash reboot.
-	 *
-	 * Now run the full 5000ms wait loop to reproduce test.7 in clean state.
-	 * If firmware writes to ramsize-4 (pcie_shared address), the loop exits
-	 * early and we proceed with init. If not (ASSERT), loop times out, then
-	 * diagnostics run (console dump from 0x96f78).
-	 *
-	 * bcm4360_reset_stage=0: full wait loop (normal path, same as default)
-	 * bcm4360_reset_stage=-1: same (default, no stage override)
-	 */
-
 	brcmf_dbg(PCIE, "Wait for FW init\n");
 
 	sharedram_addr = sharedram_addr_written;
 	loop_counter = BRCMF_PCIE_FW_UP_TIMEOUT / 50;
 	while ((sharedram_addr == sharedram_addr_written) && (loop_counter)) {
 		msleep(50);
+		/* Per-iteration log: last visible entry before any crash tells us timing */
+		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID)
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.29: wait iter %d val=0x%08x\n",
+				  (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 50) - (int)loop_counter + 1,
+				  sharedram_addr);
 		sharedram_addr = brcmf_pcie_read_ram32(devinfo,
 						       devinfo->ci->ramsize -
 						       4);
 		loop_counter--;
+	}
+
+	/* Re-enable bus mastering after wait (test.7 baseline) */
+	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 test.29: re-enabling bus mastering after FW wait\n");
+		pci_set_master(devinfo->pdev);
 	}
 
 	/* Post-FW-wait diagnostics for BCM4360 */

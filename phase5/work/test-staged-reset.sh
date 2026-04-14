@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.28: Full wait loop with properly released ARM
+# Phase 5.2 test.29: Revert to test.7 baseline — no early IRQ/MSI/bus master
 #
-# test.26: ARM release (brcmf_chip_set_active) is safe.
-# test.27: TCM reads work at T=0..50ms after ARM release (all survived).
-# Both confirmed device is in clean state after test.25 crash reboot.
+# test.28 crashed: full wait loop with test.17 code (MSI+IRQ+bus master
+# before ARM) crashed PC on clean hardware.
+# test.7 (stock code) survived: IRQ registered AFTER wait loop, bus mastering
+# DISABLED during wait (pci_clear_master before ARM, pci_set_master after).
 #
-# Previous crashes (tests 8-25) were from hardware state accumulated
-# during test.7's long 20s firmware run + bad cleanup after ASSERT.
+# test.29: remove test.17 additions, restore test.7 baseline behavior.
+# Per-iteration dev_emerg logging shows last surviving iteration if crash.
 #
-# Now run the full 5000ms wait loop to reproduce test.7 in clean state.
-# ARM is released, wait loop reads every 50ms, diagnostics run after.
+# If survived: root cause confirmed as test.17 additions (early IRQ/MSI/DMA).
+# If crashed: something else changed since test.7.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
-# Default stage is 0 (full wait loop — normal path)
+# Default stage is 0 (full 5000ms wait loop)
 set -e
 
 STAGE="${1:-0}"
@@ -23,14 +24,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.28.stage${STAGE}"
+LOG="$LOG_DIR/test.29.stage${STAGE}"
 
-echo "=== test.28: Full wait loop with properly released ARM — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.29: Test.7 baseline (no early IRQ/MSI/bus master) — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: full 5000ms wait loop (normal path — same as no stage override)" | tee -a "$LOG" ;;
+    0) echo "Stage 0: full 5000ms wait loop, test.7 baseline (pci_clear_master before ARM)" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
