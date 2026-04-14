@@ -74,8 +74,8 @@ dmesg -C  # Clear kernel log
 insmod "$FMAC_DIR/brcmfmac.ko"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
-echo "Modules loaded. Waiting 5s for probe..."
-sleep 5
+echo "Modules loaded. Waiting 15s for probe + FW init timeout + debug dump..."
+sleep 15
 
 # Capture dmesg output
 echo "=== dmesg output ===" | tee "$LOG_DIR/test.$LOG_NUM"

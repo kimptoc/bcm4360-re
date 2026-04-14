@@ -1,0 +1,129 @@
+=== dmesg output ===
+[ 6041.849641] usbcore: registered new interface driver brcmfmac
+[ 6041.849966] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffd4a041200000
+[ 6041.956415] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[ 6041.956538] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.Apple Inc.-MacBookPro11,1.bin failed with error -2
+[ 6041.958607] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+[ 6041.958715] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+[ 6041.960060] brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffd4a041200000
+[ 6042.022906] brcmfmac 0000:03:00.0: BCM4360 debug: sending H2D doorbell after ARM release
+[ 6047.122822] brcmfmac 0000:03:00.0: brcmf_pcie_download_fw_nvram: FW failed to initialize
+[ 6047.122874] brcmfmac 0000:03:00.0: BCM4360 debug: RAM end (last 32 bytes at 0x9ffe0):
+[ 6047.122946] brcmfmac 0000:03:00.0:   [0x9ffe0] = 0x72666c61
+[ 6047.123012] brcmfmac 0000:03:00.0:   [0x9ffe4] = 0x343d7165
+[ 6047.123075] brcmfmac 0000:03:00.0:   [0x9ffe8] = 0x30303030
+[ 6047.124756] brcmfmac 0000:03:00.0:   [0x9ffec] = 0x32616100
+[ 6047.126305] brcmfmac 0000:03:00.0:   [0x9fff0] = 0x00373d67
+[ 6047.127832] brcmfmac 0000:03:00.0:   [0x9fff4] = 0x67356161
+[ 6047.129770] brcmfmac 0000:03:00.0:   [0x9fff8] = 0x0000373d
+[ 6047.133456] brcmfmac 0000:03:00.0:   [0x9fffc] = 0xffc70038
+[ 6047.135370] brcmfmac 0000:03:00.0: BCM4360 debug: shared_info area (0x9D0A0):
+[ 6047.138193] brcmfmac 0000:03:00.0:   [0x9d0a0] = 0xa1857dfd
+[ 6047.140655] brcmfmac 0000:03:00.0:   [0x9d0a4] = 0x555c26b1
+[ 6047.142931] brcmfmac 0000:03:00.0:   [0x9d0a8] = 0x232703c4
+[ 6047.144936] brcmfmac 0000:03:00.0:   [0x9d0ac] = 0x7ab689cd
+[ 6047.146881] brcmfmac 0000:03:00.0:   [0x9d0b0] = 0x5e4cd7ed
+[ 6047.148537] brcmfmac 0000:03:00.0:   [0x9d0b4] = 0x0009af88
+[ 6047.149867] brcmfmac 0000:03:00.0:   [0x9d0b8] = 0x66918f11
+[ 6047.151305] brcmfmac 0000:03:00.0:   [0x9d0bc] = 0x5bcbdbeb
+[ 6047.152690] brcmfmac 0000:03:00.0: BCM4360 debug: console struct (0x96F70):
+[ 6047.154026] brcmfmac 0000:03:00.0:   [0x96f70] = 0x00004000
+[ 6047.155276] brcmfmac 0000:03:00.0:   [0x96f74] = 0x00000000
+[ 6047.156448] brcmfmac 0000:03:00.0:   [0x96f78] = 0x6e756f46
+[ 6047.157581] brcmfmac 0000:03:00.0:   [0x96f7c] = 0x68632064
+[ 6047.158719] brcmfmac 0000:03:00.0: BCM4360 debug: console buf at 0x4000 size 0
+[ 6047.159807] brcmfmac 0000:03:00.0: BCM4360 console: 
+[ 6047.160887] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0 PCIe core registers:
+[ 6047.162030] brcmfmac 0000:03:00.0:   BAR0[0x000] = 0x83828180
+[ 6047.163140] brcmfmac 0000:03:00.0:   BAR0[0x004] = 0x87868584
+[ 6047.164224] brcmfmac 0000:03:00.0:   BAR0[0x008] = 0x00000000
+[ 6047.165306] brcmfmac 0000:03:00.0:   BAR0[0x00c] = 0x00000000
+[ 6047.166380] brcmfmac 0000:03:00.0:   BAR0[0x020] = 0x00000080
+[ 6047.167441] brcmfmac 0000:03:00.0:   BAR0[0x024] = 0x00000000
+[ 6047.168485] brcmfmac 0000:03:00.0:   BAR0[0x028] = 0x00000000
+[ 6047.169486] brcmfmac 0000:03:00.0:   BAR0[0x02c] = 0x00000000
+[ 6047.170442] brcmfmac 0000:03:00.0:   BAR0[0x040] = 0x83828180
+[ 6047.171391] brcmfmac 0000:03:00.0:   BAR0[0x044] = 0x87868584
+[ 6047.172332] brcmfmac 0000:03:00.0:   BAR0[0x048] = 0x00000000
+[ 6047.173253] brcmfmac 0000:03:00.0:   BAR0[0x04c] = 0x00000000
+[ 6047.174154] brcmfmac 0000:03:00.0:   BAR0[0x050] = 0x00000000
+[ 6047.175048] brcmfmac 0000:03:00.0:   BAR0[0x054] = 0x00000000
+[ 6047.175931] brcmfmac 0000:03:00.0:   BAR0[0x058] = 0x00000000
+[ 6047.176792] brcmfmac 0000:03:00.0:   BAR0[0x05c] = 0x00000000
+[ 6047.177649] brcmfmac 0000:03:00.0:   BAR0[0x060] = 0x00000080
+[ 6047.178444] brcmfmac 0000:03:00.0:   BAR0[0x064] = 0x00000000
+[ 6047.179188] brcmfmac 0000:03:00.0:   BAR0[0x120] = 0x83828180
+[ 6047.179889] brcmfmac 0000:03:00.0:   BAR0[0x124] = 0x00000084
+[ 6047.180570] brcmfmac 0000:03:00.0:   BAR0[0x140] = 0x00000001
+[ 6047.181193] brcmfmac 0000:03:00.0:   BAR0[0x144] = 0x00000000
+[ 6047.181730] brcmfmac 0000:03:00.0: BCM4360 debug: scanning TCM for pcie_shared candidates...
+[ 6047.358500] brcmfmac 0000:03:00.0:   [0x9af90] flags=0xfa next=0x96f78
+[ 6047.363688] brcmfmac 0000:03:00.0:   [0x9cd24] flags=0xa next=0x9cd87
+[ 6047.363764] brcmfmac 0000:03:00.0:   [0x9cd3c] flags=0x10 next=0x9cdce
+[ 6047.363843] brcmfmac 0000:03:00.0:   [0x9cd54] flags=0xa next=0x9cdb7
+[ 6047.363918] brcmfmac 0000:03:00.0:   [0x9cd6c] flags=0x10 next=0x9cded
+[ 6047.364482] brcmfmac 0000:03:00.0:   [0x9cd88] flags=0x8 next=0x40010
+[ 6047.365004] brcmfmac 0000:03:00.0:   [0x9cd98] flags=0xa next=0x185d
+[ 6047.365519] brcmfmac 0000:03:00.0:   [0x9cda4] flags=0x47 next=0x62910
+[ 6047.366279] brcmfmac 0000:03:00.0:   [0x9cf3c] flags=0xa next=0x9cf31
+[ 6047.366748] brcmfmac 0000:03:00.0:   [0x9cf4c] flags=0xa next=0x9cfab
+[ 6047.367300] brcmfmac 0000:03:00.0:   [0x9cf80] flags=0x2 next=0x1202
+[ 6047.367791] brcmfmac 0000:03:00.0:   [0x9cfa8] flags=0x9 next=0x9cfe0
+[ 6047.376410] brcmfmac 0000:03:00.0: BCM4360 debug: candidate shared struct at 0x9af90:
+[ 6047.376878] brcmfmac 0000:03:00.0:   [0x9af90] = 0x000000fa
+[ 6047.377335] brcmfmac 0000:03:00.0:   [0x9af94] = 0x00096f78
+[ 6047.377782] brcmfmac 0000:03:00.0:   [0x9af98] = 0x00000000
+[ 6047.378227] brcmfmac 0000:03:00.0:   [0x9af9c] = 0x00000000
+[ 6047.378667] brcmfmac 0000:03:00.0:   [0x9afa0] = 0x00000000
+[ 6047.379108] brcmfmac 0000:03:00.0:   [0x9afa4] = 0x00000000
+[ 6047.379545] brcmfmac 0000:03:00.0:   [0x9afa8] = 0x00000000
+[ 6047.379980] brcmfmac 0000:03:00.0:   [0x9afac] = 0x00000000
+[ 6047.380409] brcmfmac 0000:03:00.0:   [0x9afb0] = 0x00000000
+[ 6047.380838] brcmfmac 0000:03:00.0:   [0x9afb4] = 0x00000000
+[ 6047.381254] brcmfmac 0000:03:00.0:   [0x9afb8] = 0x00000000
+[ 6047.381659] brcmfmac 0000:03:00.0:   [0x9afbc] = 0x00000000
+[ 6047.382064] brcmfmac 0000:03:00.0:   [0x9afc0] = 0x00000000
+[ 6047.382464] brcmfmac 0000:03:00.0:   [0x9afc4] = 0x00000000
+[ 6047.382863] brcmfmac 0000:03:00.0:   [0x9afc8] = 0x00000000
+[ 6047.383246] brcmfmac 0000:03:00.0:   [0x9afcc] = 0x00000000
+[ 6047.383619] brcmfmac 0000:03:00.0:   [0x9afd0] = 0x00000000
+[ 6047.383984] brcmfmac 0000:03:00.0:   [0x9afd4] = 0x00000000
+[ 6047.384334] brcmfmac 0000:03:00.0:   [0x9afd8] = 0x00000000
+[ 6047.384681] brcmfmac 0000:03:00.0:   [0x9afdc] = 0x00000000
+[ 6047.385028] brcmfmac 0000:03:00.0:   [0x9afe0] = 0x00000000
+[ 6047.385374] brcmfmac 0000:03:00.0:   [0x9afe4] = 0x00000000
+[ 6047.385719] brcmfmac 0000:03:00.0:   [0x9afe8] = 0x00000000
+[ 6047.386062] brcmfmac 0000:03:00.0:   [0x9afec] = 0x00000000
+[ 6047.386404] brcmfmac 0000:03:00.0:   [0x9aff0] = 0x00000000
+[ 6047.386749] brcmfmac 0000:03:00.0:   [0x9aff4] = 0x00000000
+[ 6047.387089] brcmfmac 0000:03:00.0:   [0x9aff8] = 0x00000000
+[ 6047.387537] brcmfmac 0000:03:00.0:   [0x9affc] = 0x00000000
+[ 6047.388042] brcmfmac 0000:03:00.0:   [0x9b000] = 0x00000000
+[ 6047.388561] brcmfmac 0000:03:00.0:   [0x9b004] = 0x00000000
+[ 6047.389158] brcmfmac 0000:03:00.0:   [0x9b008] = 0x00000000
+[ 6047.389640] brcmfmac 0000:03:00.0:   [0x9b00c] = 0x00000000
+[ 6047.389944] brcmfmac 0000:03:00.0: BCM4360 debug: console area (0x96f60):
+[ 6047.390293] brcmfmac 0000:03:00.0:   [0x96f60] = 0x00000000
+[ 6047.390647] brcmfmac 0000:03:00.0:   [0x96f64] = 0x00000000
+[ 6047.391003] brcmfmac 0000:03:00.0:   [0x96f68] = 0x00000000
+[ 6047.391352] brcmfmac 0000:03:00.0:   [0x96f6c] = 0x00000000
+[ 6047.391681] brcmfmac 0000:03:00.0:   [0x96f70] = 0x00004000
+[ 6047.391993] brcmfmac 0000:03:00.0:   [0x96f74] = 0x00000000
+[ 6047.392297] brcmfmac 0000:03:00.0:   [0x96f78] = 0x6e756f46
+[ 6047.392591] brcmfmac 0000:03:00.0:   [0x96f7c] = 0x68632064
+[ 6047.392879] brcmfmac 0000:03:00.0:   [0x96f80] = 0x74207069
+[ 6047.393161] brcmfmac 0000:03:00.0:   [0x96f84] = 0x20657079
+[ 6047.393443] brcmfmac 0000:03:00.0:   [0x96f88] = 0x28204941
+[ 6047.393724] brcmfmac 0000:03:00.0:   [0x96f8c] = 0x35317830
+[ 6047.394001] brcmfmac 0000:03:00.0:   [0x96f90] = 0x33343330
+[ 6047.394279] brcmfmac 0000:03:00.0:   [0x96f94] = 0x0d293036
+[ 6047.394556] brcmfmac 0000:03:00.0:   [0x96f98] = 0x3532310a
+[ 6047.394836] brcmfmac 0000:03:00.0:   [0x96f9c] = 0x2e383838
+[ 6047.395099] brcmfmac 0000:03:00.0: BCM4360 debug: trying console at word[0x96f68]=0x0
+[ 6047.396727] brcmfmac 0000:03:00.0: BCM4360 console text at 0x96f78: Found chip type AI (0x15034360)
+               125888.000 Chipc: rev 43, caps 0x58680001, chipst 0x824d pmurev 17, pmucaps 0x10a22b11
+               125888.000 si_kattach done. ccrev = 43, wd_msticks = 32
+               140386.225 ASSERT in file hndarm.c line 397 (ra 000641cb, fa 0009cfe0)
+
+[ 6047.399158] brcmfmac 0000:03:00.0: brcmf_pcie_setup: Dongle setup failed
+[ 6047.399602] ieee80211 phy7: brcmf_fw_crashed: Firmware has halted or crashed
