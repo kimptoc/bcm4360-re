@@ -2004,11 +2004,32 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 *   Writing 0x7FFFFFFF = ~107s @ 20MHz ALP, far beyond 10ms poll interval.
 		 *   If PASS (no crash at 5s): watchdog CONFIRMED as crash mechanism for tests 43-49.
 		 *   If CRASH: watchdog is NOT the cause; investigate PMU reset or CPU exception.
+		 *
+		 * test.53 RESULT: INSTANT CRASH at iter 1 after writing 0x7FFFFFFF to watchdog.
+		 *   SBR worked (BAR0 probe = 0x15034360, alive). Device got through chip_attach, BBPLL,
+		 *   ARM release fine. Poll loop iter 1: WDOG_PRE=0, PMUWDOG=0 (neither timer was running).
+		 *   WRITECC32(watchdog, 0x7FFFFFFF) logged "iter 1" then CRASH (BAR2 read fail after write).
+		 *   Hypothesis: writing to ChipCommon watchdog while ARM is initializing causes device reset.
+		 *   BAR0_WINDOW may have been changed by ARM firmware between select_core(CHIPCOMMON) at
+		 *   line 1985 and iter 1, so write went to wrong address. Or write starts watchdog which
+		 *   interacts badly with ARM firmware early init path.
+		 *
+		 * test.54 goal: remove the WRITE entirely — isolate whether write or read causes crash.
+		 *   Also: read BAR0_WINDOW (PCIe config 0x80) to check if ARM changed it.
+		 *   Also: read BAR0+0 (chip ID offset = 0) to verify BAR0 still points to ChipCommon.
+		 *   ChipCommon chip ID field = 0x15034360 for BCM4360/3. Non-matching = ARM moved BAR0.
+		 *   Expected outcomes:
+		 *   - Crash at ~49 iters + BAR0_WIN=ChipCommon: WRITE was trigger; reads are safe.
+		 *     Natural crash mechanism is something else at ~49 iters.
+		 *   - Crash at iter 1 + BAR0_WIN != ChipCommon: ARM moved BAR0; reads hit wrong address.
+		 *   - Crash at iter 1 + BAR0_WIN == ChipCommon: reads themselves trigger crash (pmuwatchdog
+		 *     read has side effects?) or something else entirely.
+		 *   - PASS: both reads safe; write was the sole cause of iter-1 crash.
 		 */
 		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 			int iter = (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 10) - (int)loop_counter + 1;
 			u16 pci_cmd, msi_ctrl;
-			u32 wdog, pmuwdog;
+			u32 wdog, pmuwdog, bar0_win, chipid;
 			int msi_cap;
 			u16 new_cmd;
 
@@ -2025,18 +2046,22 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pci_read_config_word(devinfo->pdev, msi_cap + PCI_MSI_FLAGS,
 						     &msi_ctrl);
 
-			/* BAR0 already = ChipCommon (set at ARM-release block above).
-			 * Read WDOG before servicing so we can see the pre-write countdown.
-			 * Then write a large value to reset countdown and prevent expiry.
+			/* Read BAR0_WINDOW from PCIe config — safe even if ARM changed it.
+			 * Compare with ChipCommon base to detect if ARM moved the window.
+			 * Then read chipid (offset 0) via BAR0 to confirm what window maps to.
+			 * READCC32(chipid) is BAR0+0 — same read that BAR0 probe used successfully.
+			 * test.54: NO watchdog write — isolate whether read vs. write causes crash.
 			 */
+			pci_read_config_dword(devinfo->pdev, BRCMF_PCIE_BAR0_WINDOW, &bar0_win);
+			chipid  = brcmf_pcie_read_reg32(devinfo, 0); /* BAR0+0 = chipid if CC */
 			wdog    = READCC32(devinfo, watchdog);
 			pmuwdog = READCC32(devinfo, pmuwatchdog);
-			WRITECC32(devinfo, watchdog, 0x7FFFFFFF);
+			/* test.54: intentionally no WRITECC32 — watching, not servicing */
 
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.52: iter %d val=0x%08x CMD=0x%04x MSI_CTRL=0x%04x WDOG_PRE=0x%08x PMUWDOG=0x%08x\n",
+				  "BCM4360 test.54: iter %d val=0x%08x CMD=0x%04x MSI_CTRL=0x%04x BAR0_WIN=0x%08x CHIPID=0x%08x WDOG=0x%08x PMUWDOG=0x%08x\n",
 				  iter, sharedram_addr,
-				  pci_cmd, msi_ctrl, wdog, pmuwdog);
+				  pci_cmd, msi_ctrl, bar0_win, chipid, wdog, pmuwdog);
 		}
 		sharedram_addr = brcmf_pcie_read_ram32(devinfo,
 						       devinfo->ci->ramsize -
@@ -2829,7 +2854,12 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	 *   chip_attach. SBR resets the BCM4360's AXI fabric WITHOUT needing BAR0 MMIO,
 	 *   using only host PCI config cycles to the bridge.
 	 * After SBR + pci_restore_state: BCM4360 should be in clean power-on-reset state.
-	 * Expected: chip enumeration succeeds, test runs like test.49 but with watchdog servicing.
+	 *
+	 * test.53 RESULT: INSTANT CRASH at poll loop iter 1 after WRITECC32(watchdog, 0x7FFFFFFF).
+	 *   SBR CONFIRMED WORKING: BAR0 probe = 0x15034360 (alive), chip_attach succeeded,
+	 *   BBPLL up, ARM released, iter 1 logged WDOG_PRE=0 PMUWDOG=0 then CRASH.
+	 *   Write 0x7FFFFFFF to ChipCommon watchdog → "iter 1" logged → crash on next BAR2 read.
+	 *   SBR retained for test.54 to keep clean device state.
 	 */
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID && pdev->bus && pdev->bus->self) {
 		struct pci_dev *bridge = pdev->bus->self;
