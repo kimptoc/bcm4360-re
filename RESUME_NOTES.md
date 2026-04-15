@@ -1,68 +1,73 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-15, about to run test.63)
+## Current state (2026-04-15, about to run test.64)
 
 Git branch: main (pushed to origin)
 
-## test.62 RESULT: CRASHED at ~T+20s — two root causes identified
+## test.63 RESULT: SURVIVED 20s — sharedram=0x00000000 throughout
 
-**Survived T+0..T+19s (2000+ BAR2 reads), then crashed**
-- Crash is the 7th ~3s periodic firmware event hitting a re-masking gap at T+20s
-- Firmware NEVER wrote sharedram_addr throughout 20s
+**Machine did NOT crash. TIMEOUT message logged cleanly.**
+- Survived 20s with 10ms inner-loop re-masking ✓
+- But: sharedram=0x00000000 all 20 seconds — firmware NEVER wrote it
 
-**Root cause 1 (sentinel bug):** write_ram32(0) was at line 1808 BEFORE the NVRAM copy at line 1816.
-- NVRAM (228 bytes) written at offset 0x9ff1c covers 0x9ff1c..0x9ffff, including 0x9fffc (ramsize-4)
-- Last 4 bytes of NVRAM blob = 0xffc70038, which OVERWROTE our zero
-- So sharedram_addr_written = 0xffc70038 (not 0)
-- Firmware checks ramsize-4 == 0 before writing sharedram_addr; sees 0xffc70038 → skips write
-- Detection loop compared against 0xffc70038 → never detects firmware's actual write
+**Root cause A (BusMaster=0):**
+- CMD=0x0402 at ARM release = Mem + DisINTx. BusMaster (bit 2) = 0.
+- SBR (Secondary Bus Reset) at probe time clears PCI_COMMAND
+- pci_enable_device() restores Mem but NOT BusMaster
+- Without BusMaster: firmware PCIe2 DMA init fails every ~3s (the periodic events)
+- Firmware is caught in a crash-restart loop, never reaches sharedram_addr write
 
-**Root cause 2 (re-masking gap):** Masking was only per outer tick (every 200ms).
-- The 7th periodic event at ~T+20s hit a gap between outer=95 (T+19s mask) and outer=96 (T+19.2s mask)
-- Machine crashed before TIMEOUT message was logged
+**Root cause B (NVRAM token clobbered):**
+- write_ram32(0) after NVRAM zeroed 0xffc70038 at ramsize-4
+- 0xffc70038 is the NVRAM length/magic token firmware reads to locate NVRAM
+- Without this token, firmware can't parse NVRAM → may fail to init PCIe2 interface
 
-**Key confirmed findings from test.62:**
-- BAR2 reads (brcmf_pcie_read_ram32 via TCM) are SAFE: 2000+ reads, no crash during loop
-- 0xffc70038 = last 4 bytes of NVRAM blob (not a firmware-written sharedram address)
-- 6 periodic PCIE2 events at T+2,5,8,11,14,17s all suppressed successfully
+## test.64 PLAN (about to run)
 
-## test.63 PLAN (about to run)
+**Two fixes:**
+1. **pci_set_master()** before ARM release → firmware can DMA to host memory
+2. **No write_ram32(0)** → NVRAM token (0xffc70038) preserved at ramsize-4
+   - Firmware reads token, parses NVRAM, inits PCIe2, writes sharedram_addr
+   - Detection: poll for value != 0xffc70038 (firmware overwrites it)
 
-**Two fixes + full probe:**
-1. **Sentinel fix**: write_ram32(0) moved to AFTER NVRAM write (code at line ~1808 area, now after line 1817)
-   - Firmware will see 0 at ramsize-4 → writes actual sharedram_addr
-2. **Tighter masking**: re-mask every 10ms (inner loop) instead of every 200ms
-   - Closes the ~200ms window that the 7th event exploited
-3. **Full probe on FW READY**: no return -ENODEV on fw_ready path
-   - Sets sharedram_addr_written = fw_sharedram; falls through to normal init
-   - brcmf_pcie_init_share_ram_info(devinfo, sharedram_addr) will be called
-4. **TIMEOUT**: returns -ENODEV (investigate if firmware still doesn't write)
+**Extra diagnostics:**
+- Log EP CMD (endpoint PCI_COMMAND) every 200ms → confirms BusMaster stays set
+- IOMMU group 8 protects against rogue DMA (confirmed active from test.39)
 
-**Expected outcome if sentinel fix works:**
-- Firmware writes sharedram_addr within 2-3s of ARM release (maybe even sooner with correct sentinel)
-- Full brcmfmac init proceeds: ring buffers, IRQs, etc.
-- WiFi device appears operational
-- BCM4360 802.11ac finally works on this MacBook Pro
+**Module build:** done (test.64 built successfully, warning only: write_ram32 unused)
+**Test script:** updated to test.64 (log = test.64.stage0), waits 30s
 
-**Module build:** done (test.63 built successfully, no errors)
-**Test script:** updated to test.63 (log = test.63.stage0), waits 30s
+**Expected outcomes:**
+- If BusMaster fix works: firmware initializes PCIe2 DMA, writes sharedram_addr
+  - We detect change from 0xffc70038 → actual sharedram_addr (e.g. 0x00200000-ish)
+  - "FW READY" message logged, fall through to full brcmfmac init
+  - WiFi device may appear: `ip link show` or `iw dev`
+- If still crashes: check T+Xms when crash occurred (closer to T+0 now since DMA works?)
+- If sharedram still 0xffc70038 after 20s: firmware still stuck; more diagnosis needed
 
 **After test — what to do (whether PASS or crash):**
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.63" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.63.journal'` (or -b 0 if survived)
-3. `sudo chown kimptoc:users phase5/logs/test.63.*`
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.64" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.64.journal'` (or -b 0 if survived)
+3. `sudo chown kimptoc:users phase5/logs/test.64.*`
 4. git add logs + commit + push
-5. Analyze results
+5. Analyze: look for "FW READY" vs TIMEOUT, check EP_CMD values
+
+**After FW READY + survived:**
+1. Check WiFi: `ip link show` or `iw dev`
+2. Check brcmfmac loaded: `lsmod | grep brcm`
+3. Test WiFi scanning if possible
 
 **After a crash:**
-1. Check if "FW READY" was logged → sentinel fix worked, crash is in full probe
-2. Check if sharedram=0 always → firmware still doesn't write even with fixed sentinel → deeper issue
-3. Note the T+Xms when crash occurred
+1. Check T+Xms — if very early (T+0-500ms): BusMaster caused IOMMU DMA fault crash
+2. Check if "FW READY" was logged before crash
+3. Note EP_CMD values before crash (did BusMaster get cleared?)
 
-**After success (FW READY + survived 30s):**
-1. Check if WiFi device appears: `ip link show` or `iw dev`
-2. Check if brcmfmac is loaded: `lsmod | grep brcm`
-3. Test WiFi scanning if possible
+## Key confirmed findings
+- BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
+- BAR2 reads (brcmf_pcie_read_ram32) are SAFE: 2000+ reads confirmed ✓
+- Masking (RP CMD+BC+DevCtl+AER + 10ms RW1C-clear) defeats all 3s periodic events ✓
+- Survived 20 seconds without crash (test.63) ✓
+- BusMaster must be enabled BEFORE ARM release (the missing piece)
 
 ## Test history summary
 - test.42: PASS — BBPLL only (no ARM) → HAVEHT=YES confirmed
@@ -96,13 +101,16 @@ Git branch: main (pushed to origin)
   BC/DC always 0x0000; per-tick re-masking suppressed 5s event; RootCtl=0x0000
 - test.61: SURVIVED 20s! — status clearing + re-masking defeats all events
   DS=0x0010 (AuxPwr) always; SS/RS always 0; ext_cap0=0x20000000 (ECAM accessible)
-- test.62: CRASHED at ~T+20s (two root causes found — see above)
+- test.62: CRASHED at ~T+20s (two root causes found)
+  sentinel=0xffc70038 (NVRAM last bytes); re-masking gap at T+20s (200ms window)
+- test.63: SURVIVED 20s — sentinel=0 confirmed; FW never writes sharedram
+  ROOT CAUSE FOUND: BusMaster=0 (SBR clears it, never re-enabled) + NVRAM token zeroed
 
 ## Key files
 - Source: phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 - Test script: phase5/work/test-staged-reset.sh
-- Logs: phase5/logs/test.63.stage0, test.63.journal (after test)
+- Logs: phase5/logs/test.64.stage0, test.64.journal (after test)
 - Build: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build && make -C "$KDIR" M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
 
-## Run test.63 (if not yet run):
+## Run test.64 (if not yet run):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0

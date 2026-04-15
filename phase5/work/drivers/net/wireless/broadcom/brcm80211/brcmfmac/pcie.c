@@ -1835,20 +1835,20 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			 "BCM4360 debug: WARNING - no NVRAM loaded!\n");
 	}
 
-	/* test.63: write 0 AFTER NVRAM so NVRAM doesn't overwrite the sentinel.
-	 * In the stock driver the write is before NVRAM, which means the last
-	 * 4 bytes of NVRAM (NVRAM trailer) overwrite the sentinel, leaving a
-	 * non-zero value that prevents firmware change detection.
-	 * Writing 0 here — after all host data is in TCM — is the correct order.
-	 * Firmware checks ramsize-4 == 0 before writing its sharedram_addr.
+	/* test.64: Do NOT zero ramsize-4.  The last 4 bytes of the NVRAM blob
+	 * (0xffc70038) are the NVRAM length/magic token the firmware reads to
+	 * locate its configuration.  Zeroing it (test.63) broke NVRAM discovery.
+	 * The standard brcmfmac protocol:
+	 *   host writes NVRAM → 0xffc70038 sits at ramsize-4
+	 *   firmware reads it, parses NVRAM, inits PCIe2
+	 *   firmware *overwrites* ramsize-4 with sharedram_addr
+	 *   host detects the change (value != 0xffc70038) → that's sharedram_addr
 	 */
-	brcmf_pcie_write_ram32(devinfo, devinfo->ci->ramsize - 4, 0);
-
 	sharedram_addr_written = brcmf_pcie_read_ram32(devinfo,
 						       devinfo->ci->ramsize -
 						       4);
 	dev_info(&devinfo->pdev->dev,
-		 "BCM4360 debug: sharedram sentinel after NVRAM+zero = 0x%08x (expect 0x00000000)\n",
+		 "BCM4360 debug: NVRAM marker at ramsize-4 = 0x%08x (NVRAM length token, not zeroed)\n",
 		 sharedram_addr_written);
 
 	/* test.39: watchdog reset enabled for BCM4360.
@@ -1965,6 +1965,25 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		}
 	}
 
+	/* test.64: Enable BusMaster on BCM4360 endpoint BEFORE ARM release.
+	 * The SBR (Secondary Bus Reset) at probe time clears PCI_COMMAND
+	 * including BusMaster (bit 2).  pci_enable_device() re-enables Mem
+	 * but NOT BusMaster.  Without BusMaster the firmware cannot DMA to
+	 * host memory — its PCIe2 DMA init fails every ~3s causing the
+	 * periodic crash events we observed in test.58-63.
+	 * IOMMU (group 8 confirmed active) protects against rogue DMA.
+	 */
+	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+		u16 cmd_before;
+
+		pci_read_config_word(devinfo->pdev, PCI_COMMAND, &cmd_before);
+		pci_set_master(devinfo->pdev);
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 test.64: BusMaster enabled; CMD was=0x%04x now=0x%04x\n",
+			 cmd_before,
+			 ({u16 c; pci_read_config_word(devinfo->pdev, PCI_COMMAND, &c); c;}));
+	}
+
 	brcmf_dbg(PCIE, "Bring ARM in running state\n");
 	err = brcmf_pcie_exit_download_state(devinfo, resetintr);
 	if (err)
@@ -1989,27 +2008,26 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 	}
 
-	/* test.63: Fix sentinel bug + let full probe continue on FW READY.
+	/* test.64: BusMaster enabled + NVRAM marker preserved.
 	 *
-	 * test.62 RESULT: CRASHED at ~T+20s; FW never wrote sharedram.
-	 *   - Root cause 1: sentinel bug — write_ram32(0) was BEFORE NVRAM write,
-	 *     so NVRAM last-4-bytes (0xffc70038) overwrote our zero. Firmware checks
-	 *     ramsize-4 == 0 before writing sharedram_addr; seeing non-zero, it either
-	 *     skips the write or writes something == 0xffc70038 (undetectable).
-	 *   - Root cause 2: crash at T+20s is the 7th ~3s periodic firmware event
-	 *     hitting a re-masking gap between outer ticks; add inner-loop re-masking.
-	 *   - BAR2 reads (brcmf_pcie_read_ram32) confirmed SAFE: 2000+ reads, no crash.
-	 *   - Sentinel fixed above: write_ram32(0) now happens AFTER NVRAM (confirmed 0).
+	 * test.63 RESULT: SURVIVED 20s, no crash. BUT sharedram=0x00000000 throughout.
+	 *   - Firmware never wrote sharedram_addr in 20 seconds.
+	 *   - Root cause A: CMD=0x0402 → BusMaster=0. SBR clears CMD; pci_enable_device()
+	 *     restores Mem but NOT BusMaster. Without BusMaster, firmware PCIe2 DMA init
+	 *     fails → firmware crash-restarts every ~3s (the periodic events we mask).
+	 *   - Root cause B: write_ram32(0) clobbered NVRAM length token (0xffc70038),
+	 *     breaking firmware NVRAM discovery.
 	 *
-	 * test.63 strategy:
-	 *   1. Same initial masking as test.61/62.
-	 *   2. Re-mask inside inner loop (every 10ms) to close the 200ms event gap.
-	 *   3. sentinel = 0; detect when FW writes non-zero, non-0xFFFFFFFF.
-	 *   4. FW READY → log sharedram_addr; set sharedram_addr_written = sharedram_addr;
-	 *      fall through to the normal init path (brcmf_pcie_init_share_ram_info).
-	 *   5. TIMEOUT → return -ENODEV (investigate further).
+	 * test.64 fixes (both applied above):
+	 *   1. pci_set_master() before ARM release → firmware can DMA
+	 *   2. NVRAM length token (0xffc70038) preserved at ramsize-4
 	 *
-	 * Masking stays in place on exit (restoring could trigger a crash).
+	 * Detection: poll for value != sharedram_addr_written (i.e., != 0xffc70038).
+	 * The standard brcmfmac protocol: firmware reads the NVRAM token, parses
+	 * NVRAM, initializes PCIe2, then OVERWRITES ramsize-4 with sharedram_addr.
+	 *
+	 * Extra diagnostic: log endpoint CMD every 200ms to confirm BusMaster stays set.
+	 * Masking stays in place — restoring RP error settings could trigger a crash.
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		struct pci_dev *rp = devinfo->pdev->bus ? devinfo->pdev->bus->self : NULL;
@@ -2017,7 +2035,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		u32 rp_aer_orig = 0;
 		int pcie_cap = 0, aer_cap = 0;
 		int outer, inner;
-		u32 fw_sharedram = 0; /* sentinel = 0 (write_ram32(0) done after NVRAM above) */
+		u32 fw_sharedram = sharedram_addr_written; /* NVRAM token (0xffc70038) */
 
 		/* Step 1: initial masking — disable RP error escalation */
 		if (rp) {
@@ -2065,24 +2083,35 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pci_write_config_word(rp, PCI_SEC_STATUS, secsta);
 			}
 
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.63: RP=%s masked CMD BC DevCtl AER; "
-				  "RootCtl=0x%04x ext_cap0=0x%08x sentinel=0x%08x\n",
-				  pci_name(rp), rtctl, ext_cap0, sharedram_addr_written);
+			{
+				u16 ep_cmd;
+
+				pci_read_config_word(devinfo->pdev, PCI_COMMAND, &ep_cmd);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.64: RP=%s masked CMD BC DevCtl AER; "
+					  "RootCtl=0x%04x ext_cap0=0x%08x nvram_token=0x%08x EP_CMD=0x%04x\n",
+					  pci_name(rp), rtctl, ext_cap0,
+					  sharedram_addr_written, ep_cmd);
+			}
 		} else {
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.63: no root port — skipping masking\n");
+				  "BCM4360 test.64: no root port — skipping masking\n");
 		}
 
 		/* Step 2: FW wait + per-inner-tick re-masking (20×10ms inner × 100 outer = 20s) */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.63: starting FW wait + masking loop (20s max, re-mask every 10ms)\n");
+			  "BCM4360 test.64: starting FW wait + masking loop (20s max, re-mask every 10ms)\n");
 
 		for (outer = 0; outer < 100; outer++) {
-			/* Log every outer iteration (200ms) with current sharedram value */
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.63 T+%03dms: sharedram=0x%08x\n",
-				  outer * 200, fw_sharedram);
+			/* Log every outer iteration (200ms) with current sharedram + EP CMD */
+			{
+				u16 ep_cmd;
+
+				pci_read_config_word(devinfo->pdev, PCI_COMMAND, &ep_cmd);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.64 T+%03dms: sharedram=0x%08x EP_CMD=0x%04x\n",
+					  outer * 200, fw_sharedram, ep_cmd);
+			}
 
 			/* Inner: re-mask + poll sharedram every 10ms for 200ms */
 			for (inner = 0; inner < 20; inner++) {
@@ -2119,28 +2148,26 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 				fw_sharedram = brcmf_pcie_read_ram32(devinfo,
 								      devinfo->ci->ramsize - 4);
-				/* Detect FW write: non-zero (sentinel) and non-0xFFFFFFFF (timeout) */
-				if (fw_sharedram != 0 && fw_sharedram != 0xFFFFFFFF)
-					goto t63_fw_ready;
-				if (fw_sharedram == 0xFFFFFFFF)
-					fw_sharedram = 0; /* normalize completion timeout back */
+				/* Detect FW write: value changed from NVRAM token */
+				if (fw_sharedram != sharedram_addr_written)
+					goto t64_fw_ready;
 			}
 		}
 
 		/* Timeout — FW did not write sharedram in 20s */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.63: ABOUT TO TIMEOUT (loop complete, crash=cleanup if you see this)\n");
+			  "BCM4360 test.64: ABOUT TO TIMEOUT (loop complete, crash=cleanup if you see this)\n");
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.63: TIMEOUT — FW did not write sharedram in 20s\n");
+			  "BCM4360 test.64: TIMEOUT — FW did not write sharedram in 20s\n");
 		return -ENODEV;
 
-t63_fw_ready:
+t64_fw_ready:
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.63: FW READY at T+%dms sharedram=0x%08x "
+			  "BCM4360 test.64: FW READY at T+%dms sharedram=0x%08x "
 			  "— proceeding with full probe init\n",
 			  outer * 200 + (inner + 1) * 10, fw_sharedram);
-		/* Fall through to normal init: set sharedram_addr so the wait loop below
-		 * sees a non-zero value and skips, then validation + init_share_ram_info run.
+		/* Fall through to normal init: set sharedram_addr_written so the wait
+		 * loop below sees it already changed and skips immediately.
 		 */
 		sharedram_addr_written = fw_sharedram;
 	}
