@@ -1,18 +1,25 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.75: DIAGNOSTIC — observe firmware state without triggering BAR0 MMIO
+# Phase 5.2 test.76: ASPM disable before ARM release — fix pcidongle_probe hang
 #
-# test.74 RESULT: CRASHED.
-#   Machine died immediately after H2D_MAILBOX_0=1 written via PCIE2 BAR0.
-#   Root cause: H2D_MAILBOX_0 is the ring doorbell, NOT the init mailbox.
-#   Writing it during init causes firmware DMA to uninitialised ring buffers →
-#   IOMMU fault → fatal PCIe error crash. Value 1 = D3_INFORM (wrong for init).
+# test.75 RESULT: SURVIVED. Root cause identified.
+#   Firmware froze after "pcie_dngl_probe called" — never wrote pcie_shared.
+#   console_ptr changed at T+2s (firmware alive), then static through T+30s.
+#   olmsg/trap region 0x9D0A0..0x9D100 = static firmware binary data (not trap struct).
+#   No trap magic — firmware is in a CPU bus stall (not exception).
 #
-# test.75 KEY CHANGES from test.74:
-#   1. Remove H2D_MAILBOX_0 BAR0 write entirely — it crashes every time.
-#   2. Remove SBMBX write — can't confirm it's needed without surviving test.
-#   3. DIAGNOSTIC ONLY: monitor console_ptr (0x9cc5c) at T+5s and T+20s.
-#   4. Dump olmsg/trap region 0x9D0A0..0x9D100 at T+5s and T+20s.
-#   5. Goal: determine if firmware is alive or dead at T+5s and T+20s.
+# ROOT CAUSE: ASPM L1 enabled during firmware pcidongle_probe.
+#   brcmf_pcie_reset_device() saves ASPM (L0s+L1 = 0x3) then RESTORES it after watchdog.
+#   When PCIe link enters L1, pipe clock is gated.
+#   Firmware hnd_pcie2_init accesses PCIe2 LTSSM/pipe-clock registers → hangs.
+#   Fresh boot: ASPM disabled (PCI default) → firmware works.
+#   SBR: ASPM restored from prior session → firmware hangs in pcidongle_probe.
+#
+# test.76 KEY CHANGES from test.75:
+#   1. Disable ASPM on EP just before ARM release (critical fix).
+#   2. Log PCIe2 wrapper IOCTL/RESET_CTL before ARM release (diagnostic).
+#   3. Extended BSS dump at T+5s: 0x9D0A0..0x9D500 (was 0x9D0A0..0x9D100).
+#   4. Post-timeout: ARM exception vector dump TCM[0x0..0x3F].
+#   5. Post-timeout: PCIe2 wrapper state + EP ASPM verification.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -26,14 +33,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.75.stage${STAGE}"
+LOG="$LOG_DIR/test.76.stage${STAGE}"
 
-echo "=== test.75: DIAGNOSTIC — olmsg/trap dump + console ptr tracking --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.76: ASPM disable + PCIe2 wrapper diag --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; pci_set_master before ARM; activate() preserves BusMaster; 30s masking+FW wait; TCM scan every 2s (from T+200ms); FULL console dump at T+3s; DIAGNOSTIC olmsg/trap dump at T+5s and T+20s; NO BAR0 writes; TIMEOUT: per-read re-mask+msleep(10); fw_init_done poll; RP restore on timeout" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; pci_set_master before ARM; activate() preserves BusMaster; 30s masking+FW wait; TCM scan every 2s (from T+200ms); FULL console dump at T+3s; BSS dump 0x9D0A0..0x9D500 at T+5s; olmsg dump at T+20s; NO BAR0 writes; TIMEOUT: exception vectors + PCIe2 wrapper; RP restore on timeout" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -88,7 +95,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.75 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.76 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -98,7 +105,7 @@ insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
 echo "Module loaded. Waiting 65s (30s FW wait + 35s margin for TIMEOUT path)..." | tee -a "$LOG"
-echo "(test.75: 30s wait; TCM scan every 2s from T+200ms; full console dump at T+3s; DIAGNOSTIC olmsg/trap dump at T+5s+T+20s; NO BAR0 writes; TIMEOUT → -ENODEV + RP restore)" | tee -a "$LOG"
+echo "(test.76: ASPM disabled before ARM; 30s wait; TCM scan every 2s from T+200ms; console dump at T+3s; BSS dump 0x9D0A0..0x9D500 at T+5s; TIMEOUT → exception vectors + PCIe2 wrapper + RP restore)" | tee -a "$LOG"
 sleep 65
 
 # Capture results
@@ -111,5 +118,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.75: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.75)" | tee -a "$LOG"
+echo "*** test.76: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.76)" | tee -a "$LOG"
