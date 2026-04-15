@@ -1991,86 +1991,52 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	loop_counter = BRCMF_PCIE_FW_UP_TIMEOUT / 10;
 	while ((sharedram_addr == sharedram_addr_written) && (loop_counter)) {
 		msleep(10);
-		/* test.49: INTx disable test.
-		 * test.48 finding: CMD=0x0002 throughout all 49 iters (BusMaster NEVER set
-		 *   by firmware). DMA via Bus Master is DEFINITIVELY RULED OUT.
-		 * Remaining crash candidates after ruling out DMA, link drop, PCIe errors:
-		 *   PCIe INTx (legacy interrupt) assertion by firmware.
-		 * Evidence for INTx hypothesis:
-		 *   - INTx does NOT require Bus Master — uses PCIe OrderedMessages, not TLPs.
-		 *   - Pre-test state: DisINTx- (INTx enabled), MSI: Enable- (only INTx active).
-		 *   - "Interrupt: pin A routed to IRQ 0" — level-triggered, no handler registered.
-		 *   - Level INTx with no handler → interrupt storm → hard lockup, no journal.
-		 *   - test.45 (B. loop) PASS: firmware never reaches interrupt-assertion code.
-		 *   - Wall-clock crash time ~950ms regardless of poll interval (confirmed).
-		 * Plan: set PCI_COMMAND_INTX_DISABLE (bit 10 = 0x0400) before ARM release,
-		 *   re-enforce every 10ms (insurance against firmware clearing it).
-		 *   Also read MSI Message Control (cap+0x02) to check if firmware enables MSI.
-		 *   If PASS: INTx storm confirmed as crash mechanism.
-		 *   If CRASH with DisINTx=1 logged: INTx ruled out, investigate MSI or NMI.
+		/* test.50: ChipCommon watchdog disable test.
+		 * test.49 finding: CMD=0x0402 (DisINTx=1, BusMaster=0) THROUGHOUT all 49 iters.
+		 *   INTx DEFINITIVELY RULED OUT. MSI_CTRL=0x0080 — MSI NEVER ENABLED.
+		 *   All PCIe-level crash mechanisms eliminated (DMA, INTx, MSI, link drop, AER).
+		 * Remaining hypothesis: ChipCommon hardware watchdog fires at ~490ms.
+		 *   CC watchdog (CC+0x80): countdown timer; writing 0 disables it.
+		 *   PMU watchdog (CC+0x634): similar; writing 0 disables.
+		 *   Firmware arms one or both during init. ~490ms crash timing matches a
+		 *   ~512ms watchdog (0x80000 ALP clocks @ ~1MHz ALP = 524ms).
+		 * Plan: every 10ms iteration, disable both watchdogs.
+		 *   Read BEFORE writing 0 so we can observe the countdown in the log.
+		 *   If firmware re-arms them, we'll see non-zero values appear each iter.
+		 *   Keep DisINTx=1 and BusMaster=0 (belt+suspenders from test.49).
 		 */
 		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 			int iter = (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 10) - (int)loop_counter + 1;
-			u16 pci_cmd, pci_status, devsta_dev, devsta_br;
-			u16 lnksta_dev, lnksta_br, msi_ctrl;
-			int pcie_cap_dev, pcie_cap_br, msi_cap;
-			struct pci_dev *bridge;
+			u16 pci_cmd, msi_ctrl;
+			u32 wdog, pmuwdog;
+			int msi_cap;
 			u16 new_cmd;
 
-			/* Read PCI_COMMAND, then enforce DisINTx=1 and BusMaster=0 */
+			/* Keep enforcing DisINTx=1 and BusMaster=0 (from test.49) */
 			pci_read_config_word(devinfo->pdev, PCI_COMMAND, &pci_cmd);
 			new_cmd = (pci_cmd & ~PCI_COMMAND_MASTER) | PCI_COMMAND_INTX_DISABLE;
 			if (new_cmd != pci_cmd)
 				pci_write_config_word(devinfo->pdev, PCI_COMMAND, new_cmd);
 
-			/* Read MSI Message Control to detect if firmware enables MSI */
+			/* Check if firmware has enabled MSI (should still be off) */
 			msi_ctrl = 0;
 			msi_cap = pci_find_capability(devinfo->pdev, PCI_CAP_ID_MSI);
 			if (msi_cap)
 				pci_read_config_word(devinfo->pdev, msi_cap + PCI_MSI_FLAGS,
 						     &msi_ctrl);
 
-			devsta_dev = 0;
-			devsta_br = 0;
-			lnksta_dev = 0;
-			lnksta_br = 0;
-			pci_read_config_word(devinfo->pdev, PCI_STATUS, &pci_status);
-			pcie_cap_dev = pci_find_capability(devinfo->pdev, PCI_CAP_ID_EXP);
-			if (pcie_cap_dev) {
-				pci_read_config_word(devinfo->pdev,
-						     pcie_cap_dev + PCI_EXP_DEVSTA,
-						     &devsta_dev);
-				pci_read_config_word(devinfo->pdev,
-						     pcie_cap_dev + PCI_EXP_LNKSTA,
-						     &lnksta_dev);
-			}
-			bridge = (devinfo->pdev->bus) ? devinfo->pdev->bus->self : NULL;
-			if (bridge) {
-				pcie_cap_br = pci_find_capability(bridge, PCI_CAP_ID_EXP);
-				if (pcie_cap_br) {
-					pci_read_config_word(bridge,
-							     pcie_cap_br + PCI_EXP_DEVSTA,
-							     &devsta_br);
-					pci_read_config_word(bridge,
-							     pcie_cap_br + PCI_EXP_LNKSTA,
-							     &lnksta_br);
-				}
-			}
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.49: iter %d val=0x%08x CMD=0x%04x MSI_CTRL=0x%04x PCI_STA=0x%04x DEV_DEVSTA=0x%04x DEV_LNKSTA=0x%04x BR_LNKSTA=0x%04x\n",
-				  iter, sharedram_addr,
-				  pci_cmd, msi_ctrl, pci_status, devsta_dev, lnksta_dev, lnksta_br);
-			/* Every 50 iterations (~500ms): check pmustatus */
-			if (iter % 50 == 0) {
-				u32 pmu_st;
+			/* Read watchdog values BEFORE zeroing (observe firmware behavior) */
+			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+			wdog    = READCC32(devinfo, watchdog);
+			pmuwdog = READCC32(devinfo, pmuwatchdog);
+			/* Disable both watchdogs — prevent timer from reaching 0 */
+			WRITECC32(devinfo, watchdog, 0);
+			WRITECC32(devinfo, pmuwatchdog, 0);
 
-				brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-				pmu_st = READCC32(devinfo, pmustatus);
-				dev_info(&devinfo->pdev->dev,
-					 "BCM4360 test.49: iter %d pmustatus=0x%08x HT=%s\n",
-					 iter, pmu_st,
-					 (READCC32(devinfo, clk_ctl_st) & 0x20000) ? "YES" : "NO");
-			}
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.50: iter %d val=0x%08x CMD=0x%04x MSI_CTRL=0x%04x WDOG=0x%08x PMUWDOG=0x%08x\n",
+				  iter, sharedram_addr,
+				  pci_cmd, msi_ctrl, wdog, pmuwdog);
 		}
 		sharedram_addr = brcmf_pcie_read_ram32(devinfo,
 						       devinfo->ci->ramsize -
@@ -2283,22 +2249,38 @@ static void brcmf_pcie_buscore_activate(void *ctx, struct brcmf_chip *chip,
 
 	/* test.46: restore normal firmware — write rstvec to TCM[0] for all chips.
 	 * test.49: set DisINTx=1 AND BusMaster=0 immediately before ARM release.
-	 *   test.48 confirmed firmware cannot re-enable BusMaster (CMD=0x0002 throughout).
-	 *   INTx hypothesis: firmware asserts PCIe INTx ~950ms after ARM release.
-	 *   Level-triggered INTx with no registered handler → interrupt storm → hard crash.
-	 *   PCI_COMMAND_INTX_DISABLE (0x0400) suppresses Assert_INTx PCIe messages.
-	 *   The monitoring loop also re-enforces DisINTx=1 every 10ms.
+	 *   INTx RULED OUT (test.49): CMD=0x0402 throughout all 49 iters, still crashed.
+	 *   MSI RULED OUT (test.49): MSI_CTRL=0x0080 (only 64-bit cap bit), never enabled.
+	 *   DMA already ruled out (test.48): BusMaster=0 throughout.
+	 * test.50: ChipCommon + PMU watchdog disable hypothesis.
+	 *   Remaining crash candidate: hardware watchdog timer fires at ~490ms.
+	 *   BCM4360 firmware arms CC watchdog (CC+0x80) and/or PMU watchdog (CC+0x634)
+	 *   during init. If not serviced in time → chip reset → PCIe surprise removal
+	 *   → host hard crash (no journal, no panic, no PCIe errors observed).
+	 *   Plan: write 0 to both watchdogs here (disable before ARM starts) AND
+	 *   every 10ms in the poll loop (prevent firmware from re-arming them).
+	 *   Read values first to log pre-disable state.
 	 */
 	if (chip->chip == BRCM_CC_4360_CHIP_ID) {
 		u16 cmd;
+		u32 wdog, pmuwdog;
 
+		/* Keep DisINTx=1, BusMaster=0 from test.49 */
 		pci_read_config_word(devinfo->pdev, PCI_COMMAND, &cmd);
 		cmd &= ~PCI_COMMAND_MASTER;
 		cmd |= PCI_COMMAND_INTX_DISABLE;
 		pci_write_config_word(devinfo->pdev, PCI_COMMAND, cmd);
+
+		/* Disable CC watchdog (CC+0x80) and PMU watchdog (CC+0x634) */
+		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+		wdog    = READCC32(devinfo, watchdog);
+		pmuwdog = READCC32(devinfo, pmuwatchdog);
+		WRITECC32(devinfo, watchdog, 0);
+		WRITECC32(devinfo, pmuwatchdog, 0);
+
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.49 activate: rstvec=0x%08x to TCM[0]; DisINTx=1 BusMaster=0 CMD=0x%04x\n",
-			 rstvec, cmd);
+			 "BCM4360 test.50 activate: rstvec=0x%08x to TCM[0]; CMD=0x%04x WDOG=0x%08x PMUWDOG=0x%08x (both zeroed)\n",
+			 rstvec, cmd, wdog, pmuwdog);
 	}
 	brcmf_pcie_write_tcm32(devinfo, 0, rstvec);
 }
