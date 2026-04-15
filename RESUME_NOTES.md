@@ -1,70 +1,65 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-15, about to run test.74)
+## Current state (2026-04-15, about to run test.75)
 
 Git branch: main (pushed to origin)
 
-## test.73 RESULT: SURVIVED — but firmware never wrote sharedram
+## test.74 RESULT: CRASHED
 
-**Key finding:**
-- Machine survived! No crash. Fresh pre-SBMBX masking worked.
-- SBMBX written at T+5s (config 0x98=1)
-- Sharedram stayed at 0xffc70038 (baseline/nvram_token) throughout 30s wait
-- Firmware DID run: console output at T+2s showed "wl_probe called", "pcie_dngl_probe called",
-  RTE banner "RTE (PCI-CDC) 6.30.223 (TOB) (r) on BCM4360 r3 @ 40.0/160.0/160.0MHz"
-- After console output, firmware went silent — never wrote pcie_shared ptr
-- TIMEOUT at T+28s, RP restored, returned -ENODEV
+**Crash point:** Machine died immediately after `brcmf_pcie_write_reg32(devinfo, BRCMF_PCIE_PCIE2REG_H2D_MAILBOX_0, 1)`
+Last log line: `BCM4360 test.74: H2D_MAILBOX_0=1 written via PCIE2 BAR0`
+Nothing logged after — machine rebooted.
 
 **Root cause:**
-- SBMBX alone does NOT trigger firmware to write pcie_shared ptr
-- Comparison with test.71 confirms: test.71 wrote BOTH SBMBX + H2D_MAILBOX_0, and FW READY
-  was detected immediately (sharedram→0xffffffff at T+5010ms — likely a PCIe error read)
-- H2D_MAILBOX_0 via BAR0 is the required "host-alive" signal for pcie_dngl_probe to proceed
+- H2D_MAILBOX_0 (BAR0 offset 0x140) is the **ring doorbell** (D2H/H2D DMA notification), NOT the init mailbox
+- Writing it during firmware init (before rings are allocated) causes firmware to attempt DMA to uninitialized ring buffer addresses
+- IOMMU rejects the DMA → fatal PCIe error → machine crash
+- Value 1 = D3_INFORM (host entering D3) — completely wrong meaning for initialization
+- Triple fresh masking was irrelevant: crash occurred too fast (microseconds) for masking to help
 
-**Implication:**
-- Firmware waits for H2D_MAILBOX_0 before writing pcie_shared and completing init
-- The sharedram=0xffffffff in test.71 was a PCIe read error (stale masking during read)
-- test.71's crash was in the "second wait loop" (unmasked), not from H2D_MAILBOX_0 write itself
+**Key updated understanding:**
+- BAR0 H2D_MAILBOX_0 is the ring doorbell. NEVER write it during init.
+- The correct init mailbox is `brcmf_pcie_send_mb_data()`: writes data to TCM[htod_mb_data_addr] then rings SBMBX
+- But htod_mb_data_addr is only known AFTER reading pcie_shared — chicken-and-egg
+- Firmware never writes pcie_shared despite running to "pcie_dngl_probe called"
+- SBMBX alone (test.73) doesn't trigger pcie_shared write either
 
-## test.74 PLAN (built, ready to run)
+## test.75 PLAN (built, ready to run)
 
-**Key changes from test.73:**
-1. Restore H2D_MAILBOX_0 BAR0 write after SBMBX in outer==25 block
-2. Triple fresh re-mask:
-   - Before SBMBX (already in test.73)
-   - Before H2D_MAILBOX_0 (brcmf_pcie_select_core is also a BAR0 write — mask before it)
-   - After H2D_MAILBOX_0 (firmware responds with DMA to uninitialised host rings → PCIe errors)
-3. Keep masking active through init_share_ram_info at t66_fw_ready
-   - Moved RP restore to AFTER init_share_ram_info returns (not before it)
-   - init_share_ram_info is all BAR2/TCM reads — works fine masked
-   - Firmware may DMA immediately after writing pcie_shared (D2H doorbell)
-4. Inner loop per-read masking already in place (from test.73)
+**Goal:** Pure diagnostic — determine if firmware is alive or dead after T+2s (last known console activity)
 
-**Module build:** done (warning only: brcmf_pcie_write_ram32 unused)
-**Test script:** updated to test.74 (log = test.74.stage0), waits 65s
+**Key changes from test.74:**
+1. Remove H2D_MAILBOX_0 BAR0 write entirely — it crashes every time
+2. Remove SBMBX write — need cleaner diagnostic baseline
+3. At T+5s (outer==25): read console_ptr (0x9cc5c) + dump 0x9D0A0..0x9D100
+4. At T+20s (outer==100): second read/dump — compare to T+5s
+5. Everything else unchanged (masking, inner loop, TCM scan every 2s)
 
-**Hypotheses being tested:**
-- H1: Fresh masking before H2D_MAILBOX_0 prevents crash
-- H2: H2D_MAILBOX_0 triggers firmware to write pcie_shared within 10ms (test.71 timing)
-- H3: Post-H2D re-mask + inner loop masking → valid pcie_shared read (not 0xffffffff)
-- H4: init_share_ram_info completes successfully with valid pcie_shared ptr
-- H5: Keeping masking through init prevents crash from firmware D2H DMA errors
+**Questions test.75 will answer:**
+- Q1: Does console_ptr change between T+2s and T+5s? (firmware alive?)
+- Q2: Does console_ptr change between T+5s and T+20s? (firmware still alive at T+20s?)
+- Q3: What is at 0x9D0A0..0x9D100? (olmsg magic, trap data, or zeros?)
+- Q4: Does 0x9D0A0..0x9D100 change between T+5s and T+20s?
 
 **Expected outcomes:**
-- SURVIVE: triple fresh masking + post-write masking prevents crash
-- T+5s: sharedram changes from 0xffc70038 to valid TCM address (0x9xxxx)
-- FW READY detected, init_share_ram_info called
-- Probe proceeds to DMA ring setup
+- SURVIVE: no BAR0 MMIO writes → no DMA crash trigger
+- If console_ptr static from T+2s: firmware dead/hung at pcie_dngl_probe
+- If console_ptr changes: firmware alive but waiting for something
+- If 0x9D0A0..0x9D100 shows trap magic (e.g. 0xDEADBEEF/firmware-specific): firmware crashed with exception
+- If olmsg magic 0x555c0631 at 0x9D0A4: olmsg protocol active, look for fw_init_done
 
-**After test — what to do:**
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.74" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.74.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.74.*'`
-3. Check for "FW READY" message
-4. Check sharedram value: was it a valid TCM address or 0xffffffff (PCIe error)?
-5. If FW READY + valid: check if init_share_ram_info succeeded
+**Module build:** done (warning only: brcmf_pcie_write_ram32 unused)
+**Test script:** updated to test.75 (log = test.75.stage0), waits 65s
 
-## Run test.74 (if not yet run):
+## Run test.75 (if not yet run):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
+
+## After test — what to do:
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.75" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.75.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.75.*'`
+3. Compare console_ptr at baseline, T+5s, T+20s — is firmware alive?
+4. Decode 0x9D0A0..0x9D100 dump — look for olmsg magic, trap data, or pcie_shared variants
+5. Check if 0x9D0A0..0x9D100 changed between T+5s and T+20s
 
 ## Key confirmed findings
 - BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
@@ -73,23 +68,22 @@ Git branch: main (pushed to origin)
 - BusMaster must be enabled BEFORE ARM release ✓
 - Per-read re-mask+msleep(10) in TIMEOUT path is safe ✓
 - No IOMMU/DMA faults during firmware operation ✓
-- SBMBX write triggers firmware response (within 10ms) ✓ (but firmware still needs H2D_MAILBOX_0)
 - SBMBX alone does NOT trigger pcie_shared write ✓ (test.73 confirmed)
-- H2D_MAILBOX_0 via BAR0 is required to wake pcie_dngl_probe ✓ (test.71+73 confirmed)
-- BAR0 MMIO write to H2D_MAILBOX_0 causes crash with stale masking ✗ (test.71/72)
+- H2D_MAILBOX_0 via BAR0 = RING DOORBELL (not init mailbox) — writing it during init CRASHES ✗ (test.71/74)
 - Firmware prints console output: RTE banner + wl_probe + pcie_dngl_probe ✓
+- Firmware never writes pcie_shared despite running to pcie_dngl_probe ✓ (all tests)
 
 ## Console structure (decoded from test.71/73 T+3s dump)
 - Region 0x9cc00..0x9d100 = console header + ring buffer + BSS runtime data
 - 0x9cc5c = virtual write ptr (0x8009ccbe = phys 0x9ccbe)
 - 0x9cc68 = 0x9ccc7 = ring buffer physical base
 - Last messages: "wl_probe called", "pcie_dngl_probe called", RTE banner
-- After banner: console silent (firmware waiting for H2D_MAILBOX_0)
+- After banner: console silent (firmware waiting for something)
 
 ## Key files
 - Source: phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 - Test script: phase5/work/test-staged-reset.sh
-- Logs: phase5/logs/test.74.stage0, test.74.journal (after test)
+- Logs: phase5/logs/test.75.stage0, test.75.journal (after test)
 - Build: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build && make -C "$KDIR" M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
 
 ## Test history summary (recent)
@@ -99,4 +93,5 @@ Git branch: main (pushed to origin)
 - test.71: CRASHED after FW READY — H2D_MAILBOX_0=1 → sharedram=0xffffffff (PCIe read error); unmasked second wait loop
 - test.72: CRASHED after SBMBX write — stale masking race; H2D_MAILBOX_0 BAR0 write removed in test.73
 - test.73: SURVIVED — SBMBX only (fresh masking); firmware never wrote sharedram (SBMBX insufficient)
-- test.74: PENDING — SBMBX + H2D_MAILBOX_0 with triple fresh masking; RP restore deferred past init
+- test.74: CRASHED — H2D_MAILBOX_0 BAR0 write (ring doorbell during init) → immediate crash
+- test.75: PENDING — pure diagnostic: olmsg/trap dump at T+5s+T+20s; NO BAR0 writes

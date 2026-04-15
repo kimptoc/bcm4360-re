@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.74: SBMBX + H2D_MAILBOX_0 with triple fresh masking
+# Phase 5.2 test.75: DIAGNOSTIC — observe firmware state without triggering BAR0 MMIO
 #
-# test.73 RESULT: SURVIVED (no crash).
-#   SBMBX written at T+5s. Firmware never wrote sharedram (stayed 0xffc70038).
-#   Root cause: SBMBX alone is not the trigger — H2D_MAILBOX_0 via BAR0 is required.
-#   test.71 confirmed: SBMBX + H2D_MAILBOX_0 → sharedram changed (to 0xffffffff due to
-#   stale masking PCIe read error), then crashed in unmasked second wait loop.
+# test.74 RESULT: CRASHED.
+#   Machine died immediately after H2D_MAILBOX_0=1 written via PCIE2 BAR0.
+#   Root cause: H2D_MAILBOX_0 is the ring doorbell, NOT the init mailbox.
+#   Writing it during init causes firmware DMA to uninitialised ring buffers →
+#   IOMMU fault → fatal PCIe error crash. Value 1 = D3_INFORM (wrong for init).
 #
-# test.74 KEY CHANGES from test.73:
-#   1. Restore H2D_MAILBOX_0 BAR0 write after SBMBX in outer==25.
-#   2. Triple fresh re-mask: before SBMBX, before H2D_MAILBOX_0 (select_core is
-#      also a BAR0 write), and immediately after H2D_MAILBOX_0.
-#   3. Keep masking active through init_share_ram_info at t66_fw_ready
-#      (deferred RP restore until AFTER init returns — firmware may DMA immediately).
+# test.75 KEY CHANGES from test.74:
+#   1. Remove H2D_MAILBOX_0 BAR0 write entirely — it crashes every time.
+#   2. Remove SBMBX write — can't confirm it's needed without surviving test.
+#   3. DIAGNOSTIC ONLY: monitor console_ptr (0x9cc5c) at T+5s and T+20s.
+#   4. Dump olmsg/trap region 0x9D0A0..0x9D100 at T+5s and T+20s.
+#   5. Goal: determine if firmware is alive or dead at T+5s and T+20s.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -26,14 +26,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.74.stage${STAGE}"
+LOG="$LOG_DIR/test.75.stage${STAGE}"
 
-echo "=== test.74: full console dump + H2D mailbox signal --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.75: DIAGNOSTIC — olmsg/trap dump + console ptr tracking --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; pci_set_master before ARM; activate() preserves BusMaster; 30s masking+FW wait; TCM scan every 2s (from T+200ms); FULL console dump at T+3s (every word 0x9cc00..0x9d100); H2D mailbox signal at T+5s; TIMEOUT: per-read re-mask+msleep(10); fw_init_done poll; RP restore on timeout" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; pci_set_master before ARM; activate() preserves BusMaster; 30s masking+FW wait; TCM scan every 2s (from T+200ms); FULL console dump at T+3s; DIAGNOSTIC olmsg/trap dump at T+5s and T+20s; NO BAR0 writes; TIMEOUT: per-read re-mask+msleep(10); fw_init_done poll; RP restore on timeout" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -88,7 +88,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.74 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.75 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -98,7 +98,7 @@ insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
 echo "Module loaded. Waiting 65s (30s FW wait + 35s margin for TIMEOUT path)..." | tee -a "$LOG"
-echo "(test.74: 30s wait; TCM scan every 2s from T+200ms; full console dump at T+3s; H2D mailbox at T+5s; TIMEOUT: per-read re-mask+msleep(10); FW READY → full probe; TIMEOUT → -ENODEV + RP restore)" | tee -a "$LOG"
+echo "(test.75: 30s wait; TCM scan every 2s from T+200ms; full console dump at T+3s; DIAGNOSTIC olmsg/trap dump at T+5s+T+20s; NO BAR0 writes; TIMEOUT → -ENODEV + RP restore)" | tee -a "$LOG"
 sleep 65
 
 # Capture results
@@ -111,5 +111,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.74: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.74)" | tee -a "$LOG"
+echo "*** test.75: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.75)" | tee -a "$LOG"
