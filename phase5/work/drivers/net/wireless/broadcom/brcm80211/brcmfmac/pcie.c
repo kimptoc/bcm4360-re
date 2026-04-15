@@ -1985,34 +1985,35 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 	}
 
-	/* test.59: disable root-port error escalation, then heartbeat sleep with PCI_CMD watch.
+	/* test.60: same RP error masking as test.59, but with per-tick re-masking + BC/DC logging.
 	 *
-	 * test.58 RESULT: CRASH DURING 2s SLEEP — firmware itself crashes host at ~2000ms after
-	 *   ARM release, with ZERO PCIe reads from our side. This proves the crash is firmware-
-	 *   driven (not triggered by our MMIO reads). Something the BCM4360 firmware does during
-	 *   PCIE2 core initialization at ~2s causes a fatal host event.
+	 * test.59 RESULT: CRASH at tick 24/25 (between T+4800ms and T+5000ms).
+	 *   - SURVIVED the 2s danger window (ticks 1-24 all logged, including T+2000ms tick 10)
+	 *   - Crashed between T+4800ms and T+5000ms — a SECOND firmware event at ~5s
+	 *   - PCI_CMD stayed 0x0402 throughout (BusMaster never set by firmware)
+	 *   - aer_cap=0: AER ext cap not found (ECAM may be broken on this platform)
+	 *   - masking: BC=0x0002→0x0000, DevCtl=0x000e→0x0000 — worked for 2s event
 	 *
-	 * Hypothesis: BCM4360 firmware's PCIE2 core init causes a PCIe error event (surprise
-	 *   link-down, malformed TLP, unexpected completion, or fatal AER error) that the Intel
-	 *   root port escalates via SERR → fatal system event before any kernel log is written.
+	 * Hypothesis: firmware has a SECOND PCIE2 init event at ~5s. Two possible mechanisms:
+	 *   A. Firmware restores BC/DevCtl during the 2s event, then the 5s event crashes on
+	 *      the re-enabled bits. Per-tick re-masking will prevent this.
+	 *   B. BC/DevCtl stayed zero (firmware didn't restore them), but the 5s event uses a
+	 *      different escalation path (e.g. AER root error status → SMI/NMI). If this is
+	 *      the case, re-masking won't help and we'll crash again at ~5s.
 	 *
-	 * test.59 strategy:
-	 *   1. Find root port (bus->self); log its BDF for confirmation.
-	 *   2. Disable error escalation on root port:
-	 *      a. Clear PCI_COMMAND_SERR (prevents SERR from propagating upstream).
-	 *      b. Clear PCI_BRIDGE_CTL_SERR (stops secondary-bus SERR forwarding).
-	 *      c. Clear PCIe DevCtl bits 0-3 (CERE/NFERE/FERE/URRE) — no error reporting.
-	 *      d. Clear AER root error command (no fatal/non-fatal/correctable IRQ to RC).
-	 *      Log before/after values of all four registers.
-	 *   3. Heartbeat sleep: 25 × 200ms = 5s total.
-	 *      Read PCI_CMD at each tick to detect BusMaster re-enable by firmware.
-	 *   4. If survived: log "SURVIVED", restore error reporting, return -ENODEV.
-	 *   5. If still crashes: last logged tick gives crash timing (±200ms).
+	 * test.60 strategy:
+	 *   1. Same initial masking as test.59 (CMD, BC, DevCtl, AER_RC).
+	 *   2. 40 × 200ms heartbeat = 8s total (covers 5s event with 3s margin).
+	 *   3. At each tick: read CMD + BC + DevCtl BEFORE re-masking, log all three.
+	 *      Then re-apply BC=0 and DevCtl=0 to prevent firmware from re-enabling them.
+	 *   4. If survived: log "SURVIVED 8s!", restore, return -ENODEV.
 	 *
-	 * Interpreting results:
-	 *   SURVIVED: error escalation was the crash mechanism. PCI_CMD ticks show BusMaster state.
-	 *   STILL CRASHES: mechanism is NOT PCIe error escalation; last tick gives timing.
-	 *   PCI_CMD shows BusMaster bit set: firmware re-enables DMA — explains crash mechanism.
+	 * Interpreting tick logs:
+	 *   BC or DC nonzero at tick N: firmware restored error bits at ~N×200ms; re-masking
+	 *     prevents crash → test.61 can investigate what changed.
+	 *   BC=0 DC=0 throughout but still crash at ~5s: different escalation path (AER/SMI).
+	 *     → test.61: try pci_disable_device(rp) or LNKCTL.LD before ARM release.
+	 *   SURVIVED 8s: both firmware events suppressed; test.61 can attempt MMIO reads.
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		struct pci_dev *rp = devinfo->pdev->bus ? devinfo->pdev->bus->self : NULL;
@@ -2024,7 +2025,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		/* Step 1+2: find root port and disable error escalation */
 		if (rp) {
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.59: root port = %s; disabling error escalation\n",
+				  "BCM4360 test.60: root port = %s; disabling error escalation\n",
 				  pci_name(rp));
 
 			/* 2a. SERR enable in bridge PCI_COMMAND */
@@ -2057,7 +2058,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			}
 
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.59: masked: CMD=0x%04x→0x%04x BC=0x%04x→0x%04x "
+				  "BCM4360 test.60: masked: CMD=0x%04x→0x%04x BC=0x%04x→0x%04x "
 				  "DevCtl=0x%04x→0x%04x AER_RC=0x%08x→0x00000000 "
 				  "(pcie_cap=%d aer_cap=%d)\n",
 				  rp_cmd_orig, rp_cmd_orig & ~PCI_COMMAND_SERR,
@@ -2066,24 +2067,41 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				  rp_aer_orig, pcie_cap, aer_cap);
 		} else {
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.59: no root port found — skipping error masking\n");
+				  "BCM4360 test.60: no root port found — skipping error masking\n");
 		}
 
-		/* Step 3: heartbeat sleep — 25 × 200ms with PCI_CMD reads */
+		/* Step 3: heartbeat — 40 × 200ms = 8s; re-mask BC+DevCtl every tick */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.59: starting heartbeat (25×200ms=5s); watching PCI_CMD\n");
-		for (i = 0; i < 25; i++) {
-			u16 cmd;
+			  "BCM4360 test.60: starting heartbeat (40×200ms=8s); re-masking each tick\n");
+		for (i = 0; i < 40; i++) {
+			u16 cmd, bc = 0, dc = 0;
 
 			msleep(200);
+
+			/* Read endpoint CMD */
 			pci_read_config_word(devinfo->pdev, PCI_COMMAND, &cmd);
+
+			/* Read RP BC + DevCtl BEFORE re-masking (captures firmware restores) */
+			if (rp) {
+				pci_read_config_word(rp, PCI_BRIDGE_CONTROL, &bc);
+				if (pcie_cap)
+					pci_read_config_word(rp, pcie_cap + PCI_EXP_DEVCTL, &dc);
+
+				/* Re-apply masking in case firmware restored them */
+				pci_write_config_word(rp, PCI_BRIDGE_CONTROL,
+						      bc & ~PCI_BRIDGE_CTL_SERR);
+				if (pcie_cap)
+					pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVCTL,
+							      dc & ~0x000f);
+			}
+
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.59 tick=%02d/25 T+%04dms PCI_CMD=0x%04x\n",
-				  i + 1, (i + 1) * 200, cmd);
+				  "BCM4360 test.60 tick=%02d/40 T+%04dms CMD=0x%04x BC=0x%04x DC=0x%04x\n",
+				  i + 1, (i + 1) * 200, cmd, bc, dc);
 		}
 
 		/* Step 4: survived — restore and return */
-		dev_emerg(&devinfo->pdev->dev, "BCM4360 test.59: SURVIVED 5s!\n");
+		dev_emerg(&devinfo->pdev->dev, "BCM4360 test.60: SURVIVED 8s!\n");
 
 		if (rp) {
 			pci_write_config_word(rp, PCI_COMMAND, rp_cmd_orig);
@@ -2096,7 +2114,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						       aer_cap + PCI_ERR_ROOT_COMMAND,
 						       rp_aer_orig);
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.59: RP error reporting restored\n");
+				  "BCM4360 test.60: RP error reporting restored\n");
 		}
 
 		return -ENODEV;

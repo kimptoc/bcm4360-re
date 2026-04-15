@@ -1,23 +1,17 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.59: disable root-port error escalation + heartbeat sleep + PCI_CMD monitoring
+# Phase 5.2 test.60: RP error masking + per-tick re-masking + BC/DC logging (8s heartbeat)
 #
-# test.58 RESULT: CRASH DURING 2s SLEEP — firmware itself crashes host at ~2000ms after ARM
-#   release, with ZERO PCIe reads from our side. This proves the crash is firmware-driven.
-#   BCM4360 firmware PCIE2 core initialization at ~2s causes a fatal host event independently.
+# test.59 RESULT: CRASH at tick 24/25 (between T+4800ms and T+5000ms)
+#   - SURVIVED the 2s danger window! (ticks 1-24 all logged; T+2000ms passed)
+#   - PCI_CMD stayed 0x0402 throughout (BusMaster never set by firmware)
+#   - aer_cap=0: AER ext cap not found (ECAM may be broken on this platform)
+#   - A SECOND firmware event at ~5s caused the crash (same escalation mechanism?)
 #
-# test.59 STRATEGY: disable root-port error escalation before 2s danger window.
-#   Hypothesis: firmware PCIE2 init causes a PCIe error (surprise link-down, malformed TLP,
-#   unexpected completion) that Intel root port escalates via SERR → fatal system event.
-#   Disable four error escalation paths on root port (bus->self):
-#     a) PCI_COMMAND SERR enable bit
-#     b) PCI_BRIDGE_CONTROL SERR forwarding bit
-#     c) PCIe DevCtl CERE/NFERE/FERE/URRE bits (error reporting to RC)
-#     d) AER root error command (fatal/non-fatal/correctable IRQ enable)
-#   Then: 25 × 200ms heartbeat with PCI_CMD reads to watch for BusMaster re-enable.
-#
-# Expected outcomes:
-#   SURVIVED: error escalation was the crash mechanism; PCI_CMD shows BusMaster state.
-#   STILL CRASHES: mechanism ≠ PCIe error escalation; last tick gives exact timing.
+# test.60 STRATEGY: same initial masking, but re-mask BC + DevCtl at every tick.
+#   Key diagnostic: log BC and DevCtl BEFORE re-masking each tick.
+#   If firmware restores them → re-masking prevents 5s crash.
+#   If they stay zero throughout → different escalation path at 5s (AER/SMI).
+#   40 × 200ms = 8s total (covers 5s event with 3s margin).
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -31,14 +25,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.59.stage${STAGE}"
+LOG="$LOG_DIR/test.60.stage${STAGE}"
 
-echo "=== test.59: RP error masking + 5s heartbeat sleep + PCI_CMD watch --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.60: RP error masking + 8s heartbeat + per-tick re-masking --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; BAR0 probe; BBPLL; ARM release; RP error masking; 25×200ms heartbeat" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; BAR0 probe; BBPLL; ARM release; RP error masking; 40×200ms heartbeat (re-masking each tick)" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -93,7 +87,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.59 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.60 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -102,9 +96,9 @@ modprobe cfg80211 2>/dev/null || true
 insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
-echo "Module loaded. Waiting 12s (5s heartbeat + margin)..." | tee -a "$LOG"
-echo "(test.59: 25×200ms heartbeat; returns -ENODEV after loop if survived)" | tee -a "$LOG"
-sleep 12
+echo "Module loaded. Waiting 15s (8s heartbeat + margin)..." | tee -a "$LOG"
+echo "(test.60: 40×200ms heartbeat with per-tick re-masking; returns -ENODEV if survived)" | tee -a "$LOG"
+sleep 15
 
 # Capture results
 echo "" | tee -a "$LOG"
@@ -116,5 +110,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.59: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.59)" | tee -a "$LOG"
+echo "*** test.60: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.60)" | tee -a "$LOG"
