@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.69: Fix TIMEOUT crash + add console write-ptr monitoring
+# Phase 5.2 test.70: Fix TIMEOUT crash (per-read re-mask+msleep) + fix baseline print index
 #
-# test.68 RESULT: Survived 60s but CRASHED in TIMEOUT final TCM scan path.
-#   Root cause: no settle time between last re-mask and BAR2 reads in TIMEOUT path.
-#   During the 60s loop, each BAR2 read follows msleep(10); TIMEOUT path had zero delay.
-#   Console buffer decoded: firmware prints banner then stops — ASSERT or infinite wait.
-#   Firmware wrote 50+ non-zero words in upper BSS (got well into BSS init).
-#   Console write ptr at 0x9cc5c — monitor this to detect firmware activity.
+# test.69 RESULT: Survived 30s wait, then CRASHED in TIMEOUT final TCM scan.
+#   Root cause: test.69 fix (msleep(1) before loop) helped but not enough —
+#   21 reads × no settle between them still crashed at read 8 (TCM[0x88000]).
+#   Key finding: NVRAM token IS correctly at 0x9FFFC (0xffc70038) throughout.
+#   The baseline print "sharedram[0x9FFFC]=0x5354414b" was an index bug:
+#   t66_prev[19]=0x9cc5c (console ptr, had STAK), not 0x9FFFC (index 20).
+#   Firmware is alive in event loop but never writes sharedram_addr to 0x9FFFC.
 #
-# test.69 KEY CHANGES from test.68:
-#   1. TIMEOUT path: add re-mask + RW1C clear + msleep(1) before final TCM scan
-#      (same settle-time recipe as the inner loop — proven to prevent crashes)
-#   2. Add 0x9cc5c (console ring write pointer) to t66_scan — monitor firmware printf activity
-#   3. Reduce wait from 60s to 30s (firmware either signals or dies within 10s)
-#   4. Test script waits 45s (30s FW wait + margin)
+# test.70 KEY CHANGES from test.69:
+#   1. TIMEOUT final scan: re-mask + msleep(10) PER READ (not just once before loop)
+#   2. Fix baseline print: use t66_prev[20] for 0x9FFFC (was incorrectly t66_prev[19])
+#      Also add console_ptr[0x9cc5c] = t66_prev[19] to baseline log
+#   3. Test number bumped to test.70 throughout
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -27,14 +27,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.69.stage${STAGE}"
+LOG="$LOG_DIR/test.70.stage${STAGE}"
 
-echo "=== test.69: 30s wait + TIMEOUT settle fix + console ptr monitoring --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.70: per-read re-mask+msleep in TIMEOUT scan + baseline index fix --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; pci_set_master before ARM; activate() preserves BusMaster; 30s masking+FW wait; TCM scan every 2s (from T+200ms); console write-ptr at 0x9cc5c in scan; TIMEOUT: re-mask+msleep(1) before final scan; fw_init_done poll (baseline-initialized); RP restore on timeout" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; pci_set_master before ARM; activate() preserves BusMaster; 30s masking+FW wait; TCM scan every 2s (from T+200ms); console write-ptr at 0x9cc5c in scan; TIMEOUT: per-read re-mask+msleep(10) in final scan; fw_init_done poll (baseline-initialized); RP restore on timeout" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -89,7 +89,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.69 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.70 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -98,9 +98,9 @@ modprobe cfg80211 2>/dev/null || true
 insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
-echo "Module loaded. Waiting 45s (30s FW wait + margin for full probe)..." | tee -a "$LOG"
-echo "(test.69: 30s wait; TCM scan every 2s from T+200ms; console ptr 0x9cc5c monitored; TIMEOUT: re-mask+settle before final scan; FW READY → full probe; TIMEOUT → -ENODEV + RP restore)" | tee -a "$LOG"
-sleep 45
+echo "Module loaded. Waiting 65s (30s FW wait + 35s margin for TIMEOUT path)..." | tee -a "$LOG"
+echo "(test.70: 30s wait; TCM scan every 2s from T+200ms; console ptr 0x9cc5c monitored; TIMEOUT: per-read re-mask+msleep(10); FW READY → full probe; TIMEOUT → -ENODEV + RP restore)" | tee -a "$LOG"
+sleep 65
 
 # Capture results
 echo "" | tee -a "$LOG"
@@ -112,5 +112,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.69: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.69)" | tee -a "$LOG"
+echo "*** test.70: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.70)" | tee -a "$LOG"

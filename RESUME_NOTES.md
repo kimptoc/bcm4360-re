@@ -95,29 +95,43 @@ Git branch: main (pushed to origin)
 - TIMEOUT path: no delay → BAR2 read at [0x74000] triggered PCIe error → crash
 - Fix: add re-mask + RW1C clear + msleep(1) before final scan
 
-## test.69 PLAN (about to run)
+## test.69 RESULT: Crashed in TIMEOUT path at TCM[0x88000] (8th of 21 final reads)
 
-**Key changes from test.68:**
-1. TIMEOUT crash fix: add re-mask + RW1C clear + msleep(1) before final TCM scan
-2. Add 0x9cc5c (console ring write pointer) to t66_scan — monitor firmware printf activity
-3. Reduce wait 60s → 30s (firmware dies within ~2s based on evidence)
-4. Test script waits 45s
+**Root cause of crash:** msleep(1) before the final scan loop was not enough — no settle time BETWEEN reads crashed at read 8 (0x88000).
 
-**Module build:** done (test.69 built successfully, warning only: write_ram32 unused)
-**Test script:** updated to test.69 (log = test.69.stage0), waits 45s
+**Key findings from test.69 journal:**
+- NVRAM token IS correctly at 0x9FFFC (0xffc70038) throughout — the "missing NVRAM" hypothesis was wrong
+- The baseline print "sharedram[0x9FFFC]=0x5354414b" was an INDEX BUG: t66_prev[19] = 0x9cc5c (console ptr, had STAK from prior run), not 0x9FFFC (index 20)
+- 0x9cc5c (console write ptr) CHANGED at T+2000ms: 0x5354414b → 0x8009ccbe (firmware console active)
+- 0x9d000 CHANGED at T+2000ms: 0x00000000 → 0x000043b1 (pciedngldev struct written)
+- sharedram (0x9FFFC) = 0xffc70038 throughout ALL 30 seconds — firmware NEVER writes sharedram_addr
+- fw_init (0x9F0CC) = 0x870ca017 throughout — olmsg protocol not used either
+- Firmware is alive and stable in event loop after T+2s; no changes for 28 seconds
+
+**Critical insight:** The firmware enters its event loop at T+2s but never writes the FullDongle sharedram_addr pointer to 0x9FFFC. The normal brcmfmac flow times out waiting for this write. This is WHY BCM4360 doesn't work upstream.
+
+## test.70 PLAN (about to run)
+
+**Key changes from test.69:**
+1. TIMEOUT final scan: per-read re-mask + msleep(10) BETWEEN EACH READ (not just once before loop) — same proven recipe as inner loop
+2. Fix baseline print: use t66_prev[20] for 0x9FFFC (was incorrectly t66_prev[19] = 0x9cc5c); also print console_ptr[0x9cc5c] = t66_prev[19]
+3. Test script waits 65s (30s FW wait + 35s margin for TIMEOUT path — 21 reads × ~10ms each = ~210ms)
+
+**Module build:** done (test.70 built successfully, warning only: write_ram32 unused)
+**Test script:** updated to test.70 (log = test.70.stage0), waits 65s
 
 **Expected outcomes:**
-- Console write ptr 0x9cc5c unchanged: firmware stops printing after banner
-- Watch for ASSERT: if firmware hits hnd_assert, it may write PC to a trap structure in upper BSS
-- sharedram/fw_init still stuck: firmware crashes before FullDongle/olmsg signaling
-- Survived 30s (or 45s if we see activity): next step is to look at what firmware is waiting for
+- SURVIVE (no crash in TIMEOUT path) — per-read re-mask should prevent crash
+- sharedram/fw_init still stuck: firmware never writes sharedram_addr
+- console ptr 0x9cc5c should be 0x8009ccbe (unchanged, no new console output)
+- Baseline print now correctly shows 0x9FFFC = 0xffc70038
 
 **After test — what to do:**
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.69" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.69.journal'` (or -b 0 if survived)
-3. `sudo chown kimptoc:users phase5/logs/test.69.*`
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.70" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.70.journal'` (or -b 0 if survived)
+3. `sudo chown kimptoc:users phase5/logs/test.70.*`
 4. git add logs + commit + push
-5. Analyze: did console ptr change? Any new TCM writes? Any ASSERT/trap structure?
+5. Next question: WHY does firmware never write sharedram_addr? Does it need a PCIe mailbox write from the host first?
 
 ## Key confirmed findings
 - BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
@@ -170,13 +184,14 @@ Git branch: main (pushed to origin)
 - test.66: CRASHED before T+0000ms — PCIe2 select_core EP config write during firmware init
 - test.67: SURVIVED 60s — TCM[0x9d000] changed at T+2s (0x000043b1 = Thumb ptr to 0x43b0); sharedram/fw_init unchanged; only 1 word changed → firmware crashes before sharedram init
 - test.68: SURVIVED 60s then CRASHED in TIMEOUT path — dense BSS scan: 50+ non-zero words in upper BSS; console buffer decoded (firmware banner printed); crash root cause: no settle delay before final BAR2 reads in TIMEOUT path
-- test.69: DIAGNOSTIC — TIMEOUT crash fix (re-mask+msleep(1) before final scan); add console write-ptr 0x9cc5c to scan; reduce to 30s wait
+- test.69: CRASHED in TIMEOUT path at TCM[0x88000] — msleep(1) before loop insufficient; per-read settle needed; INDEX BUG in baseline print (t66_prev[19]=0x9cc5c not 0x9FFFC); NVRAM token IS at 0x9FFFC (0xffc70038) throughout; firmware alive in event loop but never writes sharedram_addr
+- test.70: DIAGNOSTIC — per-read re-mask+msleep(10) in TIMEOUT scan; fix baseline print index; 65s script wait
 
 ## Key files
 - Source: phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 - Test script: phase5/work/test-staged-reset.sh
-- Logs: phase5/logs/test.69.stage0, test.69.journal (after test)
+- Logs: phase5/logs/test.70.stage0, test.70.journal (after test)
 - Build: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build && make -C "$KDIR" M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
 
-## Run test.69 (if not yet run):
+## Run test.70 (if not yet run):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
