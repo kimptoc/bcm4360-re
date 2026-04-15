@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.66: Extended 60s wait + full TCM memory activity scan
+# Phase 5.2 test.67: Extended 60s wait + TCM scan (no PCIe2 select_core)
 #
-# test.65 RESULT: SURVIVED 20s. BusMaster fix confirmed (CMD=0x0006 throughout).
-#   - sharedram=0xffc70038 ENTIRE 20s — firmware never writes ramsize-4.
-#   - TCM[0]=0xb80ef000 stable throughout (ARM alive, no crash-restarts).
-#   - RP restore on timeout works — no crash at cleanup.
+# test.66 RESULT: CRASHED before T+0000ms. Root cause: brcmf_pcie_select_core(PCIE2)
+#   at outer=0 (before first msleep) does pci_write_config_dword to EP BAR0_WINDOW —
+#   same crash mechanism as test.51. EP config write during firmware PCIe2 init is fatal.
 #
-# test.66 ADDS:
-#   1. Extended wait: 60s (300 outer × 200ms) — more time for firmware to signal
-#   2. TCM memory scan every 2s: 20 strategic locations to see what FW is writing
-#      Key addrs: 0x9D0A4 (olmsg magic?), 0x9F0CC (fw_init_done?), 0x9FFFC (sharedram)
-#   3. PCIe2 mailbox register reads every 10s — detect FW interrupt attempts
-#   4. Also polls fw_init_done (olmsg protocol) alongside ramsize-4 (FullDongle)
+# test.67 FIXES:
+#   1. Remove PCIe2 mailbox reads entirely (both baseline and loop) — no select_core
+#   2. Skip TCM scan at outer==0: first 200ms is pure masking (matches test.65)
+#   3. Initialize fw_init_done_last from baseline read (not 0) — detect RUNTIME changes
+#   4. Keep fw_init_done poll in inner loop (one safe BAR2 read per 10ms)
+#   5. Keep 20-location TCM scan from outer>=1 (T+200ms+)
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -25,14 +24,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.66.stage${STAGE}"
+LOG="$LOG_DIR/test.67.stage${STAGE}"
 
-echo "=== test.66: extended 60s wait + TCM memory activity scan --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.67: 60s wait + TCM scan (no PCIe2 select_core) --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; pci_set_master before ARM; activate() preserves BusMaster; 60s masking+FW wait; TCM scan every 2s; PCIe2 mailbox every 10s; fw_init_done poll; RP restore on timeout" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; pci_set_master before ARM; activate() preserves BusMaster; 60s masking+FW wait; TCM scan every 2s (from T+200ms); fw_init_done poll (baseline-initialized); RP restore on timeout" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -87,7 +86,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.66 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.67 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -97,7 +96,7 @@ insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
 echo "Module loaded. Waiting 75s (60s FW wait + margin for full probe)..." | tee -a "$LOG"
-echo "(test.66: 60s wait; TCM scan every 2s; fw_init_done poll; FW READY → full probe; TIMEOUT → -ENODEV + RP restore)" | tee -a "$LOG"
+echo "(test.67: 60s wait; TCM scan every 2s from T+200ms; fw_init_done poll; FW READY → full probe; TIMEOUT → -ENODEV + RP restore)" | tee -a "$LOG"
 sleep 75
 
 # Capture results
@@ -110,5 +109,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.66: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.66)" | tee -a "$LOG"
+echo "*** test.67: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.67)" | tee -a "$LOG"

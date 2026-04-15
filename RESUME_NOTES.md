@@ -1,8 +1,24 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-15, about to run test.66)
+## Current state (2026-04-15, about to run test.67)
 
 Git branch: main (pushed to origin)
+
+## test.66 RESULT: CRASHED before T+0000ms — PCIe2 select_core crash
+
+**Root cause: `brcmf_pcie_select_core(PCIE2)` at outer=0 before first msleep**
+- `brcmf_pcie_select_core()` does `pci_write_config_dword(EP, BAR0_WINDOW, ...)` — same mechanism as test.51 instant crash
+- Baseline PCIe2 reads at T+~0ms worked (firmware hadn't started PCIe2 init yet)
+- outer=0 loop PCIe2 reads failed at T+~5ms (after 20 TCM baseline reads)
+- Machine crashed before T+0000ms was logged — no journal evidence of TCM changes
+
+**Baseline TCM values (read at T+~0ms, firmware not yet running):**
+- sharedram[0x9FFFC] = 0xffc70038 (NVRAM token — kept)
+- magic[0x9D0A4] = 0x555c0631 (firmware binary constant, not runtime)
+- fw_init[0x9F0CC] = 0x870ca017 (firmware binary constant, not runtime)
+- PCIe2: MAILBOXINT=0x00000000, MAILBOXMASK=0x00000000
+
+**Key secondary finding:** fw_init_done_last was initialized to 0, but baseline reads 0x870ca017 at that address — it's firmware binary data. Must initialize from baseline to detect runtime changes.
 
 ## test.65 RESULT: SURVIVED 20s — BusMaster fix confirmed, sharedram still stuck
 
@@ -38,36 +54,31 @@ Git branch: main (pushed to origin)
 - Driver cleanup path then accessed device with firmware still generating errors
 - This caused the crash between "ABOUT TO TIMEOUT" and "TIMEOUT" messages
 
-## test.66 PLAN (about to run)
+## test.67 PLAN (about to run)
 
-**Key diagnostics added:**
-1. **60s wait** (300 outer × 200ms) — more time for slower firmware init
-2. **TCM memory scan every 2s**: 20 strategic locations:
-   - 0x9D0A4: olmsg shared_info magic_start
-   - 0x9F0CC: olmsg fw_init_done (SHARED_INFO_OFFSET + 0x2028)
-   - 0x9FFFC: FullDongle sharedram pointer (ramsize-4)
-   - 0x6C000..0x9C000: firmware heap/stack activity detection
-3. **PCIe2 mailbox reads every 10s**: detect if firmware tries to signal host via interrupt
-4. **Poll fw_init_done in inner loop**: catches olmsg protocol alongside FullDongle
+**Key changes from test.66:**
+1. **Remove PCIe2 mailbox reads entirely** — both baseline and loop. select_core(PCIE2) does EP config writes (BAR0_WINDOW) which are fatal during firmware PCIe2 init.
+2. **Skip TCM scan at outer==0** — `if (outer > 0 && outer % 10 == 0)`. First 200ms is pure masking matching proven test.65 behavior.
+3. **Initialize fw_init_done_last from baseline** — was 0, now set to t66_prev[16] (= 0x870ca017 firmware binary constant) so we only log RUNTIME changes.
+4. **Keep everything else** — 60s wait, 20-location TCM scan at T+200ms+, fw_init_done poll per 10ms.
 
-**Module build:** done (test.66 built successfully, warning only: write_ram32 unused)
-**Test script:** updated to test.66 (log = test.66.stage0), waits 75s
+**Module build:** done (test.67 built successfully, warning only: write_ram32 unused)
+**Test script:** updated to test.67 (log = test.67.stage0), waits 75s
 
 **Expected outcomes:**
 - If FullDongle: ramsize-4 (0x9FFFC) changes from 0xffc70038 → sharedram_addr
   → "FW READY (FullDongle)" logged, full brcmfmac init proceeds
-- If olmsg: fw_init_done (0x9F0CC) becomes non-zero
+- If olmsg: fw_init_done (0x9F0CC) becomes non-zero (≠ 0x870ca017 binary constant)
   → "FW_INIT_DONE" logged, need to implement olmsg protocol
 - If TCM changes in 0x6C000-0x9C000 region: firmware IS running but using different address
-- If PCIe2 MAILBOXINT changes: firmware tried to signal host via mailbox interrupt
-- If nothing changes for 60s: fundamental initialization issue (SROM/OTP? different protocol?)
+- If sharedram stays 0xffc70038 for 60s: firmware runs but doesn't signal (protocol unknown)
 
 **After test — what to do (whether PASS or crash):**
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.66" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.66.journal'` (or -b 0 if survived)
-3. `sudo chown kimptoc:users phase5/logs/test.66.*`
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.67" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.67.journal'` (or -b 0 if survived)
+3. `sudo chown kimptoc:users phase5/logs/test.67.*`
 4. git add logs + commit + push
-5. Analyze: check for TCM changes (what did firmware write?), fw_init_done, PCIe2 mailbox
+5. Analyze: check for TCM changes (what did firmware write?), fw_init_done changes
 
 ## Key confirmed findings
 - BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
@@ -117,13 +128,14 @@ Git branch: main (pushed to origin)
   BusMaster=0 entire time (activate() leftover from test.49 was clearing it)
   CRASH at T+20s: RP masking not restored before return -ENODEV → cleanup crash
 - test.65: SURVIVED 20s — BusMaster fix confirmed (CMD=0x0006), sharedram still stuck
-- test.66: DIAGNOSTIC — 60s wait + TCM scan (20 locations) + PCIe2 mailbox + fw_init_done poll
+- test.66: CRASHED before T+0000ms — PCIe2 select_core EP config write during firmware init
+- test.67: DIAGNOSTIC — 60s wait + TCM scan (20 locations, from T+200ms) + fw_init_done poll (baseline-initialized)
 
 ## Key files
 - Source: phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 - Test script: phase5/work/test-staged-reset.sh
-- Logs: phase5/logs/test.66.stage0, test.66.journal (after test)
+- Logs: phase5/logs/test.67.stage0, test.67.journal (after test)
 - Build: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build && make -C "$KDIR" M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
 
-## Run test.66 (if not yet run):
+## Run test.67 (if not yet run):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0

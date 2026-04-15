@@ -2008,25 +2008,20 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 	}
 
-	/* test.66: Extended diagnostic — 60s wait + full TCM memory activity scan.
+	/* test.67: Extended diagnostic — 60s wait + full TCM memory activity scan.
 	 *
-	 * test.65 RESULT: SURVIVED 60s, BusMaster=1 confirmed (CMD=0x0006 throughout),
-	 *   TCM[0]=0xb80ef000 stable, but sharedram=0xffc70038 ENTIRE 20s.
-	 *   Firmware runs without crashing but never writes ramsize-4.
+	 * test.66 RESULT: CRASHED before T+0000ms — PCIe2 select_core writes at outer=0
+	 *   (before first msleep) caused EP config crash. Root cause: brcmf_pcie_select_core()
+	 *   does pci_write_config_dword to BAR0_WINDOW — same crash mechanism as test.51.
+	 *   Baseline PCIe2 reads worked at T+0ms; outer=0 PCIe2 reads failed at T+~5ms.
 	 *
-	 * Phase4 finding: firmware is "PCI-CDC (FullMAC), NOT olmsg offload" but reads
-	 *   board config from SROM/OTP. Two candidate protocols:
-	 *   A) FullDongle: firmware writes sharedram_addr to ramsize-4 (0x9FFFC)
-	 *   B) olmsg offload: firmware writes fw_init_done at 0x9F0CC
-	 *      (SHARED_INFO_OFFSET=0x9D0A4 + SI_FW_INIT_DONE=0x2028)
-	 *
-	 * test.66 adds:
-	 *   1. Extended wait: 60s (300 outer × 200ms)
-	 *   2. TCM memory scan every 2s: 20 strategic locations to see what firmware
-	 *      IS writing — detect activity in olmsg region, FullDongle region, etc.
-	 *   3. PCIe2 core mailbox register reads every 10s: detect firmware interrupt
-	 *      attempts (if firmware tries to signal host via mailbox)
-	 *   4. Also poll fw_init_done (0x9F0CC) in inner loop alongside ramsize-4
+	 * test.67 fixes:
+	 *   1. Remove PCIe2 mailbox reads entirely (both baseline and loop) — unsafe
+	 *   2. Skip TCM scan at outer==0: first 200ms is pure masking (matches test.65)
+	 *   3. Initialize fw_init_done_last from baseline read (not 0) so we detect
+	 *      RUNTIME changes, not the constant firmware binary value at that address
+	 *   4. Keep fw_init_done poll in inner loop (one safe BAR2 read per 10ms)
+	 *   5. Keep 20-location TCM scan but only from outer>=1 (T+200ms+)
 	 *
 	 * Key scan addresses:
 	 *   0x9D0A4: shared_info magic_start (olmsg protocol)
@@ -2109,14 +2104,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 				pci_read_config_word(devinfo->pdev, PCI_COMMAND, &ep_cmd);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.66: RP=%s masked CMD BC DevCtl AER; "
+					  "BCM4360 test.67: RP=%s masked CMD BC DevCtl AER; "
 					  "RootCtl=0x%04x ext_cap0=0x%08x nvram_token=0x%08x EP_CMD=0x%04x\n",
 					  pci_name(rp), rtctl, ext_cap0,
 					  sharedram_addr_written, ep_cmd);
 			}
 		} else {
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.66: no root port — skipping masking\n");
+				  "BCM4360 test.67: no root port — skipping masking\n");
 		}
 
 		/* Baseline TCM scan — read all 20 locations before FW has had time to run */
@@ -2124,38 +2119,31 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			t66_prev[i] = brcmf_pcie_read_ram32(devinfo, t66_scan[i]);
 
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.66: TCM baseline: sharedram[0x9FFFC]=0x%08x "
+			  "BCM4360 test.67: TCM baseline: sharedram[0x9FFFC]=0x%08x "
 			  "magic[0x9D0A4]=0x%08x fw_init[0x9F0CC]=0x%08x\n",
 			  t66_prev[19], t66_prev[14], t66_prev[16]);
 
-		/* Also read PCIe2 mailbox at baseline */
-		{
-			u32 mbint, mbmask;
-
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
-			mbint  = brcmf_pcie_read_reg32(devinfo,
-						       BRCMF_PCIE_PCIE2REG_MAILBOXINT);
-			mbmask = brcmf_pcie_read_reg32(devinfo,
-						       BRCMF_PCIE_PCIE2REG_MAILBOXMASK);
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.66: PCIe2 baseline: MAILBOXINT=0x%08x MAILBOXMASK=0x%08x\n",
-				  mbint, mbmask);
-		}
+		/* Initialize fw_init_done_last from baseline so we detect RUNTIME changes,
+		 * not the constant firmware binary value pre-loaded at that address.
+		 */
+		fw_init_done_last = t66_prev[16];
 
 		/* Step 2: FW wait + per-inner-tick re-masking (20×10ms inner × 300 outer = 60s) */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.66: starting FW wait + masking loop (60s max, re-mask every 10ms)\n");
+			  "BCM4360 test.67: starting FW wait + masking loop (60s max, re-mask every 10ms)\n");
 
 		for (outer = 0; outer < 300; outer++) {
-			/* Every 2s (10 outer iters): TCM memory activity scan */
-			if (outer % 10 == 0) {
+			/* Every 2s (10 outer iters, but NOT outer==0): TCM memory activity scan.
+			 * Skip outer==0 — first 200ms is pure masking to match proven test.65
+			 * behavior. Diagnostic reads start at T+200ms after firmware has settled.
+			 */
+			if (outer > 0 && outer % 10 == 0) {
 				u16 ep_cmd;
 				int changed = 0;
 
 				pci_read_config_word(devinfo->pdev, PCI_COMMAND, &ep_cmd);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.66 T+%04dms: sharedram=0x%08x fw_init=0x%08x EP_CMD=0x%04x\n",
+					  "BCM4360 test.67 T+%04dms: sharedram=0x%08x fw_init=0x%08x EP_CMD=0x%04x\n",
 					  outer * 200, fw_sharedram, fw_init_done_last, ep_cmd);
 
 				/* Scan all 20 TCM locations; log any that changed */
@@ -2164,7 +2152,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 					if (cur != t66_prev[i]) {
 						dev_emerg(&devinfo->pdev->dev,
-							  "BCM4360 test.66 T+%04dms: TCM[0x%05x] CHANGED 0x%08x → 0x%08x\n",
+							  "BCM4360 test.67 T+%04dms: TCM[0x%05x] CHANGED 0x%08x → 0x%08x\n",
 							  outer * 200, t66_scan[i],
 							  t66_prev[i], cur);
 						t66_prev[i] = cur;
@@ -2173,23 +2161,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				}
 				if (!changed)
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.66 T+%04dms: TCM scan — no changes\n",
+						  "BCM4360 test.67 T+%04dms: TCM scan — no changes\n",
 						  outer * 200);
-			}
-
-			/* Every 10s (50 outer iters): PCIe2 mailbox registers */
-			if (outer % 50 == 0) {
-				u32 mbint, mbmask;
-
-				brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
-				mbint  = brcmf_pcie_read_reg32(devinfo,
-							       BRCMF_PCIE_PCIE2REG_MAILBOXINT);
-				mbmask = brcmf_pcie_read_reg32(devinfo,
-							       BRCMF_PCIE_PCIE2REG_MAILBOXMASK);
-				brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.66 T+%04dms: PCIe2 MAILBOXINT=0x%08x MAILBOXMASK=0x%08x\n",
-					  outer * 200, mbint, mbmask);
 			}
 
 			/* Inner: re-mask + poll sharedram AND fw_init_done every 10ms for 200ms */
@@ -2238,7 +2211,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				if (fid != fw_init_done_last) {
 					fw_init_done_last = fid;
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.66 T+%04dms: fw_init_done CHANGED to 0x%08x\n",
+						  "BCM4360 test.67 T+%04dms: fw_init_done CHANGED to 0x%08x\n",
 						  outer * 200 + inner * 10, fid);
 					if (fid != 0)
 						goto t66_fw_init_done;
@@ -2250,27 +2223,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 * Dump final TCM scan before restoring RP.
 		 */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.66: TIMEOUT — FW silent for 60s — final TCM scan:\n");
+			  "BCM4360 test.67: TIMEOUT — FW silent for 60s — final TCM scan:\n");
 		for (i = 0; i < (int)ARRAY_SIZE(t66_scan); i++) {
 			u32 cur = brcmf_pcie_read_ram32(devinfo, t66_scan[i]);
 
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.66 final: TCM[0x%05x]=0x%08x%s\n",
+				  "BCM4360 test.67 final: TCM[0x%05x]=0x%08x%s\n",
 				  t66_scan[i], cur,
 				  cur != t66_prev[i] ? " CHANGED" : "");
-		}
-		{
-			u32 mbint, mbmask;
-
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
-			mbint  = brcmf_pcie_read_reg32(devinfo,
-						       BRCMF_PCIE_PCIE2REG_MAILBOXINT);
-			mbmask = brcmf_pcie_read_reg32(devinfo,
-						       BRCMF_PCIE_PCIE2REG_MAILBOXMASK);
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.66 final: PCIe2 MAILBOXINT=0x%08x MAILBOXMASK=0x%08x\n",
-				  mbint, mbmask);
 		}
 
 		if (rp) {
@@ -2283,13 +2243,13 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
 						       rp_aer_orig);
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.66: RP settings restored\n");
+				  "BCM4360 test.67: RP settings restored\n");
 		}
 		return -ENODEV;
 
 t66_fw_init_done:
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.66: olmsg FW_INIT_DONE at T+%dms val=0x%08x "
+			  "BCM4360 test.67: olmsg FW_INIT_DONE at T+%dms val=0x%08x "
 			  "— olmsg protocol confirmed! sharedram=0x%08x\n",
 			  outer * 200 + (inner + 1) * 10, fw_init_done_last, fw_sharedram);
 		/* olmsg firmware initialized — restore RP and return ENODEV for now.
@@ -2305,13 +2265,13 @@ t66_fw_init_done:
 				pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
 						       rp_aer_orig);
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.66: RP settings restored\n");
+				  "BCM4360 test.67: RP settings restored\n");
 		}
 		return -ENODEV;
 
 t66_fw_ready:
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.66: FW READY (FullDongle) at T+%dms sharedram=0x%08x "
+			  "BCM4360 test.67: FW READY (FullDongle) at T+%dms sharedram=0x%08x "
 			  "— proceeding with full probe init\n",
 			  outer * 200 + (inner + 1) * 10, fw_sharedram);
 		/* Restore RP now that firmware is stable */
