@@ -1991,18 +1991,19 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	loop_counter = BRCMF_PCIE_FW_UP_TIMEOUT / 10;
 	while ((sharedram_addr == sharedram_addr_written) && (loop_counter)) {
 		msleep(10);
-		/* test.51: ChipCommon watchdog READ-ONLY monitoring.
-		 * test.50 RESULT: INSTANT CRASH — machine reset before ANY test.50 message logged.
-		 *   Root cause: WRITECC32(watchdog, 0) = "reset in 0 ALP ticks" = IMMEDIATE RESET.
-		 *   Writing 0 to the BCM4360 ChipCommon watchdog does NOT disable it — it triggers
-		 *   an immediate hardware reset (same mechanism as test.40's WRITECC32(watchdog, 4)
-		 *   but with 0 tick timeout = instantaneous).
-		 * test.51 goal: observe watchdog countdown WITHOUT writing anything.
-		 *   READ CC+0x80 (WDOG) and CC+0x634 (PMUWDOG) every 10ms.
-		 *   Keep DisINTx=1 and BusMaster=0 (belt+suspenders from test.49).
-		 *   Expected: crash at ~490ms like tests 46-49, but now with WDOG values in log.
-		 *   If WDOG counts down to 0 at crash time: confirms watchdog as crash mechanism.
-		 *   test.52 will then service watchdog by writing a LARGE value each iteration.
+		/* test.52: ChipCommon watchdog ACTIVE SERVICING.
+		 * test.51 RESULT: INSTANT CRASH — same as test.50. Root cause: select_core(CHIPCOMMON)
+		 *   called inside activate() corrupts BAR0 window at a critical moment during ARM init.
+		 *   No test.51 messages reached the journal; machine reset during insmod.
+		 * test.52 fix: remove select_core from activate() entirely (keep test.49 activate()).
+		 *   In this poll loop, BAR0 is already ChipCommon after select_core(CHIPCOMMON) at
+		 *   line ~1985 (ARM-release diagnostic block). Do NOT call select_core again here.
+		 *   Use READCC32 directly (BAR0 = ChipCommon), then WRITE to service the watchdog.
+		 * test.52 goal: service watchdog every 10ms by writing 0x7FFFFFFF to prevent countdown.
+		 *   BCM4360 watchdog = countdown timer; write N = reset in N ALP ticks.
+		 *   Writing 0x7FFFFFFF = ~107s @ 20MHz ALP, far beyond 10ms poll interval.
+		 *   If PASS (no crash at 5s): watchdog CONFIRMED as crash mechanism for tests 43-49.
+		 *   If CRASH: watchdog is NOT the cause; investigate PMU reset or CPU exception.
 		 */
 		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 			int iter = (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 10) - (int)loop_counter + 1;
@@ -2024,13 +2025,16 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pci_read_config_word(devinfo->pdev, msi_cap + PCI_MSI_FLAGS,
 						     &msi_ctrl);
 
-			/* READ-ONLY: observe watchdog countdown, do NOT write */
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+			/* BAR0 already = ChipCommon (set at ARM-release block above).
+			 * Read WDOG before servicing so we can see the pre-write countdown.
+			 * Then write a large value to reset countdown and prevent expiry.
+			 */
 			wdog    = READCC32(devinfo, watchdog);
 			pmuwdog = READCC32(devinfo, pmuwatchdog);
+			WRITECC32(devinfo, watchdog, 0x7FFFFFFF);
 
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.51: iter %d val=0x%08x CMD=0x%04x MSI_CTRL=0x%04x WDOG=0x%08x PMUWDOG=0x%08x\n",
+				  "BCM4360 test.52: iter %d val=0x%08x CMD=0x%04x MSI_CTRL=0x%04x WDOG_PRE=0x%08x PMUWDOG=0x%08x\n",
 				  iter, sharedram_addr,
 				  pci_cmd, msi_ctrl, wdog, pmuwdog);
 		}
@@ -2248,16 +2252,13 @@ static void brcmf_pcie_buscore_activate(void *ctx, struct brcmf_chip *chip,
 	 *   INTx RULED OUT (test.49): CMD=0x0402 throughout all 49 iters, still crashed.
 	 *   MSI RULED OUT (test.49): MSI_CTRL=0x0080 (only 64-bit cap bit), never enabled.
 	 *   DMA already ruled out (test.48): BusMaster=0 throughout.
-	 * test.51: READ-ONLY watchdog monitoring in activate().
-	 *   test.50 INSTANT CRASH confirmed: WRITECC32(watchdog, 0) = immediate reset.
-	 *   BCM4360 watchdog is a countdown timer: writing N = reset in N ALP ticks.
-	 *   Writing 0 = reset in 0 ticks = IMMEDIATE. Does NOT disable the watchdog.
-	 *   test.51: read both watchdog registers here (pre-ARM-release state) without
-	 *   writing, to observe what firmware has left them at.
+	 * test.51: INSTANT CRASH — select_core(CHIPCOMMON) in activate() corrupts BAR0
+	 *   window during ARM init. Machine reset before any test.51 message was logged.
+	 * test.52: activate() is IDENTICAL to test.49 — no watchdog reads here.
+	 *   Watchdog is serviced in the poll loop where BAR0 is already ChipCommon.
 	 */
 	if (chip->chip == BRCM_CC_4360_CHIP_ID) {
 		u16 cmd;
-		u32 wdog, pmuwdog;
 
 		/* Keep DisINTx=1, BusMaster=0 from test.49 */
 		pci_read_config_word(devinfo->pdev, PCI_COMMAND, &cmd);
@@ -2265,14 +2266,9 @@ static void brcmf_pcie_buscore_activate(void *ctx, struct brcmf_chip *chip,
 		cmd |= PCI_COMMAND_INTX_DISABLE;
 		pci_write_config_word(devinfo->pdev, PCI_COMMAND, cmd);
 
-		/* READ-ONLY: log watchdog state before ARM release, do NOT write */
-		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-		wdog    = READCC32(devinfo, watchdog);
-		pmuwdog = READCC32(devinfo, pmuwatchdog);
-
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.51 activate: rstvec=0x%08x to TCM[0]; CMD=0x%04x WDOG=0x%08x PMUWDOG=0x%08x (read-only)\n",
-			 rstvec, cmd, wdog, pmuwdog);
+			 "BCM4360 test.52 activate: rstvec=0x%08x to TCM[0]; CMD=0x%04x (watchdog serviced in poll loop)\n",
+			 rstvec, cmd);
 	}
 	brcmf_pcie_write_tcm32(devinfo, 0, rstvec);
 }
