@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.81: enable MSI before ARM release to fix pcidongle_probe hang
+# Phase 5.2 test.82: MSI enable + dummy IRQ handler before ARM release
 #
-# test.80 RESULT: SURVIVED. Stack-finder scan found only 6 scattered hits —
-#   no dense cluster, no stack. 64-byte sampling too coarse for ARM frames.
-#   Stack-finding is a dead end.
+# test.81 RESULT: CRASHED ~31s after ARM release. MSI was enabled
+#   (pci_enable_msi returned 0, ADDR=0xfee00738) but no IRQ handler was
+#   registered. Crash occurred when cleanup restored RP error reporting
+#   while MSI was still active — unhandled interrupts cascaded.
 #
-# STRATEGY SHIFT: stop diagnosing WHERE firmware is stuck.
-# Start testing WHAT it's waiting for.
-#
-# test.81 KEY CHANGES from test.80:
-#   1. ADD: pci_enable_msi(pdev) BEFORE ARM release
-#   2. ADD: Log host-side and device-side MSI config before/after enable
-#   3. ADD: Wider TCM scan (0x9A000-0x9FFFC every 0x100) for PCI-CDC handshake
-#   4. REMOVE: Stack-finder scan (failed)
-#   5. REMOVE: Probe dump at 0x9AF00 (not useful)
-#   6. KEEP: ASPM disable, named reg clears, console+BSS dumps, masking
+# test.82 FIXES from test.81:
+#   1. ADD: request_irq() with counting dummy handler after pci_enable_msi
+#   2. FIX: cleanup order — free_irq → pci_disable_msi → restore RP
+#   3. FIX: stale array indices in baseline log (wrong since scan expansion)
+#   4. ADD: read MSI message control at 0x5A to verify MSI Enable bit
+#   5. ADD: log MSI interrupt count at each TCM scan + at timeout
+#   6. KEEP: wider TCM scan, ASPM disable, reg clears, console/BSS dumps
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -28,14 +26,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.81.stage${STAGE}"
+LOG="$LOG_DIR/test.82.stage${STAGE}"
 
-echo "=== test.81: MSI enable before ARM release --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.82: MSI enable + IRQ handler before ARM release --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled before ARM; pci_set_master before ARM; 30s masking+FW wait; wider TCM scan (0x9A000-0x9FFFC) every 2s; console dump at T+3s; BSS dump at T+5s; olmsg dump at T+20s; TIMEOUT: final TCM scan + MSI state check; RP restore + MSI disable" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled + IRQ handler before ARM; pci_set_master before ARM; 30s masking+FW wait; wider TCM scan (0x9A000-0x9FFFC) every 2s; MSI count at each scan; console dump at T+3s; BSS dump at T+5s; olmsg dump at T+20s; TIMEOUT: final TCM+MSI scan; free_irq+disable_msi+RP restore" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -90,7 +88,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.81 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.82 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
