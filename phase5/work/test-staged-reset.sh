@@ -1,27 +1,17 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.48: BusMaster re-enable test — does firmware re-enable DMA?
+# Phase 5.2 test.51: ChipCommon watchdog READ-ONLY monitoring
 #
-# test.47 CRASHED at iter 19 (~950ms). Key findings:
-#   - DEV_LNKSTA=0x1011 CONSTANT through all 19 iters — PCIe link NEVER drops.
-#   - No PCIe error escalation: pre-existing CorrErr+UnsupReq+AuxPwr, unchanged.
-#   - Sharedram marker unchanged — firmware never completes initialization.
-#   - Link is completely stable — crash is NOT from link drop, NOT from error signaling.
+# test.50 INSTANT CRASH finding:
+#   Writing 0 to CC+0x80 (ChipCommon watchdog) = "reset in 0 ALP ticks" = IMMEDIATE reset.
+#   Same mechanism as test.40's WRITECC32(watchdog, 4) but faster.
+#   The BCM4360 watchdog is a pure countdown timer; writing 0 does NOT disable it.
 #
-# test.43 gap: called pci_clear_master() once, then released ARM. BCM4360 firmware
-#   has AXI bus access to its own PCIe2 endpoint registers and CAN write PCI_COMMAND
-#   bit2 (BusMaster) from the device side. Test.43 never checked BusMaster during iters.
-#   IOMMU group 6 is huge (all PCIe bridges + many devices) — no isolation.
-#   If firmware re-enables BusMaster and D11 DMA writes to arbitrary physical address
-#   (page tables, GDT/IDT), the host CPU triple-faults: instant crash, no journal entry.
-#
-# test.48 GOAL: log PCI_COMMAND every 10ms, force BusMaster off every iteration.
-#   - Sleep reduced to 10ms (crash at ~iter 95 instead of ~19 if same timing)
-#   - pci_clear_master() called every iteration AND just before ARM release
-#   Expected outcomes:
-#     PASS (no crash): firmware was re-enabling BusMaster → DMA confirmed as mechanism
-#     CRASH with CMD logged: check if BusMaster was ever 1 before crash
-#       If CMD showed BusMaster=1 at any iter → DMA confirmed
-#       If CMD always showed BusMaster=0 → DMA definitively ruled out
+# test.51 GOAL: observe watchdog countdown without touching it.
+#   - READ CC+0x80 (WDOG) and CC+0x634 (PMUWDOG) every 10ms — no writes.
+#   - Keep DisINTx=1 and BusMaster=0 (from test.49).
+#   - Expected: crash at ~490ms like tests 46-49, but now with WDOG values logged.
+#   - If WDOG counts down toward 0 at crash time: watchdog confirmed as mechanism.
+#   - test.52 will then SERVICE watchdog by writing a large value each iteration.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -35,14 +25,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.48.stage${STAGE}"
+LOG="$LOG_DIR/test.51.stage${STAGE}"
 
-echo "=== test.48: BusMaster re-enable test — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.51: watchdog read-only monitoring — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: BBPLL up; normal firmware; BusMaster cleared every 10ms; ARM release; monitor" | tee -a "$LOG" ;;
+    0) echo "Stage 0: BBPLL up; normal firmware; watchdog read-only; ARM release; monitor" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -90,7 +80,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.48 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.51 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -112,5 +102,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.48: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "*** test.51: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
 echo "Log saved to $LOG" | tee -a "$LOG"
