@@ -1,6 +1,6 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-15, about to run test.67)
+## Current state (2026-04-15, about to run test.68)
 
 Git branch: main (pushed to origin)
 
@@ -54,31 +54,48 @@ Git branch: main (pushed to origin)
 - Driver cleanup path then accessed device with firmware still generating errors
 - This caused the crash between "ABOUT TO TIMEOUT" and "TIMEOUT" messages
 
-## test.67 PLAN (about to run)
+## test.67 RESULT: SURVIVED 60s — firmware alive but crashed before sharedram init
 
-**Key changes from test.66:**
-1. **Remove PCIe2 mailbox reads entirely** — both baseline and loop. select_core(PCIE2) does EP config writes (BAR0_WINDOW) which are fatal during firmware PCIe2 init.
-2. **Skip TCM scan at outer==0** — `if (outer > 0 && outer % 10 == 0)`. First 200ms is pure masking matching proven test.65 behavior.
-3. **Initialize fw_init_done_last from baseline** — was 0, now set to t66_prev[16] (= 0x870ca017 firmware binary constant) so we only log RUNTIME changes.
-4. **Keep everything else** — 60s wait, 20-location TCM scan at T+200ms+, fw_init_done poll per 10ms.
+**TCM[0x9d000] changed at T+2s from 0x00000000 → 0x000043b1**
+- 0x000043b1 with bit 0 set = ARM Thumb function pointer to address 0x43b0
+- Firmware binary at 0x43b0: pointer table with values like 0x00058E30, 0x00042536
+- NOT a valid sharedram_addr: version byte = 0xb1 = 177 (valid range 5–7)
+- Address 0x9d000 is beyond firmware binary end (0x6BF79) → was zeroed, then written by firmware runtime
+- Only 1 word changed in entire 60s → firmware crashed very early (before BSS/sharedram init)
 
-**Module build:** done (test.67 built successfully, warning only: write_ram32 unused)
-**Test script:** updated to test.67 (log = test.67.stage0), waits 75s
+**sharedram=0xffc70038 and fw_init=0x870ca017 throughout all 60s**
+- Neither protocol signaled (FullDongle nor olmsg)
+- EP_CMD=0x0006 throughout — BusMaster maintained correctly
+
+**Root cause hypothesis: firmware crashes before sharedram write phase**
+- 0x43b0 is a pointer table entry, likely written during C runtime init (BSS/data init before main())
+- Firmware writes one function pointer, then crashes before reaching WiFi init
+- Possible causes: missing NVRAM calibration params, hardware resource not available, assert/trap
+
+## test.68 PLAN (about to run)
+
+**Key change from test.67: dense BSS scan at T+3s**
+- At outer==15 (T+3000ms), scan full BSS region for firmware runtime writes:
+  - Lower BSS 0x6C000–0x9C000: 256-byte stride (~192 reads)
+  - Upper BSS 0x9C000–0x9FFFC: 4-byte stride (~4096 reads, ~4ms)
+- Count and log all non-zero words (BSS zeroed before ARM release → non-zero = firmware wrote)
+- Interpretation: 0–5 words = early crash; 50+ words = deeper crash
+
+**Module build:** done (test.68 built successfully, warning only: write_ram32 unused)
+**Test script:** updated to test.68 (log = test.68.stage0), waits 75s
 
 **Expected outcomes:**
-- If FullDongle: ramsize-4 (0x9FFFC) changes from 0xffc70038 → sharedram_addr
-  → "FW READY (FullDongle)" logged, full brcmfmac init proceeds
-- If olmsg: fw_init_done (0x9F0CC) becomes non-zero (≠ 0x870ca017 binary constant)
-  → "FW_INIT_DONE" logged, need to implement olmsg protocol
-- If TCM changes in 0x6C000-0x9C000 region: firmware IS running but using different address
-- If sharedram stays 0xffc70038 for 60s: firmware runs but doesn't signal (protocol unknown)
+- 0-5 non-zero words: firmware crashes at C startup, before any init (stack/heap problem?)
+- 5-50 non-zero words: crashes during early BSS/global init phase
+- 50+ non-zero words: got into WiFi init; look at which addresses for crash location
+- Trap structure at 0x9C000+: look for PC/SP/CPSR to decode crash address
 
 **After test — what to do (whether PASS or crash):**
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.67" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.67.journal'` (or -b 0 if survived)
-3. `sudo chown kimptoc:users phase5/logs/test.67.*`
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.68" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.68.journal'` (or -b 0 if survived)
+3. `sudo chown kimptoc:users phase5/logs/test.68.*`
 4. git add logs + commit + push
-5. Analyze: check for TCM changes (what did firmware write?), fw_init_done changes
+5. Analyze: count non-zero words; check for trap structure (PC/SP/LR); find crash address in firmware binary
 
 ## Key confirmed findings
 - BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
@@ -129,13 +146,14 @@ Git branch: main (pushed to origin)
   CRASH at T+20s: RP masking not restored before return -ENODEV → cleanup crash
 - test.65: SURVIVED 20s — BusMaster fix confirmed (CMD=0x0006), sharedram still stuck
 - test.66: CRASHED before T+0000ms — PCIe2 select_core EP config write during firmware init
-- test.67: DIAGNOSTIC — 60s wait + TCM scan (20 locations, from T+200ms) + fw_init_done poll (baseline-initialized)
+- test.67: SURVIVED 60s — TCM[0x9d000] changed at T+2s (0x000043b1 = Thumb ptr to 0x43b0); sharedram/fw_init unchanged; only 1 word changed → firmware crashes before sharedram init
+- test.68: DIAGNOSTIC — dense BSS scan at T+3s (4-byte stride upper BSS 0x9C000–0x9FFFC, 256-byte lower BSS)
 
 ## Key files
 - Source: phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 - Test script: phase5/work/test-staged-reset.sh
-- Logs: phase5/logs/test.67.stage0, test.67.journal (after test)
+- Logs: phase5/logs/test.68.stage0, test.68.journal (after test)
 - Build: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build && make -C "$KDIR" M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
 
-## Run test.67 (if not yet run):
+## Run test.68 (if not yet run):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0

@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.67: Extended 60s wait + TCM scan (no PCIe2 select_core)
+# Phase 5.2 test.68: Dense BSS scan at T+3s to count firmware runtime writes
 #
-# test.66 RESULT: CRASHED before T+0000ms. Root cause: brcmf_pcie_select_core(PCIE2)
-#   at outer=0 (before first msleep) does pci_write_config_dword to EP BAR0_WINDOW —
-#   same crash mechanism as test.51. EP config write during firmware PCIe2 init is fatal.
+# test.68 RESULT: SURVIVED 60s. Firmware alive (TCM[0x9d000] changed at T+2s to
+#   0x000043b1 = ARM Thumb function pointer to 0x43b0). Only 1 word changed in 60s.
+#   sharedram=0xffc70038 and fw_init=0x870ca017 unchanged throughout. NVRAM token kept.
+#   Conclusion: firmware is running but crashing very early before sharedram init phase.
 #
-# test.67 FIXES:
-#   1. Remove PCIe2 mailbox reads entirely (both baseline and loop) — no select_core
-#   2. Skip TCM scan at outer==0: first 200ms is pure masking (matches test.65)
-#   3. Initialize fw_init_done_last from baseline read (not 0) — detect RUNTIME changes
-#   4. Keep fw_init_done poll in inner loop (one safe BAR2 read per 10ms)
-#   5. Keep 20-location TCM scan from outer>=1 (T+200ms+)
+# test.68 KEY CHANGE:
+#   Add dense BSS scan at T+3s (outer==15):
+#     - Lower BSS 0x6C000–0x9C000: 256-byte stride (~192 reads)
+#     - Upper BSS 0x9C000–0x9FFFC: 4-byte stride (~4096 reads)
+#   Count and log all non-zero words (BSS was zeroed before ARM release).
+#   0-5 non-zero = firmware crashed before BSS init; 50+ = got deeper into init.
+#   Everything else unchanged from test.68 (60s wait, periodic 2s scans, inner poll).
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -24,14 +26,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.67.stage${STAGE}"
+LOG="$LOG_DIR/test.68.stage${STAGE}"
 
-echo "=== test.67: 60s wait + TCM scan (no PCIe2 select_core) --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.68: 60s wait + TCM scan (no PCIe2 select_core) --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; pci_set_master before ARM; activate() preserves BusMaster; 60s masking+FW wait; TCM scan every 2s (from T+200ms); fw_init_done poll (baseline-initialized); RP restore on timeout" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; pci_set_master before ARM; activate() preserves BusMaster; 60s masking+FW wait; TCM scan every 2s (from T+200ms); dense BSS scan at T+3s (4-byte stride upper BSS + 256-byte lower BSS); fw_init_done poll (baseline-initialized); RP restore on timeout" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -86,7 +88,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.67 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.68 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -96,7 +98,7 @@ insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
 echo "Module loaded. Waiting 75s (60s FW wait + margin for full probe)..." | tee -a "$LOG"
-echo "(test.67: 60s wait; TCM scan every 2s from T+200ms; fw_init_done poll; FW READY → full probe; TIMEOUT → -ENODEV + RP restore)" | tee -a "$LOG"
+echo "(test.68: 60s wait; TCM scan every 2s from T+200ms; fw_init_done poll; FW READY → full probe; TIMEOUT → -ENODEV + RP restore)" | tee -a "$LOG"
 sleep 75
 
 # Capture results
@@ -109,5 +111,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.67: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.67)" | tee -a "$LOG"
+echo "*** test.68: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.68)" | tee -a "$LOG"
