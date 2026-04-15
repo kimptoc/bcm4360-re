@@ -1988,25 +1988,35 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	brcmf_dbg(PCIE, "Wait for FW init\n");
 
 	sharedram_addr = sharedram_addr_written;
-	loop_counter = BRCMF_PCIE_FW_UP_TIMEOUT / 50;
+	loop_counter = BRCMF_PCIE_FW_UP_TIMEOUT / 10;
 	while ((sharedram_addr == sharedram_addr_written) && (loop_counter)) {
-		msleep(50);
-		/* test.47: log PCIe error + LINK STATUS registers every iteration.
-		 * test.46 finding: SERR and all error reporting already OFF — crash is NOT
-		 * from PCIe error signaling. Adding LnkSta to detect link down/retrain.
-		 * Hypothesis: firmware watchdog (~1s) resets internal PCIe2 core → link down.
-		 * Config-space reads survive device errors (unlike MMIO).
-		 * PCI_STATUS: master/target abort, parity error flags.
-		 * PCI_EXP_DEVSTA: error status (expected unchanged — errors masked).
-		 * PCI_EXP_LNKSTA: link status — Active, Width, Speed, Training bits.
-		 * BR_DEVSTA / BR_LNKSTA: same from host bridge perspective.
+		msleep(10);
+		/* test.48: BusMaster re-enable test.
+		 * test.47 finding: LnkSta STABLE all 19 iters — link never drops.
+		 *   No PCIe error escalation. Crash is NOT from link drop or error signaling.
+		 * Gap in test.43: called pci_clear_master() once before ARM release, but
+		 *   BCM4360 firmware has AXI access to its own PCIe2 endpoint registers.
+		 *   Firmware can write PCI_COMMAND bit2 (BusMaster) from device side at any
+		 *   time after ARM release — test.43 never re-checked BusMaster during iters.
+		 * Plan: read PCI_COMMAND every 10ms, force BusMaster off every iter.
+		 *   If crash is PREVENTED: firmware was re-enabling BusMaster → DMA is the
+		 *     mechanism (confirmed). IOMMU group 6 is huge, provides no isolation.
+		 *   If crash PERSISTS with BusMaster=0 logged: DMA definitively ruled out.
+		 *     Next: look at MSI/interrupt, internal register, or platform event.
+		 * Sleep reduced to 10ms for finer timing (crash at ~iter 95 instead of ~19).
 		 */
 		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-			int iter = (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 50) - (int)loop_counter + 1;
-			u16 pci_status, devsta_dev, devsta_br;
+			int iter = (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 10) - (int)loop_counter + 1;
+			u16 pci_cmd, pci_status, devsta_dev, devsta_br;
 			u16 lnksta_dev, lnksta_br;
 			int pcie_cap_dev, pcie_cap_br;
 			struct pci_dev *bridge;
+
+			/* Read PCI_COMMAND to check if firmware re-enabled BusMaster */
+			pci_read_config_word(devinfo->pdev, PCI_COMMAND, &pci_cmd);
+
+			/* Force BusMaster off every iteration */
+			pci_clear_master(devinfo->pdev);
 
 			devsta_dev = 0;
 			devsta_br = 0;
@@ -2035,19 +2045,18 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				}
 			}
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.47: iter %d val=0x%08x PCI_STA=0x%04x DEV_DEVSTA=0x%04x DEV_LNKSTA=0x%04x BR_DEVSTA=0x%04x BR_LNKSTA=0x%04x\n",
+				  "BCM4360 test.48: iter %d val=0x%08x CMD=0x%04x PCI_STA=0x%04x DEV_DEVSTA=0x%04x DEV_LNKSTA=0x%04x BR_LNKSTA=0x%04x\n",
 				  iter, sharedram_addr,
-				  pci_status, devsta_dev, lnksta_dev, devsta_br, lnksta_br);
-			/* Every 20 iterations: check pmustatus */
-			if (iter % 20 == 0) {
+				  pci_cmd, pci_status, devsta_dev, lnksta_dev, lnksta_br);
+			/* Every 50 iterations (~500ms): check pmustatus */
+			if (iter % 50 == 0) {
 				u32 pmu_st;
 
 				brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 				pmu_st = READCC32(devinfo, pmustatus);
 				dev_info(&devinfo->pdev->dev,
-					 "BCM4360 test.47: iter %d pmustatus=0x%08x clk_ctl_st=0x%08x HT=%s\n",
+					 "BCM4360 test.48: iter %d pmustatus=0x%08x HT=%s\n",
 					 iter, pmu_st,
-					 READCC32(devinfo, clk_ctl_st),
 					 (READCC32(devinfo, clk_ctl_st) & 0x20000) ? "YES" : "NO");
 			}
 		}
@@ -2261,14 +2270,15 @@ static void brcmf_pcie_buscore_activate(void *ctx, struct brcmf_chip *chip,
 	struct brcmf_pciedev_info *devinfo = (struct brcmf_pciedev_info *)ctx;
 
 	/* test.46: restore normal firmware — write rstvec to TCM[0] for all chips.
-	 * test.46 PASSED (B. infinite loop survived 5s), confirming firmware
-	 * execution is the crash mechanism. Now run real firmware and capture
-	 * PCIe error state at each iteration to identify the crash type.
+	 * test.48: also disable BusMaster immediately before ARM release.
+	 *   Firmware may re-enable BusMaster from device side via AXI→PCIe2 registers.
+	 *   The monitoring loop also forces BusMaster off every 10ms iteration.
 	 */
 	if (chip->chip == BRCM_CC_4360_CHIP_ID) {
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.47 activate: writing rstvec=0x%08x to TCM[0] (normal firmware)\n",
+			 "BCM4360 test.48 activate: writing rstvec=0x%08x to TCM[0] (normal firmware); disabling BusMaster\n",
 			 rstvec);
+		pci_clear_master(devinfo->pdev);
 	}
 	brcmf_pcie_write_tcm32(devinfo, 0, rstvec);
 }

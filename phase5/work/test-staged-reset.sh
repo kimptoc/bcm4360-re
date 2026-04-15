@@ -1,25 +1,27 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.47: normal firmware + PCIe LINK STATUS reads per iteration.
+# Phase 5.2 test.48: BusMaster re-enable test — does firmware re-enable DMA?
 #
-# test.46 CRASHED at iter 19 (~950ms). Key findings:
-#   - SERR and all PCIe error reporting already OFF (BusMaster- SERR- CorrErr-
-#     NonFatalErr- FatalErr- UnsupReq- in lspci pre-state).
-#   - No PCIe error escalation: DEV_DEVSTA=0x0011 (CorrErr pre-existing, AuxPwr),
-#     BR_DEVSTA=0x0010 (AuxPwr only) — constant through all 19 iters.
-#   - Sharedram marker 0xffc70038 UNCHANGED — firmware never completed init.
-#   - Conclusion: crash is NOT from PCIe error signaling. Mechanism unknown.
+# test.47 CRASHED at iter 19 (~950ms). Key findings:
+#   - DEV_LNKSTA=0x1011 CONSTANT through all 19 iters — PCIe link NEVER drops.
+#   - No PCIe error escalation: pre-existing CorrErr+UnsupReq+AuxPwr, unchanged.
+#   - Sharedram marker unchanged — firmware never completes initialization.
+#   - Link is completely stable — crash is NOT from link drop, NOT from error signaling.
 #
-# test.47 HYPOTHESIS: firmware watchdog (~1s) fires, resets internal PCIe2 core,
-#   causing the PCIe link to go DOWN from the endpoint side → host hard-crashes.
-#   LnkSta should show "Link Down" or "Training" in the iter just before crash.
+# test.43 gap: called pci_clear_master() once, then released ARM. BCM4360 firmware
+#   has AXI bus access to its own PCIe2 endpoint registers and CAN write PCI_COMMAND
+#   bit2 (BusMaster) from the device side. Test.43 never checked BusMaster during iters.
+#   IOMMU group 6 is huge (all PCIe bridges + many devices) — no isolation.
+#   If firmware re-enables BusMaster and D11 DMA writes to arbitrary physical address
+#   (page tables, GDT/IDT), the host CPU triple-faults: instant crash, no journal entry.
 #
-# test.47 GOAL: add PCI_EXP_LNKSTA reads (device + bridge) to each iteration.
-#   Log: PCI_STA, DEV_DEVSTA, DEV_LNKSTA, BR_DEVSTA, BR_LNKSTA per iter.
-#   If LnkSta drops (bit 13 DLActive goes low, or Training bit sets) → confirmed.
-#
-# Expected: PC crashes at ~19 iters (~950ms). Last iter should show:
-#   DEV_LNKSTA bit 13 (DLActive) = 0, or bit 11 (SlotClk) changes.
-#   BR_LNKSTA bits similar.
+# test.48 GOAL: log PCI_COMMAND every 10ms, force BusMaster off every iteration.
+#   - Sleep reduced to 10ms (crash at ~iter 95 instead of ~19 if same timing)
+#   - pci_clear_master() called every iteration AND just before ARM release
+#   Expected outcomes:
+#     PASS (no crash): firmware was re-enabling BusMaster → DMA confirmed as mechanism
+#     CRASH with CMD logged: check if BusMaster was ever 1 before crash
+#       If CMD showed BusMaster=1 at any iter → DMA confirmed
+#       If CMD always showed BusMaster=0 → DMA definitively ruled out
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -33,14 +35,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.47.stage${STAGE}"
+LOG="$LOG_DIR/test.48.stage${STAGE}"
 
-echo "=== test.47: normal firmware + LnkSta reads per iter — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.48: BusMaster re-enable test — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: BBPLL up; normal firmware (rstvec at TCM[0]); LnkSta + error reads per iter; ARM release; monitor" | tee -a "$LOG" ;;
+    0) echo "Stage 0: BBPLL up; normal firmware; BusMaster cleared every 10ms; ARM release; monitor" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -88,7 +90,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.47 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.48 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -110,5 +112,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.47: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "*** test.48: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
 echo "Log saved to $LOG" | tee -a "$LOG"
