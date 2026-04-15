@@ -1,28 +1,30 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.54: reads-only — isolate read vs. write as crash trigger
+# Phase 5.2 test.55: two-phase polling — BAR0-only first 1.5s, then BAR2 reads
 #
-# test.53 INSTANT CRASH finding:
-#   SBR succeeded, device alive (BAR0 probe 0x15034360), chip_attach OK, BBPLL up,
-#   ARM released. Poll loop iter 1: WDOG_PRE=0, PMUWDOG=0, then WRITECC32(watchdog,
-#   0x7FFFFFFF) → "iter 1" logged → CRASH (BAR2 TCM read fails → Completion Timeout).
-#   Root cause: writing to ChipCommon watchdog while ARM initializing causes device reset.
+# test.54 RESULT: INSTANT CRASH at iter 1 (BAR2 read fails after ARM release).
+#   BAR0 reads all succeeded: BAR0_WIN=0x18000000, CHIPID=0x15034360, WDOG=0, PMUWDOG=0.
+#   Root cause: real BCM4360 firmware (rstvec=0xb80ef000) runs and initializes the PCIE2
+#   DMA engine within 10ms of ARM release (SBR gives clean state), making BAR2 temporarily
+#   inaccessible. Unconditional brcmf_pcie_read_ram32() after log -> PCIe Completion Timeout.
+#   Note: rstvec is REAL firmware, not the busyloop B. injection (that was only test.45).
+#   The pcie_shared marker 0xffc70038 was NVRAM written to TCM[0x9fffc], not pcie_shared.
 #
-# test.54 CHANGES:
-#   - Remove WRITECC32 entirely — NO write to watchdog register.
-#   - Add BAR0_WINDOW read (PCIe config 0x80) — safe config cycle, not MMIO.
-#   - Add CHIPID read (BAR0+0) — tells us if ARM moved BAR0 window.
-#   - Keep WDOG + PMUWDOG reads from test.53 (these may or may not be safe).
-#   - Log: "BCM4360 test.54: iter N val=... CMD=... MSI_CTRL=... BAR0_WIN=... CHIPID=... WDOG=... PMUWDOG=..."
+# test.55 CHANGES:
+#   - PRE-PHASE (iters 1-150, 0-1.5s): BAR0-only reads. No BAR2. Log at 1,5,10,25,50,100,150.
+#     BAR0_WINDOW, CHIPID, WDOG, PMUWDOG (guarded: only if BAR0_WIN==0x18000000 and CHIPID valid).
+#     Early exit if CHIPID=0xffffffff (device dead).
+#   - POST-PHASE (iters 151-500, 1.5-5s): same BAR0 reads + BAR2 (brcmf_pcie_read_ram32).
+#     Log every 10 iters and immediately when BAR2 value changes (= pcie_shared written).
+#   - Hypothesis: firmware PCIE2 init completes within ~200ms. BAR2 safe from iter ~20 of post-phase.
 #
 # Expected outcomes:
-#   - CRASH at ~49 iters + BAR0_WIN=CC_BASE + CHIPID=0x15034360: WRITE was the trigger.
-#     BAR0 reads are safe. Natural crash mechanism acts at ~49 iters.
-#     → test.55: investigate natural crash (maybe ARM programs its own watchdog).
-#   - CRASH at iter 1 + BAR0_WIN != CC_BASE: ARM changed BAR0_WINDOW; reads hit wrong space.
-#     → test.55: re-call select_core(CHIPCOMMON) at the start of each poll iteration.
-#   - CRASH at iter 1 + BAR0_WIN == CC_BASE: reads themselves crash (pmuwdog side effects?).
-#     → test.55: drop pmuwdog read, or drop all BAR0 reads.
-#   - PASS: all reads safe. WRITE was sole cause. → test.55: investigate 49-iter natural crash.
+#   - PASS + BAR2 changes in post-phase: firmware wrote pcie_shared. Normal init proceeds.
+#     Log shows at what iter BAR2 changed -> tells us how long PCIE2 init took.
+#     -> Normal driver init should complete (device registered, wlan0 appears).
+#   - CRASH in post-phase: BAR2 still not ready at 1.5s. Extend pre-phase delay.
+#     -> test.56: extend pre-phase to 300 or 400 iters (3-4s).
+#   - CRASH in pre-phase: BAR0 reads themselves unsafe (unexpected -- test.54 showed they're safe).
+#   - 5s timeout (no BAR2 change): firmware never wrote pcie_shared. Investigate TCM/DMA.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -36,14 +38,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.54.stage${STAGE}"
+LOG="$LOG_DIR/test.55.stage${STAGE}"
 
-echo "=== test.54: SBR + reads-only (no watchdog write) — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.55: SBR + two-phase polling (BAR0-only 0-1.5s, BAR2 1.5-5s) --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; BAR0 probe; BBPLL; ARM release; poll reads only (BAR0_WIN+CHIPID+WDOG+PMUWDOG), NO watchdog write" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; BAR0 probe; BBPLL; ARM release; PRE-PHASE BAR0-only 150 iters; POST-PHASE BAR0+BAR2" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -51,7 +53,7 @@ echo "" | tee -a "$LOG"
 # Check modules exist
 for mod in brcmfmac.ko wcc/brcmfmac-wcc.ko; do
     if [ ! -f "$FMAC_DIR/$mod" ]; then
-        echo "ERROR: $FMAC_DIR/$mod not found — run make first" | tee -a "$LOG"
+        echo "ERROR: $FMAC_DIR/$mod not found -- run make first" | tee -a "$LOG"
         exit 1
     fi
 done
@@ -91,7 +93,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.54 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.55 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -113,5 +115,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.54: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.54)" | tee -a "$LOG"
+echo "*** test.55: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.55)" | tee -a "$LOG"

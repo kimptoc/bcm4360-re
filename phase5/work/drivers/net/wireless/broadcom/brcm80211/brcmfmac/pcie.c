@@ -1991,81 +1991,98 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	loop_counter = BRCMF_PCIE_FW_UP_TIMEOUT / 10;
 	while ((sharedram_addr == sharedram_addr_written) && (loop_counter)) {
 		msleep(10);
-		/* test.52: ChipCommon watchdog ACTIVE SERVICING.
-		 * test.51 RESULT: INSTANT CRASH — same as test.50. Root cause: select_core(CHIPCOMMON)
-		 *   called inside activate() corrupts BAR0 window at a critical moment during ARM init.
-		 *   No test.51 messages reached the journal; machine reset during insmod.
-		 * test.52 fix: remove select_core from activate() entirely (keep test.49 activate()).
-		 *   In this poll loop, BAR0 is already ChipCommon after select_core(CHIPCOMMON) at
-		 *   line ~1985 (ARM-release diagnostic block). Do NOT call select_core again here.
-		 *   Use READCC32 directly (BAR0 = ChipCommon), then WRITE to service the watchdog.
-		 * test.52 goal: service watchdog every 10ms by writing 0x7FFFFFFF to prevent countdown.
-		 *   BCM4360 watchdog = countdown timer; write N = reset in N ALP ticks.
-		 *   Writing 0x7FFFFFFF = ~107s @ 20MHz ALP, far beyond 10ms poll interval.
-		 *   If PASS (no crash at 5s): watchdog CONFIRMED as crash mechanism for tests 43-49.
-		 *   If CRASH: watchdog is NOT the cause; investigate PMU reset or CPU exception.
+		/* test.54 RESULT: INSTANT CRASH at iter 1 — BAR2 read (brcmf_pcie_read_ram32) fails.
+		 *   BAR0 reads all succeeded (BAR0_WIN=0x18000000, CHIPID=0x15034360, WDOG=0, PMUWDOG=0).
+		 *   Root cause: real BCM4360 firmware (rstvec=0xb80ef000) runs and initializes the PCIE2
+		 *   DMA engine within 10ms of ARM release, making BAR2 (TCM) temporarily inaccessible.
+		 *   The unconditional brcmf_pcie_read_ram32() after the log caused PCIe Completion Timeout.
+		 *   With SBR (clean device state), firmware reaches PCIE2 init in <10ms every time.
+		 *   Without SBR (test.43-49), firmware took 190-490ms, so BAR2 read worked early on.
 		 *
-		 * test.53 RESULT: INSTANT CRASH at iter 1 after writing 0x7FFFFFFF to watchdog.
-		 *   SBR worked (BAR0 probe = 0x15034360, alive). Device got through chip_attach, BBPLL,
-		 *   ARM release fine. Poll loop iter 1: WDOG_PRE=0, PMUWDOG=0 (neither timer was running).
-		 *   WRITECC32(watchdog, 0x7FFFFFFF) logged "iter 1" then CRASH (BAR2 read fail after write).
-		 *   Hypothesis: writing to ChipCommon watchdog while ARM is initializing causes device reset.
-		 *   BAR0_WINDOW may have been changed by ARM firmware between select_core(CHIPCOMMON) at
-		 *   line 1985 and iter 1, so write went to wrong address. Or write starts watchdog which
-		 *   interacts badly with ARM firmware early init path.
+		 * test.55 plan: two-phase polling.
+		 *   Pre-phase (iters 1-150, first 1.5s): BAR0-only reads. No BAR2 reads.
+		 *     - PCIe config: CMD and BAR0_WINDOW
+		 *     - BAR0+0: CHIPID (verify window still points to ChipCommon)
+		 *     - READCC32: WDOG and PMUWDOG (only if BAR0_WIN == CC_BASE and CHIPID valid)
+		 *     - Log at iters 1, 5, 10, 25, 50, 100, 150
+		 *     - Early exit if CHIPID == 0xffffffff (BAR0 dead — device gone)
+		 *   Post-phase (iters 151-500, 1.5-5s): add BAR2 read to detect pcie_shared write.
+		 *     - Same BAR0 reads as pre-phase
+		 *     - brcmf_pcie_read_ram32: read TCM[ramsize-4] for pcie_shared pointer
+		 *     - Log every 10 iters and immediately when BAR2 value changes
+		 *     - When BAR2 value changes → firmware wrote pcie_shared → normal init proceeds
 		 *
-		 * test.54 goal: remove the WRITE entirely — isolate whether write or read causes crash.
-		 *   Also: read BAR0_WINDOW (PCIe config 0x80) to check if ARM changed it.
-		 *   Also: read BAR0+0 (chip ID offset = 0) to verify BAR0 still points to ChipCommon.
-		 *   ChipCommon chip ID field = 0x15034360 for BCM4360/3. Non-matching = ARM moved BAR0.
-		 *   Expected outcomes:
-		 *   - Crash at ~49 iters + BAR0_WIN=ChipCommon: WRITE was trigger; reads are safe.
-		 *     Natural crash mechanism is something else at ~49 iters.
-		 *   - Crash at iter 1 + BAR0_WIN != ChipCommon: ARM moved BAR0; reads hit wrong address.
-		 *   - Crash at iter 1 + BAR0_WIN == ChipCommon: reads themselves trigger crash (pmuwatchdog
-		 *     read has side effects?) or something else entirely.
-		 *   - PASS: both reads safe; write was the sole cause of iter-1 crash.
+		 * Note: rstvec=0xb80ef000 is real BCM4360 firmware (not the busyloop B. injection).
+		 *   The "B. injected" log string in brcmf_pcie_buscore_activate() is stale from test.47
+		 *   era. The busyloop (0xEAFFFFFE) was only active in test.45. Tests 46-54 all ran real
+		 *   firmware. The pcie_shared marker (0xffc70038) comes from NVRAM loaded to TCM[0x9fffc].
 		 */
 		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 			int iter = (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 10) - (int)loop_counter + 1;
-			u16 pci_cmd, msi_ctrl;
-			u32 wdog, pmuwdog, bar0_win, chipid;
-			int msi_cap;
-			u16 new_cmd;
+			u32 bar0_win, chipid;
+			bool bar0_ok;
+			/* PRE-PHASE: iters 1-150 (0-1.5s) — BAR0 reads only, no BAR2 */
+			if (iter <= 150) {
+				pci_read_config_dword(devinfo->pdev, BRCMF_PCIE_BAR0_WINDOW,
+						      &bar0_win);
+				chipid = brcmf_pcie_read_reg32(devinfo, 0); /* BAR0+0 */
+				bar0_ok = (bar0_win == 0x18000000 && chipid != 0xffffffff);
 
-			/* Keep enforcing DisINTx=1 and BusMaster=0 (from test.49) */
-			pci_read_config_word(devinfo->pdev, PCI_COMMAND, &pci_cmd);
-			new_cmd = (pci_cmd & ~PCI_COMMAND_MASTER) | PCI_COMMAND_INTX_DISABLE;
-			if (new_cmd != pci_cmd)
-				pci_write_config_word(devinfo->pdev, PCI_COMMAND, new_cmd);
+				if (bar0_ok) {
+					/* Safe to read CC registers only when window is valid */
+					u32 wdog    = READCC32(devinfo, watchdog);
+					u32 pmuwdog = READCC32(devinfo, pmuwatchdog);
+					if (iter == 1 || iter == 5 || iter == 10 ||
+					    iter == 25 || iter == 50 || iter == 100 ||
+					    iter == 150) {
+						dev_emerg(&devinfo->pdev->dev,
+							  "BCM4360 test.55 PRE iter=%d BAR0_WIN=0x%08x CHIPID=0x%08x WDOG=0x%08x PMUWDOG=0x%08x\n",
+							  iter, bar0_win, chipid, wdog, pmuwdog);
+					}
+				} else {
+					dev_emerg(&devinfo->pdev->dev,
+						  "BCM4360 test.55 PRE iter=%d BAR0_WIN=0x%08x CHIPID=0x%08x (BAR0 invalid/dead)\n",
+						  iter, bar0_win, chipid);
+					if (chipid == 0xffffffff) {
+						dev_emerg(&devinfo->pdev->dev,
+							  "BCM4360 test.55: CHIPID=0xffffffff at iter=%d, BAR0 dead, aborting\n",
+							  iter);
+						loop_counter = 0; /* force exit */
+					}
+				}
+				/* No BAR2 read in pre-phase — sharedram_addr stays == sharedram_addr_written */
+				loop_counter--;
+				continue;
+			}
 
-			/* Check if firmware has enabled MSI (should still be off) */
-			msi_ctrl = 0;
-			msi_cap = pci_find_capability(devinfo->pdev, PCI_CAP_ID_MSI);
-			if (msi_cap)
-				pci_read_config_word(devinfo->pdev, msi_cap + PCI_MSI_FLAGS,
-						     &msi_ctrl);
-
-			/* Read BAR0_WINDOW from PCIe config — safe even if ARM changed it.
-			 * Compare with ChipCommon base to detect if ARM moved the window.
-			 * Then read chipid (offset 0) via BAR0 to confirm what window maps to.
-			 * READCC32(chipid) is BAR0+0 — same read that BAR0 probe used successfully.
-			 * test.54: NO watchdog write — isolate whether read vs. write causes crash.
-			 */
+			/* POST-PHASE: iters 151+ (after 1.5s) — add BAR2 reads */
 			pci_read_config_dword(devinfo->pdev, BRCMF_PCIE_BAR0_WINDOW, &bar0_win);
-			chipid  = brcmf_pcie_read_reg32(devinfo, 0); /* BAR0+0 = chipid if CC */
-			wdog    = READCC32(devinfo, watchdog);
-			pmuwdog = READCC32(devinfo, pmuwatchdog);
-			/* test.54: intentionally no WRITECC32 — watching, not servicing */
+			chipid = brcmf_pcie_read_reg32(devinfo, 0);
+			bar0_ok = (bar0_win == 0x18000000 && chipid != 0xffffffff);
 
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.54: iter %d val=0x%08x CMD=0x%04x MSI_CTRL=0x%04x BAR0_WIN=0x%08x CHIPID=0x%08x WDOG=0x%08x PMUWDOG=0x%08x\n",
-				  iter, sharedram_addr,
-				  pci_cmd, msi_ctrl, bar0_win, chipid, wdog, pmuwdog);
+			if (bar0_ok) {
+				u32 wdog    = READCC32(devinfo, watchdog);
+				u32 pmuwdog = READCC32(devinfo, pmuwatchdog);
+				u32 new_bar2 = brcmf_pcie_read_ram32(devinfo,
+								     devinfo->ci->ramsize - 4);
+				bool changed = (new_bar2 != sharedram_addr_written);
+
+				if ((iter % 10 == 1) || changed) {
+					dev_emerg(&devinfo->pdev->dev,
+						  "BCM4360 test.55 POST iter=%d BAR0_WIN=0x%08x CHIPID=0x%08x WDOG=0x%08x PMUWDOG=0x%08x BAR2=0x%08x%s\n",
+						  iter, bar0_win, chipid, wdog, pmuwdog, new_bar2,
+						  changed ? " CHANGED!" : "");
+				}
+				sharedram_addr = new_bar2;
+			} else {
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.55 POST iter=%d BAR0_WIN=0x%08x CHIPID=0x%08x (BAR0 invalid — skip BAR2)\n",
+					  iter, bar0_win, chipid);
+			}
+		} else {
+			sharedram_addr = brcmf_pcie_read_ram32(devinfo,
+							       devinfo->ci->ramsize - 4);
 		}
-		sharedram_addr = brcmf_pcie_read_ram32(devinfo,
-						       devinfo->ci->ramsize -
-						       4);
 		loop_counter--;
 	}
 
