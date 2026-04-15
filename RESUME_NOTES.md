@@ -17,11 +17,7 @@ Git branch: main (pushed to origin)
 - Root cause: writing 0x7FFFFFFF to ChipCommon watchdog register causes device reset or
   AXI fault, which makes subsequent BAR2 TCM read fail (Completion Timeout → NMI → host crash)
 
-**Key questions for test.54:**
-1. Is it the WRITE that triggers the crash, or is something wrong with the READS too?
-2. Has the ARM firmware changed BAR0_WINDOW between select_core(CHIPCOMMON) at line 1985
-   and the poll loop reads? (ARM could change BAR0_WINDOW from its AXI side)
-3. If we remove the WRITE, does the crash move back to ~49 iters (natural crash mechanism)?
+## test.54 PLAN (about to run)
 
 **What test.54 does:**
 - Same SBR + chip_attach + BBPLL + ARM release sequence as test.53
@@ -32,8 +28,11 @@ Git branch: main (pushed to origin)
 - **NO WRITECC32** — removed the 0x7FFFFFFF write to isolate reads from write
 - Log: "BCM4360 test.54: iter N val=... CMD=... MSI_CTRL=... BAR0_WIN=... CHIPID=... WDOG=... PMUWDOG=..."
 
+**Module build:** pcie.c and brcmfmac.ko both dated 2026-04-15 10:14 — in sync
+**Test script:** updated to test.54 (log = test.54.stage0)
+
 **Expected outcomes:**
-- CRASH at ~49 iters + BAR0_WIN=CC_BASE + CHIPID=0x15034360: WRITE was the iter-1 trigger.
+- CRASH at ~49 iters + BAR0_WIN=CC_BASE + CHIPID=0x15034360: WRITE was iter-1 trigger.
   BAR0 reads are safe. Natural crash at ~49 iters = ARM programs a short watchdog that fires.
   → test.55: service both ChipCommon watchdog AND PMU watchdog (WRITE to pmuwatchdog too).
 - CRASH at iter 1 + BAR0_WIN != CC_BASE: ARM changed BAR0_WINDOW; reads hit wrong space.
@@ -41,13 +40,12 @@ Git branch: main (pushed to origin)
 - CRASH at iter 1 + BAR0_WIN == CC_BASE + CHIPID == 0x15034360: reads themselves crash.
   Possible: READCC32(pmuwatchdog) has side effects on BCM4360 that cause reset.
   → test.55: only read CC watchdog, not PMU watchdog. Or only read BAR0_WIN+CHIPID.
-- CRASH at iter 1 + BAR0_WIN == CC_BASE + CHIPID != 0x15034360: contradictory; window is CC
-  but chipid is wrong — could mean the CC isn't responding, reads return 0xffffffff or garbage.
+- CRASH at iter 1 + BAR0_WIN == CC_BASE + CHIPID != 0x15034360: window is CC but reads return garbage.
 - PASS (no crash at 5s): all reads are safe without the write. Why did test.49 crash at 49 iters?
   → check TCM tail value in timeout diagnostics.
 
 **After a crash — what to do:**
-1. Find the boot: `for b in -9 -8 -7 -6 -5 -4 -3 -2 -1; do echo "=== $b ==="; journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.5[34]" | wc -l; done`
+1. Find the boot: `for b in -9 -8 -7 -6 -5 -4 -3 -2 -1; do echo "=== $b ==="; journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.5[45]" | wc -l; done`
 2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.54.journal'`
 3. Check BAR0_WIN column: does it match ChipCommon base (0x18000000)?
 4. Check CHIPID column: 0x15034360 = CC; 0xffffffff = dead; other = moved window
