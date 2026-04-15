@@ -1979,7 +1979,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		pci_read_config_word(devinfo->pdev, PCI_COMMAND, &cmd_before);
 		pci_set_master(devinfo->pdev);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.64: BusMaster enabled; CMD was=0x%04x now=0x%04x\n",
+			 "BCM4360 test.65: BusMaster enabled; CMD was=0x%04x now=0x%04x\n",
 			 cmd_before,
 			 ({u16 c; pci_read_config_word(devinfo->pdev, PCI_COMMAND, &c); c;}));
 	}
@@ -2008,7 +2008,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 	}
 
-	/* test.64: BusMaster enabled + NVRAM marker preserved.
+	/* test.65: BusMaster enabled + NVRAM marker preserved.
 	 *
 	 * test.63 RESULT: SURVIVED 20s, no crash. BUT sharedram=0x00000000 throughout.
 	 *   - Firmware never wrote sharedram_addr in 20 seconds.
@@ -2088,29 +2088,40 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 				pci_read_config_word(devinfo->pdev, PCI_COMMAND, &ep_cmd);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.64: RP=%s masked CMD BC DevCtl AER; "
+					  "BCM4360 test.65: RP=%s masked CMD BC DevCtl AER; "
 					  "RootCtl=0x%04x ext_cap0=0x%08x nvram_token=0x%08x EP_CMD=0x%04x\n",
 					  pci_name(rp), rtctl, ext_cap0,
 					  sharedram_addr_written, ep_cmd);
 			}
 		} else {
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.64: no root port — skipping masking\n");
+				  "BCM4360 test.65: no root port — skipping masking\n");
 		}
 
 		/* Step 2: FW wait + per-inner-tick re-masking (20×10ms inner × 100 outer = 20s) */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.64: starting FW wait + masking loop (20s max, re-mask every 10ms)\n");
+			  "BCM4360 test.65: starting FW wait + masking loop (20s max, re-mask every 10ms)\n");
 
 		for (outer = 0; outer < 100; outer++) {
-			/* Log every outer iteration (200ms) with current sharedram + EP CMD */
+			/* Log every outer iteration (200ms) with current sharedram + EP CMD.
+			 * Also read TCM[0] (rstvec) every ~2s (every 10 outer iters) to detect
+			 * ARM crash-restart: if TCM[0] changes, firmware restarted.
+			 */
 			{
 				u16 ep_cmd;
 
 				pci_read_config_word(devinfo->pdev, PCI_COMMAND, &ep_cmd);
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.64 T+%03dms: sharedram=0x%08x EP_CMD=0x%04x\n",
-					  outer * 200, fw_sharedram, ep_cmd);
+				if (outer % 10 == 0) {
+					u32 tcm0 = brcmf_pcie_read_ram32(devinfo, 0);
+
+					dev_emerg(&devinfo->pdev->dev,
+						  "BCM4360 test.65 T+%03dms: sharedram=0x%08x EP_CMD=0x%04x TCM[0]=0x%08x\n",
+						  outer * 200, fw_sharedram, ep_cmd, tcm0);
+				} else {
+					dev_emerg(&devinfo->pdev->dev,
+						  "BCM4360 test.65 T+%03dms: sharedram=0x%08x EP_CMD=0x%04x\n",
+						  outer * 200, fw_sharedram, ep_cmd);
+				}
 			}
 
 			/* Inner: re-mask + poll sharedram every 10ms for 200ms */
@@ -2150,20 +2161,35 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 								      devinfo->ci->ramsize - 4);
 				/* Detect FW write: value changed from NVRAM token */
 				if (fw_sharedram != sharedram_addr_written)
-					goto t64_fw_ready;
+					goto t65_fw_ready;
 			}
 		}
 
-		/* Timeout — FW did not write sharedram in 20s */
+		/* Timeout — FW did not write sharedram in 20s.
+		 * Restore RP settings BEFORE returning so the system doesn't crash
+		 * during driver cleanup (firmware is still running and generating
+		 * PCIe errors; we need the RP to be in a known state for cleanup).
+		 * test.64 crashed here because RP masking was dropped without cleanup.
+		 */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.64: ABOUT TO TIMEOUT (loop complete, crash=cleanup if you see this)\n");
-		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.64: TIMEOUT — FW did not write sharedram in 20s\n");
+			  "BCM4360 test.65: TIMEOUT — FW did not write sharedram in 20s — restoring RP\n");
+		if (rp) {
+			pci_write_config_word(rp, PCI_COMMAND, rp_cmd_orig);
+			pci_write_config_word(rp, PCI_BRIDGE_CONTROL, rp_bc_orig);
+			if (pcie_cap)
+				pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVCTL,
+						      rp_devctl_orig);
+			if (aer_cap)
+				pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
+						       rp_aer_orig);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.65: RP settings restored\n");
+		}
 		return -ENODEV;
 
-t64_fw_ready:
+t65_fw_ready:
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.64: FW READY at T+%dms sharedram=0x%08x "
+			  "BCM4360 test.65: FW READY at T+%dms sharedram=0x%08x "
 			  "— proceeding with full probe init\n",
 			  outer * 200 + (inner + 1) * 10, fw_sharedram);
 		/* Fall through to normal init: set sharedram_addr_written so the wait
@@ -2416,14 +2442,14 @@ static void brcmf_pcie_buscore_activate(void *ctx, struct brcmf_chip *chip,
 	if (chip->chip == BRCM_CC_4360_CHIP_ID) {
 		u16 cmd;
 
-		/* Keep DisINTx=1, BusMaster=0 from test.49 */
+		/* test.65: DO NOT modify CMD here — pci_set_master() was called before
+		 * brcmf_pcie_exit_download_state(), and BusMaster must stay set so
+		 * firmware PCIe2 DMA init succeeds. Previous tests (test.49 era) cleared
+		 * BusMaster here; that caused firmware crash-restart loop every ~3s.
+		 */
 		pci_read_config_word(devinfo->pdev, PCI_COMMAND, &cmd);
-		cmd &= ~PCI_COMMAND_MASTER;
-		cmd |= PCI_COMMAND_INTX_DISABLE;
-		pci_write_config_word(devinfo->pdev, PCI_COMMAND, cmd);
-
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.52 activate: rstvec=0x%08x to TCM[0]; CMD=0x%04x (watchdog serviced in poll loop)\n",
+			 "BCM4360 test.65 activate: rstvec=0x%08x to TCM[0]; CMD=0x%04x (BusMaster preserved)\n",
 			 rstvec, cmd);
 	}
 	brcmf_pcie_write_tcm32(devinfo, 0, rstvec);

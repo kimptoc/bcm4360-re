@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.64: BusMaster enabled + NVRAM token preserved
+# Phase 5.2 test.65: Fix activate() CMD bug + RP restoration on timeout
 #
-# test.63 RESULT: SURVIVED 20s (no crash), but sharedram=0x00000000 throughout.
-#   - Firmware never wrote sharedram_addr in 20 seconds.
-#   - Root cause A: CMD=0x0402 → BusMaster=0. SBR clears CMD; pci_enable_device()
-#     restores Mem but NOT BusMaster. Without BusMaster firmware PCIe2 DMA init
-#     fails → firmware crash-restarts every ~3s (the periodic events we masked).
-#   - Root cause B: write_ram32(0) clobbered NVRAM length token (0xffc70038),
-#     breaking firmware NVRAM discovery.
+# test.64 RESULT: sharedram=0xffc70038 throughout 20s — firmware never wrote it.
+#   - pci_set_master() was called but activate() IMMEDIATELY undid it:
+#     activate() (leftover from test.49) cleared BusMaster before ARM release.
+#   - EP_CMD=0x0402 throughout (BusMaster=0) confirms firmware never had DMA.
+#   - Machine crashed at T+20s timeout because RP masking not restored on timeout path.
 #
-# test.64 STRATEGY:
-#   - pci_set_master() before ARM release → firmware can DMA to host
-#   - Do NOT zero ramsize-4 → NVRAM token (0xffc70038) preserved for firmware
-#   - Detection: poll for value != 0xffc70038 (firmware overwrites it with sharedram_addr)
-#   - Log EP CMD every 200ms to confirm BusMaster stays set
-#   - FW READY → fall through to full probe init
-#   - TIMEOUT → return -ENODEV
+# test.65 FIXES:
+#   1. brcmf_pcie_buscore_activate(): remove CMD manipulation — just read+log CMD.
+#      BusMaster set by pci_set_master() before activate() call will be preserved.
+#   2. Timeout path: restore RP settings before return -ENODEV (prevents T+20s crash).
+#   3. Outer loop: read TCM[0] every ~2s to detect ARM crash-restart.
+#   4. All test.64 labels → test.65.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -29,14 +26,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.64.stage${STAGE}"
+LOG="$LOG_DIR/test.65.stage${STAGE}"
 
-echo "=== test.64: BusMaster enabled + NVRAM token preserved --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.65: activate() CMD fix + RP restore on timeout --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; pci_set_master before ARM; masking+FW wait (10ms re-mask); full probe on READY" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; pci_set_master before ARM; activate() preserves BusMaster; masking+FW wait (10ms re-mask); RP restore on timeout; full probe on READY" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -91,7 +88,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.64 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.65 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -101,7 +98,7 @@ insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
 echo "Module loaded. Waiting 30s (20s FW wait + margin for full probe)..." | tee -a "$LOG"
-echo "(test.64: BusMaster enabled; NVRAM token preserved; FW READY → full probe; TIMEOUT → -ENODEV)" | tee -a "$LOG"
+echo "(test.65: BusMaster preserved; NVRAM token kept; FW READY → full probe; TIMEOUT → -ENODEV + RP restore)" | tee -a "$LOG"
 sleep 30
 
 # Capture results
@@ -114,5 +111,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.64: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.64)" | tee -a "$LOG"
+echo "*** test.65: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.65)" | tee -a "$LOG"
