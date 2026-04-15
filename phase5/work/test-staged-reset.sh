@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.42: raise PMU masks to bring BBPLL up, but DO NOT release ARM.
+# Phase 5.2 test.43: BBPLL up + ARM release with bus mastering OFF.
 #
-# test.42 CRASHED: raised max_res_mask+min_res_mask=0xFFFFF then released ARM.
-# PC hard-crashed — no dmesg captured. Unknown whether crash was from PMU mask
-# writes or from ARM executing firmware.
+# test.42 PASS: PMU mask writes safe — BBPLL came up in ~10ms, HAVEHT=YES.
+# test.41 CRASHED: BBPLL + ARM release → hard crash (ARM/firmware, not PMU).
 #
-# test.42: isolate the cause. Same PMU mask writes as test.42, poll HAVEHT,
-# log result, then return -ENODEV WITHOUT releasing ARM.
-# If PC survives: crash was ARM/firmware activity.
-# If PC crashes: PMU mask write itself is dangerous.
+# test.43: release ARM with bus mastering disabled (pci_clear_master).
+# Firmware can execute in TCM but cannot DMA to host or fire interrupts.
+# If PC survives: TCM changes prove ARM executed.
+# If crash: firmware corrupts PCIe2 core from ARM side (not host DMA).
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -22,14 +21,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.42.stage${STAGE}"
+LOG="$LOG_DIR/test.43.stage${STAGE}"
 
-echo "=== test.42: raise PMU max_res_mask+min_res_mask — bring BBPLL up before ARM release — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.43: raise PMU max_res_mask+min_res_mask — bring BBPLL up before ARM release — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: watchdog reset; raise max_res_mask+min_res_mask=0xFFFFF; poll HAVEHT; ARM release" | tee -a "$LOG" ;;
+    0) echo "Stage 0: BBPLL up; bus mastering OFF; ARM release; monitor TCM" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -77,7 +76,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.42 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.43 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -99,5 +98,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.42: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "*** test.43: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
 echo "Log saved to $LOG" | tee -a "$LOG"
