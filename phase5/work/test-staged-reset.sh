@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.72: Validate H2D mailbox response + H2D_MAILBOX_1 + direct init
+# Phase 5.2 test.73: SBMBX-only mailbox signal + fresh pre-mailbox re-mask
 #
-# test.72 RESULT: H2D_MAILBOX_0=1 triggered sharedram→0xffffffff within 10ms!
-#   Machine crashed after t66_fw_ready: restored RP → unmasked second wait loop.
-#   0xffffffff could be: (a) real firmware ACK or (b) PCIe bus error from BAR0 write.
+# test.73 RESULT: Crashed after SBMBX write (before H2D_MAILBOX_0 BAR0 MMIO write).
+#   Root cause: masking was stale (up to 200ms old) when outer==25 ran between
+#   inner loops. BAR0 MMIO write raced with firmware response to SBMBX.
+#   Non-deterministic: test.71 had identical code but survived.
 #
-# test.72 KEY CHANGES from test.72:
-#   1. Validation reads after sharedram changes: read 3 known-stable locations.
-#      If ALL 0xffffffff → PCIe bus error (device disrupted). Continue with masking.
-#      If device-ok: check if valid RAM address or 0xffffffff ACK.
-#   2. If 0xffffffff ACK (validated real): send H2D_MAILBOX_1 (HOSTRDY_DB1), update
-#      sharedram_addr_written baseline, keep polling for valid RAM address.
-#   3. t66_fw_ready: bypass unmasked second wait loop — call init_share_ram_info
-#      directly. Previous crash was from unmasked BAR2 reads after RP restore.
-#   4. Test number bumped to test.72 throughout
+# test.73 KEY CHANGES from test.73:
+#   1. Fresh re-mask + msleep(10) immediately before SBMBX write (outer==25).
+#      Eliminates the stale-masking race window.
+#   2. Remove H2D_MAILBOX_0 BAR0 MMIO write entirely — SBMBX config write only.
+#      Config-space writes are safe; BAR0 MMIO writes triggered crash.
+#   3. Keep all validation reads (PCIe-ERR vs dev-ok), H2D_MAILBOX_1 path,
+#      t66_fw_ready direct init_share_ram_info call.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -27,9 +26,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.72.stage${STAGE}"
+LOG="$LOG_DIR/test.73.stage${STAGE}"
 
-echo "=== test.72: full console dump + H2D mailbox signal --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.73: full console dump + H2D mailbox signal --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -89,7 +88,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.72 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.73 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -99,7 +98,7 @@ insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
 echo "Module loaded. Waiting 65s (30s FW wait + 35s margin for TIMEOUT path)..." | tee -a "$LOG"
-echo "(test.72: 30s wait; TCM scan every 2s from T+200ms; full console dump at T+3s; H2D mailbox at T+5s; TIMEOUT: per-read re-mask+msleep(10); FW READY → full probe; TIMEOUT → -ENODEV + RP restore)" | tee -a "$LOG"
+echo "(test.73: 30s wait; TCM scan every 2s from T+200ms; full console dump at T+3s; H2D mailbox at T+5s; TIMEOUT: per-read re-mask+msleep(10); FW READY → full probe; TIMEOUT → -ENODEV + RP restore)" | tee -a "$LOG"
 sleep 65
 
 # Capture results
@@ -112,5 +111,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.72: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.72)" | tee -a "$LOG"
+echo "*** test.73: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.73)" | tee -a "$LOG"
