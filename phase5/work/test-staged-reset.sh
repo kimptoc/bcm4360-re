@@ -1,24 +1,18 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.78: full PCIe2 BAC register dump (0x000-0x1FF) pre-ARM
+# Phase 5.2 test.79: clear unknown PCIe2 core regs + firmware stack dump
 #
-# test.77 RESULT: SURVIVED. Stale H2D mailbox theory DISPROVED.
-#   H2D0=0xffffffff, H2D1=0xffffffff pre-ARM (stale doorbells).
-#   Cleared H2D0/H2D1/INTMASK/MBMASK to 0 before ARM release.
-#   Firmware STILL froze in pcie_dngl_probe at T+2s — identical to test.75/76.
-#   Post-timeout SURVIVED (select_core(PCIE2) crash fixed in test.77).
+# test.78 RESULT: SURVIVED. Full PCIe2 BAC dump captured.
+#   CORRECTED register map: 0x120/0x124 = CONFIGADDR/CONFIGDATA (NOT DMA).
+#   0x100-0x108 = unknown (all 0x0000000c). 0x1E0 = 0x00070040.
+#   Firmware STILL froze in pcidongle_probe — identical to test.75-77.
 #
-# test.78 HYPOTHESIS: stale DMA channel registers (offsets 0x100-0x1FF in PCIe2 BAC)
-#   survive the watchdog reset and have enable bits set or error/busy status.
-#   When firmware's hnddma_attach/pcie_dngl_probe tries to initialize these DMA
-#   channels, it may hang waiting for them to go idle, or the ARM may freeze on
-#   an AXI bus transaction to a busy/hung DMA sub-block.
-#
-# test.78 KEY CHANGES from test.77:
-#   1. Add full PCIe2 BAC dump: all 128 registers at offsets 0x000-0x1FF (4/line).
-#   2. Keep named register reads (INTMASK/MBINT/MBMASK/H2D0/H2D1/IOCTL/RESET).
-#   3. Keep H2D0/H2D1/INTMASK/MBMASK clears (from test.77, confirmed safe).
-#   4. NOT clearing DMA channel regs yet — need to see the dump first.
-#   5. Everything else identical to test.77.
+# test.79 KEY CHANGES from test.78:
+#   1. Print PCIe2 core revision (needed for config restore question)
+#   2. Clear unknown regs 0x100, 0x104, 0x108, 0x1E0 to 0 before ARM release
+#   3. Readback verify the clears
+#   4. At timeout: dump TCM[0x9E000..0x9F000] for firmware stack frames
+#   5. Keep full BAC dump, named regs, ASPM disable, all existing clears
+#   6. Wait extended to 75s for stack dump (adds ~40s of per-read masking)
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -32,14 +26,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.78.stage${STAGE}"
+LOG="$LOG_DIR/test.79.stage${STAGE}"
 
-echo "=== test.78: full PCIe2 BAC dump (0x000-0x1FF) pre-ARM --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.79: clear unknown PCIe2 regs + stack dump --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; PCIe2 BAC full dump 0x000-0x1FF; named regs (INTMASK/MBINT/MBMASK/H2D0/H2D1/IOCTL/RESET); H2D0/H2D1/INTMASK/MBMASK cleared; pci_set_master before ARM; activate() preserves BusMaster; 30s masking+FW wait; TCM scan every 2s (from T+200ms); FULL console dump at T+3s; BSS dump 0x9D0A0..0x9D500 at T+5s; olmsg dump at T+20s; NO BAR0 writes; TIMEOUT: TCM[0..3F] dump with masking; RP restore on timeout" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; PCIe2 core dump 0x000-0x1FF; PCIe2 core rev; clear 0x100-0x108+0x1E0+INTMASK/MBMASK/H2D0/H2D1; readback verify; pci_set_master before ARM; 30s masking+FW wait; TCM scan every 2s; console dump at T+3s; BSS dump at T+5s; olmsg dump at T+20s; TIMEOUT: TCM[0..3F] + stack dump TCM[0x9E000..0x9F000] with masking; RP restore" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -94,7 +88,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.78 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.79 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -103,9 +97,9 @@ modprobe cfg80211 2>/dev/null || true
 insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
-echo "Module loaded. Waiting 65s (30s FW wait + 35s margin for TIMEOUT path)..." | tee -a "$LOG"
-echo "(test.78: ASPM disabled + PCIe2 BAC full dump 0x000-0x1FF + named regs + H2D0/H2D1/INTMASK/MBMASK cleared before ARM; 30s wait; TCM scan every 2s from T+200ms; console dump at T+3s; BSS dump 0x9D0A0..0x9D500 at T+5s; TIMEOUT → TCM[0..3F] with masking + RP restore)" | tee -a "$LOG"
-sleep 65
+echo "Module loaded. Waiting 90s (30s FW wait + 60s margin for TIMEOUT+stack dump)..." | tee -a "$LOG"
+echo "(test.79: PCIe2 rev + BAC dump + clear 0x100-0x108/0x1E0 + INTMASK/MBMASK/H2D0/H2D1; 30s FW wait; TIMEOUT → TCM[0..3F] + stack dump 0x9E000..0x9F000 with per-read masking)" | tee -a "$LOG"
+sleep 90
 
 # Capture results
 echo "" | tee -a "$LOG"
@@ -117,5 +111,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.78: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.78)" | tee -a "$LOG"
+echo "*** test.79: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.79)" | tee -a "$LOG"
