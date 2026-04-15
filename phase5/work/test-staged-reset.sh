@@ -1,17 +1,24 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.52: ChipCommon watchdog ACTIVE SERVICING
+# Phase 5.2 test.53: secondary bus reset + watchdog active servicing
 #
 # test.52 INSTANT CRASH finding:
-#   Calling select_core(CHIPCOMMON) inside activate() corrupts BAR0 window during ARM init.
-#   Machine reset before any test.52 kernel message was logged.
-#   Lesson: never call select_core or READCC32/WRITECC32 inside activate().
+#   Crash during chip enumeration BAR0 MMIO reads, after get_resource but before
+#   reset_device. Root cause: tests 50/51 left BCM4360 in bad state where BAR0 MMIO
+#   reads cause PCIe Completion Timeout → NMI → host crash.
 #
-# test.52 GOAL: prevent watchdog expiry by servicing it in the poll loop.
-#   - activate(): identical to test.49 (DisINTx=1, BusMaster=0, no watchdog reads)
-#   - poll loop: BAR0 already = ChipCommon after ARM-release block; no select_core needed
-#     READ WDOG_PRE (pre-write countdown), READ PMUWDOG, then WRITE 0x7FFFFFFF to service
-#   - If PASS: watchdog confirmed as crash mechanism for tests 43-49
-#   - If CRASH: watchdog not the cause; investigate PMU reset or CPU exception
+# test.53 CHANGES (two independent parts):
+#   1. Secondary bus reset (SBR) via upstream bridge in brcmf_pcie_probe() BEFORE chip_attach.
+#      Resets BCM4360 AXI fabric without needing BAR0 MMIO; uses only PCIe config cycles.
+#      After SBR + pci_restore_state: device should be in clean power-on-reset state.
+#   2. BAR0 MMIO probe read in brcmf_pcie_get_resource() after ioremap: reads CC@0x18000000.
+#      0xffffffff = device dead; valid value = chip alive; if no log line = MMIO itself crashes.
+#   3. Watchdog active servicing in poll loop (unchanged from test.52 design).
+#
+# Expected outcomes:
+#   - SBR logged + BAR0 probe prints valid value → SBR works, chip alive, proceed to poll
+#   - PASS (5s timeout): watchdog CONFIRMED as crash mechanism for tests 43-49
+#   - CRASH ~49 iters: watchdog not the cause
+#   - INSTANT CRASH after SBR logged: SBR didn't fix it → power cycle needed
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -25,14 +32,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.52.stage${STAGE}"
+LOG="$LOG_DIR/test.53.stage${STAGE}"
 
-echo "=== test.52: watchdog read-only monitoring — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.53: SBR + BAR0 probe + watchdog active servicing — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: BBPLL up; normal firmware; watchdog serviced every 10ms; ARM release; monitor" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR before chip_attach; BAR0 probe read; BBPLL; watchdog serviced every 10ms; ARM release" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -80,7 +87,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.52 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.53 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -102,5 +109,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.52: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG" | tee -a "$LOG"
+echo "*** test.53: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.53)" | tee -a "$LOG"

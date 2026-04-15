@@ -2167,6 +2167,23 @@ static int brcmf_pcie_get_resource(struct brcmf_pciedev_info *devinfo)
 		 (unsigned long long)bar0_addr, (unsigned long long)bar1_addr,
 		 bar1_size, devinfo->tcm);
 
+	/* test.53: BAR0 MMIO probe read — confirms device is responding after SBR.
+	 * Set BAR0_WINDOW to ChipCommon (0x18000000) and read offset 0 (chip ID word).
+	 * Expected: 0x43a04e13 or similar (chipid | corerev fields). 0xffffffff = dead.
+	 * This read happens before chip_attach's enumeration; if it crashes → BAR0 MMIO broken.
+	 * If it prints 0xffffffff → device not responding even after SBR → need power cycle.
+	 */
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
+		u32 probe_val;
+
+		pci_write_config_dword(pdev, BRCMF_PCIE_BAR0_WINDOW, 0x18000000);
+		probe_val = ioread32(devinfo->regs);
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x%08x%s\n",
+			  probe_val,
+			  probe_val == 0xffffffff ? " — DEAD (no MMIO response)" : " — alive");
+	}
+
 	return 0;
 }
 
@@ -2799,6 +2816,40 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	devinfo->pdev = pdev;
 	pcie_bus_dev = NULL;
+
+	/* test.53: secondary bus reset via upstream bridge, before chip_attach.
+	 * test.52 RESULT: INSTANT CRASH during chip enumeration BAR0 MMIO reads.
+	 *   test.52 logged "BCM4360 debug: BAR0=..." (from brcmf_pcie_get_resource in
+	 *   chip_attach's prepare callback) but crashed before "BCM4360 EFI state:" in
+	 *   brcmf_pcie_reset_device — meaning crash was during chip ID enumeration reads.
+	 * Root cause hypothesis: tests 50/51 left BCM4360 in bad state (watchdog or
+	 *   select_core during ARM init corrupted PCIe/AXI state), causing BAR0 MMIO
+	 *   reads to fail (PCIe Completion Timeout → NMI → host crash).
+	 * Fix: do host-side PCIe secondary bus reset (SBR) via upstream bridge before
+	 *   chip_attach. SBR resets the BCM4360's AXI fabric WITHOUT needing BAR0 MMIO,
+	 *   using only host PCI config cycles to the bridge.
+	 * After SBR + pci_restore_state: BCM4360 should be in clean power-on-reset state.
+	 * Expected: chip enumeration succeeds, test runs like test.49 but with watchdog servicing.
+	 */
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID && pdev->bus && pdev->bus->self) {
+		struct pci_dev *bridge = pdev->bus->self;
+		u16 bc = 0;
+
+		pci_save_state(pdev);
+		pci_read_config_word(bridge, PCI_BRIDGE_CONTROL, &bc);
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.53: SBR via bridge %s (bridge_ctrl=0x%04x) before chip_attach\n",
+			  pci_name(bridge), bc);
+		pci_write_config_word(bridge, PCI_BRIDGE_CONTROL,
+				      bc | PCI_BRIDGE_CTL_BUS_RESET);
+		msleep(10);  /* PCIe spec: hold reset ≥1ms */
+		pci_write_config_word(bridge, PCI_BRIDGE_CONTROL, bc);
+		msleep(200); /* PCIe spec: device must respond within 1s after reset; 200ms is safe */
+		pci_restore_state(pdev);
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.53: SBR complete — bridge_ctrl restored\n");
+	}
+
 	devinfo->ci = brcmf_chip_attach(devinfo, pdev->device,
 					&brcmf_pcie_buscore_ops);
 	if (IS_ERR(devinfo->ci)) {
