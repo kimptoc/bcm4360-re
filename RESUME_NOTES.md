@@ -1,78 +1,66 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-15, about to run test.60)
+## Current state (2026-04-15, about to run test.61)
 
 Git branch: main (pushed to origin)
 
-## test.59 RESULT: CRASH at tick 24/25 (between T+4800ms and T+5000ms)
+## test.60 RESULT: CRASH at tick 39/40 (~T+7800-8000ms)
 
-**MAJOR BREAKTHROUGH: survived the 2s danger window!**
-- Ticks 1-24 all logged (T+200ms through T+4800ms)
-- Tick 10 (T+2000ms) and tick 11 (T+2200ms) both survived — the 2s event was masking-suppressed
-- PCI_CMD stayed 0x0402 throughout — BusMaster (bit 2 = 0x0004) never set by firmware
-- aer_cap=0: AER extended capability not found (ECAM broken on this platform?)
-- Crash between T+4800ms and T+5000ms — a SECOND firmware event at ~5s
+**MAJOR FINDING: per-tick re-masking pushed crash from 5s → 8s (one more event suppressed)**
+- Ticks 1-39 all logged (T+200ms through T+7800ms)
+- BC=0x0000 DC=0x0000 at ALL ticks — firmware never restored error bits
+- Tick 25 (T+5000ms) survived — 5s event was suppressed by per-tick re-masking!
+- Crash at tick 39/40 — a THIRD firmware event at ~8s
+- Pattern: periodic firmware PCIE2 events at ~2s, ~5s, ~8s (every ~3s)
+- RootCtl confirmed 0x0000 at boot (SECEE/SENFEE/SEFEE all 0 — not the missing path)
 
-**What masking did:**
-- CMD=0x0407→0x0407 (SERR already off in CMD — no change needed)
-- BC=0x0002→0x0000 (BridgeCtl SERR forwarding cleared — KEY)
-- DevCtl=0x000e→0x0000 (NonFatalErr+FatalErr+UnsupReq cleared — KEY)
-- AER_RC: not masked (aer_cap=0, so skipped)
+**Per-tick re-masking suppresses one event per 3s run, even though BC/DC read as 0:**
+- The act of writing BC=0 / DevCtl=0 is side-effecting something (PCH internal state?)
+- Or we're racing a brief firmware set+clear within the 200ms tick interval
 
-**Conclusion:** BCM4360 firmware has TWO PCIE2 initialization events:
-1. Event at ~2000ms — suppressed by BC+DevCtl masking (test.59 survived it)
-2. Event at ~5000ms — same mechanism? Different mechanism? Unknown. test.60 investigates.
+## test.61 PLAN (about to run)
 
-**Hypothesis for 5s crash:**
-- A: Firmware restores BC/DevCtl error bits during the 2s event, then 5s event crashes on them
-- B: BC/DevCtl stayed zero; 5s event uses a different escalation path (AER/SMI via aer_cap?)
-- Per-tick re-masking in test.60 will discriminate between A and B.
+**Strategy: same masking + per-tick status register clearing + 20s heartbeat**
 
-## test.60 PLAN (about to run)
+New additions vs test.60:
+1. Log RootCtl at init (confirming 0x0000)
+2. Probe ext config at 0x100 to check ECAM accessibility
+3. Per tick: read+RW1C-clear DevSta (RP), SecSta, RootSta (in addition to BC/DC re-mask)
+4. Per tick: also re-mask CMD SERR bit
+5. 100 × 200ms = 20s heartbeat (covers 6+ periodic events)
 
-**Strategy: same masking + per-tick re-masking + BC/DC log at each tick**
+**Hypothesis:** Status registers (DevSta/SecSta/RootSta) accumulate error flags during
+firmware PCIE2 reinit events. Intel PCH SMM handler polls these and triggers system
+reset when it sees persistent errors. Per-tick RW1C clearing prevents accumulation.
 
-What test.60 does after ARM release:
-1. Same initial masking as test.59 (CMD, BC, DevCtl, AER_RC)
-2. 40 × 200ms heartbeat = 8s total (covers 5s event with 3s margin)
-3. At each tick: READ BC + DevCtl BEFORE re-masking → log CMD + BC + DC
-4. Re-apply BC=0 and DevCtl=0 after reading (in case firmware restored them)
-5. If survived: log "SURVIVED 8s!", restore, return -ENODEV
-
-**Expected log lines (if survived):**
+**Expected log per tick:**
 ```
-BCM4360 test.60: root port = 0000:00:1c.2; disabling error escalation
-BCM4360 test.60: masked: CMD=0x????→0x???? BC=0x????→0x???? DevCtl=0x????→0x???? AER_RC=...
-BCM4360 test.60: starting heartbeat (40×200ms=8s); re-masking each tick
-BCM4360 test.60 tick=01/40 T+0200ms CMD=0x???? BC=0x???? DC=0x????
-...
-BCM4360 test.60 tick=40/40 T+8000ms CMD=0x???? BC=0x???? DC=0x????
-BCM4360 test.60: SURVIVED 8s!
-BCM4360 test.60: RP error reporting restored
+BCM4360 test.61 tick=NNN/100 T+NNNNNms CMD=0x???? BC=0x???? DC=0x???? DS=0x???? SS=0x???? RS=0x????????
 ```
+DS=DevSta, SS=SecSta (Secondary Status), RS=RootSta
 
 **Interpreting results:**
-- BC or DC nonzero at tick ~10 (2000ms): firmware restored error bits; re-masking prevents 5s crash
-  - If SURVIVED: hypothesis A confirmed; test.61 needs to keep re-masking forever
-- BC=0 DC=0 throughout but CRASH at ~5s: hypothesis B; different escalation path
-  - test.61: try pci_disable_device(rp) or LNKCTL link disable before ARM release
-- SURVIVED 8s + BC/DC always 0: masking alone works; test.61 attempts MMIO reads past 5s
+- Any DS/SS/RS nonzero at crash tick → confirms SMM polling that register
+- SURVIVED 20s: status clearing is the key; test.62 integrates into normal init
+- Crash at ~11s: one more suppressed; check which status reg shows nonzero at last tick
+- Crash at ~8s: status clearing didn't help; AER or completion timeout is remaining path
 
-**Module build:** done (test.60 built successfully, no errors)
-**Test script:** updated to test.60 (log = test.60.stage0)
+**Module build:** done (test.61 built successfully, no errors)
+**Test script:** updated to test.61 (log = test.61.stage0)
 
 **After test — what to do (whether PASS or crash):**
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.60" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.60.journal'` (or -b 0 if survived)
-3. `sudo chown kimptoc:users phase5/logs/test.60.*`
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.61" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.61.journal'` (or -b 0 if survived)
+3. `sudo chown kimptoc:users phase5/logs/test.61.*`
 4. git add logs + commit + push
-5. Analyze BC/DC tick data → plan test.61
+5. Analyze DS/SS/RS tick data → plan test.62
 
 **After a crash:**
-1. Check for BC/DC values in last few ticks — did firmware restore them?
-2. Last tick number × 200ms = crash timing
+1. Check DS/SS/RS at last few ticks — any nonzero values = found escalation path
+2. Check ext_cap0 value — if not 0/0xFFFFFFFF, ECAM is accessible and test.62 can mask AER
+3. Last tick number × 200ms = crash timing (should be ~11s if pattern holds)
 
-**Test history summary:**
+## Test history summary
 - test.42: PASS — BBPLL only (no ARM) → HAVEHT=YES confirmed
 - test.43: CRASHED — BBPLL + ARM + pci_clear_master() once → 19 iters (950ms)
 - test.44: CRASHED — B. injected PRE-activate (bug: activate() overwrote it)
@@ -100,12 +88,14 @@ BCM4360 test.60: RP error reporting restored
   Key finding: crash is firmware-driven at ~2000ms after ARM release, not caused by our reads
 - test.59: CRASH at tick 24/25 (T+4800-5000ms) — survived 2s window! Second event at ~5s
   BC+DevCtl masking suppressed 2s crash; PCI_CMD=0x0402 throughout; aer_cap=0
+- test.60: CRASH at tick 39/40 (T+7800-8000ms) — survived 5s window! Third event at ~8s
+  BC/DC always 0x0000; per-tick re-masking suppressed 5s event; RootCtl=0x0000
 
 ## Key files
 - Source: phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 - Test script: phase5/work/test-staged-reset.sh
-- Logs: phase5/logs/test.60.stage0, test.60.journal (after test)
+- Logs: phase5/logs/test.61.stage0, test.61.journal (after test)
 - Build: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build && make -C "$KDIR" M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
 
-## Run test.60 (if not yet run):
+## Run test.61 (if not yet run):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0

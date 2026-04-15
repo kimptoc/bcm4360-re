@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.60: RP error masking + per-tick re-masking + BC/DC logging (8s heartbeat)
+# Phase 5.2 test.61: extended masking + status-register clearing + 20s heartbeat
 #
-# test.59 RESULT: CRASH at tick 24/25 (between T+4800ms and T+5000ms)
-#   - SURVIVED the 2s danger window! (ticks 1-24 all logged; T+2000ms passed)
-#   - PCI_CMD stayed 0x0402 throughout (BusMaster never set by firmware)
-#   - aer_cap=0: AER ext cap not found (ECAM may be broken on this platform)
-#   - A SECOND firmware event at ~5s caused the crash (same escalation mechanism?)
+# test.60 RESULT: CRASH at tick 39/40 (~T+7800-8000ms)
+#   - BC=0x0000 DC=0x0000 at ALL 39 ticks — firmware never restored error bits
+#   - Per-tick re-masking shifted crash from ~5s (test.59) to ~8s (test.60)
+#   - Periodic pattern: firmware PCIE2 events at ~2s, ~5s, ~8s (every ~3s)
+#   - RootCtl = 0x0000 (SECEE/SENFEE/SEFEE already 0 — not the missing path)
+#   - aer_cap=0: extended config space inaccessible (ECAM broken?)
 #
-# test.60 STRATEGY: same initial masking, but re-mask BC + DevCtl at every tick.
-#   Key diagnostic: log BC and DevCtl BEFORE re-masking each tick.
-#   If firmware restores them → re-masking prevents 5s crash.
-#   If they stay zero throughout → different escalation path at 5s (AER/SMI).
-#   40 × 200ms = 8s total (covers 5s event with 3s margin).
+# test.61 STRATEGY: same initial masking + per-tick re-masking, PLUS:
+#   - Per-tick RW1C-clear of DevSta (RP), SecSta, RootSta
+#   - Log all five per-tick values (BC, DC, DS, SS, RS)
+#   - Extend heartbeat to 100×200ms = 20s (covers 6+ events)
+#   - Probe ext config at 0x100 to check ECAM; log RootCtl at init
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -25,14 +26,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.60.stage${STAGE}"
+LOG="$LOG_DIR/test.61.stage${STAGE}"
 
-echo "=== test.60: RP error masking + 8s heartbeat + per-tick re-masking --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.61: RP error masking + 20s heartbeat + status clearing --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; BAR0 probe; BBPLL; ARM release; RP error masking; 40×200ms heartbeat (re-masking each tick)" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; BAR0 probe; BBPLL; ARM release; RP error masking; 100×200ms heartbeat (re-masking+status-clearing each tick)" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -87,7 +88,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.60 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.61 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -96,9 +97,9 @@ modprobe cfg80211 2>/dev/null || true
 insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
-echo "Module loaded. Waiting 15s (8s heartbeat + margin)..." | tee -a "$LOG"
-echo "(test.60: 40×200ms heartbeat with per-tick re-masking; returns -ENODEV if survived)" | tee -a "$LOG"
-sleep 15
+echo "Module loaded. Waiting 25s (20s heartbeat + margin)..." | tee -a "$LOG"
+echo "(test.61: 100×200ms heartbeat with per-tick re-masking + status clearing; returns -ENODEV if survived)" | tee -a "$LOG"
+sleep 25
 
 # Capture results
 echo "" | tee -a "$LOG"
@@ -110,5 +111,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.60: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.60)" | tee -a "$LOG"
+echo "*** test.61: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.61)" | tee -a "$LOG"
