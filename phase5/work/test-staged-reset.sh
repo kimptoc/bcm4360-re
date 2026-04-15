@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.58: 2000ms sleep after ARM release + config-space reads ONLY (no BAR MMIO)
+# Phase 5.2 test.59: disable root-port error escalation + heartbeat sleep + PCI_CMD monitoring
 #
-# test.57 RESULT: CRASH at iter=1 (~2010ms after ARM release).
-#   test.56 iter=1 at ~2010ms: CHIPID=0xffffffff (non-fatal, device silent).
-#   test.57 iter=1 at ~2010ms: CHIPID read itself crashed host (fatal PCIe error).
-#   Both tests at ~2010ms; outcome timing-dependent — at the sharp edge of PCIE2 init danger window.
-#   No PCI_CMD/BAR diagnostic data captured — crashed before those reads.
+# test.58 RESULT: CRASH DURING 2s SLEEP — firmware itself crashes host at ~2000ms after ARM
+#   release, with ZERO PCIe reads from our side. This proves the crash is firmware-driven.
+#   BCM4360 firmware PCIE2 core initialization at ~2s causes a fatal host event independently.
 #
-# test.58 STRATEGY: skip all BAR MMIO reads after the 2s sleep.
-#   - pci_read_config_* reads are routed via root complex, safe even when BAR MMIO is fatal.
-#   - Read PCI_COMMAND, PCI_BASE_ADDRESS_0, PCI_BASE_ADDRESS_2, BRCMF_PCIE_BAR0_WINDOW.
-#   - Log and return -ENODEV. No MMIO polling loop.
+# test.59 STRATEGY: disable root-port error escalation before 2s danger window.
+#   Hypothesis: firmware PCIE2 init causes a PCIe error (surprise link-down, malformed TLP,
+#   unexpected completion) that Intel root port escalates via SERR → fatal system event.
+#   Disable four error escalation paths on root port (bus->self):
+#     a) PCI_COMMAND SERR enable bit
+#     b) PCI_BRIDGE_CONTROL SERR forwarding bit
+#     c) PCIe DevCtl CERE/NFERE/FERE/URRE bits (error reporting to RC)
+#     d) AER root error command (fatal/non-fatal/correctable IRQ enable)
+#   Then: 25 × 200ms heartbeat with PCI_CMD reads to watch for BusMaster re-enable.
 #
-# Expected outcomes (config state 2s after ARM release):
-#   - PCI_CMD bit1 (MEM) = 0: firmware cleared memory enable → firmware reset config space.
-#   - BAR0_BASE != 0xb0600004: firmware reconfigured BARs during PCIE2 init.
-#   - BAR2_BASE != 0xb0400004: same for BAR2 (BAR2 type=64-bit, so bit2+bit1=0b10 → +4).
-#   - BAR0_WIN != 0x18000000: firmware changed the window register.
+# Expected outcomes:
+#   SURVIVED: error escalation was the crash mechanism; PCI_CMD shows BusMaster state.
+#   STILL CRASHES: mechanism ≠ PCIe error escalation; last tick gives exact timing.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -30,14 +31,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.58.stage${STAGE}"
+LOG="$LOG_DIR/test.59.stage${STAGE}"
 
-echo "=== test.58: SBR + 2000ms sleep + config-space only (no BAR MMIO) --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.59: RP error masking + 5s heartbeat sleep + PCI_CMD watch --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; BAR0 probe; BBPLL; ARM release; 2000ms sleep; config-space only (no BAR MMIO)" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; BAR0 probe; BBPLL; ARM release; RP error masking; 25×200ms heartbeat" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -78,6 +79,13 @@ else
 fi
 echo "" | tee -a "$LOG"
 
+# Also show root port state (00:1c.2) before the test
+echo "=== Pre-test root port (00:1c.2) state ===" | tee -a "$LOG"
+if [ -x "$LSPCI" ]; then
+    "$LSPCI" -s "00:1c.2" -nn -vv 2>&1 | head -20 | tee -a "$LOG"
+fi
+echo "" | tee -a "$LOG"
+
 # Flush before loading
 echo "=== Flushing to disk ===" | tee -a "$LOG"
 sync
@@ -85,7 +93,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.58 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.59 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -94,9 +102,9 @@ modprobe cfg80211 2>/dev/null || true
 insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
-echo "Module loaded. Waiting 10s (2s sleep + fast return after config reads)..." | tee -a "$LOG"
-echo "(test.58: returns -ENODEV immediately after config-space reads, no MMIO polling)" | tee -a "$LOG"
-sleep 10
+echo "Module loaded. Waiting 12s (5s heartbeat + margin)..." | tee -a "$LOG"
+echo "(test.59: 25×200ms heartbeat; returns -ENODEV after loop if survived)" | tee -a "$LOG"
+sleep 12
 
 # Capture results
 echo "" | tee -a "$LOG"
@@ -108,5 +116,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.58: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.58)" | tee -a "$LOG"
+echo "*** test.59: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.59)" | tee -a "$LOG"

@@ -1,71 +1,81 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-15, about to run test.58)
+## Current state (2026-04-15, about to run test.59)
 
 Git branch: main (pushed to origin)
 
-## test.57 RESULT: CRASH at iter=1 (~2010ms after ARM release)
+## test.58 RESULT: CRASH DURING 2s SLEEP
 
-**test.57 crashed at iter=1 — same timing as test.56 iter=1, but now FATAL**
-- "sleeping 2000ms" logged ✓
-- "woke up after 2s sleep, starting poll" logged ✓
-- Crash BEFORE any "iter=1" log line (i.e., before the first MMIO read completed)
-- NO PCI_CMD / BAR address data captured
+**The crash is FIRMWARE-DRIVEN — happens with zero PCIe reads from our side.**
+- "sleeping 2000ms — NO PCIe reads" logged ✓
+- Machine crashed DURING the 2s sleep — no "woke up" message, no config reads logged
+- NO AER errors, NO NMI, NO MCE — journal just stops cold (same as all prior crashes)
+- This proves our MMIO reads were NOT causing the crash; the firmware does it independently
 
-**Key finding — sharp timing boundary around 2010-2020ms:**
-- test.56 iter=1 at ~2010ms: CHIPID MMIO read returned 0xffffffff (non-fatal, device silent)
-- test.56 iter=2 at ~2020ms: CHIPID MMIO read crashed the host
-- test.57 iter=1 at ~2010ms: CHIPID MMIO read crashed the host (same read, now fatal)
-- Same timing, different outcomes — we are at the exact edge of the PCIE2 init danger window
+**Timing consistency:**
+- test.56/57: crashed at ~2010ms during MMIO reads (mistakenly attributed to reads)
+- test.58: crashed at <2000ms during sleep (same event, 10-50ms earlier = timing variance)
+- The firmware crash event happens at ~1900-2100ms after ARM release (±100ms variance)
 
-**Conclusion:** The device is in a sharp transition state at ~2010ms. BAR0 MMIO cannot be read
-safely anywhere in this window. Config-space reads (via RC) remain safe.
+**Conclusion:** BCM4360 firmware PCIE2 core initialization at ~2s causes a fatal PCIe event
+that the Intel root port escalates before any kernel log can be written.
 
-## test.58 PLAN (about to run)
+**Likely mechanism:** Firmware resets/re-inits its PCIE2 endpoint controller, causing:
+- Surprise link-down at root port, OR
+- Malformed TLP / unexpected completion escalated via AER → SERR → fatal reset
 
-**Strategy: config-space reads ONLY after 2s sleep — no BAR MMIO whatsoever**
+## test.59 PLAN (about to run)
 
-What test.58 does after the 2s sleep (no polling loop for BCM4360):
-- `pci_read_config_word(pdev, PCI_COMMAND, &pci_cmd)` — was memory enable cleared?
-- `pci_read_config_dword(pdev, PCI_BASE_ADDRESS_0, &bar0_base)` — was BAR0 addr changed?
-- `pci_read_config_dword(pdev, PCI_BASE_ADDRESS_2, &bar2_base)` — was BAR2 addr changed?
-- `pci_read_config_dword(pdev, BRCMF_PCIE_BAR0_WINDOW, &bar0_win)` — window register?
-- Log all values and `return -ENODEV` immediately (no MMIO reads at all)
+**Strategy: disable root-port error escalation before the 2s danger window**
 
-**Expected log line:**
+What test.59 does after ARM release:
+1. Find root port (bus->self = 0000:00:1c.2); log its BDF for confirmation
+2. Disable four error escalation paths:
+   a. `PCI_COMMAND_SERR = 0` on root port
+   b. `PCI_BRIDGE_CTL_SERR = 0` on root port
+   c. `DevCtl bits 0-3 = 0` (CERE/NFERE/FERE/URRE) on root port
+   d. `AER root error command = 0` on root port
+   → Log before/after values of all four registers
+3. Heartbeat: 25 × 200ms = 5s, reading PCI_CMD at each tick
+4. If survived: log "SURVIVED", restore error reporting, return -ENODEV
+
+**Expected log lines (if survived):**
 ```
-BCM4360 test.58 config@2s: PCI_CMD=0x???? BAR0_BASE=0x???????? BAR2_BASE=0x???????? BAR0_WIN=0x????????
+BCM4360 test.59: root port = 0000:00:1c.2; disabling error escalation
+BCM4360 test.59: masked: CMD=0x????→0x???? BC=0x????→0x???? DevCtl=0x????→0x???? AER_RC=0x????????→0x00000000
+BCM4360 test.59: starting heartbeat (25×200ms=5s); watching PCI_CMD
+BCM4360 test.59 tick=01/25 T+0200ms PCI_CMD=0x????
+...
+BCM4360 test.59 tick=25/25 T+5000ms PCI_CMD=0x????
+BCM4360 test.59: SURVIVED 5s!
+BCM4360 test.59: RP error reporting restored
 ```
-Then: PC SURVIVES (no crash — config reads are RC-routed, always safe)
 
 **Interpreting results:**
-- PCI_CMD bit1 (MEM) = 0: firmware cleared memory enable → test.59 re-enables it and tries MMIO
-- BAR0_BASE != 0xb0600004: firmware reconfigured BARs → test.59 needs new ioremap
-- BAR2_BASE != 0xb0400004: same for BAR2
-- BAR0_WIN == 0x18000000: window register unchanged (expected)
-- All values unchanged: device config intact, BAR MMIO was just transiently inaccessible
+- SURVIVED: error escalation was crash mechanism; PCI_CMD ticks show BusMaster state
+  - PCI_CMD bit 2 set after tick ~10: firmware re-enabled BusMaster → test.60 disables it again
+  - PCI_CMD constant 0x0402: firmware never changes it → start MMIO reads after 5s
+- STILL CRASHES at tick N: mechanism ≠ PCIe error escalation; timing = N×200ms from ARM release
+  - test.60: try disabling link (LNKCTL.LD=1) or D3cold before ARM release
+- No "masked:" log before "starting heartbeat": root port not found → check bus topology
 
-**Pre-test state:**
-- Initial lspci: PCI_CMD Mem+, BAR0=0xb0600000 (64-bit, non-prefetch), BAR2=0xb0400000 (64-bit, non-prefetch)
-- BAR registers include type bits: BAR0_BASE=0xb0600004, BAR2_BASE=0xb0400004
-
-**Module build:** done (test.58 built successfully, no errors)
-**Test script:** updated to test.58 (log = test.58.stage0)
+**Module build:** done (test.59 built successfully, no errors)
+**Test script:** updated to test.59 (log = test.59.stage0)
 
 **After test — what to do (whether PASS or crash):**
-1. If SURVIVED: `grep "BCM4360 test.58" /home/kimptoc/bcm4360-re/phase5/logs/test.58.stage0`
-2. Save journal: `sudo bash -c 'journalctl -b 0 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.58.journal'`
-3. `sudo chown kimptoc:users phase5/logs/test.58.*`
+1. If SURVIVED: `grep "BCM4360 test.59" /home/kimptoc/bcm4360-re/phase5/logs/test.59.stage0`
+2. Save journal: `sudo bash -c 'journalctl -b 0 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.59.journal'`
+3. `sudo chown kimptoc:users phase5/logs/test.59.*`
 4. git add logs + commit + push
-5. Analyze PCI_CMD + BAR addresses → plan test.59
+5. Analyze tick data → plan test.60
 
 **After a crash — what to do:**
-1. Check which boot has test.58 messages:
-   `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.58" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.58.journal'`
-3. `sudo chown kimptoc:users phase5/logs/test.58.*`
+1. Check which boot has test.59 messages:
+   `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.59" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.59.journal'`
+3. `sudo chown kimptoc:users phase5/logs/test.59.*`
 4. git add logs + commit + push
-5. Determine what config read (if any) triggered the crash
+5. Check last tick logged + whether "masked:" line appeared → diagnose
 
 **Test history summary:**
 - test.42: PASS — BBPLL only (no ARM) → HAVEHT=YES confirmed
@@ -87,16 +97,18 @@ Then: PC SURVIVES (no crash — config reads are RC-routed, always safe)
   PRE phase had NO BAR2 reads; crash at iter=2 (~20ms) during BAR0 reads
   ALL PCIe accesses (BAR0 + BAR2) fail during PCIE2 init danger window
 - test.56: CRASH at iter=2 (~2010ms) — bugs: loop_counter underflow + MMIO diagnostics on dead BAR0
-  Survived 2s sleep. iter=1: BAR0_WIN=0x18000000 (config OK), CHIPID=0xffffffff (BAR0 MMIO dead)
+  Survived 2s worth of polling. iter=1: BAR0_WIN=0x18000000 (config OK), CHIPID=0xffffffff (BAR0 MMIO dead)
   PCI_CMD/BAR address state unknown (test.57 was supposed to get these — crashed before)
 - test.57: CRASH at iter=1 (~2010ms) — same CHIPID read, now fatal (timing variance)
   At the exact edge of PCIE2 init danger window. test.58: config-space only
+- test.58: CRASH DURING 2s SLEEP — firmware crashes host with ZERO reads from our side
+  Key finding: crash is firmware-driven at ~2000ms after ARM release, not caused by our reads
 
 ## Key files
 - Source: phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 - Test script: phase5/work/test-staged-reset.sh
-- Logs: phase5/logs/test.58.stage0, test.58.journal (after test)
+- Logs: phase5/logs/test.59.stage0, test.59.journal (after test)
 - Build: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build && make -C "$KDIR" M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
 
-## Run test.58 (if not yet run):
+## Run test.59 (if not yet run):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0

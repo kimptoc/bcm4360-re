@@ -1985,46 +1985,120 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 	}
 
-	/* test.58: after the 2s sleep, do ONLY config-space reads (no BAR MMIO whatsoever).
+	/* test.59: disable root-port error escalation, then heartbeat sleep with PCI_CMD watch.
 	 *
-	 * test.57 RESULT: CRASH at iter=1 (~2010ms) — BAR0 MMIO fatal on first attempt.
-	 *   test.56 iter=1 at ~2010ms: CHIPID=0xffffffff (non-fatal, device silent).
-	 *   test.57 iter=1 at ~2010ms: CHIPID read itself crashes host (fatal PCIe error).
-	 *   Both tests ran at the same ~2010ms mark; the outcome is timing-dependent.
-	 *   We are at the sharp edge of the PCIE2 init danger window (~2010-2030ms).
-	 *   No PCI_CMD/BAR diagnostic data was captured because we crashed before those reads.
+	 * test.58 RESULT: CRASH DURING 2s SLEEP — firmware itself crashes host at ~2000ms after
+	 *   ARM release, with ZERO PCIe reads from our side. This proves the crash is firmware-
+	 *   driven (not triggered by our MMIO reads). Something the BCM4360 firmware does during
+	 *   PCIE2 core initialization at ~2s causes a fatal host event.
 	 *
-	 * test.58 strategy: skip all MMIO reads after the 2s sleep.
-	 *   Config-space reads (pci_read_config_*) are routed via the root complex and are
-	 *   safe even when BAR MMIO is fatal — test.56 proved BAR0_WIN=0x18000000 read fine
-	 *   while CHIPID MMIO returned 0xffffffff.
-	 *   Read PCI_COMMAND, PCI_BASE_ADDRESS_0, PCI_BASE_ADDRESS_2, BRCMF_PCIE_BAR0_WINDOW.
-	 *   Log and return -ENODEV.  No polling loop for 4360.
+	 * Hypothesis: BCM4360 firmware's PCIE2 core init causes a PCIe error event (surprise
+	 *   link-down, malformed TLP, unexpected completion, or fatal AER error) that the Intel
+	 *   root port escalates via SERR → fatal system event before any kernel log is written.
+	 *
+	 * test.59 strategy:
+	 *   1. Find root port (bus->self); log its BDF for confirmation.
+	 *   2. Disable error escalation on root port:
+	 *      a. Clear PCI_COMMAND_SERR (prevents SERR from propagating upstream).
+	 *      b. Clear PCI_BRIDGE_CTL_SERR (stops secondary-bus SERR forwarding).
+	 *      c. Clear PCIe DevCtl bits 0-3 (CERE/NFERE/FERE/URRE) — no error reporting.
+	 *      d. Clear AER root error command (no fatal/non-fatal/correctable IRQ to RC).
+	 *      Log before/after values of all four registers.
+	 *   3. Heartbeat sleep: 25 × 200ms = 5s total.
+	 *      Read PCI_CMD at each tick to detect BusMaster re-enable by firmware.
+	 *   4. If survived: log "SURVIVED", restore error reporting, return -ENODEV.
+	 *   5. If still crashes: last logged tick gives crash timing (±200ms).
 	 *
 	 * Interpreting results:
-	 *   PCI_CMD bit1 (MEM) = 0: firmware cleared memory enable.
-	 *   BAR0_BASE != 0xb0600004: firmware reconfigured BARs (type+prefetch bits included).
-	 *   BAR2_BASE != 0xb0400004: same for BAR2.
-	 *   BAR0_WIN != 0x18000000: firmware changed the window register.
+	 *   SURVIVED: error escalation was the crash mechanism. PCI_CMD ticks show BusMaster state.
+	 *   STILL CRASHES: mechanism is NOT PCIe error escalation; last tick gives timing.
+	 *   PCI_CMD shows BusMaster bit set: firmware re-enables DMA — explains crash mechanism.
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-		u16 pci_cmd;
-		u32 bar0_base, bar2_base, bar0_win;
+		struct pci_dev *rp = devinfo->pdev->bus ? devinfo->pdev->bus->self : NULL;
+		u16 rp_cmd_orig = 0, rp_bc_orig = 0, rp_devctl_orig = 0;
+		u32 rp_aer_orig = 0;
+		int pcie_cap = 0, aer_cap = 0;
+		int i;
 
-		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.58: sleeping 2000ms — NO PCIe reads — to skip PCIE2 init window\n");
-		msleep(2000);
-		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.58: woke up — reading config space only (no BAR MMIO)\n");
+		/* Step 1+2: find root port and disable error escalation */
+		if (rp) {
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.59: root port = %s; disabling error escalation\n",
+				  pci_name(rp));
 
-		pci_read_config_word(devinfo->pdev, PCI_COMMAND, &pci_cmd);
-		pci_read_config_dword(devinfo->pdev, PCI_BASE_ADDRESS_0, &bar0_base);
-		pci_read_config_dword(devinfo->pdev, PCI_BASE_ADDRESS_2, &bar2_base);
-		pci_read_config_dword(devinfo->pdev, BRCMF_PCIE_BAR0_WINDOW, &bar0_win);
+			/* 2a. SERR enable in bridge PCI_COMMAND */
+			pci_read_config_word(rp, PCI_COMMAND, &rp_cmd_orig);
+			pci_write_config_word(rp, PCI_COMMAND,
+					      rp_cmd_orig & ~PCI_COMMAND_SERR);
 
+			/* 2b. SERR forwarding in PCI_BRIDGE_CONTROL */
+			pci_read_config_word(rp, PCI_BRIDGE_CONTROL, &rp_bc_orig);
+			pci_write_config_word(rp, PCI_BRIDGE_CONTROL,
+					      rp_bc_orig & ~PCI_BRIDGE_CTL_SERR);
+
+			/* 2c. PCIe DevCtl error enables (bits 0-3: CERE NFERE FERE URRE) */
+			pcie_cap = pci_find_capability(rp, PCI_CAP_ID_EXP);
+			if (pcie_cap) {
+				pci_read_config_word(rp, pcie_cap + PCI_EXP_DEVCTL,
+						     &rp_devctl_orig);
+				pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVCTL,
+						      rp_devctl_orig & ~0x000f);
+			}
+
+			/* 2d. AER root error command (fatal/non-fatal/correctable IRQ enable) */
+			aer_cap = pci_find_ext_capability(rp, PCI_EXT_CAP_ID_ERR);
+			if (aer_cap) {
+				pci_read_config_dword(rp,
+						      aer_cap + PCI_ERR_ROOT_COMMAND,
+						      &rp_aer_orig);
+				pci_write_config_dword(rp,
+						       aer_cap + PCI_ERR_ROOT_COMMAND, 0);
+			}
+
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.59: masked: CMD=0x%04x→0x%04x BC=0x%04x→0x%04x "
+				  "DevCtl=0x%04x→0x%04x AER_RC=0x%08x→0x00000000 "
+				  "(pcie_cap=%d aer_cap=%d)\n",
+				  rp_cmd_orig, rp_cmd_orig & ~PCI_COMMAND_SERR,
+				  rp_bc_orig, rp_bc_orig & ~PCI_BRIDGE_CTL_SERR,
+				  rp_devctl_orig, rp_devctl_orig & ~0x000f,
+				  rp_aer_orig, pcie_cap, aer_cap);
+		} else {
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.59: no root port found — skipping error masking\n");
+		}
+
+		/* Step 3: heartbeat sleep — 25 × 200ms with PCI_CMD reads */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.58 config@2s: PCI_CMD=0x%04x BAR0_BASE=0x%08x BAR2_BASE=0x%08x BAR0_WIN=0x%08x\n",
-			  pci_cmd, bar0_base, bar2_base, bar0_win);
+			  "BCM4360 test.59: starting heartbeat (25×200ms=5s); watching PCI_CMD\n");
+		for (i = 0; i < 25; i++) {
+			u16 cmd;
+
+			msleep(200);
+			pci_read_config_word(devinfo->pdev, PCI_COMMAND, &cmd);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.59 tick=%02d/25 T+%04dms PCI_CMD=0x%04x\n",
+				  i + 1, (i + 1) * 200, cmd);
+		}
+
+		/* Step 4: survived — restore and return */
+		dev_emerg(&devinfo->pdev->dev, "BCM4360 test.59: SURVIVED 5s!\n");
+
+		if (rp) {
+			pci_write_config_word(rp, PCI_COMMAND, rp_cmd_orig);
+			pci_write_config_word(rp, PCI_BRIDGE_CONTROL, rp_bc_orig);
+			if (pcie_cap)
+				pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVCTL,
+						      rp_devctl_orig);
+			if (aer_cap)
+				pci_write_config_dword(rp,
+						       aer_cap + PCI_ERR_ROOT_COMMAND,
+						       rp_aer_orig);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.59: RP error reporting restored\n");
+		}
+
 		return -ENODEV;
 	}
 
