@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.79: clear unknown PCIe2 core regs + firmware stack dump
+# Phase 5.2 test.80: stack-finder scan — locate firmware stack in TCM
 #
-# test.78 RESULT: SURVIVED. Full PCIe2 BAC dump captured.
-#   CORRECTED register map: 0x120/0x124 = CONFIGADDR/CONFIGDATA (NOT DMA).
-#   0x100-0x108 = unknown (all 0x0000000c). 0x1E0 = 0x00070040.
-#   Firmware STILL froze in pcidongle_probe — identical to test.75-77.
+# test.79 RESULT: SURVIVED (rebooted to boot -1). PCIe2 core rev=1.
+#   Cleared 0x100-0x108 OK; 0x1E0 readback=0x00070000 (bits 18:16 hardwired).
+#   Firmware STILL hangs in pcidongle_probe.
+#   Stack dump at 0x9E000-0x9F000 = high entropy = firmware binary, NOT stack!
 #
-# test.79 KEY CHANGES from test.78:
-#   1. Print PCIe2 core revision (needed for config restore question)
-#   2. Clear unknown regs 0x100, 0x104, 0x108, 0x1E0 to 0 before ARM release
-#   3. Readback verify the clears
-#   4. At timeout: dump TCM[0x9E000..0x9F000] for firmware stack frames
-#   5. Keep full BAC dump, named regs, ASPM disable, all existing clears
-#   6. Wait extended to 75s for stack dump (adds ~40s of per-read masking)
+# test.80 KEY CHANGES from test.79:
+#   1. Remove full BAC dump (confirmed identical across tests)
+#   2. Replace stack dump with stack-finder scan: read one word every 64 bytes
+#      from 0x90000 to 0x9E000 (896 reads), flag code-range values
+#   3. Dense probe dump of 0x9AF00-0x9B000 (seen as data pointer in console)
+#   4. Keep: ASPM disable, named reg clears, unknown reg clears, console+BSS
+#   5. Shorter wait (60s — scan is faster than dense dump)
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -26,14 +26,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.79.stage${STAGE}"
+LOG="$LOG_DIR/test.80.stage${STAGE}"
 
-echo "=== test.79: clear unknown PCIe2 regs + stack dump --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.80: stack-finder scan --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; PCIe2 core dump 0x000-0x1FF; PCIe2 core rev; clear 0x100-0x108+0x1E0+INTMASK/MBMASK/H2D0/H2D1; readback verify; pci_set_master before ARM; 30s masking+FW wait; TCM scan every 2s; console dump at T+3s; BSS dump at T+5s; olmsg dump at T+20s; TIMEOUT: TCM[0..3F] + stack dump TCM[0x9E000..0x9F000] with masking; RP restore" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; pci_set_master before ARM; 30s masking+FW wait; TCM scan every 2s; console dump at T+3s; BSS dump at T+5s; olmsg dump at T+20s; TIMEOUT: TCM[0..3F] + stack-finder scan 0x90000-0x9E000 every 64 bytes + probe dump 0x9AF00-0x9B000; RP restore" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -88,7 +88,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.79 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.80 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -97,9 +97,9 @@ modprobe cfg80211 2>/dev/null || true
 insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
-echo "Module loaded. Waiting 90s (30s FW wait + 60s margin for TIMEOUT+stack dump)..." | tee -a "$LOG"
-echo "(test.79: PCIe2 rev + BAC dump + clear 0x100-0x108/0x1E0 + INTMASK/MBMASK/H2D0/H2D1; 30s FW wait; TIMEOUT → TCM[0..3F] + stack dump 0x9E000..0x9F000 with per-read masking)" | tee -a "$LOG"
-sleep 90
+echo "Module loaded. Waiting 60s (30s FW wait + 30s margin for TIMEOUT+scan)..." | tee -a "$LOG"
+echo "(test.80: stack-finder scan 0x90000-0x9E000 every 64 bytes; probe dump 0x9AF00-0x9B000)" | tee -a "$LOG"
+sleep 60
 
 # Capture results
 echo "" | tee -a "$LOG"
@@ -111,5 +111,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.79: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.79)" | tee -a "$LOG"
+echo "*** test.80: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.80)" | tee -a "$LOG"
