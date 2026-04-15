@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.68: Dense BSS scan at T+3s to count firmware runtime writes
+# Phase 5.2 test.69: Fix TIMEOUT crash + add console write-ptr monitoring
 #
-# test.68 RESULT: SURVIVED 60s. Firmware alive (TCM[0x9d000] changed at T+2s to
-#   0x000043b1 = ARM Thumb function pointer to 0x43b0). Only 1 word changed in 60s.
-#   sharedram=0xffc70038 and fw_init=0x870ca017 unchanged throughout. NVRAM token kept.
-#   Conclusion: firmware is running but crashing very early before sharedram init phase.
+# test.68 RESULT: Survived 60s but CRASHED in TIMEOUT final TCM scan path.
+#   Root cause: no settle time between last re-mask and BAR2 reads in TIMEOUT path.
+#   During the 60s loop, each BAR2 read follows msleep(10); TIMEOUT path had zero delay.
+#   Console buffer decoded: firmware prints banner then stops — ASSERT or infinite wait.
+#   Firmware wrote 50+ non-zero words in upper BSS (got well into BSS init).
+#   Console write ptr at 0x9cc5c — monitor this to detect firmware activity.
 #
-# test.68 KEY CHANGE:
-#   Add dense BSS scan at T+3s (outer==15):
-#     - Lower BSS 0x6C000–0x9C000: 256-byte stride (~192 reads)
-#     - Upper BSS 0x9C000–0x9FFFC: 4-byte stride (~4096 reads)
-#   Count and log all non-zero words (BSS was zeroed before ARM release).
-#   0-5 non-zero = firmware crashed before BSS init; 50+ = got deeper into init.
-#   Everything else unchanged from test.68 (60s wait, periodic 2s scans, inner poll).
+# test.69 KEY CHANGES from test.68:
+#   1. TIMEOUT path: add re-mask + RW1C clear + msleep(1) before final TCM scan
+#      (same settle-time recipe as the inner loop — proven to prevent crashes)
+#   2. Add 0x9cc5c (console ring write pointer) to t66_scan — monitor firmware printf activity
+#   3. Reduce wait from 60s to 30s (firmware either signals or dies within 10s)
+#   4. Test script waits 45s (30s FW wait + margin)
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -26,14 +27,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.68.stage${STAGE}"
+LOG="$LOG_DIR/test.69.stage${STAGE}"
 
-echo "=== test.68: 60s wait + TCM scan (no PCIe2 select_core) --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.69: 30s wait + TIMEOUT settle fix + console ptr monitoring --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; pci_set_master before ARM; activate() preserves BusMaster; 60s masking+FW wait; TCM scan every 2s (from T+200ms); dense BSS scan at T+3s (4-byte stride upper BSS + 256-byte lower BSS); fw_init_done poll (baseline-initialized); RP restore on timeout" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; pci_set_master before ARM; activate() preserves BusMaster; 30s masking+FW wait; TCM scan every 2s (from T+200ms); console write-ptr at 0x9cc5c in scan; TIMEOUT: re-mask+msleep(1) before final scan; fw_init_done poll (baseline-initialized); RP restore on timeout" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -88,7 +89,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.68 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.69 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -97,9 +98,9 @@ modprobe cfg80211 2>/dev/null || true
 insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
-echo "Module loaded. Waiting 75s (60s FW wait + margin for full probe)..." | tee -a "$LOG"
-echo "(test.68: 60s wait; TCM scan every 2s from T+200ms; fw_init_done poll; FW READY → full probe; TIMEOUT → -ENODEV + RP restore)" | tee -a "$LOG"
-sleep 75
+echo "Module loaded. Waiting 45s (30s FW wait + margin for full probe)..." | tee -a "$LOG"
+echo "(test.69: 30s wait; TCM scan every 2s from T+200ms; console ptr 0x9cc5c monitored; TIMEOUT: re-mask+settle before final scan; FW READY → full probe; TIMEOUT → -ENODEV + RP restore)" | tee -a "$LOG"
+sleep 45
 
 # Capture results
 echo "" | tee -a "$LOG"
@@ -111,5 +112,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.68: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.68)" | tee -a "$LOG"
+echo "*** test.69: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.69)" | tee -a "$LOG"

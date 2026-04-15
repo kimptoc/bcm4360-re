@@ -1,6 +1,6 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-15, about to run test.68)
+## Current state (2026-04-15, about to run test.69)
 
 Git branch: main (pushed to origin)
 
@@ -72,30 +72,52 @@ Git branch: main (pushed to origin)
 - Firmware writes one function pointer, then crashes before reaching WiFi init
 - Possible causes: missing NVRAM calibration params, hardware resource not available, assert/trap
 
-## test.68 PLAN (about to run)
+## test.68 RESULT: SURVIVED 60s — firmware prints banner, then TIMEOUT path crashed
 
-**Key change from test.67: dense BSS scan at T+3s**
-- At outer==15 (T+3000ms), scan full BSS region for firmware runtime writes:
-  - Lower BSS 0x6C000–0x9C000: 256-byte stride (~192 reads)
-  - Upper BSS 0x9C000–0x9FFFC: 4-byte stride (~4096 reads, ~4ms)
-- Count and log all non-zero words (BSS zeroed before ARM release → non-zero = firmware wrote)
-- Interpretation: 0–5 words = early crash; 50+ words = deeper crash
+**Dense BSS scan results: 50+ non-zero words in upper BSS — firmware got well into BSS init**
+- Lower BSS (0x6C000–0x9C000): 2 non-zero words: TCM[0x6c000]=0x008965f8, TCM[0x70000]=0xc0c900e2
+  - These are RESIDUAL values from prior firmware run (SBR doesn't clear TCM SRAM)
+- Upper BSS: 50+ non-zero words — firmware active region confirmed as 0x9cc00–0x9d000
 
-**Module build:** done (test.68 built successfully, warning only: write_ram32 unused)
-**Test script:** updated to test.68 (log = test.68.stage0), waits 75s
+**Console ring buffer decoded at 0x9cc00–0x9ce58:**
+- Virtual write pointer stored at 0x9cc5c (and 0x9cc6c) = 0x8009ccbe → phys 0x9ccbe
+- Firmware banner: "RTE (PCIE-CDC) 6.30.223 (TOB) (r) on BCM4360 r3 @ 40.0/160.0/160.0 MHz"
+- Sequence: Chipc info → wl_probe called → pcie_dngl_probe called → firmware banner → STAK fill
+- No ASSERT message found (either overwritten by ring wrap or assert in separate struct)
+
+**Region 0x9ce8c–0x9d000: linked list of event/timer objects**
+- Contains function pointers (0x43b1, 0x68d2f, 0x68321...) — not an ASSERT structure
+- This is normal firmware runtime data (timer/event dispatch tables)
+
+**TIMEOUT path CRASHED during final TCM scan at TCM[0x74000]:**
+- Root cause: zero settle time between last re-mask and BAR2 reads in TIMEOUT path
+- During 60s loop: every BAR2 read follows msleep(10) — settle time proven safe
+- TIMEOUT path: no delay → BAR2 read at [0x74000] triggered PCIe error → crash
+- Fix: add re-mask + RW1C clear + msleep(1) before final scan
+
+## test.69 PLAN (about to run)
+
+**Key changes from test.68:**
+1. TIMEOUT crash fix: add re-mask + RW1C clear + msleep(1) before final TCM scan
+2. Add 0x9cc5c (console ring write pointer) to t66_scan — monitor firmware printf activity
+3. Reduce wait 60s → 30s (firmware dies within ~2s based on evidence)
+4. Test script waits 45s
+
+**Module build:** done (test.69 built successfully, warning only: write_ram32 unused)
+**Test script:** updated to test.69 (log = test.69.stage0), waits 45s
 
 **Expected outcomes:**
-- 0-5 non-zero words: firmware crashes at C startup, before any init (stack/heap problem?)
-- 5-50 non-zero words: crashes during early BSS/global init phase
-- 50+ non-zero words: got into WiFi init; look at which addresses for crash location
-- Trap structure at 0x9C000+: look for PC/SP/CPSR to decode crash address
+- Console write ptr 0x9cc5c unchanged: firmware stops printing after banner
+- Watch for ASSERT: if firmware hits hnd_assert, it may write PC to a trap structure in upper BSS
+- sharedram/fw_init still stuck: firmware crashes before FullDongle/olmsg signaling
+- Survived 30s (or 45s if we see activity): next step is to look at what firmware is waiting for
 
-**After test — what to do (whether PASS or crash):**
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.68" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.68.journal'` (or -b 0 if survived)
-3. `sudo chown kimptoc:users phase5/logs/test.68.*`
+**After test — what to do:**
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.69" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.69.journal'` (or -b 0 if survived)
+3. `sudo chown kimptoc:users phase5/logs/test.69.*`
 4. git add logs + commit + push
-5. Analyze: count non-zero words; check for trap structure (PC/SP/LR); find crash address in firmware binary
+5. Analyze: did console ptr change? Any new TCM writes? Any ASSERT/trap structure?
 
 ## Key confirmed findings
 - BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
@@ -147,13 +169,14 @@ Git branch: main (pushed to origin)
 - test.65: SURVIVED 20s — BusMaster fix confirmed (CMD=0x0006), sharedram still stuck
 - test.66: CRASHED before T+0000ms — PCIe2 select_core EP config write during firmware init
 - test.67: SURVIVED 60s — TCM[0x9d000] changed at T+2s (0x000043b1 = Thumb ptr to 0x43b0); sharedram/fw_init unchanged; only 1 word changed → firmware crashes before sharedram init
-- test.68: DIAGNOSTIC — dense BSS scan at T+3s (4-byte stride upper BSS 0x9C000–0x9FFFC, 256-byte lower BSS)
+- test.68: SURVIVED 60s then CRASHED in TIMEOUT path — dense BSS scan: 50+ non-zero words in upper BSS; console buffer decoded (firmware banner printed); crash root cause: no settle delay before final BAR2 reads in TIMEOUT path
+- test.69: DIAGNOSTIC — TIMEOUT crash fix (re-mask+msleep(1) before final scan); add console write-ptr 0x9cc5c to scan; reduce to 30s wait
 
 ## Key files
 - Source: phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 - Test script: phase5/work/test-staged-reset.sh
-- Logs: phase5/logs/test.68.stage0, test.68.journal (after test)
+- Logs: phase5/logs/test.69.stage0, test.69.journal (after test)
 - Build: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build && make -C "$KDIR" M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
 
-## Run test.68 (if not yet run):
+## Run test.69 (if not yet run):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
