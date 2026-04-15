@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.45: B. injected via buscore_activate — correct TCM[0] fix.
+# Phase 5.2 test.46: normal firmware + PCIe error register reads per iteration.
 #
-# test.44 CRASHED (same timing as test.43 — 19 iters = ~950ms):
-#   Root cause: brcmf_pcie_buscore_activate() overwrote TCM[0] with firmware
-#   reset vector (0xb80ef000) AFTER our branch-to-self write. Both tests ran
-#   identical firmware → identical crash. Our pre-activate overwrite was a no-op.
+# test.46 PASSED (B. = ARM branch-to-self survived 5s, 100 iterations).
+#   Confirmed: firmware execution (not hardware timer) is the crash mechanism.
+#   ARM runs safely when spinning at address 0 — crash requires firmware code.
 #
-# test.45 FIX: B. (0xEAFFFFFE) now written inside brcmf_pcie_buscore_activate()
-#   for BCM4360, replacing rstvec. This is the LAST write to TCM before ARM is
-#   released — guaranteed to be what ARM sees at address 0x00000000.
+# test.46 GOAL: identify WHAT the firmware does that crashes the host.
+#   Restore normal firmware (rstvec at TCM[0]).
+#   Read PCIe error registers (config space) every iteration in wait loop:
+#     PCI_STATUS: master/target abort, parity error
+#     DEV_DEVSTA: correctable/uncorrectable/fatal PCIe errors (BCM4360 side)
+#     BR_DEVSTA:  same from host PCIe bridge (host side)
+#   All reads via pci_read_config_word() — survives device errors unlike MMIO.
 #
-# Expected:
-#   If crash at ~19 iters: hardware timer fires ~950ms after ARM release
-#     regardless of code — crash is NOT firmware-driven.
-#   If PASS: firmware execution (via rstvec at TCM[0]) is crash source.
+# Expected: PC crashes at ~19 iters (~950ms). Journal should capture error
+#   register values at iters 1-19 before the crash, revealing error type.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -27,14 +28,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.45.stage${STAGE}"
+LOG="$LOG_DIR/test.46.stage${STAGE}"
 
-echo "=== test.45: B. via activate — correct TCM[0] fix — isolate ARM startup from firmware — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.46: B. via activate — correct TCM[0] fix — isolate ARM startup from firmware — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: BBPLL up; B. injected via activate; ARM release; monitor" | tee -a "$LOG" ;;
+    0) echo "Stage 0: BBPLL up; normal firmware (rstvec at TCM[0]); PCIe error reads per iter; ARM release; monitor" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -82,7 +83,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.45 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.46 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -104,5 +105,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.45: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "*** test.46: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
 echo "Log saved to $LOG" | tee -a "$LOG"
