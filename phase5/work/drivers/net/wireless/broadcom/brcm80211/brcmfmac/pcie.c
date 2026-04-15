@@ -1985,38 +1985,45 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 	}
 
-	/* test.56: sleep 2000ms after ARM release with ZERO PCIe reads.
+	/* test.57: same 2000ms sleep as test.56, but with diagnostic reads on CHIPID=0xffffffff.
 	 *
-	 * test.55 RESULT: CRASH after PRE iter=1 even though PRE phase had NO BAR2 reads.
-	 *   Logged: "BCM4360 test.55 PRE iter=1 BAR0_WIN=0x18000000 CHIPID=0x15034360 WDOG=0 PMUWDOG=0"
-	 *   Then journal ends — crash happened at ~20ms (iter=2), during BAR0 reads.
-	 *   Conclusion: PCIE2 init makes ALL PCIe accesses fail (not just BAR2).
-	 *   Even BAR0 config/MMIO reads cause PCIe Completion Timeout → NMI → host crash.
+	 * test.56 RESULT: CRASH at iter=2 (~2010ms after ARM release).
+	 *   "woke up" was logged (survived 2s sleep OK).
+	 *   iter=1: BAR0_WIN=0x18000000 (config space fine), CHIPID=0xffffffff (BAR0 MMIO dead).
+	 *   TWO BUGS caused the crash:
+	 *     BUG 1: loop_counter = 0; loop_counter-- → underflows to 0xFFFFFFFF → loop never exits.
+	 *            Fix: use break instead of loop_counter=0.
+	 *     BUG 2: timeout diagnostics (READCC32 etc.) ran even with dead BAR0 MMIO → crash.
+	 *            Fix: bar0_dead flag skips MMIO diagnostics.
+	 *   State after 2s: config space OK but BAR0 MMIO returns 0xffffffff.
+	 *   Key question: was PCI_COMMAND memory enable cleared? Were BARs reconfigured?
 	 *
-	 * test.56 strategy: wait 2000ms with NO PCIe activity at all to skip the PCIE2 init
-	 *   danger window entirely. Then poll BAR0+BAR2 normally.
-	 *   - If crash DURING sleep → firmware-initiated crash (different failure mode).
-	 *   - If crash on FIRST BAR0 read AFTER sleep → 2s wasn't enough (extend to 5s).
-	 *   - If PASS → confirms PCIE2 init window is < 2s; proceed with normal driver init.
+	 * test.57 strategy: keep 2s sleep; fix both bugs; add safe config-space diagnostics
+	 *   when CHIPID=0xffffffff: read PCI_COMMAND, PCI_BASE_ADDRESS_0, PCI_BASE_ADDRESS_2.
+	 *   These are config reads (always safe). Tells us if memory enable was cleared or
+	 *   BAR addresses were changed by firmware's PCIE2 init.
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.56: sleeping 2000ms — NO PCIe reads — to skip PCIE2 init window\n");
+			  "BCM4360 test.57: sleeping 2000ms — NO PCIe reads — to skip PCIE2 init window\n");
 		msleep(2000);
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.56: woke up after 2s sleep, starting poll\n");
+			  "BCM4360 test.57: woke up after 2s sleep, starting poll\n");
 	}
 
 	brcmf_dbg(PCIE, "Wait for FW init\n");
 
 	sharedram_addr = sharedram_addr_written;
 	loop_counter = BRCMF_PCIE_FW_UP_TIMEOUT / 10;
+	{
+		bool bar0_dead = false; /* set when CHIPID=0xffffffff; skips MMIO diagnostics */
+
 	while ((sharedram_addr == sharedram_addr_written) && (loop_counter)) {
 		msleep(10);
-		/* test.56 polling: BAR0+BAR2 reads after 2s sleep (PCIE2 init should be done).
+		/* test.57 polling: BAR0+BAR2 reads after 2s sleep (PCIE2 init should be done).
 		 *   iter 1 = 2010ms from ARM release, iter N = 2000ms + N*10ms.
 		 *   Log at iters 1, 5, 10, 25, 50, 100 and immediately on BAR2 change.
-		 *   Early exit if CHIPID=0xffffffff (device dead).
+		 *   Early exit (break) if CHIPID=0xffffffff (BAR0 MMIO dead).
 		 */
 		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 			int iter = (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 10) - (int)loop_counter + 1;
@@ -2037,20 +2044,25 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				if (iter == 1 || iter == 5 || iter == 10 || iter == 25 ||
 				    iter == 50 || iter == 100 || changed) {
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.56 iter=%d BAR0_WIN=0x%08x CHIPID=0x%08x WDOG=0x%08x PMUWDOG=0x%08x BAR2=0x%08x%s\n",
+						  "BCM4360 test.57 iter=%d BAR0_WIN=0x%08x CHIPID=0x%08x WDOG=0x%08x PMUWDOG=0x%08x BAR2=0x%08x%s\n",
 						  iter, bar0_win, chipid, wdog, pmuwdog, new_bar2,
 						  changed ? " CHANGED!" : "");
 				}
 				sharedram_addr = new_bar2;
 			} else {
+				/* BAR0 MMIO invalid. Read config space (always safe) for diagnosis. */
+				u16 pci_cmd;
+				u32 bar0_base, bar2_base;
+
+				pci_read_config_word(devinfo->pdev, PCI_COMMAND, &pci_cmd);
+				pci_read_config_dword(devinfo->pdev, PCI_BASE_ADDRESS_0, &bar0_base);
+				pci_read_config_dword(devinfo->pdev, PCI_BASE_ADDRESS_2, &bar2_base);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.56 iter=%d BAR0_WIN=0x%08x CHIPID=0x%08x (BAR0 invalid)\n",
-					  iter, bar0_win, chipid);
+					  "BCM4360 test.57 iter=%d BAR0_WIN=0x%08x CHIPID=0x%08x (BAR0 MMIO dead) PCI_CMD=0x%04x BAR0_BASE=0x%08x BAR2_BASE=0x%08x\n",
+					  iter, bar0_win, chipid, pci_cmd, bar0_base, bar2_base);
 				if (chipid == 0xffffffff) {
-					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.56: CHIPID=0xffffffff at iter=%d — device dead, aborting\n",
-						  iter);
-					loop_counter = 0; /* force exit */
+					bar0_dead = true;
+					break; /* FIX: was loop_counter=0 which underflowed to 0xFFFFFFFF */
 				}
 			}
 		} else {
@@ -2059,6 +2071,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		}
 		loop_counter--;
 	}
+
+	/* FIX: skip all MMIO diagnostics when BAR0 MMIO is known dead (prevents crash). */
+	if (bar0_dead) {
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.57: BAR0 MMIO dead after 2s sleep — skipping MMIO diagnostics, returning -ENODEV\n");
+		return -ENODEV;
+	}
+	} /* end bar0_dead scope */
 
 	/* test.36: On timeout, log diagnostics BEFORE returning -ENODEV.
 	 * These reads tell us if ARM executed even when FW didn't write pcie_shared.

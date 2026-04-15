@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.56: 2000ms sleep after ARM release, then poll BAR0+BAR2
+# Phase 5.2 test.57: 2000ms sleep after ARM release + diagnostic reads on BAR0 dead state
 #
-# test.55 RESULT: CRASH after PRE iter=1 even though PRE phase had NO BAR2 reads.
-#   Logged: "BCM4360 test.55 PRE iter=1 BAR0_WIN=0x18000000 CHIPID=0x15034360 WDOG=0 PMUWDOG=0"
-#   Then journal ends — crash at ~20ms (iter=2), during BAR0 reads (not BAR2!).
-#   Conclusion: PCIE2 init makes ALL PCIe accesses fail (BAR0 + BAR2 + config space).
-#   Even BAR0 reads cause PCIe Completion Timeout → NMI → host crash during the PCIE2 init window.
+# test.56 RESULT: CRASH at iter=2 (~2010ms after ARM release).
+#   "woke up" logged (survived 2s sleep). iter=1: BAR0_WIN=0x18000000 (config OK),
+#   CHIPID=0xffffffff (BAR0 MMIO dead after 2s). Two bugs caused the crash:
+#   BUG 1: loop_counter=0; loop_counter-- underflowed to 0xFFFFFFFF → loop continued to iter=2.
+#   BUG 2: timeout diagnostics (READCC32) ran with dead BAR0 → crash.
+#   Key question: is PCI_COMMAND memory enable still set? Were BAR addresses changed?
 #
-# test.56 STRATEGY: sleep 2000ms after ARM release with ZERO PCIe reads.
-#   - Log BEFORE and AFTER sleep to distinguish: crash-during-sleep vs crash-on-first-read.
-#   - After 2s: poll BAR0+BAR2 every 10ms. Log at iters 1,5,10,25,50,100 + on BAR2 change.
-#   - When BAR2 != initial marker (0xffc70038) → firmware wrote pcie_shared → normal init.
+# test.57 STRATEGY: same 2s sleep; fix bugs; add safe config-space reads on CHIPID=0xffffffff.
+#   - Read PCI_COMMAND, BAR0_BASE, BAR2_BASE (config reads, always safe) when BAR0 MMIO dead.
+#   - If MEM enable was cleared → firmware reset PCIe config space.
+#   - If BAR addresses changed → firmware reconfigured BARs during PCIE2 init.
+#   - If MEM enable still set + BARs unchanged → BAR0 MMIO dead for other reason (investigate).
 #
 # Expected outcomes:
-#   - PASS: BAR2 changes within a few iters → wlan0 registered. SUCCESS!
-#   - Crash BEFORE "woke up" log → firmware-initiated crash during sleep (different mechanism).
-#   - Crash AFTER "woke up" on first reads → 2s wasn't enough; need to extend sleep.
-#   - 5s timeout (no BAR2 change) → firmware never wrote pcie_shared; investigate TCM/DMA.
+#   - PCI_CMD bit1 (MEM) = 0: firmware cleared memory enable → re-enable and retry (test.58).
+#   - BAR0/BAR2 addresses changed: firmware reconfigured BARs → need re-ioremap (test.58).
+#   - Both fine but BAR0 dead: device in recovery/post-PCIE2 state → extend sleep (test.58).
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -30,14 +31,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.56.stage${STAGE}"
+LOG="$LOG_DIR/test.57.stage${STAGE}"
 
-echo "=== test.56: SBR + 2000ms sleep + poll BAR0+BAR2 --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.57: SBR + 2000ms sleep + BAR0-dead diagnostics --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; BAR0 probe; BBPLL; ARM release; 2000ms sleep; poll BAR0+BAR2" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; BAR0 probe; BBPLL; ARM release; 2000ms sleep; BAR0-dead diagnostics; poll BAR0+BAR2" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -85,7 +86,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.56 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.57 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -95,6 +96,7 @@ insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
 echo "Module loaded. Waiting 22s (2s sleep + 5s FW wait loop + 15s diagnostics)..." | tee -a "$LOG"
+echo "(test.57: if BAR0 dead, returns -ENODEV immediately after iter=1 config-space diagnostics)" | tee -a "$LOG"
 sleep 22
 
 # Capture results
@@ -107,5 +109,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.56: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.56)" | tee -a "$LOG"
+echo "*** test.57: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.57)" | tee -a "$LOG"

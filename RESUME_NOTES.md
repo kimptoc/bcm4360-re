@@ -1,84 +1,76 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-15, about to run test.56)
+## Current state (2026-04-15, about to run test.57)
 
 Git branch: main (pushed to origin)
 
-## test.55 RESULT: CRASH after PRE iter=1 — even BAR0 reads are fatal during PCIE2 init window
+## test.56 RESULT: CRASH at iter=2 — two bugs caused crash after survived 2s sleep
 
-**test.55 showed: EVEN BAR0 reads crash the host during PCIE2 init**
-- Logged: "BCM4360 test.55 PRE iter=1 BAR0_WIN=0x18000000 CHIPID=0x15034360 WDOG=0x00000000 PMUWDOG=0x00000000"
-- PRE phase had NO BAR2 reads — only BAR0 config + MMIO reads
-- Journal ends immediately after iter=1 log → crashed at ~20ms (iter=2) during BAR0 reads
-- CONCLUSION: PCIE2 init makes ALL PCIe accesses fail (not just BAR2 as previously thought)
-  - Even pci_read_config_dword / brcmf_pcie_read_reg32 (BAR0+0) → PCIe Completion Timeout → NMI → host crash
-  - The danger window starts at <10ms after ARM release (firmware begins PCIE2 init immediately with SBR)
-  - Duration of danger window: UNKNOWN — but must be < 2s (that's what test.56 tests)
+**test.56 survived the 2s sleep, then crashed at iter=2 (~2010ms)**
+- "sleeping 2000ms" logged ✓
+- "woke up after 2s sleep" logged ✓
+- iter=1: BAR0_WIN=0x18000000 (config read fine), CHIPID=0xffffffff (BAR0 MMIO dead)
+- Crash at iter=2 — NOT logged
 
-## IMPORTANT CORRECTION: "B. injection" was only test.45
+**TWO BUGS caused the crash:**
 
-The RESUME_NOTES previously said "B. injected via activate()". This is WRONG.
-- rstvec=0xb80ef000 is REAL BCM4360 firmware loaded from /lib/firmware
-- The "B. injected" log string in brcmf_pcie_buscore_activate() is STALE from test.47 era
-- The busyloop (0xEAFFFFFE) was only active in test.45
-- Tests 46-55 all ran real firmware
-- The pcie_shared marker 0xffc70038 = NVRAM data written to TCM[0x9fffc], NOT pcie_shared
-  (pcie_shared would be a pointer into TCM, e.g. 0x000XXXXX)
+BUG 1: `loop_counter = 0; loop_counter--` → unsigned underflow to 0xFFFFFFFF
+- Loop never exited as intended; continued to iter=2
+- iter=2 `brcmf_pcie_read_reg32(devinfo, 0)` caused deferred PCIe error → NMI → crash
+- FIX: replaced `loop_counter = 0` with `break`
 
-## test.56 PLAN (about to run)
+BUG 2: Timeout diagnostics (READCC32 etc.) ran even when BAR0 MMIO dead
+- After while loop: `if (sharedram_addr == sharedram_addr_written)` fires → READCC32 → crash
+- FIX: `bar0_dead` flag → `return -ENODEV` before diagnostics block when BAR0 dead
 
-**Strategy: sleep 2000ms with ZERO PCIe reads after ARM release, then poll BAR0+BAR2**
+**Key observation from test.56:**
+- BAR0 config reads (pci_read_config_dword) WORK: BAR0_WIN=0x18000000
+- BAR0 MMIO reads (brcmf_pcie_read_reg32) FAIL: 0xffffffff at 2010ms after ARM release
+- This is DIFFERENT from test.55 where BAR0 MMIO was valid at 10ms (CHIPID=0x15034360)
+- After 2s, firmware's PCIE2 init has done SOMETHING to make BAR0 MMIO inaccessible
+- Key question: was PCI_COMMAND memory enable bit cleared? Were BAR addresses changed?
 
-Why 2000ms:
-- With SBR, PCIE2 init starts at <10ms (much faster than without SBR where it was 190ms+)
-- PCIE2 init duration unknown, but likely < 200ms based on firmware behavior
-- 2000ms gives very large safety margin
-- If crash happens DURING sleep → firmware-initiated crash (new mechanism to investigate)
-- If crash happens on FIRST READ after sleep → 2s wasn't enough (extend to 5s)
-- If PASS → firmware wrote pcie_shared during 2s window → normal driver init proceeds
+## test.57 PLAN (about to run)
 
-**What test.56 does:**
-- Same SBR + chip_attach + BBPLL + ARM release sequence
-- After ARM release: log "sleeping 2000ms", msleep(2000), log "woke up"
-- Zero PCIe reads during the 2000ms sleep
-- Then poll BAR0+BAR2 every 10ms (500 iters = 5s total)
-  - pci_read_config_dword BAR0_WINDOW
-  - brcmf_pcie_read_reg32(devinfo, 0) CHIPID (BAR0+0)
-  - READCC32(watchdog) and READCC32(pmuwatchdog) (guarded by bar0_ok)
-  - brcmf_pcie_read_ram32(TCM[ramsize-4]) for pcie_shared pointer
-  - Log at iters 1, 5, 10, 25, 50, 100 and immediately when BAR2 changes
-  - Early exit if CHIPID=0xffffffff
+**Strategy: same 2s sleep; fix both bugs; add safe config-space diagnostic reads**
 
-**Module build:** done (test.56 built successfully)
-**Test script:** updated to test.56 (log = test.56.stage0)
+What test.57 adds when CHIPID=0xffffffff:
+- `pci_read_config_word(pdev, PCI_COMMAND, &pci_cmd)` — was memory enable cleared?
+- `pci_read_config_dword(pdev, PCI_BASE_ADDRESS_0, &bar0_base)` — was BAR0 address changed?
+- `pci_read_config_dword(pdev, PCI_BASE_ADDRESS_2, &bar2_base)` — was BAR2 address changed?
+- All config space reads (safe even with dead MMIO)
+- Then `bar0_dead=true; break` → safe exit → `return -ENODEV` (no MMIO diagnostics)
 
-**Expected outcomes:**
-- PASS + "woke up" logged + BAR2 changes in early iters (iter 1-10): PCIE2 init done within 2s.
-  Normal driver init continues. wlan0 should appear.
-  -> SUCCESS: study journal for timing, check if wlan0 registered.
-- Crash BEFORE "woke up" log: firmware is ACTIVELY crashing the host (TLP, MSI, DMA).
-  Not a PCIe read timeout. Need different approach (PCIe error containment, etc.)
-  -> test.57: investigate firmware-initiated crash mechanism.
-- Crash AFTER "woke up" on FIRST reads (iter=1): 2s wasn't enough; PCIE2 init takes >2s.
-  -> test.57: extend sleep to 5000ms.
-- 5s timeout (no BAR2 change): firmware never wrote pcie_shared. Investigate DMA/TCM.
+**Expected log line at iter=1:**
+```
+BCM4360 test.57 iter=1 BAR0_WIN=0x18000000 CHIPID=0xffffffff (BAR0 MMIO dead)
+  PCI_CMD=0x???? BAR0_BASE=0x???????? BAR2_BASE=0x????????
+```
+Then: "BAR0 MMIO dead after 2s sleep — skipping MMIO diagnostics, returning -ENODEV"
+Then: PC SURVIVES (no crash)
+
+**Interpreting results:**
+- PCI_CMD bit1 (MEM) = 0: firmware cleared memory enable → test.58 re-enables and retries
+- BAR0_BASE != 0xb0600004: firmware reconfigured BARs → test.58 needs re-ioremap
+- PCI_CMD bit1 = 1 + BARs unchanged: BAR0 MMIO dead for other reason → extend sleep to 5s in test.58
+
+**Module build:** done (test.57 built successfully, no errors)
+**Test script:** updated to test.57 (log = test.57.stage0)
+
+**After test — what to do (whether PASS or crash):**
+1. If SURVIVED: `grep "BCM4360 test.57" /path/dmesg` — check PCI_CMD + BAR values
+2. Save journal: `sudo bash -c 'journalctl -b 0 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.57.journal'`
+3. `sudo chown kimptoc:users phase5/logs/test.57.*`
+4. git add logs + commit + push
+5. Analyze PCI_CMD + BAR addresses → plan test.58
 
 **After a crash — what to do:**
-1. Check if "woke up" was logged:
-   `for b in -9 -8 -7 -6 -5 -4 -3 -2 -1; do echo "=== $b ==="; journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.5[67]" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.56.journal'`
-3. Check: did "sleeping 2000ms" appear? Did "woke up" appear? Did iter=1 appear?
-4. `sudo chown kimptoc:users phase5/logs/test.56.*`
-5. git add logs + commit + push
-
-**After a PASS (wlan0 registered) — what to do:**
-1. Save journal: `sudo bash -c 'journalctl -b 0 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.56.journal'`
-2. Find BAR2 change: `grep "CHANGED" phase5/logs/test.56.stage0`
-3. Check iter number → tells us how long firmware took to write pcie_shared AFTER 2s window
-4. Check if wlan0 appeared: `ip link show wlan0`
-5. `sudo chown kimptoc:users phase5/logs/test.56.*`
-6. git add logs + commit + push
-7. If wlan0 appeared: SUCCESS! Move to full firmware integration testing.
+1. Check which boot has test.57 messages:
+   `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.57" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.57.journal'`
+3. `sudo chown kimptoc:users phase5/logs/test.57.*`
+4. git add logs + commit + push
+5. Analyze what was logged before crash — what read triggered it?
 
 **Test history summary:**
 - test.42: PASS — BBPLL only (no ARM) → HAVEHT=YES confirmed
@@ -99,12 +91,15 @@ Why 2000ms:
 - test.55: CRASH after PRE iter=1 — BAR0 reads ALSO fatal during PCIE2 init window
   PRE phase had NO BAR2 reads; crash at iter=2 (~20ms) during BAR0 reads
   ALL PCIe accesses (BAR0 + BAR2) fail during PCIE2 init danger window
+- test.56: CRASH at iter=2 (~2010ms) — bugs: loop_counter underflow + MMIO diagnostics on dead BAR0
+  Survived 2s sleep. iter=1: BAR0_WIN=0x18000000 (config OK), CHIPID=0xffffffff (BAR0 MMIO dead)
+  PCI_CMD/BAR address state unknown (test.57 adds these reads)
 
 ## Key files
 - Source: phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 - Test script: phase5/work/test-staged-reset.sh
-- Logs: phase5/logs/test.56.stage0, test.56.journal (after test)
+- Logs: phase5/logs/test.57.stage0, test.57.journal (after test)
 - Build: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build && make -C "$KDIR" M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
 
-## Run test.56 (if not yet run):
+## Run test.57 (if not yet run):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
