@@ -1991,32 +1991,44 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	loop_counter = BRCMF_PCIE_FW_UP_TIMEOUT / 10;
 	while ((sharedram_addr == sharedram_addr_written) && (loop_counter)) {
 		msleep(10);
-		/* test.48: BusMaster re-enable test.
-		 * test.47 finding: LnkSta STABLE all 19 iters — link never drops.
-		 *   No PCIe error escalation. Crash is NOT from link drop or error signaling.
-		 * Gap in test.43: called pci_clear_master() once before ARM release, but
-		 *   BCM4360 firmware has AXI access to its own PCIe2 endpoint registers.
-		 *   Firmware can write PCI_COMMAND bit2 (BusMaster) from device side at any
-		 *   time after ARM release — test.43 never re-checked BusMaster during iters.
-		 * Plan: read PCI_COMMAND every 10ms, force BusMaster off every iter.
-		 *   If crash is PREVENTED: firmware was re-enabling BusMaster → DMA is the
-		 *     mechanism (confirmed). IOMMU group 6 is huge, provides no isolation.
-		 *   If crash PERSISTS with BusMaster=0 logged: DMA definitively ruled out.
-		 *     Next: look at MSI/interrupt, internal register, or platform event.
-		 * Sleep reduced to 10ms for finer timing (crash at ~iter 95 instead of ~19).
+		/* test.49: INTx disable test.
+		 * test.48 finding: CMD=0x0002 throughout all 49 iters (BusMaster NEVER set
+		 *   by firmware). DMA via Bus Master is DEFINITIVELY RULED OUT.
+		 * Remaining crash candidates after ruling out DMA, link drop, PCIe errors:
+		 *   PCIe INTx (legacy interrupt) assertion by firmware.
+		 * Evidence for INTx hypothesis:
+		 *   - INTx does NOT require Bus Master — uses PCIe OrderedMessages, not TLPs.
+		 *   - Pre-test state: DisINTx- (INTx enabled), MSI: Enable- (only INTx active).
+		 *   - "Interrupt: pin A routed to IRQ 0" — level-triggered, no handler registered.
+		 *   - Level INTx with no handler → interrupt storm → hard lockup, no journal.
+		 *   - test.45 (B. loop) PASS: firmware never reaches interrupt-assertion code.
+		 *   - Wall-clock crash time ~950ms regardless of poll interval (confirmed).
+		 * Plan: set PCI_COMMAND_INTX_DISABLE (bit 10 = 0x0400) before ARM release,
+		 *   re-enforce every 10ms (insurance against firmware clearing it).
+		 *   Also read MSI Message Control (cap+0x02) to check if firmware enables MSI.
+		 *   If PASS: INTx storm confirmed as crash mechanism.
+		 *   If CRASH with DisINTx=1 logged: INTx ruled out, investigate MSI or NMI.
 		 */
 		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 			int iter = (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 10) - (int)loop_counter + 1;
 			u16 pci_cmd, pci_status, devsta_dev, devsta_br;
-			u16 lnksta_dev, lnksta_br;
-			int pcie_cap_dev, pcie_cap_br;
+			u16 lnksta_dev, lnksta_br, msi_ctrl;
+			int pcie_cap_dev, pcie_cap_br, msi_cap;
 			struct pci_dev *bridge;
+			u16 new_cmd;
 
-			/* Read PCI_COMMAND to check if firmware re-enabled BusMaster */
+			/* Read PCI_COMMAND, then enforce DisINTx=1 and BusMaster=0 */
 			pci_read_config_word(devinfo->pdev, PCI_COMMAND, &pci_cmd);
+			new_cmd = (pci_cmd & ~PCI_COMMAND_MASTER) | PCI_COMMAND_INTX_DISABLE;
+			if (new_cmd != pci_cmd)
+				pci_write_config_word(devinfo->pdev, PCI_COMMAND, new_cmd);
 
-			/* Force BusMaster off every iteration */
-			pci_clear_master(devinfo->pdev);
+			/* Read MSI Message Control to detect if firmware enables MSI */
+			msi_ctrl = 0;
+			msi_cap = pci_find_capability(devinfo->pdev, PCI_CAP_ID_MSI);
+			if (msi_cap)
+				pci_read_config_word(devinfo->pdev, msi_cap + PCI_MSI_FLAGS,
+						     &msi_ctrl);
 
 			devsta_dev = 0;
 			devsta_br = 0;
@@ -2045,9 +2057,9 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				}
 			}
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.48: iter %d val=0x%08x CMD=0x%04x PCI_STA=0x%04x DEV_DEVSTA=0x%04x DEV_LNKSTA=0x%04x BR_LNKSTA=0x%04x\n",
+				  "BCM4360 test.49: iter %d val=0x%08x CMD=0x%04x MSI_CTRL=0x%04x PCI_STA=0x%04x DEV_DEVSTA=0x%04x DEV_LNKSTA=0x%04x BR_LNKSTA=0x%04x\n",
 				  iter, sharedram_addr,
-				  pci_cmd, pci_status, devsta_dev, lnksta_dev, lnksta_br);
+				  pci_cmd, msi_ctrl, pci_status, devsta_dev, lnksta_dev, lnksta_br);
 			/* Every 50 iterations (~500ms): check pmustatus */
 			if (iter % 50 == 0) {
 				u32 pmu_st;
@@ -2055,7 +2067,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 				pmu_st = READCC32(devinfo, pmustatus);
 				dev_info(&devinfo->pdev->dev,
-					 "BCM4360 test.48: iter %d pmustatus=0x%08x HT=%s\n",
+					 "BCM4360 test.49: iter %d pmustatus=0x%08x HT=%s\n",
 					 iter, pmu_st,
 					 (READCC32(devinfo, clk_ctl_st) & 0x20000) ? "YES" : "NO");
 			}
@@ -2270,15 +2282,23 @@ static void brcmf_pcie_buscore_activate(void *ctx, struct brcmf_chip *chip,
 	struct brcmf_pciedev_info *devinfo = (struct brcmf_pciedev_info *)ctx;
 
 	/* test.46: restore normal firmware — write rstvec to TCM[0] for all chips.
-	 * test.48: also disable BusMaster immediately before ARM release.
-	 *   Firmware may re-enable BusMaster from device side via AXI→PCIe2 registers.
-	 *   The monitoring loop also forces BusMaster off every 10ms iteration.
+	 * test.49: set DisINTx=1 AND BusMaster=0 immediately before ARM release.
+	 *   test.48 confirmed firmware cannot re-enable BusMaster (CMD=0x0002 throughout).
+	 *   INTx hypothesis: firmware asserts PCIe INTx ~950ms after ARM release.
+	 *   Level-triggered INTx with no registered handler → interrupt storm → hard crash.
+	 *   PCI_COMMAND_INTX_DISABLE (0x0400) suppresses Assert_INTx PCIe messages.
+	 *   The monitoring loop also re-enforces DisINTx=1 every 10ms.
 	 */
 	if (chip->chip == BRCM_CC_4360_CHIP_ID) {
+		u16 cmd;
+
+		pci_read_config_word(devinfo->pdev, PCI_COMMAND, &cmd);
+		cmd &= ~PCI_COMMAND_MASTER;
+		cmd |= PCI_COMMAND_INTX_DISABLE;
+		pci_write_config_word(devinfo->pdev, PCI_COMMAND, cmd);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.48 activate: writing rstvec=0x%08x to TCM[0] (normal firmware); disabling BusMaster\n",
-			 rstvec);
-		pci_clear_master(devinfo->pdev);
+			 "BCM4360 test.49 activate: rstvec=0x%08x to TCM[0]; DisINTx=1 BusMaster=0 CMD=0x%04x\n",
+			 rstvec, cmd);
 	}
 	brcmf_pcie_write_tcm32(devinfo, 0, rstvec);
 }
