@@ -1895,21 +1895,16 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			return -ENODEV; /* clean abort, no crash */
 		}
 
-		/* test.41: log PMU state, raise max_res_mask+min_res_mask to bring BBPLL up.
+		/* test.42: raise PMU masks to bring BBPLL up, but DO NOT release ARM.
 		 *
-		 * test.40 results:
-		 *   pllcontrol[0..5] non-zero after EFI — PLL dividers already programmed.
-		 *   ARM-release: IOCTL=0x1 RESET_CTL=0x0 ARM_CLKST=0x04050040 (ALP only).
-		 *   pmustatus=0x2a throughout 5s wait: HAVEALP set, HAVEHT NEVER set.
-		 *   ARM never executes — TCM completely unchanged.
+		 * test.41 CRASHED: raised max_res_mask+min_res_mask to 0xFFFFF,
+		 * then released ARM. PC hard-crashed — no dmesg captured.
+		 * We don't know if crash was from PMU mask write or ARM execution.
 		 *
-		 * Root cause: max_res_mask=0x13f is the PMU CEILING. BBPLL resource
-		 * is not in 0x13f, so PMU will never start it regardless of request.
-		 * ARM CPU requires BBPLL (HT clock) to execute instructions.
-		 *
-		 * Fix: write max_res_mask first (raises ceiling), then min_res_mask
-		 * (forces all resources up including BBPLL). Poll pmustatus HAVEHT
-		 * (bit 2 = 0x04) before ARM release.
+		 * test.42: isolate the cause. Perform identical PMU mask writes
+		 * as test.41, poll HAVEHT, log result, then return -ENODEV
+		 * WITHOUT releasing ARM. If PC survives: crash was ARM/firmware.
+		 * If PC crashes: PMU mask write itself is dangerous.
 		 */
 		{
 			u32 clk, i, pmu_st;
@@ -1918,7 +1913,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 			clk = READCC32(devinfo, clk_ctl_st);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.41 pre-ARM: clk_ctl_st=0x%08x min_res=0x%08x max_res=0x%08x res_state=0x%08x pmustatus=0x%08x HT=%s\n",
+				 "BCM4360 test.42 pre-BBPLL: clk_ctl_st=0x%08x min_res=0x%08x max_res=0x%08x res_state=0x%08x pmustatus=0x%08x HT=%s\n",
 				 clk,
 				 READCC32(devinfo, min_res_mask),
 				 READCC32(devinfo, max_res_mask),
@@ -1929,13 +1924,13 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			for (i = 0; i < 6; i++) {
 				WRITECC32(devinfo, pllcontrol_addr, i);
 				dev_info(&devinfo->pdev->dev,
-					 "BCM4360 test.41 pllcontrol[%u]=0x%08x\n",
+					 "BCM4360 test.42 pllcontrol[%u]=0x%08x\n",
 					 i, READCC32(devinfo, pllcontrol_data));
 			}
 
 			/* Raise PMU ceiling first, then floor. Order matters. */
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.41: raising max_res_mask+min_res_mask to 0xFFFFF\n");
+				 "BCM4360 test.42: raising max_res_mask+min_res_mask to 0xFFFFF\n");
 			WRITECC32(devinfo, max_res_mask, 0xFFFFF);
 			WRITECC32(devinfo, min_res_mask, 0xFFFFF);
 
@@ -1948,17 +1943,16 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			} while (!(pmu_st & 0x04) && retries < 10);
 
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.41 BBPLL: pmustatus=0x%08x clk_ctl_st=0x%08x HAVEHT=%s (retries=%d)\n",
+				 "BCM4360 test.42 BBPLL: pmustatus=0x%08x clk_ctl_st=0x%08x HAVEHT=%s (retries=%d)\n",
 				 pmu_st, READCC32(devinfo, clk_ctl_st),
 				 (pmu_st & 0x04) ? "YES" : "NO", retries);
 
-			if (!(pmu_st & 0x04)) {
-				dev_err(&devinfo->pdev->dev,
-					"BCM4360 test.41: BBPLL failed to come up — aborting ARM release\n");
-				return -ENODEV;
-			}
+			/* test.42: ALWAYS abort here — do NOT release ARM.
+			 * This isolates PMU mask writes from ARM execution. */
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.41: BBPLL up! Proceeding with ARM release.\n");
+				 "BCM4360 test.42: PMU mask test complete, HAVEHT=%s. Aborting before ARM release.\n",
+				 (pmu_st & 0x04) ? "YES" : "NO");
+			return -ENODEV;
 		}
 	}
 

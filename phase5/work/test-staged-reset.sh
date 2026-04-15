@@ -1,20 +1,17 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.41: raise PMU max_res_mask+min_res_mask to bring BBPLL up before ARM release
+# Phase 5.2 test.42: raise PMU masks to bring BBPLL up, but DO NOT release ARM.
 #
-# test.40 SURVIVED: pllcontrol[0..5] confirmed — EFI programmed PLL dividers.
-# ARM-release: IOCTL=0x1 RESET_CTL=0x0 ARM_CLKST=0x04050040 (ALP only, no HT).
-# pmustatus=0x2a throughout 5s wait: HAVEALP set, HAVEHT NEVER set.
-# TCM completely unchanged — ARM never executed a single instruction.
-# ROOT CAUSE: max_res_mask=0x13f is PMU ceiling; BBPLL not in 0x13f range.
-# ARM CPU requires BBPLL (HT clock) to fetch and execute instructions.
+# test.42 CRASHED: raised max_res_mask+min_res_mask=0xFFFFF then released ARM.
+# PC hard-crashed — no dmesg captured. Unknown whether crash was from PMU mask
+# writes or from ARM executing firmware.
 #
-# test.41: FIX — write max_res_mask=0xFFFFF (raises ceiling) then
-# min_res_mask=0xFFFFF (forces resources up) before ARM release.
-# Poll pmustatus HAVEHT (bit 2=0x04). If BBPLL comes up: release ARM.
-# If BBPLL doesn't come up after 100ms: return -ENODEV.
+# test.42: isolate the cause. Same PMU mask writes as test.42, poll HAVEHT,
+# log result, then return -ENODEV WITHOUT releasing ARM.
+# If PC survives: crash was ARM/firmware activity.
+# If PC crashes: PMU mask write itself is dangerous.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
-# Default stage is 0 (full 5000ms wait loop)
+# Default stage is 0
 set -e
 
 STAGE="${1:-0}"
@@ -25,9 +22,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.41.stage${STAGE}"
+LOG="$LOG_DIR/test.42.stage${STAGE}"
 
-echo "=== test.41: raise PMU max_res_mask+min_res_mask — bring BBPLL up before ARM release — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.42: raise PMU max_res_mask+min_res_mask — bring BBPLL up before ARM release — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -80,7 +77,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.41 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.42 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -102,5 +99,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.41: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "*** test.42: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
 echo "Log saved to $LOG" | tee -a "$LOG"

@@ -1,0 +1,101 @@
+=== test.42: raise PMU max_res_mask+min_res_mask — bring BBPLL up before ARM release — stage=0 ===
+Date: Wed 15 Apr 07:49:51 BST 2026
+
+Stage 0: watchdog reset; raise max_res_mask+min_res_mask=0xFFFFF; poll HAVEHT; ARM release
+
+=== Pre-test PCIe state ===
+03:00.0 Network controller [0280]: Broadcom Inc. and subsidiaries BCM4360 802.11ac Dual Band Wireless Network Adapter [14e4:43a0] (rev 03)
+	Subsystem: Apple Inc. Device [106b:0112]
+	Control: I/O- Mem- BusMaster- SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+	Interrupt: pin A routed to IRQ 0
+	IOMMU group: 6
+	Region 0: Memory at b0600000 (64-bit, non-prefetchable) [disabled] [size=32K]
+	Region 2: Memory at b0400000 (64-bit, non-prefetchable) [disabled] [size=2M]
+	Capabilities: [48] Power Management version 3
+		Flags: PMEClk- DSI- D1+ D2+ AuxCurrent=0mA PME(D0+,D1+,D2+,D3hot+,D3cold+)
+		Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=2 PME-
+	Capabilities: [58] MSI: Enable- Count=1/1 Maskable- 64bit+
+		Address: 0000000000000000  Data: 0000
+	Capabilities: [68] Vendor Specific Information: Len=44 <?>
+	Capabilities: [ac] Express (v2) Endpoint, IntMsgNum 0
+		DevCap:	MaxPayload 256 bytes, PhantFunc 0, Latency L0s <4us, L1 unlimited
+			ExtTag- AttnBtn- AttnInd- PwrInd- RBE+ FLReset- SlotPowerLimit 10W TEE-IO-
+		DevCtl:	CorrErr- NonFatalErr- FatalErr- UnsupReq-
+			RlxdOrd+ ExtTag- PhantFunc- AuxPwr+ NoSnoop+
+			MaxPayload 128 bytes, MaxReadReq 512 bytes
+		DevSta:	CorrErr- NonFatalErr- FatalErr- UnsupReq- AuxPwr+ TransPend-
+		LnkCap:	Port #0, Speed 2.5GT/s, Width x1, ASPM L0s L1, Exit Latency L0s <2us, L1 <32us
+			ClockPM+ Surprise- LLActRep- BwNot- ASPMOptComp+
+		LnkCtl:	ASPM Disabled; RCB 64 bytes, LnkDisable- CommClk-
+			ExtSynch- ClockPM- AutWidDis- BWInt- AutBWInt- FltModeDis-
+		LnkSta:	Speed 2.5GT/s, Width x1
+			TrErr- Train- SlotClk+ DLActive- BWMgmt- ABWMgmt-
+		DevCap2: Completion Timeout: Range ABCD, TimeoutDis+ NROPrPrP- LTR+
+			 10BitTagComp- 10BitTagReq- OBFF Via WAKE#, ExtFmt- EETLPPrefix-
+			 EmergencyPowerReduction Not Supported, EmergencyPowerReductionInit-
+
+=== Flushing to disk ===
+Flush complete.
+
+=== Loading brcmfmac (bcm4360_reset_stage=0) — test.42 ===
+Module loaded. Waiting 15s (5s FW wait loop + 10s diagnostics)...
+
+=== Post-test dmesg ===
+[  350.166318] brcmfmac: loading out-of-tree module taints kernel.
+[  350.173295] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffd01f81400000
+[  350.174033] brcmfmac 0000:03:00.0: BCM4360 EFI state: clk_ctl_st=0x00010040 min_res=0x0000013b max_res=0x0000013f res_state=0x0000013b
+[  350.174045] brcmfmac 0000:03:00.0: BCM4360 EFI PMU: pmustatus=0x0000002a pmucontrol=0x01770181
+[  350.174052] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[0]=0x00000000
+[  350.174058] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[1]=0x00000000
+[  350.174064] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[2]=0x00000c31
+[  350.174070] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[3]=0x00133333
+[  350.174076] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[4]=0x06060c03
+[  350.174082] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[5]=0x00000606
+[  350.174084] brcmfmac 0000:03:00.0: BCM4360 test.40: allowing watchdog reset (IOMMU group 8 is crash-protective)
+[  350.278840] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[  350.280247] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.Apple Inc.-MacBookPro11,1.bin failed with error -2
+[  350.284650] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+[  350.284763] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+[  350.284926] brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffd01f81400000
+[  350.345399] brcmfmac 0000:03:00.0: BCM4360 debug: NVRAM loaded, len=228, writing to TCM 0x9ff1c
+[  350.345439] brcmfmac 0000:03:00.0: BCM4360 debug: sharedram marker before ARM release = 0xffc70038
+[  350.345454] brcmfmac 0000:03:00.0: BCM4360 pre-ARM: clk_ctl_st=0x00050040 res_state=0x0000013b HT=NO
+[  350.345474] brcmfmac 0000:03:00.0: BCM4360 test.42 pre-BBPLL: clk_ctl_st=0x00050040 min_res=0x0000013b max_res=0x0000013f res_state=0x0000013b pmustatus=0x0000002a HT=NO
+[  350.345480] brcmfmac 0000:03:00.0: BCM4360 test.42 pllcontrol[0]=0x00000000
+[  350.345483] brcmfmac 0000:03:00.0: BCM4360 test.42 pllcontrol[1]=0x00000000
+[  350.345486] brcmfmac 0000:03:00.0: BCM4360 test.42 pllcontrol[2]=0x00000c31
+[  350.345490] brcmfmac 0000:03:00.0: BCM4360 test.42 pllcontrol[3]=0x00133333
+[  350.345493] brcmfmac 0000:03:00.0: BCM4360 test.42 pllcontrol[4]=0x06060c03
+[  350.345496] brcmfmac 0000:03:00.0: BCM4360 test.42 pllcontrol[5]=0x00000606
+[  350.345497] brcmfmac 0000:03:00.0: BCM4360 test.42: raising max_res_mask+min_res_mask to 0xFFFFF
+[  350.356519] brcmfmac 0000:03:00.0: BCM4360 test.42 BBPLL: pmustatus=0x0000002e clk_ctl_st=0x01030040 HAVEHT=YES (retries=1)
+[  350.356526] brcmfmac 0000:03:00.0: BCM4360 test.42: PMU mask test complete, HAVEHT=YES. Aborting before ARM release.
+[  350.356529] brcmfmac 0000:03:00.0: brcmf_pcie_setup: Dongle setup failed
+[  350.356574] ieee80211 phy1: brcmf_fw_crashed: Firmware has halted or crashed
+[  350.366569] brcmfmac 0000:03:00.0: BCM4360 EFI state: clk_ctl_st=0x01030040 min_res=0x000fffff max_res=0x000fffff res_state=0x000007ff
+[  350.366581] brcmfmac 0000:03:00.0: BCM4360 EFI PMU: pmustatus=0x0000002e pmucontrol=0x01770181
+[  350.366586] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[0]=0x00000000
+[  350.366591] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[1]=0x00000000
+[  350.366596] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[2]=0x00000c31
+[  350.366599] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[3]=0x00133333
+[  350.366603] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[4]=0x06060c03
+[  350.366606] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[5]=0x00000606
+[  350.366608] brcmfmac 0000:03:00.0: BCM4360 test.40: allowing watchdog reset (IOMMU group 8 is crash-protective)
+[  351.835552] wlp0s20u2: disconnect from AP 60:83:e7:3f:8a:8a for new auth to 60:83:e7:3f:8a:8b
+[  352.903748] wlp0s20u2: authenticate with 60:83:e7:3f:8a:8b (local address=2c:30:33:a7:29:5a)
+[  352.903762] wlp0s20u2: send auth to 60:83:e7:3f:8a:8b (try 1/3)
+[  352.906997] wlp0s20u2: authenticated
+[  352.917315] wlp0s20u2: associate with 60:83:e7:3f:8a:8b (try 1/3)
+[  352.928875] wlp0s20u2: RX ReassocResp from 60:83:e7:3f:8a:8b (capab=0x1511 status=0 aid=6)
+[  352.931914] wlp0s20u2: associated
+[  352.995727] wlp0s20u2: Limiting TX power to 20 (23 - 3) dBm as advertised by 60:83:e7:3f:8a:8b
+
+=== Module state ===
+brcmfmac_wcc           12288  0
+brcmfmac              430080  1 brcmfmac_wcc
+brcmutil               16384  1 brcmfmac
+cfg80211             1413120  6 mt76,mt76x02_lib,brcmfmac,mac80211,mt76x02_usb,mt76x2_common
+
+*** test.42: PC SURVIVED stage=0! ***
+Log saved to /home/kimptoc/bcm4360-re/phase5/work/../logs/test.42.stage0
