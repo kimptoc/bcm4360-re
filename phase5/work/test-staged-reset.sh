@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.51: ChipCommon watchdog READ-ONLY monitoring
+# Phase 5.2 test.52: ChipCommon watchdog ACTIVE SERVICING
 #
-# test.50 INSTANT CRASH finding:
-#   Writing 0 to CC+0x80 (ChipCommon watchdog) = "reset in 0 ALP ticks" = IMMEDIATE reset.
-#   Same mechanism as test.40's WRITECC32(watchdog, 4) but faster.
-#   The BCM4360 watchdog is a pure countdown timer; writing 0 does NOT disable it.
+# test.52 INSTANT CRASH finding:
+#   Calling select_core(CHIPCOMMON) inside activate() corrupts BAR0 window during ARM init.
+#   Machine reset before any test.52 kernel message was logged.
+#   Lesson: never call select_core or READCC32/WRITECC32 inside activate().
 #
-# test.51 GOAL: observe watchdog countdown without touching it.
-#   - READ CC+0x80 (WDOG) and CC+0x634 (PMUWDOG) every 10ms — no writes.
-#   - Keep DisINTx=1 and BusMaster=0 (from test.49).
-#   - Expected: crash at ~490ms like tests 46-49, but now with WDOG values logged.
-#   - If WDOG counts down toward 0 at crash time: watchdog confirmed as mechanism.
-#   - test.52 will then SERVICE watchdog by writing a large value each iteration.
+# test.52 GOAL: prevent watchdog expiry by servicing it in the poll loop.
+#   - activate(): identical to test.49 (DisINTx=1, BusMaster=0, no watchdog reads)
+#   - poll loop: BAR0 already = ChipCommon after ARM-release block; no select_core needed
+#     READ WDOG_PRE (pre-write countdown), READ PMUWDOG, then WRITE 0x7FFFFFFF to service
+#   - If PASS: watchdog confirmed as crash mechanism for tests 43-49
+#   - If CRASH: watchdog not the cause; investigate PMU reset or CPU exception
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -25,14 +25,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.51.stage${STAGE}"
+LOG="$LOG_DIR/test.52.stage${STAGE}"
 
-echo "=== test.51: watchdog read-only monitoring — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.52: watchdog read-only monitoring — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: BBPLL up; normal firmware; watchdog read-only; ARM release; monitor" | tee -a "$LOG" ;;
+    0) echo "Stage 0: BBPLL up; normal firmware; watchdog serviced every 10ms; ARM release; monitor" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -80,7 +80,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.51 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.52 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -102,5 +102,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.51: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "*** test.52: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
 echo "Log saved to $LOG" | tee -a "$LOG"
