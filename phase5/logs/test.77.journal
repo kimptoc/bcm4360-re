@@ -1,0 +1,1321 @@
+Apr 15 22:22:13 nixos kernel: Linux version 6.12.80 (nixbld@localhost) (gcc (GCC) 14.3.0, GNU ld (GNU Binutils) 2.44) #1-NixOS SMP PREEMPT_DYNAMIC Thu Apr  2 11:09:54 UTC 2026
+Apr 15 22:22:13 nixos kernel: Command line: initrd=\EFI\nixos\v6bc83nw2h5x85106qkcr1v1qyi1ax7g-initrd-linux-6.12.80-initrd.efi init=/nix/store/zzjxl2zx2rnnkmc3kx8sdg5v1bcxm5w4-nixos-system-nixos-25.11.9067.54170c54449e/init pci=noaer intel_iommu=on iommu=strict loglevel=4 lsm=landlock,yama,bpf
+Apr 15 22:22:13 nixos kernel: BIOS-provided physical RAM map:
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x0000000000000000-0x0000000000057fff] usable
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x0000000000058000-0x0000000000058fff] reserved
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x0000000000059000-0x000000000008efff] usable
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x000000000008f000-0x000000000008ffff] reserved
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x0000000000090000-0x000000000009ffff] usable
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x00000000000a0000-0x00000000000bffff] reserved
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x0000000000100000-0x000000008ad0ffff] usable
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x000000008ad10000-0x000000008ad52fff] ACPI NVS
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x000000008ad53000-0x000000008ad5cfff] usable
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x000000008ad5d000-0x000000008ad8efff] ACPI data
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x000000008ad8f000-0x000000008ae38fff] usable
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x000000008ae39000-0x000000008ae8efff] reserved
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x000000008ae8f000-0x000000008aed1fff] usable
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x000000008aed2000-0x000000008aefefff] reserved
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x000000008aeff000-0x000000008af83fff] usable
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x000000008af84000-0x000000008afeffff] reserved
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x000000008aff0000-0x000000008affffff] usable
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x000000008b000000-0x000000008f9fffff] reserved
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x00000000e00f8000-0x00000000e00f8fff] reserved
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x00000000fed1c000-0x00000000fed1ffff] reserved
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x00000000ffe10000-0x00000000ffe3ffff] reserved
+Apr 15 22:22:13 nixos kernel: BIOS-e820: [mem 0x0000000100000000-0x000000026f5fffff] usable
+Apr 15 22:22:13 nixos kernel: NX (Execute Disable) protection: active
+Apr 15 22:22:13 nixos kernel: APIC: Static calls initialized
+Apr 15 22:22:13 nixos kernel: e820: update [mem 0x75dfa190-0x75e0a1cf] usable ==> usable
+Apr 15 22:22:13 nixos kernel: e820: update [mem 0x75df9810-0x75df9cd2] usable ==> usable
+Apr 15 22:22:13 nixos kernel: extended physical RAM map:
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x0000000000000000-0x0000000000057fff] usable
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x0000000000058000-0x0000000000058fff] reserved
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x0000000000059000-0x000000000008efff] usable
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x000000000008f000-0x000000000008ffff] reserved
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x0000000000090000-0x000000000009ffff] usable
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x00000000000a0000-0x00000000000bffff] reserved
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x0000000000100000-0x0000000075df980f] usable
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x0000000075df9810-0x0000000075df9cd2] usable
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x0000000075df9cd3-0x0000000075dfa18f] usable
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x0000000075dfa190-0x0000000075e0a1cf] usable
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x0000000075e0a1d0-0x000000008ad0ffff] usable
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x000000008ad10000-0x000000008ad52fff] ACPI NVS
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x000000008ad53000-0x000000008ad5cfff] usable
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x000000008ad5d000-0x000000008ad8efff] ACPI data
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x000000008ad8f000-0x000000008ae38fff] usable
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x000000008ae39000-0x000000008ae8efff] reserved
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x000000008ae8f000-0x000000008aed1fff] usable
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x000000008aed2000-0x000000008aefefff] reserved
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x000000008aeff000-0x000000008af83fff] usable
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x000000008af84000-0x000000008afeffff] reserved
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x000000008aff0000-0x000000008affffff] usable
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x000000008b000000-0x000000008f9fffff] reserved
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x00000000e00f8000-0x00000000e00f8fff] reserved
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x00000000fed1c000-0x00000000fed1ffff] reserved
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x00000000ffe10000-0x00000000ffe3ffff] reserved
+Apr 15 22:22:13 nixos kernel: reserve setup_data: [mem 0x0000000100000000-0x000000026f5fffff] usable
+Apr 15 22:22:13 nixos kernel: efi: EFI v1.1 by Apple
+Apr 15 22:22:13 nixos kernel: efi: ACPI=0x8ad8e000 ACPI 2.0=0x8ad8e014 SMBIOS=0x8ad11000 RNG=0x8ad61f90 INITRD=0x75e22f90 
+Apr 15 22:22:13 nixos kernel: random: crng init done
+Apr 15 22:22:13 nixos kernel: efi: Not removing mem275: MMIO range=[0xe00f8000-0xe00f8fff] (4KB) from e820 map
+Apr 15 22:22:13 nixos kernel: efi: Not removing mem276: MMIO range=[0xfed1c000-0xfed1ffff] (16KB) from e820 map
+Apr 15 22:22:13 nixos kernel: efi: Not removing mem277: MMIO range=[0xffe10000-0xffe3ffff] (192KB) from e820 map
+Apr 15 22:22:13 nixos kernel: [Firmware Bug]: Corrupted DMI table, offset 2189 (only 40 entries processed)
+Apr 15 22:22:13 nixos kernel: SMBIOS 2.4 present.
+Apr 15 22:22:13 nixos kernel: DMI: Apple Inc. MacBookPro11,1/Mac-189A3D4F975D5FFC, BIOS 478.0.0.0.0 01/13/2023
+Apr 15 22:22:13 nixos kernel: DMI: Memory slots populated: 2/2
+Apr 15 22:22:13 nixos kernel: tsc: Fast TSC calibration using PIT
+Apr 15 22:22:13 nixos kernel: tsc: Detected 2600.096 MHz processor
+Apr 15 22:22:13 nixos kernel: e820: update [mem 0x00000000-0x00000fff] usable ==> reserved
+Apr 15 22:22:13 nixos kernel: e820: remove [mem 0x000a0000-0x000fffff] usable
+Apr 15 22:22:13 nixos kernel: last_pfn = 0x26f600 max_arch_pfn = 0x400000000
+Apr 15 22:22:13 nixos kernel: MTRR map: 5 entries (4 fixed + 1 variable; max 24), built from 10 variable MTRRs
+Apr 15 22:22:13 nixos kernel: x86/PAT: Configuration [0-7]: WB  WC  UC- UC  WB  WP  UC- WT  
+Apr 15 22:22:13 nixos kernel: last_pfn = 0x8b000 max_arch_pfn = 0x400000000
+Apr 15 22:22:13 nixos kernel: Using GB pages for direct mapping
+Apr 15 22:22:13 nixos kernel: Secure boot disabled
+Apr 15 22:22:13 nixos kernel: RAMDISK: [mem 0x71242000-0x72c10fff]
+Apr 15 22:22:13 nixos kernel: ACPI: Early table checksum verification disabled
+Apr 15 22:22:13 nixos kernel: ACPI: RSDP 0x000000008AD8E014 000024 (v02 APPLE )
+Apr 15 22:22:13 nixos kernel: ACPI: XSDT 0x000000008AD8E1C0 0000A4 (v01 APPLE  Apple00  00000000      01000013)
+Apr 15 22:22:13 nixos kernel: ACPI: FACP 0x000000008AD8C000 0000F4 (v05 APPLE  Apple00  00000000 Loki 0000005F)
+Apr 15 22:22:13 nixos kernel: ACPI: DSDT 0x000000008AD7F000 007681 (v03 APPLE  MacBookP 00110001 INTL 20100915)
+Apr 15 22:22:13 nixos kernel: ACPI: FACS 0x000000008AD18000 000040
+Apr 15 22:22:13 nixos kernel: ACPI: FACS 0x000000008AD18000 000040
+Apr 15 22:22:13 nixos kernel: ACPI: HPET 0x000000008AD8B000 000038 (v01 APPLE  Apple00  00000001 Loki 0000005F)
+Apr 15 22:22:13 nixos kernel: ACPI: APIC 0x000000008AD8A000 0000BC (v02 APPLE  Apple00  00000001 Loki 0000005F)
+Apr 15 22:22:13 nixos kernel: ACPI: SBST 0x000000008AD88000 000030 (v01 APPLE  Apple00  00000001 Loki 0000005F)
+Apr 15 22:22:13 nixos kernel: ACPI: ECDT 0x000000008AD87000 000053 (v01 APPLE  Apple00  00000001 Loki 0000005F)
+Apr 15 22:22:13 nixos kernel: ACPI: SSDT 0x000000008AD7E000 00010B (v01 APPLE  SataAhci 00001000 INTL 20100915)
+Apr 15 22:22:13 nixos kernel: ACPI: SSDT 0x000000008AD7D000 000024 (v01 APPLE  SmcDppt  00001000 INTL 20100915)
+Apr 15 22:22:13 nixos kernel: ACPI: SSDT 0x000000008AD7A000 000FE9 (v01 APPLE  SDUsbLpt 00001000 INTL 20100915)
+Apr 15 22:22:13 nixos kernel: ACPI: SSDT 0x000000008AD76000 000032 (v01 APPLE  SsdtS3   00001000 INTL 20100915)
+Apr 15 22:22:13 nixos kernel: ACPI: SSDT 0x000000008AD73000 0028B2 (v01 APPLE  PcieTbt  00001000 INTL 20100915)
+Apr 15 22:22:13 nixos kernel: ACPI: SSDT 0x000000008AD66000 0000B8 (v01 APPLE  Sdxc     00001000 INTL 20100915)
+Apr 15 22:22:13 nixos kernel: ACPI: SSDT 0x000000008AD65000 0003E0 (v01 APPLE  SaHdaCdc 00001000 INTL 20100915)
+Apr 15 22:22:13 nixos kernel: ACPI: SSDT 0x000000008AD64000 000594 (v01 PmRef  Cpu0Ist  00003000 INTL 20100915)
+Apr 15 22:22:13 nixos kernel: ACPI: SSDT 0x000000008AD63000 000B83 (v01 PmRef  CpuPm    00003000 INTL 20100915)
+Apr 15 22:22:13 nixos kernel: ACPI: DMAR 0x000000008AD62000 000088 (v01 APPLE  HSW      00000001 AAPL 00000001)
+Apr 15 22:22:13 nixos kernel: ACPI: MCFG 0x000000008AD89000 00003C (v01 APPLE  Apple00  00000001 Loki 0000005F)
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving FACP table memory at [mem 0x8ad8c000-0x8ad8c0f3]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving DSDT table memory at [mem 0x8ad7f000-0x8ad86680]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving FACS table memory at [mem 0x8ad18000-0x8ad1803f]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving FACS table memory at [mem 0x8ad18000-0x8ad1803f]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving HPET table memory at [mem 0x8ad8b000-0x8ad8b037]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving APIC table memory at [mem 0x8ad8a000-0x8ad8a0bb]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving SBST table memory at [mem 0x8ad88000-0x8ad8802f]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving ECDT table memory at [mem 0x8ad87000-0x8ad87052]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving SSDT table memory at [mem 0x8ad7e000-0x8ad7e10a]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving SSDT table memory at [mem 0x8ad7d000-0x8ad7d023]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving SSDT table memory at [mem 0x8ad7a000-0x8ad7afe8]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving SSDT table memory at [mem 0x8ad76000-0x8ad76031]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving SSDT table memory at [mem 0x8ad73000-0x8ad758b1]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving SSDT table memory at [mem 0x8ad66000-0x8ad660b7]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving SSDT table memory at [mem 0x8ad65000-0x8ad653df]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving SSDT table memory at [mem 0x8ad64000-0x8ad64593]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving SSDT table memory at [mem 0x8ad63000-0x8ad63b82]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving DMAR table memory at [mem 0x8ad62000-0x8ad62087]
+Apr 15 22:22:13 nixos kernel: ACPI: Reserving MCFG table memory at [mem 0x8ad89000-0x8ad8903b]
+Apr 15 22:22:13 nixos kernel: ACPI: DMI detected to setup _OSI("Darwin"): Apple hardware
+Apr 15 22:22:13 nixos kernel: No NUMA configuration found
+Apr 15 22:22:13 nixos kernel: Faking a node at [mem 0x0000000000000000-0x000000026f5fffff]
+Apr 15 22:22:13 nixos kernel: NODE_DATA(0) allocated [mem 0x26f5fa8c0-0x26f5ffdff]
+Apr 15 22:22:13 nixos kernel: Zone ranges:
+Apr 15 22:22:13 nixos kernel:   DMA      [mem 0x0000000000001000-0x0000000000ffffff]
+Apr 15 22:22:13 nixos kernel:   DMA32    [mem 0x0000000001000000-0x00000000ffffffff]
+Apr 15 22:22:13 nixos kernel:   Normal   [mem 0x0000000100000000-0x000000026f5fffff]
+Apr 15 22:22:13 nixos kernel:   Device   empty
+Apr 15 22:22:13 nixos kernel: Movable zone start for each node
+Apr 15 22:22:13 nixos kernel: Early memory node ranges
+Apr 15 22:22:13 nixos kernel:   node   0: [mem 0x0000000000001000-0x0000000000057fff]
+Apr 15 22:22:13 nixos kernel:   node   0: [mem 0x0000000000059000-0x000000000008efff]
+Apr 15 22:22:13 nixos kernel:   node   0: [mem 0x0000000000090000-0x000000000009ffff]
+Apr 15 22:22:13 nixos kernel:   node   0: [mem 0x0000000000100000-0x000000008ad0ffff]
+Apr 15 22:22:13 nixos kernel:   node   0: [mem 0x000000008ad53000-0x000000008ad5cfff]
+Apr 15 22:22:13 nixos kernel:   node   0: [mem 0x000000008ad8f000-0x000000008ae38fff]
+Apr 15 22:22:13 nixos kernel:   node   0: [mem 0x000000008ae8f000-0x000000008aed1fff]
+Apr 15 22:22:13 nixos kernel:   node   0: [mem 0x000000008aeff000-0x000000008af83fff]
+Apr 15 22:22:13 nixos kernel:   node   0: [mem 0x000000008aff0000-0x000000008affffff]
+Apr 15 22:22:13 nixos kernel:   node   0: [mem 0x0000000100000000-0x000000026f5fffff]
+Apr 15 22:22:13 nixos kernel: Initmem setup node 0 [mem 0x0000000000001000-0x000000026f5fffff]
+Apr 15 22:22:13 nixos kernel: On node 0, zone DMA: 1 pages in unavailable ranges
+Apr 15 22:22:13 nixos kernel: On node 0, zone DMA: 1 pages in unavailable ranges
+Apr 15 22:22:13 nixos kernel: On node 0, zone DMA: 1 pages in unavailable ranges
+Apr 15 22:22:13 nixos kernel: On node 0, zone DMA: 96 pages in unavailable ranges
+Apr 15 22:22:13 nixos kernel: On node 0, zone DMA32: 67 pages in unavailable ranges
+Apr 15 22:22:13 nixos kernel: On node 0, zone DMA32: 50 pages in unavailable ranges
+Apr 15 22:22:13 nixos kernel: On node 0, zone DMA32: 86 pages in unavailable ranges
+Apr 15 22:22:13 nixos kernel: On node 0, zone DMA32: 45 pages in unavailable ranges
+Apr 15 22:22:13 nixos kernel: On node 0, zone DMA32: 108 pages in unavailable ranges
+Apr 15 22:22:13 nixos kernel: On node 0, zone Normal: 20480 pages in unavailable ranges
+Apr 15 22:22:13 nixos kernel: On node 0, zone Normal: 2560 pages in unavailable ranges
+Apr 15 22:22:13 nixos kernel: Reserving Intel graphics memory at [mem 0x8ba00000-0x8f9fffff]
+Apr 15 22:22:13 nixos kernel: ACPI: PM-Timer IO Port: 0x1808
+Apr 15 22:22:13 nixos kernel: ACPI: LAPIC_NMI (acpi_id[0x01] high edge lint[0x1])
+Apr 15 22:22:13 nixos kernel: ACPI: LAPIC_NMI (acpi_id[0x02] high edge lint[0x1])
+Apr 15 22:22:13 nixos kernel: ACPI: LAPIC_NMI (acpi_id[0x03] high edge lint[0x1])
+Apr 15 22:22:13 nixos kernel: ACPI: LAPIC_NMI (acpi_id[0x04] high edge lint[0x1])
+Apr 15 22:22:13 nixos kernel: ACPI: LAPIC_NMI (acpi_id[0x05] high edge lint[0x1])
+Apr 15 22:22:13 nixos kernel: ACPI: LAPIC_NMI (acpi_id[0x06] high edge lint[0x1])
+Apr 15 22:22:13 nixos kernel: ACPI: LAPIC_NMI (acpi_id[0x07] high edge lint[0x1])
+Apr 15 22:22:13 nixos kernel: ACPI: LAPIC_NMI (acpi_id[0x08] high edge lint[0x1])
+Apr 15 22:22:13 nixos kernel: IOAPIC[0]: apic_id 2, version 32, address 0xfec00000, GSI 0-39
+Apr 15 22:22:13 nixos kernel: ACPI: INT_SRC_OVR (bus 0 bus_irq 0 global_irq 2 dfl dfl)
+Apr 15 22:22:13 nixos kernel: ACPI: INT_SRC_OVR (bus 0 bus_irq 9 global_irq 9 high level)
+Apr 15 22:22:13 nixos kernel: ACPI: Using ACPI (MADT) for SMP configuration information
+Apr 15 22:22:13 nixos kernel: ACPI: HPET id: 0x8086a201 base: 0xfed00000
+Apr 15 22:22:13 nixos kernel: TSC deadline timer available
+Apr 15 22:22:13 nixos kernel: CPU topo: Max. logical packages:   1
+Apr 15 22:22:13 nixos kernel: CPU topo: Max. logical dies:       1
+Apr 15 22:22:13 nixos kernel: CPU topo: Max. dies per package:   1
+Apr 15 22:22:13 nixos kernel: CPU topo: Max. threads per core:   2
+Apr 15 22:22:13 nixos kernel: CPU topo: Num. cores per package:     2
+Apr 15 22:22:13 nixos kernel: CPU topo: Num. threads per package:   4
+Apr 15 22:22:13 nixos kernel: CPU topo: Allowing 4 present CPUs plus 0 hotplug CPUs
+Apr 15 22:22:13 nixos kernel: PM: hibernation: Registered nosave memory: [mem 0x00000000-0x00000fff]
+Apr 15 22:22:13 nixos kernel: PM: hibernation: Registered nosave memory: [mem 0x00058000-0x00058fff]
+Apr 15 22:22:13 nixos kernel: PM: hibernation: Registered nosave memory: [mem 0x0008f000-0x0008ffff]
+Apr 15 22:22:13 nixos kernel: PM: hibernation: Registered nosave memory: [mem 0x000a0000-0x000fffff]
+Apr 15 22:22:13 nixos kernel: PM: hibernation: Registered nosave memory: [mem 0x8ad10000-0x8ad52fff]
+Apr 15 22:22:13 nixos kernel: PM: hibernation: Registered nosave memory: [mem 0x8ad5d000-0x8ad8efff]
+Apr 15 22:22:13 nixos kernel: PM: hibernation: Registered nosave memory: [mem 0x8ae39000-0x8ae8efff]
+Apr 15 22:22:13 nixos kernel: PM: hibernation: Registered nosave memory: [mem 0x8aed2000-0x8aefefff]
+Apr 15 22:22:13 nixos kernel: PM: hibernation: Registered nosave memory: [mem 0x8af84000-0x8afeffff]
+Apr 15 22:22:13 nixos kernel: PM: hibernation: Registered nosave memory: [mem 0x8b000000-0xffffffff]
+Apr 15 22:22:13 nixos kernel: [mem 0x8fa00000-0xe00f7fff] available for PCI devices
+Apr 15 22:22:13 nixos kernel: Booting paravirtualized kernel on bare hardware
+Apr 15 22:22:13 nixos kernel: clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 1910969940391419 ns
+Apr 15 22:22:13 nixos kernel: setup_percpu: NR_CPUS:384 nr_cpumask_bits:4 nr_cpu_ids:4 nr_node_ids:1
+Apr 15 22:22:13 nixos kernel: percpu: Embedded 116 pages/cpu s294912 r65536 d114688 u524288
+Apr 15 22:22:13 nixos kernel: pcpu-alloc: s294912 r65536 d114688 u524288 alloc=1*2097152
+Apr 15 22:22:13 nixos kernel: pcpu-alloc: [0] 0 1 2 3 
+Apr 15 22:22:13 nixos kernel: Kernel command line: initrd=\EFI\nixos\v6bc83nw2h5x85106qkcr1v1qyi1ax7g-initrd-linux-6.12.80-initrd.efi init=/nix/store/zzjxl2zx2rnnkmc3kx8sdg5v1bcxm5w4-nixos-system-nixos-25.11.9067.54170c54449e/init pci=noaer intel_iommu=on iommu=strict loglevel=4 lsm=landlock,yama,bpf
+Apr 15 22:22:13 nixos kernel: DMAR: IOMMU enabled
+Apr 15 22:22:13 nixos kernel: Dentry cache hash table entries: 1048576 (order: 11, 8388608 bytes, linear)
+Apr 15 22:22:13 nixos kernel: Inode-cache hash table entries: 524288 (order: 10, 4194304 bytes, linear)
+Apr 15 22:22:13 nixos kernel: Fallback order for Node 0: 0 
+Apr 15 22:22:13 nixos kernel: Built 1 zonelists, mobility grouping on.  Total pages: 2073657
+Apr 15 22:22:13 nixos kernel: Policy zone: Normal
+Apr 15 22:22:13 nixos kernel: mem auto-init: stack:all(zero), heap alloc:on, heap free:off
+Apr 15 22:22:13 nixos kernel: software IO TLB: area num 4.
+Apr 15 22:22:13 nixos kernel: SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=4, Nodes=1
+Apr 15 22:22:13 nixos kernel: allocated 16777216 bytes of page_ext
+Apr 15 22:22:13 nixos kernel: Kernel/User page tables isolation: enabled
+Apr 15 22:22:13 nixos kernel: ftrace: allocating 46233 entries in 181 pages
+Apr 15 22:22:13 nixos kernel: ftrace: allocated 181 pages with 5 groups
+Apr 15 22:22:13 nixos kernel: Dynamic Preempt: voluntary
+Apr 15 22:22:13 nixos kernel: rcu: Preemptible hierarchical RCU implementation.
+Apr 15 22:22:13 nixos kernel: rcu:         RCU event tracing is enabled.
+Apr 15 22:22:13 nixos kernel: rcu:         RCU restricting CPUs from NR_CPUS=384 to nr_cpu_ids=4.
+Apr 15 22:22:13 nixos kernel:         Trampoline variant of Tasks RCU enabled.
+Apr 15 22:22:13 nixos kernel:         Rude variant of Tasks RCU enabled.
+Apr 15 22:22:13 nixos kernel:         Tracing variant of Tasks RCU enabled.
+Apr 15 22:22:13 nixos kernel: rcu: RCU calculated value of scheduler-enlistment delay is 100 jiffies.
+Apr 15 22:22:13 nixos kernel: rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=4
+Apr 15 22:22:13 nixos kernel: RCU Tasks: Setting shift to 2 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=4.
+Apr 15 22:22:13 nixos kernel: RCU Tasks Rude: Setting shift to 2 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=4.
+Apr 15 22:22:13 nixos kernel: RCU Tasks Trace: Setting shift to 2 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=4.
+Apr 15 22:22:13 nixos kernel: NR_IRQS: 24832, nr_irqs: 728, preallocated irqs: 16
+Apr 15 22:22:13 nixos kernel: rcu: srcu_init: Setting srcu_struct sizes based on contention.
+Apr 15 22:22:13 nixos kernel: kfence: initialized - using 2097152 bytes for 255 objects at 0x(____ptrval____)-0x(____ptrval____)
+Apr 15 22:22:13 nixos kernel: Console: colour dummy device 80x25
+Apr 15 22:22:13 nixos kernel: printk: legacy console [tty0] enabled
+Apr 15 22:22:13 nixos kernel: ACPI: Core revision 20240827
+Apr 15 22:22:13 nixos kernel: hpet: HPET dysfunctional in PC10. Force disabled.
+Apr 15 22:22:13 nixos kernel: APIC: Switch to symmetric I/O mode setup
+Apr 15 22:22:13 nixos kernel: DMAR: Host address width 39
+Apr 15 22:22:13 nixos kernel: DMAR: DRHD base: 0x000000fed90000 flags: 0x0
+Apr 15 22:22:13 nixos kernel: DMAR: dmar0: reg_base_addr fed90000 ver 1:0 cap c0000020660462 ecap f0101a
+Apr 15 22:22:13 nixos kernel: DMAR: DRHD base: 0x000000fed91000 flags: 0x1
+Apr 15 22:22:13 nixos kernel: DMAR: dmar1: reg_base_addr fed91000 ver 1:0 cap d2008020660462 ecap f010da
+Apr 15 22:22:13 nixos kernel: DMAR: RMRR base: 0x0000008b800000 end: 0x0000008f9fffff
+Apr 15 22:22:13 nixos kernel: DMAR-IR: IOAPIC id 2 under DRHD base  0xfed91000 IOMMU 1
+Apr 15 22:22:13 nixos kernel: DMAR-IR: HPET id 0 under DRHD base 0xfed91000
+Apr 15 22:22:13 nixos kernel: DMAR-IR: Queued invalidation will be enabled to support x2apic and Intr-remapping.
+Apr 15 22:22:13 nixos kernel: DMAR-IR: Enabled IRQ remapping in x2apic mode
+Apr 15 22:22:13 nixos kernel: x2apic enabled
+Apr 15 22:22:13 nixos kernel: APIC: Switched APIC routing to: cluster x2apic
+Apr 15 22:22:13 nixos kernel: clocksource: tsc-early: mask: 0xffffffffffffffff max_cycles: 0x257a96ba51a, max_idle_ns: 440795211807 ns
+Apr 15 22:22:13 nixos kernel: Calibrating delay loop (skipped), value calculated using timer frequency.. 5200.19 BogoMIPS (lpj=2600096)
+Apr 15 22:22:13 nixos kernel: CPU0: Thermal monitoring enabled (TM1)
+Apr 15 22:22:13 nixos kernel: Last level iTLB entries: 4KB 1024, 2MB 1024, 4MB 1024
+Apr 15 22:22:13 nixos kernel: Last level dTLB entries: 4KB 1024, 2MB 1024, 4MB 1024, 1GB 4
+Apr 15 22:22:13 nixos kernel: process: using mwait in idle threads
+Apr 15 22:22:13 nixos kernel: Spectre V1 : Mitigation: usercopy/swapgs barriers and __user pointer sanitization
+Apr 15 22:22:13 nixos kernel: Spectre V2 : Mitigation: Retpolines
+Apr 15 22:22:13 nixos kernel: Spectre V2 : Spectre v2 / SpectreRSB: Filling RSB on context switch and VMEXIT
+Apr 15 22:22:13 nixos kernel: Spectre V2 : Enabling Restricted Speculation for firmware calls
+Apr 15 22:22:13 nixos kernel: Spectre V2 : mitigation: Enabling conditional Indirect Branch Prediction Barrier
+Apr 15 22:22:13 nixos kernel: Spectre V2 : User space: Mitigation: STIBP via prctl
+Apr 15 22:22:13 nixos kernel: Speculative Store Bypass: Mitigation: Speculative Store Bypass disabled via prctl
+Apr 15 22:22:13 nixos kernel: MDS: Mitigation: Clear CPU buffers
+Apr 15 22:22:13 nixos kernel: MMIO Stale Data: Unknown: No mitigations
+Apr 15 22:22:13 nixos kernel: SRBDS: Mitigation: Microcode
+Apr 15 22:22:13 nixos kernel: VMSCAPE: Mitigation: IBPB before exit to userspace
+Apr 15 22:22:13 nixos kernel: x86/fpu: Supporting XSAVE feature 0x001: 'x87 floating point registers'
+Apr 15 22:22:13 nixos kernel: x86/fpu: Supporting XSAVE feature 0x002: 'SSE registers'
+Apr 15 22:22:13 nixos kernel: x86/fpu: Supporting XSAVE feature 0x004: 'AVX registers'
+Apr 15 22:22:13 nixos kernel: x86/fpu: xstate_offset[2]:  576, xstate_sizes[2]:  256
+Apr 15 22:22:13 nixos kernel: x86/fpu: Enabled xstate features 0x7, context size is 832 bytes, using 'standard' format.
+Apr 15 22:22:13 nixos kernel: Freeing SMP alternatives memory: 40K
+Apr 15 22:22:13 nixos kernel: pid_max: default: 32768 minimum: 301
+Apr 15 22:22:13 nixos kernel: LSM: initializing lsm=capability,landlock,yama,bpf
+Apr 15 22:22:13 nixos kernel: landlock: Up and running.
+Apr 15 22:22:13 nixos kernel: Yama: becoming mindful.
+Apr 15 22:22:13 nixos kernel: LSM support for eBPF active
+Apr 15 22:22:13 nixos kernel: Mount-cache hash table entries: 16384 (order: 5, 131072 bytes, linear)
+Apr 15 22:22:13 nixos kernel: Mountpoint-cache hash table entries: 16384 (order: 5, 131072 bytes, linear)
+Apr 15 22:22:13 nixos kernel: smpboot: CPU0: Intel(R) Core(TM) i5-4288U CPU @ 2.60GHz (family: 0x6, model: 0x45, stepping: 0x1)
+Apr 15 22:22:13 nixos kernel: Performance Events: PEBS fmt2+, Haswell events, 16-deep LBR, full-width counters, Intel PMU driver.
+Apr 15 22:22:13 nixos kernel: ... version:                3
+Apr 15 22:22:13 nixos kernel: ... bit width:              48
+Apr 15 22:22:13 nixos kernel: ... generic registers:      4
+Apr 15 22:22:13 nixos kernel: ... value mask:             0000ffffffffffff
+Apr 15 22:22:13 nixos kernel: ... max period:             00007fffffffffff
+Apr 15 22:22:13 nixos kernel: ... fixed-purpose events:   3
+Apr 15 22:22:13 nixos kernel: ... event mask:             000000070000000f
+Apr 15 22:22:13 nixos kernel: signal: max sigframe size: 1776
+Apr 15 22:22:13 nixos kernel: Estimated ratio of average max frequency by base frequency (times 1024): 1220
+Apr 15 22:22:13 nixos kernel: rcu: Hierarchical SRCU implementation.
+Apr 15 22:22:13 nixos kernel: rcu:         Max phase no-delay instances is 400.
+Apr 15 22:22:13 nixos kernel: Timer migration: 1 hierarchy levels; 8 children per group; 1 crossnode level
+Apr 15 22:22:13 nixos kernel: NMI watchdog: Enabled. Permanently consumes one hw-PMU counter.
+Apr 15 22:22:13 nixos kernel: smp: Bringing up secondary CPUs ...
+Apr 15 22:22:13 nixos kernel: smpboot: x86: Booting SMP configuration:
+Apr 15 22:22:13 nixos kernel: .... node  #0, CPUs:      #1 #2 #3
+Apr 15 22:22:13 nixos kernel: MDS CPU bug present and SMT on, data leak possible. See https://www.kernel.org/doc/html/latest/admin-guide/hw-vuln/mds.html for more details.
+Apr 15 22:22:13 nixos kernel: VMSCAPE: SMT on, STIBP is required for full protection. See https://www.kernel.org/doc/html/latest/admin-guide/hw-vuln/vmscape.html for more details.
+Apr 15 22:22:13 nixos kernel: smp: Brought up 1 node, 4 CPUs
+Apr 15 22:22:13 nixos kernel: smpboot: Total of 4 processors activated (20800.76 BogoMIPS)
+Apr 15 22:22:13 nixos kernel: Memory: 7634996K/8294628K available (16384K kernel code, 2646K rwdata, 12592K rodata, 3416K init, 3348K bss, 628868K reserved, 0K cma-reserved)
+Apr 15 22:22:13 nixos kernel: devtmpfs: initialized
+Apr 15 22:22:13 nixos kernel: x86/mm: Memory block size: 128MB
+Apr 15 22:22:13 nixos kernel: ACPI: PM: Registering ACPI NVS region [mem 0x8ad10000-0x8ad52fff] (274432 bytes)
+Apr 15 22:22:13 nixos kernel: clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 1911260446275000 ns
+Apr 15 22:22:13 nixos kernel: futex hash table entries: 1024 (order: 4, 65536 bytes, linear)
+Apr 15 22:22:13 nixos kernel: pinctrl core: initialized pinctrl subsystem
+Apr 15 22:22:13 nixos kernel: PM: RTC time: 21:22:10, date: 2026-04-15
+Apr 15 22:22:13 nixos kernel: NET: Registered PF_NETLINK/PF_ROUTE protocol family
+Apr 15 22:22:13 nixos kernel: DMA: preallocated 1024 KiB GFP_KERNEL pool for atomic allocations
+Apr 15 22:22:13 nixos kernel: DMA: preallocated 1024 KiB GFP_KERNEL|GFP_DMA pool for atomic allocations
+Apr 15 22:22:13 nixos kernel: DMA: preallocated 1024 KiB GFP_KERNEL|GFP_DMA32 pool for atomic allocations
+Apr 15 22:22:13 nixos kernel: audit: initializing netlink subsys (disabled)
+Apr 15 22:22:13 nixos kernel: audit: type=2000 audit(1776288130.005:1): state=initialized audit_enabled=0 res=1
+Apr 15 22:22:13 nixos kernel: thermal_sys: Registered thermal governor 'bang_bang'
+Apr 15 22:22:13 nixos kernel: thermal_sys: Registered thermal governor 'step_wise'
+Apr 15 22:22:13 nixos kernel: thermal_sys: Registered thermal governor 'user_space'
+Apr 15 22:22:13 nixos kernel: cpuidle: using governor menu
+Apr 15 22:22:13 nixos kernel: efi: Freeing EFI boot services memory: 342664K
+Apr 15 22:22:13 nixos kernel: acpiphp: ACPI Hot Plug PCI Controller Driver version: 0.5
+Apr 15 22:22:13 nixos kernel: PCI: ECAM [mem 0xe0000000-0xe9bfffff] (base 0xe0000000) for domain 0000 [bus 00-9b]
+Apr 15 22:22:13 nixos kernel: PCI: Using configuration type 1 for base access
+Apr 15 22:22:13 nixos kernel: core: PMU erratum BJ122, BV98, HSD29 worked around, HT is on
+Apr 15 22:22:13 nixos kernel: kprobes: kprobe jump-optimization is enabled. All kprobes are optimized if possible.
+Apr 15 22:22:13 nixos kernel: HugeTLB: registered 1.00 GiB page size, pre-allocated 0 pages
+Apr 15 22:22:13 nixos kernel: HugeTLB: 16380 KiB vmemmap can be freed for a 1.00 GiB page
+Apr 15 22:22:13 nixos kernel: HugeTLB: registered 2.00 MiB page size, pre-allocated 0 pages
+Apr 15 22:22:13 nixos kernel: HugeTLB: 28 KiB vmemmap can be freed for a 2.00 MiB page
+Apr 15 22:22:13 nixos kernel: ACPI: Disabled all _OSI OS vendors
+Apr 15 22:22:13 nixos kernel: ACPI: Added _OSI(Module Device)
+Apr 15 22:22:13 nixos kernel: ACPI: Added _OSI(Processor Device)
+Apr 15 22:22:13 nixos kernel: ACPI: Added _OSI(Processor Aggregator Device)
+Apr 15 22:22:13 nixos kernel: ACPI: Added _OSI(Darwin)
+Apr 15 22:22:13 nixos kernel: ACPI: 10 ACPI AML tables successfully acquired and loaded
+Apr 15 22:22:13 nixos kernel: ACPI: EC: EC started
+Apr 15 22:22:13 nixos kernel: ACPI: EC: interrupt blocked
+Apr 15 22:22:13 nixos kernel: ACPI: EC: EC_CMD/EC_SC=0x66, EC_DATA=0x62
+Apr 15 22:22:13 nixos kernel: ACPI: EC: Boot ECDT EC used to handle transactions
+Apr 15 22:22:13 nixos kernel: ACPI: BIOS _OSI(Darwin) query honored via DMI
+Apr 15 22:22:13 nixos kernel: ACPI: [Firmware Bug]: BIOS _OSI(Linux) query ignored
+Apr 15 22:22:13 nixos kernel: ACPI: Dynamic OEM Table Load:
+Apr 15 22:22:13 nixos kernel: ACPI: SSDT 0xFFFF8D9C42A9F000 0004F0 (v01 PmRef  Cpu0Cst  00003001 INTL 20100915)
+Apr 15 22:22:13 nixos kernel: ACPI: Dynamic OEM Table Load:
+Apr 15 22:22:13 nixos kernel: ACPI: SSDT 0xFFFF8D9C42A9C000 00067C (v01 PmRef  ApIst    00003000 INTL 20100915)
+Apr 15 22:22:13 nixos kernel: ACPI: Dynamic OEM Table Load:
+Apr 15 22:22:13 nixos kernel: ACPI: SSDT 0xFFFF8D9C4205E200 000119 (v01 PmRef  ApCst    00003000 INTL 20100915)
+Apr 15 22:22:13 nixos kernel: ACPI: Interpreter enabled
+Apr 15 22:22:13 nixos kernel: ACPI: PM: (supports S0 S3 S4 S5)
+Apr 15 22:22:13 nixos kernel: ACPI: Using IOAPIC for interrupt routing
+Apr 15 22:22:13 nixos kernel: PCI: Using host bridge windows from ACPI; if necessary, use "pci=nocrs" and report a bug
+Apr 15 22:22:13 nixos kernel: PCI: Ignoring E820 reservations for host bridge windows
+Apr 15 22:22:13 nixos kernel: ACPI: Enabled 4 GPEs in block 00 to 7F
+Apr 15 22:22:13 nixos kernel: ACPI: PCI Root Bridge [PCI0] (domain 0000 [bus 00-ff])
+Apr 15 22:22:13 nixos kernel: acpi PNP0A08:00: _OSC: OS assumes control of [PCIeHotplug SHPCHotplug AER PCIeCapability LTR DPC]
+Apr 15 22:22:13 nixos kernel: acpi PNP0A08:00: [Firmware Info]: ECAM [mem 0xe0000000-0xe9bfffff] for domain 0000 [bus 00-9b] only partially covers this bridge
+Apr 15 22:22:13 nixos kernel: PCI host bridge to bus 0000:00
+Apr 15 22:22:13 nixos kernel: pci_bus 0000:00: root bus resource [io  0x0000-0x0cf7 window]
+Apr 15 22:22:13 nixos kernel: pci_bus 0000:00: root bus resource [io  0x0d00-0xffff window]
+Apr 15 22:22:13 nixos kernel: pci_bus 0000:00: root bus resource [mem 0x000a0000-0x000fffff window]
+Apr 15 22:22:13 nixos kernel: pci_bus 0000:00: root bus resource [mem 0x8fa00000-0xfeafffff window]
+Apr 15 22:22:13 nixos kernel: pci_bus 0000:00: root bus resource [mem 0xfed40000-0xfed44fff window]
+Apr 15 22:22:13 nixos kernel: pci_bus 0000:00: root bus resource [bus 00-ff]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:00.0: [8086:0a04] type 00 class 0x060000 conventional PCI endpoint
+Apr 15 22:22:13 nixos kernel: pci 0000:00:02.0: [8086:0a2e] type 00 class 0x030000 conventional PCI endpoint
+Apr 15 22:22:13 nixos kernel: pci 0000:00:02.0: BAR 0 [mem 0xb0000000-0xb03fffff 64bit]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:02.0: BAR 2 [mem 0xa0000000-0xafffffff 64bit pref]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:02.0: BAR 4 [io  0x2000-0x203f]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:02.0: Video device with shadowed ROM at [mem 0x000c0000-0x000dffff]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:03.0: [8086:0a0c] type 00 class 0x040300 PCIe Root Complex Integrated Endpoint
+Apr 15 22:22:13 nixos kernel: pci 0000:00:03.0: BAR 0 [mem 0xb0a10000-0xb0a13fff 64bit]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:14.0: [8086:9c31] type 00 class 0x0c0330 conventional PCI endpoint
+Apr 15 22:22:13 nixos kernel: pci 0000:00:14.0: BAR 0 [mem 0xb0a00000-0xb0a0ffff 64bit]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:14.0: PME# supported from D3hot D3cold
+Apr 15 22:22:13 nixos kernel: pci 0000:00:16.0: [8086:9c3a] type 00 class 0x078000 conventional PCI endpoint
+Apr 15 22:22:13 nixos kernel: pci 0000:00:16.0: BAR 0 [mem 0xb0a2a100-0xb0a2a11f 64bit]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:16.0: PME# supported from D0 D3hot D3cold
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1b.0: [8086:9c20] type 00 class 0x040300 PCIe Root Complex Integrated Endpoint
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1b.0: BAR 0 [mem 0xb0a14000-0xb0a17fff 64bit]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1b.0: PME# supported from D0 D3hot D3cold
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.0: [8086:9c10] type 01 class 0x060400 PCIe Root Port
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.0: PCI bridge to [bus 01]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.0: PME# supported from D0 D3hot D3cold
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.1: [8086:9c12] type 01 class 0x060400 PCIe Root Port
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.1: PCI bridge to [bus 02]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.1:   bridge window [mem 0xb0800000-0xb09fffff]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.1:   bridge window [mem 0x90000000-0x9fffffff 64bit pref]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.1: PME# supported from D0 D3hot D3cold
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.2: [8086:9c14] type 01 class 0x060400 PCIe Root Port
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.2: PCI bridge to [bus 03]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.2:   bridge window [mem 0xb0400000-0xb06fffff]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.2: PME# supported from D0 D3hot D3cold
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.4: [8086:9c18] type 01 class 0x060400 PCIe Root Port
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.4: PCI bridge to [bus 05-9b]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.4:   bridge window [io  0x3000-0x5fff]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.4:   bridge window [mem 0xb0b00000-0xbcbfffff]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.4:   bridge window [mem 0xbcc00000-0xc8bfffff 64bit pref]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.4: PME# supported from D0 D3hot D3cold
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.5: [8086:9c1a] type 01 class 0x060400 PCIe Root Port
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.5: PCI bridge to [bus 04]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.5:   bridge window [mem 0xb0700000-0xb07fffff]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.5: PME# supported from D0 D3hot D3cold
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1f.0: [8086:9c43] type 00 class 0x060100 conventional PCI endpoint
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1f.3: [8086:9c22] type 00 class 0x0c0500 conventional PCI endpoint
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1f.3: BAR 0 [mem 0xb0a2a000-0xb0a2a0ff 64bit]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1f.3: BAR 4 [io  0xefa0-0xefbf]
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.0: PCI bridge to [bus 01]
+Apr 15 22:22:13 nixos kernel: pci 0000:02:00.0: [14e4:1570] type 00 class 0x048000 PCIe Endpoint
+Apr 15 22:22:13 nixos kernel: pci 0000:02:00.0: BAR 0 [mem 0xb0900000-0xb090ffff 64bit]
+Apr 15 22:22:13 nixos kernel: pci 0000:02:00.0: BAR 2 [mem 0x90000000-0x9fffffff 64bit pref]
+Apr 15 22:22:13 nixos kernel: pci 0000:02:00.0: BAR 4 [mem 0xb0800000-0xb08fffff 64bit]
+Apr 15 22:22:13 nixos kernel: pci 0000:02:00.0: supports D1
+Apr 15 22:22:13 nixos kernel: pci 0000:02:00.0: PME# supported from D0 D3hot
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.1: PCI bridge to [bus 02]
+Apr 15 22:22:13 nixos kernel: pci 0000:03:00.0: [14e4:43a0] type 00 class 0x028000 PCIe Endpoint
+Apr 15 22:22:13 nixos kernel: pci 0000:03:00.0: BAR 0 [mem 0xb0600000-0xb0607fff 64bit]
+Apr 15 22:22:13 nixos kernel: pci 0000:03:00.0: BAR 2 [mem 0xb0400000-0xb05fffff 64bit]
+Apr 15 22:22:13 nixos kernel: pci 0000:03:00.0: supports D1 D2
+Apr 15 22:22:13 nixos kernel: pci 0000:03:00.0: PME# supported from D0 D1 D2 D3hot D3cold
+Apr 15 22:22:13 nixos kernel: pci 0000:00:1c.2: PCI bridge to [bus 03]
+Apr 15 22:22:13 nixos kernel: pci 0000:05:00.0: [8086:156d] type 01 class 0x060400 PCIe Switch Upstream Port
+Apr 15 22:22:13 nixos kernel: pci 0000:05:00.0: PCI bridge to [bus 06-6b]
+Apr 15 22:22:14 nixos kernel: pci 0000:05:00.0:   bridge window [io  0x3000-0x4fff]
+Apr 15 22:22:14 nixos kernel: pci 0000:05:00.0:   bridge window [mem 0xb0b00000-0xb8bfffff]
+Apr 15 22:22:14 nixos kernel: pci 0000:05:00.0:   bridge window [mem 0xbcc00000-0xc4bfffff 64bit pref]
+Apr 15 22:22:14 nixos kernel: pci 0000:05:00.0: enabling Extended Tags
+Apr 15 22:22:14 nixos kernel: pci 0000:05:00.0: supports D1 D2
+Apr 15 22:22:14 nixos kernel: pci 0000:05:00.0: PME# supported from D0 D1 D2 D3hot D3cold
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.4: PCI bridge to [bus 05-9b]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: [8086:156d] type 01 class 0x060400 PCIe Switch Downstream Port
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: PCI bridge to [bus 07]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0:   bridge window [mem 0xb0b00000-0xb0bfffff]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: enabling Extended Tags
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: supports D1 D2
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: PME# supported from D0 D1 D2 D3hot D3cold
+Apr 15 22:22:14 nixos kernel: pci 0000:06:03.0: [8086:156d] type 01 class 0x060400 PCIe Switch Downstream Port
+Apr 15 22:22:14 nixos kernel: pci 0000:06:03.0: PCI bridge to [bus 08-38]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:03.0:   bridge window [io  0x3000-0x3fff]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:03.0:   bridge window [mem 0xb0c00000-0xb4bfffff]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:03.0:   bridge window [mem 0xbcc00000-0xc0bfffff 64bit pref]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:03.0: enabling Extended Tags
+Apr 15 22:22:14 nixos kernel: pci 0000:06:03.0: supports D1 D2
+Apr 15 22:22:14 nixos kernel: pci 0000:06:03.0: PME# supported from D0 D1 D2 D3hot D3cold
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: [8086:156d] type 01 class 0x060400 PCIe Switch Downstream Port
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: PCI bridge to [bus 39]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: enabling Extended Tags
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: supports D1 D2
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: PME# supported from D0 D1 D2 D3hot D3cold
+Apr 15 22:22:14 nixos kernel: pci 0000:06:05.0: [8086:156d] type 01 class 0x060400 PCIe Switch Downstream Port
+Apr 15 22:22:14 nixos kernel: pci 0000:06:05.0: PCI bridge to [bus 3a-6a]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:05.0:   bridge window [io  0x4000-0x4fff]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:05.0:   bridge window [mem 0xb4c00000-0xb8bfffff]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:05.0:   bridge window [mem 0xc0c00000-0xc4bfffff 64bit pref]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:05.0: enabling Extended Tags
+Apr 15 22:22:14 nixos kernel: pci 0000:06:05.0: supports D1 D2
+Apr 15 22:22:14 nixos kernel: pci 0000:06:05.0: PME# supported from D0 D1 D2 D3hot D3cold
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: [8086:156d] type 01 class 0x060400 PCIe Switch Downstream Port
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: PCI bridge to [bus 6b]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: enabling Extended Tags
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: supports D1 D2
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: PME# supported from D0 D1 D2 D3hot D3cold
+Apr 15 22:22:14 nixos kernel: pci 0000:05:00.0: PCI bridge to [bus 06-6b]
+Apr 15 22:22:14 nixos kernel: pci 0000:07:00.0: [8086:156c] type 00 class 0x088000 PCIe Endpoint
+Apr 15 22:22:14 nixos kernel: pci 0000:07:00.0: BAR 0 [mem 0xb0b00000-0xb0b3ffff]
+Apr 15 22:22:14 nixos kernel: pci 0000:07:00.0: BAR 1 [mem 0xb0b40000-0xb0b40fff]
+Apr 15 22:22:14 nixos kernel: pci 0000:07:00.0: enabling Extended Tags
+Apr 15 22:22:14 nixos kernel: pci 0000:07:00.0: supports D1 D2
+Apr 15 22:22:14 nixos kernel: pci 0000:07:00.0: PME# supported from D0 D1 D2 D3hot D3cold
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: PCI bridge to [bus 07]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:03.0: PCI bridge to [bus 08-38]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: PCI bridge to [bus 39]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:05.0: PCI bridge to [bus 3a-6a]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: PCI bridge to [bus 6b]
+Apr 15 22:22:14 nixos kernel: pci 0000:04:00.0: [144d:1600] type 00 class 0x010601 PCIe Endpoint
+Apr 15 22:22:14 nixos kernel: pci 0000:04:00.0: BAR 5 [mem 0xb0700000-0xb0701fff]
+Apr 15 22:22:14 nixos kernel: pci 0000:04:00.0: ROM [mem 0xffff0000-0xffffffff pref]
+Apr 15 22:22:14 nixos kernel: pci 0000:04:00.0: PME# supported from D3hot D3cold
+Apr 15 22:22:14 nixos kernel: pci 0000:04:00.0: 8.000 Gb/s available PCIe bandwidth, limited by 5.0 GT/s PCIe x2 link at 0000:00:1c.5 (capable of 16.000 Gb/s with 5.0 GT/s PCIe x4 link)
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.5: PCI bridge to [bus 04]
+Apr 15 22:22:14 nixos kernel: ACPI: PCI: Interrupt link LNKA configured for IRQ 0
+Apr 15 22:22:14 nixos kernel: ACPI: PCI: Interrupt link LNKA disabled
+Apr 15 22:22:14 nixos kernel: ACPI: PCI: Interrupt link LNKB configured for IRQ 0
+Apr 15 22:22:14 nixos kernel: ACPI: PCI: Interrupt link LNKB disabled
+Apr 15 22:22:14 nixos kernel: ACPI: PCI: Interrupt link LNKC configured for IRQ 0
+Apr 15 22:22:14 nixos kernel: ACPI: PCI: Interrupt link LNKC disabled
+Apr 15 22:22:14 nixos kernel: ACPI: PCI: Interrupt link LNKD configured for IRQ 0
+Apr 15 22:22:14 nixos kernel: ACPI: PCI: Interrupt link LNKD disabled
+Apr 15 22:22:14 nixos kernel: ACPI: PCI: Interrupt link LNKE configured for IRQ 0
+Apr 15 22:22:14 nixos kernel: ACPI: PCI: Interrupt link LNKE disabled
+Apr 15 22:22:14 nixos kernel: ACPI: PCI: Interrupt link LNKF configured for IRQ 0
+Apr 15 22:22:14 nixos kernel: ACPI: PCI: Interrupt link LNKF disabled
+Apr 15 22:22:14 nixos kernel: ACPI: PCI: Interrupt link LNKG configured for IRQ 0
+Apr 15 22:22:14 nixos kernel: ACPI: PCI: Interrupt link LNKG disabled
+Apr 15 22:22:14 nixos kernel: ACPI: PCI: Interrupt link LNKH configured for IRQ 0
+Apr 15 22:22:14 nixos kernel: ACPI: PCI: Interrupt link LNKH disabled
+Apr 15 22:22:14 nixos kernel: ACPI: EC: interrupt unblocked
+Apr 15 22:22:14 nixos kernel: ACPI: EC: event unblocked
+Apr 15 22:22:14 nixos kernel: ACPI: EC: EC_CMD/EC_SC=0x66, EC_DATA=0x62
+Apr 15 22:22:14 nixos kernel: ACPI: EC: GPE=0x4e
+Apr 15 22:22:14 nixos kernel: ACPI: \_SB_.PCI0.LPCB.EC__: Boot ECDT EC initialization complete
+Apr 15 22:22:14 nixos kernel: ACPI: \_SB_.PCI0.LPCB.EC__: EC: Used to handle transactions and events
+Apr 15 22:22:14 nixos kernel: iommu: Default domain type: Translated
+Apr 15 22:22:14 nixos kernel: iommu: DMA domain TLB invalidation policy: lazy mode
+Apr 15 22:22:14 nixos kernel: ACPI: bus type USB registered
+Apr 15 22:22:14 nixos kernel: usbcore: registered new interface driver usbfs
+Apr 15 22:22:14 nixos kernel: usbcore: registered new interface driver hub
+Apr 15 22:22:14 nixos kernel: usbcore: registered new device driver usb
+Apr 15 22:22:14 nixos kernel: efivars: Registered efivars operations
+Apr 15 22:22:14 nixos kernel: NetLabel: Initializing
+Apr 15 22:22:14 nixos kernel: NetLabel:  domain hash size = 128
+Apr 15 22:22:14 nixos kernel: NetLabel:  protocols = UNLABELED CIPSOv4 CALIPSO
+Apr 15 22:22:14 nixos kernel: NetLabel:  unlabeled traffic allowed by default
+Apr 15 22:22:14 nixos kernel: PCI: Using ACPI for IRQ routing
+Apr 15 22:22:14 nixos kernel: PCI: pci_cache_line_size set to 64 bytes
+Apr 15 22:22:14 nixos kernel: e820: reserve RAM buffer [mem 0x00058000-0x0005ffff]
+Apr 15 22:22:14 nixos kernel: e820: reserve RAM buffer [mem 0x0008f000-0x0008ffff]
+Apr 15 22:22:14 nixos kernel: e820: reserve RAM buffer [mem 0x75df9810-0x77ffffff]
+Apr 15 22:22:14 nixos kernel: e820: reserve RAM buffer [mem 0x75dfa190-0x77ffffff]
+Apr 15 22:22:14 nixos kernel: e820: reserve RAM buffer [mem 0x8ad10000-0x8bffffff]
+Apr 15 22:22:14 nixos kernel: e820: reserve RAM buffer [mem 0x8ad5d000-0x8bffffff]
+Apr 15 22:22:14 nixos kernel: e820: reserve RAM buffer [mem 0x8ae39000-0x8bffffff]
+Apr 15 22:22:14 nixos kernel: e820: reserve RAM buffer [mem 0x8aed2000-0x8bffffff]
+Apr 15 22:22:14 nixos kernel: e820: reserve RAM buffer [mem 0x8af84000-0x8bffffff]
+Apr 15 22:22:14 nixos kernel: e820: reserve RAM buffer [mem 0x8b000000-0x8bffffff]
+Apr 15 22:22:14 nixos kernel: e820: reserve RAM buffer [mem 0x26f600000-0x26fffffff]
+Apr 15 22:22:14 nixos kernel: pci 0000:00:02.0: vgaarb: setting as boot VGA device
+Apr 15 22:22:14 nixos kernel: pci 0000:00:02.0: vgaarb: bridge control possible
+Apr 15 22:22:14 nixos kernel: pci 0000:00:02.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+Apr 15 22:22:14 nixos kernel: vgaarb: loaded
+Apr 15 22:22:14 nixos kernel: clocksource: Switched to clocksource tsc-early
+Apr 15 22:22:14 nixos kernel: VFS: Disk quotas dquot_6.6.0
+Apr 15 22:22:14 nixos kernel: VFS: Dquot-cache hash table entries: 512 (order 0, 4096 bytes)
+Apr 15 22:22:14 nixos kernel: pnp: PnP ACPI init
+Apr 15 22:22:14 nixos kernel: system 00:00: [mem 0xfed00000-0xfed03fff] has been reserved
+Apr 15 22:22:14 nixos kernel: system 00:01: [io  0xffff] has been reserved
+Apr 15 22:22:14 nixos kernel: system 00:01: [io  0x1800-0x187f] has been reserved
+Apr 15 22:22:14 nixos kernel: system 00:01: [io  0x0800-0x087f] has been reserved
+Apr 15 22:22:14 nixos kernel: system 00:03: [mem 0xfed1c000-0xfed1ffff] has been reserved
+Apr 15 22:22:14 nixos kernel: system 00:03: [mem 0xfed10000-0xfed17fff] has been reserved
+Apr 15 22:22:14 nixos kernel: system 00:03: [mem 0xfed18000-0xfed18fff] has been reserved
+Apr 15 22:22:14 nixos kernel: system 00:03: [mem 0xfed19000-0xfed19fff] has been reserved
+Apr 15 22:22:14 nixos kernel: system 00:03: [mem 0xe0000000-0xefffffff] could not be reserved
+Apr 15 22:22:14 nixos kernel: system 00:03: [mem 0xfed20000-0xfed3ffff] has been reserved
+Apr 15 22:22:14 nixos kernel: system 00:03: [mem 0xfed90000-0xfed93fff] could not be reserved
+Apr 15 22:22:14 nixos kernel: system 00:03: [mem 0xfed45000-0xfed8ffff] has been reserved
+Apr 15 22:22:14 nixos kernel: system 00:03: [mem 0xff000000-0xffffffff] could not be reserved
+Apr 15 22:22:14 nixos kernel: system 00:03: [mem 0xfee00000-0xfeefffff] has been reserved
+Apr 15 22:22:14 nixos kernel: system 00:04: [mem 0x20000000-0x201fffff] could not be reserved
+Apr 15 22:22:14 nixos kernel: system 00:04: [mem 0x40000000-0x401fffff] could not be reserved
+Apr 15 22:22:14 nixos kernel: pnp: PnP ACPI: found 5 devices
+Apr 15 22:22:14 nixos kernel: pci 0000:00:02.0: assigning 3 device properties
+Apr 15 22:22:14 nixos kernel: pci 0000:07:00.0: assigning 8 device properties
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1b.0: assigning 4 device properties
+Apr 15 22:22:14 nixos kernel: clocksource: acpi_pm: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 2085701024 ns
+Apr 15 22:22:14 nixos kernel: NET: Registered PF_INET protocol family
+Apr 15 22:22:14 nixos kernel: IP idents hash table entries: 131072 (order: 8, 1048576 bytes, linear)
+Apr 15 22:22:14 nixos kernel: tcp_listen_portaddr_hash hash table entries: 4096 (order: 4, 65536 bytes, linear)
+Apr 15 22:22:14 nixos kernel: Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+Apr 15 22:22:14 nixos kernel: TCP established hash table entries: 65536 (order: 7, 524288 bytes, linear)
+Apr 15 22:22:14 nixos kernel: TCP bind hash table entries: 65536 (order: 9, 2097152 bytes, linear)
+Apr 15 22:22:14 nixos kernel: TCP: Hash tables configured (established 65536 bind 65536)
+Apr 15 22:22:14 nixos kernel: MPTCP token hash table entries: 8192 (order: 6, 196608 bytes, linear)
+Apr 15 22:22:14 nixos kernel: UDP hash table entries: 4096 (order: 5, 131072 bytes, linear)
+Apr 15 22:22:14 nixos kernel: UDP-Lite hash table entries: 4096 (order: 5, 131072 bytes, linear)
+Apr 15 22:22:14 nixos kernel: NET: Registered PF_UNIX/PF_LOCAL protocol family
+Apr 15 22:22:14 nixos kernel: NET: Registered PF_XDP protocol family
+Apr 15 22:22:14 nixos kernel: pci 0000:04:00.0: ROM [mem 0xffff0000-0xffffffff pref]: can't claim; no compatible bridge window
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: bridge window [io  0x1000-0x0fff] to [bus 07] add_size 1000
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: bridge window [mem 0x00100000-0x000fffff 64bit pref] to [bus 07] add_size 200000 add_align 100000
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: bridge window [io  0x1000-0x0fff] to [bus 39] add_size 1000
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: bridge window [mem 0x00100000-0x000fffff 64bit pref] to [bus 39] add_size 200000 add_align 100000
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: bridge window [mem 0x00100000-0x000fffff] to [bus 39] add_size 200000 add_align 100000
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: bridge window [io  0x1000-0x0fff] to [bus 6b] add_size 1000
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: bridge window [mem 0x00100000-0x000fffff 64bit pref] to [bus 6b] add_size 200000 add_align 100000
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: bridge window [mem 0x00100000-0x000fffff] to [bus 6b] add_size 200000 add_align 100000
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.0: PCI bridge to [bus 01]
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.1: PCI bridge to [bus 02]
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.1:   bridge window [mem 0xb0800000-0xb09fffff]
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.1:   bridge window [mem 0x90000000-0x9fffffff 64bit pref]
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.2: PCI bridge to [bus 03]
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.2:   bridge window [mem 0xb0400000-0xb06fffff]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: bridge window [mem size 0x00200000 64bit pref]: can't assign; no space
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: bridge window [mem size 0x00200000 64bit pref]: failed to assign
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: bridge window [mem size 0x00200000]: can't assign; no space
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: bridge window [mem size 0x00200000]: failed to assign
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: bridge window [mem size 0x00200000 64bit pref]: can't assign; no space
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: bridge window [mem size 0x00200000 64bit pref]: failed to assign
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: bridge window [mem size 0x00200000]: can't assign; no space
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: bridge window [mem size 0x00200000]: failed to assign
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: bridge window [mem size 0x00200000 64bit pref]: can't assign; no space
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: bridge window [mem size 0x00200000 64bit pref]: failed to assign
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: bridge window [io  size 0x1000]: can't assign; no space
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: bridge window [io  size 0x1000]: failed to assign
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: bridge window [io  size 0x1000]: can't assign; no space
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: bridge window [io  size 0x1000]: failed to assign
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: bridge window [io  size 0x1000]: can't assign; no space
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: bridge window [io  size 0x1000]: failed to assign
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: bridge window [mem size 0x00200000]: can't assign; no space
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: bridge window [mem size 0x00200000]: failed to assign
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: bridge window [mem size 0x00200000 64bit pref]: can't assign; no space
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: bridge window [mem size 0x00200000 64bit pref]: failed to assign
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: bridge window [io  size 0x1000]: can't assign; no space
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: bridge window [io  size 0x1000]: failed to assign
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: bridge window [mem size 0x00200000]: can't assign; no space
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: bridge window [mem size 0x00200000]: failed to assign
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: bridge window [mem size 0x00200000 64bit pref]: can't assign; no space
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: bridge window [mem size 0x00200000 64bit pref]: failed to assign
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: bridge window [io  size 0x1000]: can't assign; no space
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: bridge window [io  size 0x1000]: failed to assign
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: bridge window [mem size 0x00200000 64bit pref]: can't assign; no space
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: bridge window [mem size 0x00200000 64bit pref]: failed to assign
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: bridge window [io  size 0x1000]: can't assign; no space
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: bridge window [io  size 0x1000]: failed to assign
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: PCI bridge to [bus 07]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0:   bridge window [mem 0xb0b00000-0xb0bfffff]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:03.0: PCI bridge to [bus 08-38]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:03.0:   bridge window [io  0x3000-0x3fff]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:03.0:   bridge window [mem 0xb0c00000-0xb4bfffff]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:03.0:   bridge window [mem 0xbcc00000-0xc0bfffff 64bit pref]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: PCI bridge to [bus 39]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:05.0: PCI bridge to [bus 3a-6a]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:05.0:   bridge window [io  0x4000-0x4fff]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:05.0:   bridge window [mem 0xb4c00000-0xb8bfffff]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:05.0:   bridge window [mem 0xc0c00000-0xc4bfffff 64bit pref]
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: PCI bridge to [bus 6b]
+Apr 15 22:22:14 nixos kernel: pci 0000:05:00.0: PCI bridge to [bus 06-6b]
+Apr 15 22:22:14 nixos kernel: pci 0000:05:00.0:   bridge window [io  0x3000-0x4fff]
+Apr 15 22:22:14 nixos kernel: pci 0000:05:00.0:   bridge window [mem 0xb0b00000-0xb8bfffff]
+Apr 15 22:22:14 nixos kernel: pci 0000:05:00.0:   bridge window [mem 0xbcc00000-0xc4bfffff 64bit pref]
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.4: PCI bridge to [bus 05-9b]
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.4:   bridge window [io  0x3000-0x5fff]
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.4:   bridge window [mem 0xb0b00000-0xbcbfffff]
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.4:   bridge window [mem 0xbcc00000-0xc8bfffff 64bit pref]
+Apr 15 22:22:14 nixos kernel: pci 0000:04:00.0: ROM [mem 0xb0710000-0xb071ffff pref]: assigned
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.5: PCI bridge to [bus 04]
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.5:   bridge window [mem 0xb0700000-0xb07fffff]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:00: resource 4 [io  0x0000-0x0cf7 window]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:00: resource 5 [io  0x0d00-0xffff window]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:00: resource 6 [mem 0x000a0000-0x000fffff window]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:00: resource 7 [mem 0x8fa00000-0xfeafffff window]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:00: resource 8 [mem 0xfed40000-0xfed44fff window]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:02: resource 1 [mem 0xb0800000-0xb09fffff]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:02: resource 2 [mem 0x90000000-0x9fffffff 64bit pref]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:03: resource 1 [mem 0xb0400000-0xb06fffff]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:05: resource 0 [io  0x3000-0x5fff]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:05: resource 1 [mem 0xb0b00000-0xbcbfffff]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:05: resource 2 [mem 0xbcc00000-0xc8bfffff 64bit pref]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:06: resource 0 [io  0x3000-0x4fff]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:06: resource 1 [mem 0xb0b00000-0xb8bfffff]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:06: resource 2 [mem 0xbcc00000-0xc4bfffff 64bit pref]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:07: resource 1 [mem 0xb0b00000-0xb0bfffff]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:08: resource 0 [io  0x3000-0x3fff]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:08: resource 1 [mem 0xb0c00000-0xb4bfffff]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:08: resource 2 [mem 0xbcc00000-0xc0bfffff 64bit pref]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:3a: resource 0 [io  0x4000-0x4fff]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:3a: resource 1 [mem 0xb4c00000-0xb8bfffff]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:3a: resource 2 [mem 0xc0c00000-0xc4bfffff 64bit pref]
+Apr 15 22:22:14 nixos kernel: pci_bus 0000:04: resource 1 [mem 0xb0700000-0xb07fffff]
+Apr 15 22:22:14 nixos kernel: PCI: CLS 256 bytes, default 64
+Apr 15 22:22:14 nixos kernel: DMAR: No ATSR found
+Apr 15 22:22:14 nixos kernel: DMAR: No SATC found
+Apr 15 22:22:14 nixos kernel: DMAR: IOMMU feature pgsel_inv inconsistent
+Apr 15 22:22:14 nixos kernel: DMAR: IOMMU feature sc_support inconsistent
+Apr 15 22:22:14 nixos kernel: DMAR: IOMMU feature pass_through inconsistent
+Apr 15 22:22:14 nixos kernel: DMAR: dmar0: Using Queued invalidation
+Apr 15 22:22:14 nixos kernel: DMAR: dmar1: Using Queued invalidation
+Apr 15 22:22:14 nixos kernel: Trying to unpack rootfs image as initramfs...
+Apr 15 22:22:14 nixos kernel: pci 0000:00:02.0: Adding to iommu group 0
+Apr 15 22:22:14 nixos kernel: pci 0000:00:00.0: Adding to iommu group 1
+Apr 15 22:22:14 nixos kernel: pci 0000:00:03.0: Adding to iommu group 2
+Apr 15 22:22:14 nixos kernel: pci 0000:00:14.0: Adding to iommu group 3
+Apr 15 22:22:14 nixos kernel: pci 0000:00:16.0: Adding to iommu group 4
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1b.0: Adding to iommu group 5
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.0: Adding to iommu group 6
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.1: Adding to iommu group 6
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.2: Adding to iommu group 6
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.4: Adding to iommu group 6
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1c.5: Adding to iommu group 6
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1f.0: Adding to iommu group 7
+Apr 15 22:22:14 nixos kernel: pci 0000:00:1f.3: Adding to iommu group 7
+Apr 15 22:22:14 nixos kernel: pci 0000:02:00.0: Adding to iommu group 6
+Apr 15 22:22:14 nixos kernel: pci 0000:03:00.0: Adding to iommu group 6
+Apr 15 22:22:14 nixos kernel: pci 0000:05:00.0: Adding to iommu group 6
+Apr 15 22:22:14 nixos kernel: pci 0000:06:00.0: Adding to iommu group 6
+Apr 15 22:22:14 nixos kernel: pci 0000:06:03.0: Adding to iommu group 6
+Apr 15 22:22:14 nixos kernel: pci 0000:06:04.0: Adding to iommu group 6
+Apr 15 22:22:14 nixos kernel: pci 0000:06:05.0: Adding to iommu group 6
+Apr 15 22:22:14 nixos kernel: pci 0000:06:06.0: Adding to iommu group 6
+Apr 15 22:22:14 nixos kernel: pci 0000:07:00.0: Adding to iommu group 6
+Apr 15 22:22:14 nixos kernel: pci 0000:04:00.0: Adding to iommu group 6
+Apr 15 22:22:14 nixos kernel: DMAR: Intel(R) Virtualization Technology for Directed I/O
+Apr 15 22:22:14 nixos kernel: PCI-DMA: Using software bounce buffering for IO (SWIOTLB)
+Apr 15 22:22:14 nixos kernel: software IO TLB: mapped [mem 0x000000006d242000-0x0000000071242000] (64MB)
+Apr 15 22:22:14 nixos kernel: Initialise system trusted keyrings
+Apr 15 22:22:14 nixos kernel: workingset: timestamp_bits=40 max_order=21 bucket_order=0
+Apr 15 22:22:14 nixos kernel: Key type asymmetric registered
+Apr 15 22:22:14 nixos kernel: Asymmetric key parser 'x509' registered
+Apr 15 22:22:14 nixos kernel: Block layer SCSI generic (bsg) driver version 0.4 loaded (major 251)
+Apr 15 22:22:14 nixos kernel: io scheduler mq-deadline registered
+Apr 15 22:22:14 nixos kernel: io scheduler kyber registered
+Apr 15 22:22:14 nixos kernel: pcieport 0000:00:1c.0: Enabling MPC IRBNCE
+Apr 15 22:22:14 nixos kernel: pcieport 0000:00:1c.0: Intel PCH root port ACS workaround enabled
+Apr 15 22:22:14 nixos kernel: pcieport 0000:00:1c.1: Enabling MPC IRBNCE
+Apr 15 22:22:14 nixos kernel: pcieport 0000:00:1c.1: Intel PCH root port ACS workaround enabled
+Apr 15 22:22:14 nixos kernel: pcieport 0000:00:1c.2: Enabling MPC IRBNCE
+Apr 15 22:22:14 nixos kernel: pcieport 0000:00:1c.2: Intel PCH root port ACS workaround enabled
+Apr 15 22:22:14 nixos kernel: pcieport 0000:00:1c.4: Enabling MPC IRBNCE
+Apr 15 22:22:14 nixos kernel: pcieport 0000:00:1c.4: Intel PCH root port ACS workaround enabled
+Apr 15 22:22:14 nixos kernel: pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+Apr 15 22:22:14 nixos kernel: pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+Apr 15 22:22:14 nixos kernel: pcieport 0000:06:00.0: pciehp: Slot #0 AttnBtn- PwrCtrl- MRL- AttnInd- PwrInd- HotPlug+ Surprise+ Interlock- NoCompl+ IbPresDis- LLActRep+
+Apr 15 22:22:14 nixos kernel: pcieport 0000:06:03.0: enabling device (0000 -> 0003)
+Apr 15 22:22:14 nixos kernel: pcieport 0000:06:03.0: pciehp: Slot #3 AttnBtn- PwrCtrl- MRL- AttnInd- PwrInd- HotPlug+ Surprise+ Interlock- NoCompl+ IbPresDis- LLActRep+
+Apr 15 22:22:14 nixos kernel: pcieport 0000:06:04.0: pciehp: Slot #4 AttnBtn- PwrCtrl- MRL- AttnInd- PwrInd- HotPlug+ Surprise+ Interlock- NoCompl+ IbPresDis- LLActRep+
+Apr 15 22:22:14 nixos kernel: pcieport 0000:06:05.0: enabling device (0000 -> 0003)
+Apr 15 22:22:14 nixos kernel: pcieport 0000:06:05.0: pciehp: Slot #5 AttnBtn- PwrCtrl- MRL- AttnInd- PwrInd- HotPlug+ Surprise+ Interlock- NoCompl+ IbPresDis- LLActRep+
+Apr 15 22:22:14 nixos kernel: pcieport 0000:06:06.0: pciehp: Slot #6 AttnBtn- PwrCtrl- MRL- AttnInd- PwrInd- HotPlug+ Surprise+ Interlock- NoCompl+ IbPresDis- LLActRep+
+Apr 15 22:22:14 nixos kernel: Serial: 8250/16550 driver, 4 ports, IRQ sharing enabled
+Apr 15 22:22:14 nixos kernel: hpet_acpi_add: no address or irqs in _CRS
+Apr 15 22:22:14 nixos kernel: Linux agpgart interface v0.103
+Apr 15 22:22:14 nixos kernel: ACPI: bus type drm_connector registered
+Apr 15 22:22:14 nixos kernel: usbcore: registered new interface driver usbserial_generic
+Apr 15 22:22:14 nixos kernel: usbserial: USB Serial support registered for generic
+Apr 15 22:22:14 nixos kernel: intel_pstate: Intel P-state driver initializing
+Apr 15 22:22:14 nixos kernel: simple-framebuffer simple-framebuffer.0: [drm] Registered 1 planes with drm panic
+Apr 15 22:22:14 nixos kernel: [drm] Initialized simpledrm 1.0.0 for simple-framebuffer.0 on minor 0
+Apr 15 22:22:14 nixos kernel: fbcon: Deferring console take-over
+Apr 15 22:22:14 nixos kernel: simple-framebuffer simple-framebuffer.0: [drm] fb0: simpledrmdrmfb frame buffer device
+Apr 15 22:22:14 nixos kernel: drop_monitor: Initializing network drop monitor service
+Apr 15 22:22:14 nixos kernel: NET: Registered PF_INET6 protocol family
+Apr 15 22:22:14 nixos kernel: Freeing initrd memory: 26428K
+Apr 15 22:22:14 nixos kernel: Segment Routing with IPv6
+Apr 15 22:22:14 nixos kernel: In-situ OAM (IOAM) with IPv6
+Apr 15 22:22:14 nixos kernel: ENERGY_PERF_BIAS: Set to 'normal', was 'performance'
+Apr 15 22:22:14 nixos kernel: microcode: Current revision: 0x00000026
+Apr 15 22:22:14 nixos kernel: IPI shorthand broadcast: enabled
+Apr 15 22:22:14 nixos kernel: sched_clock: Marking stable (294001580, 1648980)->(333260325, -37609765)
+Apr 15 22:22:14 nixos kernel: registered taskstats version 1
+Apr 15 22:22:14 nixos kernel: Loading compiled-in X.509 certificates
+Apr 15 22:22:14 nixos kernel: Demotion targets for Node 0: null
+Apr 15 22:22:14 nixos kernel: Key type .fscrypt registered
+Apr 15 22:22:14 nixos kernel: Key type fscrypt-provisioning registered
+Apr 15 22:22:14 nixos kernel: PM:   Magic number: 6:167:399
+Apr 15 22:22:14 nixos kernel: RAS: Correctable Errors collector initialized.
+Apr 15 22:22:14 nixos kernel: clk: Disabling unused clocks
+Apr 15 22:22:14 nixos kernel: PM: genpd: Disabling unused power domains
+Apr 15 22:22:14 nixos kernel: Freeing unused decrypted memory: 2028K
+Apr 15 22:22:14 nixos kernel: Freeing unused kernel image (initmem) memory: 3416K
+Apr 15 22:22:14 nixos kernel: Write protecting the kernel read-only data: 30720k
+Apr 15 22:22:14 nixos kernel: Freeing unused kernel image (rodata/data gap) memory: 1744K
+Apr 15 22:22:14 nixos kernel: x86/mm: Checked W+X mappings: passed, no W+X pages found.
+Apr 15 22:22:14 nixos kernel: x86/mm: Checking user space page tables
+Apr 15 22:22:14 nixos kernel: x86/mm: Checked W+X mappings: passed, no W+X pages found.
+Apr 15 22:22:14 nixos kernel: Run /init as init process
+Apr 15 22:22:14 nixos kernel:   with arguments:
+Apr 15 22:22:14 nixos kernel:     /init
+Apr 15 22:22:14 nixos kernel:   with environment:
+Apr 15 22:22:14 nixos kernel:     HOME=/
+Apr 15 22:22:14 nixos kernel:     TERM=linux
+Apr 15 22:22:14 nixos kernel: fbcon: Taking over console
+Apr 15 22:22:14 nixos kernel: Console: switching to colour frame buffer device 160x50
+Apr 15 22:22:14 nixos stage-1-init: [Wed Apr 15 21:22:10 UTC 2026] loading module dm_mod...
+Apr 15 22:22:14 nixos kernel: device-mapper: ioctl: 4.48.0-ioctl (2023-03-01) initialised: dm-devel@lists.linux.dev
+Apr 15 22:22:14 nixos stage-1-init: [Wed Apr 15 21:22:10 UTC 2026] running udev...
+Apr 15 22:22:14 nixos stage-1-init: [Wed Apr 15 21:22:10 UTC 2026] Starting systemd-udevd version 258.5
+Apr 15 22:22:14 nixos kernel: xhci_hcd 0000:00:14.0: xHCI Host Controller
+Apr 15 22:22:14 nixos kernel: xhci_hcd 0000:00:14.0: new USB bus registered, assigned bus number 1
+Apr 15 22:22:14 nixos kernel: xhci_hcd 0000:00:14.0: hcc params 0x200077c1 hci version 0x100 quirks 0x000000000004b810
+Apr 15 22:22:14 nixos kernel: xhci_hcd 0000:00:14.0: xHCI Host Controller
+Apr 15 22:22:14 nixos kernel: xhci_hcd 0000:00:14.0: new USB bus registered, assigned bus number 2
+Apr 15 22:22:14 nixos kernel: xhci_hcd 0000:00:14.0: Host supports USB 3.0 SuperSpeed
+Apr 15 22:22:14 nixos kernel: usb usb1: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.12
+Apr 15 22:22:14 nixos kernel: usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+Apr 15 22:22:14 nixos kernel: usb usb1: Product: xHCI Host Controller
+Apr 15 22:22:14 nixos kernel: usb usb1: Manufacturer: Linux 6.12.80 xhci-hcd
+Apr 15 22:22:14 nixos kernel: usb usb1: SerialNumber: 0000:00:14.0
+Apr 15 22:22:14 nixos kernel: hub 1-0:1.0: USB hub found
+Apr 15 22:22:14 nixos kernel: hub 1-0:1.0: 9 ports detected
+Apr 15 22:22:14 nixos kernel: usb usb2: New USB device found, idVendor=1d6b, idProduct=0003, bcdDevice= 6.12
+Apr 15 22:22:14 nixos kernel: usb usb2: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+Apr 15 22:22:14 nixos kernel: usb usb2: Product: xHCI Host Controller
+Apr 15 22:22:14 nixos kernel: usb usb2: Manufacturer: Linux 6.12.80 xhci-hcd
+Apr 15 22:22:14 nixos kernel: usb usb2: SerialNumber: 0000:00:14.0
+Apr 15 22:22:14 nixos kernel: hub 2-0:1.0: USB hub found
+Apr 15 22:22:14 nixos kernel: hub 2-0:1.0: 4 ports detected
+Apr 15 22:22:14 nixos kernel: SCSI subsystem initialized
+Apr 15 22:22:14 nixos kernel: libata version 3.00 loaded.
+Apr 15 22:22:14 nixos kernel: ahci 0000:04:00.0: version 3.0
+Apr 15 22:22:14 nixos kernel: ahci 0000:04:00.0: AHCI vers 0001.0300, 32 command slots, 6 Gbps, SATA mode
+Apr 15 22:22:14 nixos kernel: ahci 0000:04:00.0: 1/1 ports implemented (port mask 0x1)
+Apr 15 22:22:14 nixos kernel: ahci 0000:04:00.0: flags: 64bit ncq led clo only pio ccc 
+Apr 15 22:22:14 nixos kernel: scsi host0: ahci
+Apr 15 22:22:14 nixos kernel: ata1: SATA max UDMA/133 abar m8192@0xb0700000 port 0xb0700100 irq 16 lpm-pol 1
+Apr 15 22:22:14 nixos kernel: usb 1-3: new full-speed USB device number 2 using xhci_hcd
+Apr 15 22:22:14 nixos kernel: ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+Apr 15 22:22:14 nixos kernel: ata1.00: LPM support broken, forcing max_power
+Apr 15 22:22:14 nixos kernel: ata1.00: unexpected _GTF length (8)
+Apr 15 22:22:14 nixos kernel: ata1.00: ATA-8: APPLE SSD SM0512F, UXM2JA1Q, max UDMA/133
+Apr 15 22:22:14 nixos kernel: ata1.00: 977105060 sectors, multi 16: LBA48 NCQ (depth 32), AA
+Apr 15 22:22:14 nixos kernel: ata1.00: LPM support broken, forcing max_power
+Apr 15 22:22:14 nixos kernel: ata1.00: unexpected _GTF length (8)
+Apr 15 22:22:14 nixos kernel: ata1.00: configured for UDMA/133
+Apr 15 22:22:14 nixos kernel: scsi 0:0:0:0: Direct-Access     ATA      APPLE SSD SM0512 JA1Q PQ: 0 ANSI: 5
+Apr 15 22:22:14 nixos kernel: usb 1-3: New USB device found, idVendor=0a5c, idProduct=4500, bcdDevice= 1.00
+Apr 15 22:22:14 nixos kernel: usb 1-3: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+Apr 15 22:22:14 nixos kernel: usb 1-3: Product: BRCM20702 Hub
+Apr 15 22:22:14 nixos kernel: usb 1-3: Manufacturer: Apple Inc.
+Apr 15 22:22:14 nixos kernel: hub 1-3:1.0: USB hub found
+Apr 15 22:22:14 nixos kernel: hub 1-3:1.0: 3 ports detected
+Apr 15 22:22:14 nixos kernel: sd 0:0:0:0: [sda] 977105060 512-byte logical blocks: (500 GB/466 GiB)
+Apr 15 22:22:14 nixos kernel: sd 0:0:0:0: [sda] 4096-byte physical blocks
+Apr 15 22:22:14 nixos kernel: sd 0:0:0:0: [sda] Write Protect is off
+Apr 15 22:22:14 nixos kernel: sd 0:0:0:0: [sda] Mode Sense: 00 3a 00 00
+Apr 15 22:22:14 nixos kernel: sd 0:0:0:0: [sda] Write cache: enabled, read cache: enabled, doesn't support DPO or FUA
+Apr 15 22:22:14 nixos kernel: sd 0:0:0:0: [sda] Preferred minimum I/O size 4096 bytes
+Apr 15 22:22:14 nixos kernel:  sda: sda1 sda2
+Apr 15 22:22:14 nixos kernel: sd 0:0:0:0: [sda] Attached SCSI disk
+Apr 15 22:22:14 nixos stage-1-init: [Wed Apr 15 21:22:10 UTC 2026] starting device mapper and LVM...
+Apr 15 22:22:14 nixos stage-1-init: [Wed Apr 15 21:22:10 UTC 2026] checking /dev/disk/by-uuid/6d0ce22e-97a0-4e60-ab8f-6ef8ff706b60...
+Apr 15 22:22:14 nixos stage-1-init: [Wed Apr 15 21:22:10 UTC 2026] fsck (busybox 1.36.1)
+Apr 15 22:22:14 nixos stage-1-init: [Wed Apr 15 21:22:10 UTC 2026] [fsck.ext4 (1) -- /mnt-root/] fsck.ext4 -a /dev/disk/by-uuid/6d0ce22e-97a0-4e60-ab8f-6ef8ff706b60
+Apr 15 22:22:14 nixos stage-1-init: [Wed Apr 15 21:22:10 UTC 2026] /dev/disk/by-uuid/6d0ce22e-97a0-4e60-ab8f-6ef8ff706b60: recovering journal
+Apr 15 22:22:14 nixos kernel: usb 2-1: new SuperSpeed USB device number 2 using xhci_hcd
+Apr 15 22:22:14 nixos kernel: usb 2-1: New USB device found, idVendor=0781, idProduct=5583, bcdDevice= 1.00
+Apr 15 22:22:14 nixos kernel: usb 2-1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+Apr 15 22:22:14 nixos kernel: usb 2-1: Product: Ultra Fit
+Apr 15 22:22:14 nixos kernel: usb 2-1: Manufacturer: SanDisk
+Apr 15 22:22:14 nixos kernel: usb 2-1: SerialNumber: 4C531001461024107462
+Apr 15 22:22:14 nixos kernel: usb-storage 2-1:1.0: USB Mass Storage device detected
+Apr 15 22:22:14 nixos kernel: scsi host1: usb-storage 2-1:1.0
+Apr 15 22:22:14 nixos kernel: usbcore: registered new interface driver usb-storage
+Apr 15 22:22:14 nixos kernel: usb 1-5: new full-speed USB device number 3 using xhci_hcd
+Apr 15 22:22:14 nixos kernel: tsc: Refined TSC clocksource calibration: 2600.000 MHz
+Apr 15 22:22:14 nixos kernel: clocksource: tsc: mask: 0xffffffffffffffff max_cycles: 0x257a3c3232d, max_idle_ns: 440795236700 ns
+Apr 15 22:22:14 nixos kernel: clocksource: Switched to clocksource tsc
+Apr 15 22:22:14 nixos kernel: usb 1-5: New USB device found, idVendor=05ac, idProduct=025a, bcdDevice= 2.24
+Apr 15 22:22:14 nixos kernel: usb 1-5: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+Apr 15 22:22:14 nixos kernel: usb 1-5: Product: Apple Internal Keyboard / Trackpad
+Apr 15 22:22:14 nixos kernel: usb 1-5: Manufacturer: Apple Inc.
+Apr 15 22:22:14 nixos kernel: hid: raw HID events driver (C) Jiri Kosina
+Apr 15 22:22:14 nixos kernel: usbcore: registered new interface driver usbhid
+Apr 15 22:22:14 nixos kernel: usbhid: USB HID core driver
+Apr 15 22:22:14 nixos kernel: input: Apple Inc. Apple Internal Keyboard / Trackpad as /devices/pci0000:00/0000:00:14.0/usb1/1-5/1-5:1.0/0003:05AC:025A.0001/input/input0
+Apr 15 22:22:14 nixos kernel: usb 2-2: new SuperSpeed USB device number 3 using xhci_hcd
+Apr 15 22:22:14 nixos kernel: apple 0003:05AC:025A.0001: input,hidraw0: USB HID v1.11 Keyboard [Apple Inc. Apple Internal Keyboard / Trackpad] on usb-0000:00:14.0-5/input0
+Apr 15 22:22:14 nixos kernel: apple 0003:05AC:025A.0002: hidraw1: USB HID v1.11 Device [Apple Inc. Apple Internal Keyboard / Trackpad] on usb-0000:00:14.0-5/input1
+Apr 15 22:22:14 nixos kernel: usb 2-2: New USB device found, idVendor=0846, idProduct=9053, bcdDevice= 1.00
+Apr 15 22:22:14 nixos kernel: usb 2-2: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+Apr 15 22:22:14 nixos kernel: usb 2-2: Product: A6210
+Apr 15 22:22:14 nixos kernel: usb 2-2: Manufacturer: NETGEAR
+Apr 15 22:22:14 nixos kernel: usb 2-2: SerialNumber: 100
+Apr 15 22:22:14 nixos kernel: usb 1-3.1: new full-speed USB device number 4 using xhci_hcd
+Apr 15 22:22:14 nixos kernel: usb 1-3.1: New USB device found, idVendor=05ac, idProduct=820a, bcdDevice= 1.00
+Apr 15 22:22:14 nixos kernel: usb 1-3.1: New USB device strings: Mfr=0, Product=0, SerialNumber=0
+Apr 15 22:22:14 nixos kernel: input: HID 05ac:820a as /devices/pci0000:00/0000:00:14.0/usb1/1-3/1-3.1/1-3.1:1.0/0003:05AC:820A.0003/input/input1
+Apr 15 22:22:14 nixos kernel: hid-generic 0003:05AC:820A.0003: input,hidraw2: USB HID v1.11 Keyboard [HID 05ac:820a] on usb-0000:00:14.0-3.1/input0
+Apr 15 22:22:14 nixos kernel: usb 2-3: new SuperSpeed USB device number 4 using xhci_hcd
+Apr 15 22:22:14 nixos kernel: usb 2-3: New USB device found, idVendor=05ac, idProduct=8406, bcdDevice= 8.20
+Apr 15 22:22:14 nixos kernel: usb 2-3: New USB device strings: Mfr=3, Product=4, SerialNumber=5
+Apr 15 22:22:14 nixos kernel: usb 2-3: Product: Card Reader
+Apr 15 22:22:14 nixos kernel: usb 2-3: Manufacturer: Apple
+Apr 15 22:22:14 nixos kernel: usb 2-3: SerialNumber: 000000000820
+Apr 15 22:22:14 nixos kernel: usb-storage 2-3:1.0: USB Mass Storage device detected
+Apr 15 22:22:14 nixos kernel: scsi host2: usb-storage 2-3:1.0
+Apr 15 22:22:14 nixos stage-1-init: [Wed Apr 15 21:22:11 UTC 2026] /dev/disk/by-uuid/6d0ce22e-97a0-4e60-ab8f-6ef8ff706b60: clean, 2180843/30507008 files, 67222703/122004586 blocks
+Apr 15 22:22:14 nixos stage-1-init: [Wed Apr 15 21:22:11 UTC 2026] mounting /dev/disk/by-uuid/6d0ce22e-97a0-4e60-ab8f-6ef8ff706b60 on /...
+Apr 15 22:22:14 nixos kernel: usb 1-3.2: new full-speed USB device number 5 using xhci_hcd
+Apr 15 22:22:14 nixos kernel: usb 1-3.2: New USB device found, idVendor=05ac, idProduct=820b, bcdDevice= 1.00
+Apr 15 22:22:14 nixos kernel: usb 1-3.2: New USB device strings: Mfr=0, Product=0, SerialNumber=0
+Apr 15 22:22:14 nixos kernel: input: HID 05ac:820b as /devices/pci0000:00/0000:00:14.0/usb1/1-3/1-3.2/1-3.2:1.0/0003:05AC:820B.0004/input/input2
+Apr 15 22:22:14 nixos kernel: hid-generic 0003:05AC:820B.0004: input,hidraw3: USB HID v1.11 Mouse [HID 05ac:820b] on usb-0000:00:14.0-3.2/input0
+Apr 15 22:22:14 nixos kernel: EXT4-fs (sda2): mounted filesystem 6d0ce22e-97a0-4e60-ab8f-6ef8ff706b60 r/w with ordered data mode. Quota mode: none.
+Apr 15 22:22:14 nixos kernel: usb 1-3.3: new full-speed USB device number 6 using xhci_hcd
+Apr 15 22:22:14 nixos kernel: usb 1-3.3: New USB device found, idVendor=05ac, idProduct=8289, bcdDevice= 1.50
+Apr 15 22:22:14 nixos kernel: usb 1-3.3: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+Apr 15 22:22:14 nixos kernel: usb 1-3.3: Product: Bluetooth USB Host Controller
+Apr 15 22:22:14 nixos kernel: usb 1-3.3: Manufacturer: Apple Inc.
+Apr 15 22:22:14 nixos kernel: EXT4-fs (sda2): re-mounted 6d0ce22e-97a0-4e60-ab8f-6ef8ff706b60.
+Apr 15 22:22:14 nixos unknown: booting system configuration /nix/store/zzjxl2zx2rnnkmc3kx8sdg5v1bcxm5w4-nixos-system-nixos-25.11.9067.54170c54449e
+Apr 15 22:22:14 nixos stage-2-init: running activation script...
+Apr 15 22:22:14 nixos kernel: scsi 1:0:0:0: Direct-Access     SanDisk  Ultra Fit        1.00 PQ: 0 ANSI: 6
+Apr 15 22:22:14 nixos kernel: sd 1:0:0:0: [sdb] 60062500 512-byte logical blocks: (30.8 GB/28.6 GiB)
+Apr 15 22:22:14 nixos kernel: sd 1:0:0:0: [sdb] Write Protect is off
+Apr 15 22:22:14 nixos kernel: sd 1:0:0:0: [sdb] Mode Sense: 43 00 00 00
+Apr 15 22:22:14 nixos kernel: sd 1:0:0:0: [sdb] Write cache: disabled, read cache: enabled, doesn't support DPO or FUA
+Apr 15 22:22:14 nixos kernel:  sdb: sdb1 sdb2
+Apr 15 22:22:14 nixos kernel: sd 1:0:0:0: [sdb] Attached SCSI removable disk
+Apr 15 22:22:14 nixos stage-2-init: setting up /etc...
+Apr 15 22:22:14 nixos systemd[1]: Inserted module 'autofs4'
+Apr 15 22:22:14 nixos kernel: scsi 2:0:0:0: Direct-Access     APPLE    SD Card Reader   3.00 PQ: 0 ANSI: 6
+Apr 15 22:22:14 nixos kernel: sd 2:0:0:0: [sdc] Media removed, stopped polling
+Apr 15 22:22:14 nixos kernel: sd 2:0:0:0: [sdc] Attached SCSI removable disk
+Apr 15 22:22:14 nixos systemd[1]: systemd 258.5 running in system mode (+PAM +AUDIT -SELINUX +APPARMOR +IMA +IPE +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN -IPTC +KMOD +LIBCRYPTSETUP +LIBCRYPTSETUP_PLUGINS +LIBFDISK +PCRE2 +PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD +BPF_FRAMEWORK -BTF -XKBCOMMON +UTMP -SYSVINIT +LIBARCHIVE)
+Apr 15 22:22:14 nixos systemd[1]: Detected architecture x86-64.
+Apr 15 22:22:14 nixos systemd[1]: Hostname set to <nixos>.
+Apr 15 22:22:14 nixos systemd[1]: bpf-restrict-fs: LSM BPF program attached
+Apr 15 22:22:14 nixos systemd[1]: /etc/systemd/system/cups.socket:5: ListenStream= references a path below legacy directory /var/run/, updating /var/run/cups/cups.sock → /run/cups/cups.sock; please update the unit file accordingly.
+Apr 15 22:22:14 nixos systemd[1]: Queued start job for default target Multi-User System.
+Apr 15 22:22:14 nixos systemd[1]: Created slice Slice /system/getty.
+Apr 15 22:22:14 nixos systemd[1]: Created slice Slice /system/modprobe.
+Apr 15 22:22:14 nixos systemd[1]: Created slice Slice /system/systemd-fsck.
+Apr 15 22:22:14 nixos systemd[1]: Created slice User and Session Slice.
+Apr 15 22:22:14 nixos systemd[1]: Started Dispatch Password Requests to Console Directory Watch.
+Apr 15 22:22:14 nixos systemd[1]: Started Forward Password Requests to Wall Directory Watch.
+Apr 15 22:22:14 nixos systemd[1]: Expecting device /dev/disk/by-uuid/B4F5-DAC1...
+Apr 15 22:22:14 nixos systemd[1]: Expecting device /dev/input/mice...
+Apr 15 22:22:14 nixos systemd[1]: Reached target Local Encrypted Volumes.
+Apr 15 22:22:14 nixos systemd[1]: Reached target Virtual Machines and Containers.
+Apr 15 22:22:14 nixos systemd[1]: Reached target Path Units.
+Apr 15 22:22:14 nixos systemd[1]: Reached target Remote File Systems.
+Apr 15 22:22:14 nixos systemd[1]: Reached target Slice Units.
+Apr 15 22:22:14 nixos systemd[1]: Listening on Process Core Dump Socket.
+Apr 15 22:22:14 nixos systemd[1]: Listening on Credential Encryption/Decryption.
+Apr 15 22:22:14 nixos systemd[1]: Listening on Journal Audit Socket.
+Apr 15 22:22:14 nixos systemd[1]: Listening on Journal Socket (/dev/log).
+Apr 15 22:22:14 nixos systemd[1]: Listening on Journal Sockets.
+Apr 15 22:22:14 nixos systemd[1]: Listening on Userspace Out-Of-Memory (OOM) Killer Socket.
+Apr 15 22:22:14 nixos systemd[1]: Make TPM PCR Policy skipped, unmet condition check ConditionSecurity=measured-uki
+Apr 15 22:22:14 nixos systemd[1]: Listening on udev Control Socket.
+Apr 15 22:22:14 nixos systemd[1]: Listening on udev Kernel Socket.
+Apr 15 22:22:14 nixos systemd[1]: Mounting Huge Pages File System...
+Apr 15 22:22:14 nixos systemd[1]: Mounting POSIX Message Queue File System...
+Apr 15 22:22:14 nixos systemd[1]: Mounting Kernel Debug File System...
+Apr 15 22:22:14 nixos systemd[1]: Mounting Kernel Trace File System...
+Apr 15 22:22:14 nixos systemd[1]: Starting Create List of Static Device Nodes...
+Apr 15 22:22:14 nixos systemd[1]: Starting Load Kernel Module configfs...
+Apr 15 22:22:14 nixos systemd[1]: Load Kernel Module drm skipped, unmet condition check ConditionKernelModuleLoaded=!drm
+Apr 15 22:22:14 nixos systemd[1]: Starting Load Kernel Module efi_pstore...
+Apr 15 22:22:14 nixos (modprobe)[377]: modprobe@configfs.service: modprobe@configfs.service: Unable to locate executable 'modprobe': No such file or directory
+Apr 15 22:22:14 nixos systemd[1]: Starting Load Kernel Module fuse...
+Apr 15 22:22:14 nixos (modprobe)[378]: modprobe@efi_pstore.service: modprobe@efi_pstore.service: Unable to locate executable 'modprobe': No such file or directory
+Apr 15 22:22:14 nixos systemd[1]: File System Check on Root Device skipped, unmet condition check ConditionPathIsReadWrite=!/
+Apr 15 22:22:14 nixos systemd[1]: Clear Stale Hibernate Storage Info skipped, unmet condition check ConditionPathExists=/sys/firmware/efi/efivars/HibernateLocation-8cf2644b-4b0b-428f-9387-6d876050dc67
+Apr 15 22:22:14 nixos systemd[1]: Starting Journal Service...
+Apr 15 22:22:14 nixos (modprobe)[379]: modprobe@fuse.service: modprobe@fuse.service: Unable to locate executable 'modprobe': No such file or directory
+Apr 15 22:22:14 nixos systemd[1]: Starting Load Kernel Modules...
+Apr 15 22:22:14 nixos systemd[1]: Starting Remount Root and Kernel File Systems...
+Apr 15 22:22:14 nixos systemd[1]: Early TPM SRK Setup skipped, unmet condition check ConditionSecurity=measured-uki
+Apr 15 22:22:14 nixos systemd[1]: Starting Coldplug All udev Devices...
+Apr 15 22:22:14 nixos systemd[1]: Mounted Huge Pages File System.
+Apr 15 22:22:14 nixos systemd-journald[380]: Collecting audit messages is enabled.
+Apr 15 22:22:14 nixos systemd[1]: Mounted POSIX Message Queue File System.
+Apr 15 22:22:14 nixos systemd[1]: Mounted Kernel Debug File System.
+Apr 15 22:22:14 nixos systemd[1]: Mounted Kernel Trace File System.
+Apr 15 22:22:14 nixos systemd[1]: Finished Create List of Static Device Nodes.
+Apr 15 22:22:14 nixos systemd[1]: modprobe@configfs.service: Deactivated successfully.
+Apr 15 22:22:14 nixos systemd[1]: Finished Load Kernel Module configfs.
+Apr 15 22:22:14 nixos systemd[1]: modprobe@efi_pstore.service: Deactivated successfully.
+Apr 15 22:22:14 nixos systemd[1]: Finished Load Kernel Module efi_pstore.
+Apr 15 22:22:14 nixos systemd[1]: modprobe@fuse.service: Deactivated successfully.
+Apr 15 22:22:14 nixos systemd[1]: Finished Load Kernel Module fuse.
+Apr 15 22:22:14 nixos systemd[1]: FUSE Control File System skipped, unmet condition check ConditionPathExists=/sys/fs/fuse/connections
+Apr 15 22:22:14 nixos systemd[1]: Kernel Configuration File System skipped, unmet condition check ConditionPathExists=/sys/kernel/config
+Apr 15 22:22:14 nixos kernel: EXT4-fs (sda2): re-mounted 6d0ce22e-97a0-4e60-ab8f-6ef8ff706b60.
+Apr 15 22:22:14 nixos systemd[1]: Starting Create Static Device Nodes in /dev gracefully...
+Apr 15 22:22:14 nixos systemd[1]: Finished Remount Root and Kernel File Systems.
+Apr 15 22:22:14 nixos systemd[1]: Platform Persistent Storage Archival skipped, unmet condition check ConditionDirectoryNotEmpty=/sys/fs/pstore
+Apr 15 22:22:14 nixos systemd[1]: Starting Load/Save OS Random Seed...
+Apr 15 22:22:14 nixos systemd[1]: Starting Network Time Synchronization...
+Apr 15 22:22:14 nixos systemd[1]: TPM SRK Setup skipped, unmet condition check ConditionSecurity=measured-uki
+Apr 15 22:22:14 nixos systemd[1]: Finished Create Static Device Nodes in /dev gracefully.
+Apr 15 22:22:14 nixos systemd[1]: Starting Create Static Device Nodes in /dev...
+Apr 15 22:22:14 nixos systemd[1]: Finished Load/Save OS Random Seed.
+Apr 15 22:22:14 nixos systemd[1]: First Boot Complete skipped, unmet condition check ConditionFirstBoot=yes
+Apr 15 22:22:14 nixos systemd[1]: Finished Create Static Device Nodes in /dev.
+Apr 15 22:22:14 nixos systemd[1]: Reached target Preparation for Local File Systems.
+Apr 15 22:22:14 nixos systemd[1]: Starting Rule-based Manager for Device Events and Files...
+Apr 15 22:22:14 nixos systemd[1]: Started Journal Service.
+Apr 15 22:22:14 nixos kernel: loop: module loaded
+Apr 15 22:22:14 nixos systemd-journald[380]: Received client request to flush runtime journal.
+Apr 15 22:22:14 nixos systemd-journald[380]: File /var/log/journal/8db5f21542484d84a1e7d83dddef1e30/system.journal corrupted or uncleanly shut down, renaming and replacing.
+Apr 15 22:22:14 nixos kernel: Adding 8388604k swap on /var/lib/swapfile.  Priority:-2 extents:67 across:64225280k SS
+Apr 15 22:22:14 nixos kernel: input: Lid Switch as /devices/LNXSYSTM:00/LNXSYBUS:00/PNP0C0D:00/input/input3
+Apr 15 22:22:14 nixos kernel: ACPI: button: Lid Switch [LID0]
+Apr 15 22:22:14 nixos kernel: input: Power Button as /devices/LNXSYSTM:00/LNXSYBUS:00/PNP0C0C:00/input/input4
+Apr 15 22:22:14 nixos kernel: ACPI: button: Power Button [PWRB]
+Apr 15 22:22:14 nixos kernel: input: Sleep Button as /devices/LNXSYSTM:00/LNXSYBUS:00/PNP0C0E:00/input/input5
+Apr 15 22:22:14 nixos kernel: ACPI: button: Sleep Button [SLPB]
+Apr 15 22:22:14 nixos kernel: input: Power Button as /devices/LNXSYSTM:00/LNXPWRBN:00/input/input6
+Apr 15 22:22:14 nixos kernel: ACPI: button: Power Button [PWRF]
+Apr 15 22:22:14 nixos kernel: ACPI: AC: AC Adapter [ADP1] (on-line)
+Apr 15 22:22:14 nixos kernel: rtc_cmos 00:02: RTC can wake from S4
+Apr 15 22:22:14 nixos kernel: rtc_cmos 00:02: registered as rtc0
+Apr 15 22:22:14 nixos kernel: rtc_cmos 00:02: setting system clock to 2026-04-15T21:22:14 UTC (1776288134)
+Apr 15 22:22:14 nixos kernel: rtc_cmos 00:02: alarms up to one month, y3k, 242 bytes nvram
+Apr 15 22:22:14 nixos kernel: ACPI: bus type thunderbolt registered
+Apr 15 22:22:14 nixos systemd-journald[380]: Time jumped backwards, rotating.
+Apr 15 22:22:14 nixos kernel: smbus_hc ACPI0001:00: SBS HC: offset = 0x20, query_bit = 0x10
+Apr 15 22:22:14 nixos kernel: thunderbolt 0000:07:00.0: device link creation from 0000:06:00.0 failed
+Apr 15 22:22:14 nixos kernel: i801_smbus 0000:00:1f.3: SMBus using PCI interrupt
+Apr 15 22:22:14 nixos kernel: pstore: Using crash dump compression: deflate
+Apr 15 22:22:14 nixos kernel: snd_hda_codec_cirrus hdaudioC0D0: autoconfig for CS4208: line_outs=2 (0x12/0x13/0x0/0x0/0x0) type:speaker
+Apr 15 22:22:14 nixos kernel: snd_hda_codec_cirrus hdaudioC0D0:    speaker_outs=0 (0x0/0x0/0x0/0x0/0x0)
+Apr 15 22:22:14 nixos kernel: snd_hda_codec_cirrus hdaudioC0D0:    hp_outs=1 (0x10/0x0/0x0/0x0/0x0)
+Apr 15 22:22:14 nixos kernel: snd_hda_codec_cirrus hdaudioC0D0:    mono: mono_out=0x0
+Apr 15 22:22:14 nixos kernel: snd_hda_codec_cirrus hdaudioC0D0:    dig-out=0x21/0x0
+Apr 15 22:22:14 nixos kernel: snd_hda_codec_cirrus hdaudioC0D0:    inputs:
+Apr 15 22:22:14 nixos kernel: snd_hda_codec_cirrus hdaudioC0D0:      Mic=0x18
+Apr 15 22:22:14 nixos kernel: snd_hda_codec_cirrus hdaudioC0D0:      Internal Mic=0x1c
+Apr 15 22:22:14 nixos kernel: input: HDA Intel PCH Mic as /devices/pci0000:00/0000:00:1b.0/sound/card0/input7
+Apr 15 22:22:14 nixos kernel: input: HDA Intel PCH Headphone as /devices/pci0000:00/0000:00:1b.0/sound/card0/input8
+Apr 15 22:22:14 nixos kernel: input: HDA Intel PCH SPDIF as /devices/pci0000:00/0000:00:1b.0/sound/card0/input9
+Apr 15 22:22:14 nixos kernel: ACPI: Smart Battery System [SBS0]: Battery Slot [BAT0] (battery present)
+Apr 15 22:22:15 nixos kernel: pstore: Registered efi_pstore as persistent store backend
+Apr 15 22:22:15 nixos kernel: i915 0000:00:02.0: [drm] Found HASWELL/ULT (device ID 0a2e) display version 7.00 stepping N/A
+Apr 15 22:22:15 nixos kernel: i915 0000:00:02.0: [drm] VT-d active for gfx access
+Apr 15 22:22:15 nixos kernel: Console: switching to colour dummy device 80x25
+Apr 15 22:22:15 nixos kernel: iTCO_wdt iTCO_wdt.1.auto: unable to reset NO_REBOOT flag, device disabled by hardware/BIOS
+Apr 15 22:22:15 nixos kernel: RAPL PMU: API unit is 2^-32 Joules, 4 fixed counters, 655360 ms ovfl timer
+Apr 15 22:22:15 nixos kernel: RAPL PMU: hw unit of domain pp0-core 2^-14 Joules
+Apr 15 22:22:15 nixos kernel: RAPL PMU: hw unit of domain package 2^-14 Joules
+Apr 15 22:22:15 nixos kernel: RAPL PMU: hw unit of domain dram 2^-14 Joules
+Apr 15 22:22:15 nixos kernel: RAPL PMU: hw unit of domain pp1-gpu 2^-14 Joules
+Apr 15 22:22:15 nixos kernel: i915 0000:00:02.0: vgaarb: deactivate vga console
+Apr 15 22:22:15 nixos kernel: i915 0000:00:02.0: [drm] Using Transparent Hugepages
+Apr 15 22:22:15 nixos kernel: i915 0000:00:02.0: [drm] DMAR active, disabling use of stolen memory
+Apr 15 22:22:15 nixos kernel: cryptd: max_cpu_qlen set to 1000
+Apr 15 22:22:15 nixos kernel: AES CTR mode by8 optimization enabled
+Apr 15 22:22:15 nixos kernel: applesmc: key=571 fan=1 temp=32 index=31 acc=0 lux=2 kbd=1
+Apr 15 22:22:15 nixos kernel: applesmc applesmc.768: hwmon_device_register() is deprecated. Please convert the driver to use hwmon_device_register_with_info().
+Apr 15 22:22:15 nixos kernel: i915 0000:00:02.0: vgaarb: VGA decodes changed: olddecodes=io+mem,decodes=io+mem:owns=io+mem
+Apr 15 22:22:15 nixos kernel: Creating 1 MTD partitions on "intel-spi":
+Apr 15 22:22:15 nixos kernel: 0x000000000000-0x000000800000 : "BIOS"
+Apr 15 22:22:15 nixos kernel: intel_rapl_common: Found RAPL domain package
+Apr 15 22:22:15 nixos kernel: intel_rapl_common: Found RAPL domain core
+Apr 15 22:22:15 nixos kernel: intel_rapl_common: Found RAPL domain uncore
+Apr 15 22:22:15 nixos kernel: intel_rapl_common: Found RAPL domain dram
+Apr 15 22:22:15 nixos kernel: i915 0000:00:02.0: [drm] Skipping intel_backlight registration
+Apr 15 22:22:15 nixos kernel: [drm] Initialized i915 1.6.0 for 0000:00:02.0 on minor 1
+Apr 15 22:22:15 nixos kernel: ACPI: video: Video Device [IGPU] (multi-head: yes  rom: no  post: no)
+Apr 15 22:22:15 nixos kernel: input: Video Bus as /devices/LNXSYSTM:00/LNXSYBUS:00/PNP0A08:00/LNXVIDEO:00/input/input10
+Apr 15 22:22:15 nixos kernel: acpi device:02: registered as cooling_device5
+Apr 15 22:22:15 nixos kernel: fbcon: i915drmfb (fb0) is primary device
+Apr 15 22:22:15 nixos kernel: Console: switching to colour frame buffer device 160x50
+Apr 15 22:22:15 nixos kernel: i915 0000:00:02.0: [drm] fb0: i915drmfb frame buffer device
+Apr 15 22:22:15 nixos kernel: usbcore: registered new interface driver uas
+Apr 15 22:22:15 nixos kernel: snd_hda_intel 0000:00:03.0: bound 0000:00:02.0 (ops i915_audio_component_bind_ops [i915])
+Apr 15 22:22:15 nixos kernel: usbcore: registered new device driver apple-mfi-fastcharge
+Apr 15 22:22:15 nixos kernel: input: HDA Intel HDMI HDMI/DP,pcm=3 as /devices/pci0000:00/0000:00:03.0/sound/card1/input11
+Apr 15 22:22:15 nixos kernel: input: HDA Intel HDMI HDMI/DP,pcm=7 as /devices/pci0000:00/0000:00:03.0/sound/card1/input12
+Apr 15 22:22:15 nixos kernel: input: HDA Intel HDMI HDMI/DP,pcm=8 as /devices/pci0000:00/0000:00:03.0/sound/card1/input13
+Apr 15 22:22:15 nixos kernel: pcieport 0000:00:1c.0: Enabling MPC IRBNCE
+Apr 15 22:22:15 nixos kernel: pcieport 0000:00:1c.0: Intel PCH root port ACS workaround enabled
+Apr 15 22:22:16 nixos kernel: input: bcm5974 as /devices/pci0000:00/0000:00:14.0/usb1/1-5/1-5:1.2/input/input14
+Apr 15 22:22:16 nixos kernel: usbcore: registered new interface driver bcm5974
+Apr 15 22:22:16 nixos kernel: mousedev: PS/2 mouse device common for all mice
+Apr 15 22:22:16 nixos kernel: cfg80211: Loading compiled-in X.509 certificates for regulatory database
+Apr 15 22:22:16 nixos kernel: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+Apr 15 22:22:16 nixos kernel: Loaded X.509 cert 'wens: 61c038651aabdcf94bd0ac7ff06c7248db18c600'
+Apr 15 22:22:16 nixos kernel: usb 2-2: reset SuperSpeed USB device number 3 using xhci_hcd
+Apr 15 22:22:16 nixos kernel: mt76x2u 2-2:1.0: ASIC revision: 76120044
+Apr 15 22:22:16 nixos kernel: mt76x2u 2-2:1.0: ROM patch build: 20141115060606a
+Apr 15 22:22:16 nixos kernel: mt76x2u 2-2:1.0: Firmware Version: 0.0.00
+Apr 15 22:22:16 nixos kernel: mt76x2u 2-2:1.0: Build: 1
+Apr 15 22:22:16 nixos kernel: mt76x2u 2-2:1.0: Build Time: 201507311614____
+Apr 15 22:22:16 nixos kernel: Bluetooth: Core ver 2.22
+Apr 15 22:22:16 nixos kernel: NET: Registered PF_BLUETOOTH protocol family
+Apr 15 22:22:16 nixos kernel: Bluetooth: HCI device and connection manager initialized
+Apr 15 22:22:16 nixos kernel: Bluetooth: HCI socket layer initialized
+Apr 15 22:22:16 nixos kernel: Bluetooth: L2CAP socket layer initialized
+Apr 15 22:22:16 nixos kernel: Bluetooth: SCO socket layer initialized
+Apr 15 22:22:16 nixos kernel: usbcore: registered new interface driver btusb
+Apr 15 22:22:17 nixos kernel: usb 1-3.1: USB disconnect, device number 4
+Apr 15 22:22:17 nixos kernel: Bluetooth: hci0: BCM: chip id 73 build 1127
+Apr 15 22:22:17 nixos kernel: Bluetooth: hci0: BCM: product 05ac:8289
+Apr 15 22:22:17 nixos kernel: Bluetooth: hci0: BCM: features 0x07
+Apr 15 22:22:17 nixos kernel: Bluetooth: hci0: BCM20702B0 Generic USB Class 1 @ 20 MHz
+Apr 15 22:22:17 nixos kernel: usb 1-3.2: USB disconnect, device number 5
+Apr 15 22:22:17 nixos kernel: ieee80211 phy0: Selected rate control algorithm 'minstrel_ht'
+Apr 15 22:22:17 nixos kernel: usbcore: registered new interface driver mt76x2u
+Apr 15 22:22:17 nixos kernel: mt76x2u 2-2:1.0 wlp0s20u2: renamed from wlan0
+Apr 15 22:22:18 nixos kernel: NET: Registered PF_PACKET protocol family
+Apr 15 22:22:27 nixos kernel: wlp0s20u2: authenticate with 60:83:e7:3f:8a:8b (local address=2c:30:33:a7:29:5a)
+Apr 15 22:22:27 nixos kernel: wlp0s20u2: send auth to 60:83:e7:3f:8a:8b (try 1/3)
+Apr 15 22:22:27 nixos kernel: wlp0s20u2: authenticated
+Apr 15 22:22:27 nixos kernel: wlp0s20u2: associate with 60:83:e7:3f:8a:8b (try 1/3)
+Apr 15 22:22:27 nixos kernel: wlp0s20u2: RX AssocResp from 60:83:e7:3f:8a:8b (capab=0x1511 status=0 aid=8)
+Apr 15 22:22:27 nixos kernel: wlp0s20u2: associated
+Apr 15 22:22:27 nixos kernel: wlp0s20u2: Limiting TX power to 20 (23 - 3) dBm as advertised by 60:83:e7:3f:8a:8b
+Apr 15 23:00:17 nixos kernel: brcmfmac: loading out-of-tree module taints kernel.
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffd139c2800000
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 EFI state: clk_ctl_st=0x00010040 min_res=0x0000013b max_res=0x0000013f res_state=0x0000013b
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 EFI PMU: pmustatus=0x0000002a pmucontrol=0x01770181
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[0]=0x00000000
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[1]=0x00000000
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[2]=0x00000c31
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[3]=0x00133333
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[4]=0x06060c03
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[5]=0x00000606
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.40: allowing watchdog reset (IOMMU group 8 is crash-protective)
+Apr 15 23:00:17 nixos kernel: brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.Apple Inc.-MacBookPro11,1.bin failed with error -2
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffd139c2800000
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: NVRAM loaded, len=228, writing to TCM 0x9ff1c
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: NVRAM marker at ramsize-4 = 0xffc70038 (NVRAM length token, not zeroed)
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pre-ARM: clk_ctl_st=0x00050040 res_state=0x0000013b HT=NO
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.47 pre-BBPLL: clk_ctl_st=0x00050040 min_res=0x0000013b max_res=0x0000013f res_state=0x0000013b pmustatus=0x0000002a HT=NO
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.47: raising max_res_mask+min_res_mask to 0xFFFFF
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.47 BBPLL: pmustatus=0x0000002e clk_ctl_st=0x01030040 HAVEHT=YES (retries=1)
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.47: BBPLL up — proceeding to ARM release (B. injected via activate)
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.65: BusMaster enabled; CMD was=0x0006 now=0x0006
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77: EP LINK_STATUS_CTRL=0x10110143 ASPM_bits=0x3
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77: ASPM disabled (was 0x3) before ARM
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77: PCIe2 pre-ARM: INTMASK=0x0 MBINT=0x0 MBMASK=0x0 H2D0=0xffffffff H2D1=0xffffffff IOCTL=0x1 RESET=0x0
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77: PCIe2 BAC regs cleared (INTMASK/MBMASK/H2D0/H2D1 → 0)
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.65 activate: rstvec=0xb80ef000 to TCM[0]; CMD=0x0006 (BusMaster preserved)
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.47 ARM-release: IOCTL=0x00000001 RESET_CTL=0x00000000 ARM_CLKST=0x070b0040
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77: RP=0000:00:1c.2 masked CMD BC DevCtl AER; RootCtl=0x0000 ext_cap0=0x20000000 nvram_token=0xffc70038 EP_CMD=0x0006
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77: TCM baseline: sharedram[0x9FFFC]=0xffc70038 magic[0x9D0A4]=0x55582631 fw_init[0x9F0CC]=0x870ca017 console_ptr[0x9cc5c]=0x5354414b
+Apr 15 23:00:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77: starting FW wait + masking loop (30s max, re-mask every 10ms)
+Apr 15 23:00:19 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+2000ms: sharedram=0xffc70038 fw_init=0x870ca017 EP_CMD=0x0006
+Apr 15 23:00:19 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+2000ms: TCM[0x9d000] CHANGED 0x00002f5c → 0x000043b1
+Apr 15 23:00:19 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+2000ms: TCM[0x9cc5c] CHANGED 0x5354414b → 0x8009ccbe
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77: T+3000ms full console dump 0x9cc00..0x9d100
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cc00: 5354414b 5354414b 5354414b 5354414b  |KATSKATSKATSKATS|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cc10: 5354414b 5354414b 5354414b 5354414b  |KATSKATSKATSKATS|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cc20: 5354414b 5354414b 5354414b 5354414b  |KATSKATSKATSKATS|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cc30: 5354414b 5354414b 5354414b 5354414b  |KATSKATSKATSKATS|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cc40: 5354414b 5354414b 5354414b 5354414b  |KATSKATSKATSKATS|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cc50: 5354414b 5354414b 00303030 8009ccbe  |KATSKATS000.....|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cc60: 00000000 0000000a 0009ccc7 8009ccbe  |................|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cc70: 32623131 31306132 10a22b11 00000010  |11b22a01.+......|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cc80: 0009cd0e 0009cec0 000475b5 0009cef0  |.........u......|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cc90: 00000000 00000713 00000000 00040010  |................|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cca0: 000629c0 0009af80 0000000a 0000185d  |.)..........]...|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9ccb0: 00040010 00000057 00062910 00000a87  |....W....)......|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9ccc0: 38353231 302e3838 43203030 63706968  |125888.000 Chipc|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9ccd0: 6572203a 33342076 6163202c 30207370  |: rev 43, caps 0|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cce0: 36383578 30303038 63202c31 73706968  |x58680001, chips|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9ccf0: 78302074 64346139 756d7020 20766572  |t 0x9a4d pmurev |
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cd00: 202c3731 63756d70 20737061 30317830  |17, pmucaps 0x10|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cd10: 62323261 000a3131 0000000a 0000185d  |a22b11......]...|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cd20: 00040010 00000057 00062910 00000a87  |....W....)......|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cd30: 38353231 302e3838 43203030 63706968  |125888.000 Chipc|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cd40: 00303030 8009cda6 00000000 0000000a  |000.............|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cd50: 0009cdaf 8009cda6 0003fffc 0009cda8  |................|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cd60: 00000000 00000713 00000003 0003ffff  |................|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cd70: 0780e600 00062910 18001000 00058ef0  |.....)..........|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cd80: 0009cdb3 000001f6 000629c0 0009af80  |.........)......|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cd90: 0000000a 0000185d 000001f6 0000001b  |....]...........|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cda0: 00062910 00000a87 38353231 302e3838  |.)......125888.0|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cdb0: 77203030 72705f6c 2065626f 6c6c6163  |00 wl_probe call|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cdc0: 000a6465 64656963 5f6c676e 626f7270  |ed..ciedngl_prob|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cdd0: 61632065 64656c6c 0000000a 00000713  |e called........|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cde0: 00000000 0003ffff 000629c0 0009af80  |.........)......|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cdf0: 0000000a 0000185d 0003ffff 00000051  |....].......Q...|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9ce00: 00062910 00000a87 38353231 302e3838  |.)......125888.0|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9ce10: 0a203030 20455452 49435028 4344432d  |00 .RTE (PCI-CDC|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9ce20: 2e362029 322e3033 28203332 29424f54  |) 6.30.223 (TOB)|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9ce30: 29722820 206e6f20 344d4342 20303633  | (r) on BCM4360 |
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9ce40: 40203372 2e303420 36312f30 2f302e30  |r3 @ 40.0/160.0/|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9ce50: 2e303631 7a484d30 5354000a 5354414b  |160.0MHz..TSKATS|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9ce60: 5354414b 5354414b 5354414b 5354414b  |KATSKATSKATSKATS|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9ce70: 5354414b 5354414b 5354414b 00000004  |KATSKATSKATS....|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9ce80: 5354414b 00000000 00000000 00093610  |KATS.........6..|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9ce90: 00000030 0009cf44 000934c0 00091c04  |0...D....4......|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cea0: 00000000 00012c69 0009cf44 00000000  |....i,..D.......|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9ceb0: 00093610 00092440 00091cc4 00068d2f  |.6..@$....../...|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cec0: 00000000 00091cc4 00091cc4 00092440  |............@$..|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9ced0: 00000000 00068321 0009cf1c 0009f08a  |....!...........|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cee0: 0000000a 00005271 00000000 000927bc  |....qR.......'..|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cef0: 0000003c 00000004 00000000 0009238c  |<............#..|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cf00: 00000000 00093610 000000c4 00000004  |.....6..........|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cf10: 00093610 00092440 00000000 00093610  |.6..@$.......6..|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cf20: 00000028 000043b1 00093610 00091e54  |(....C...6..T...|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cf30: 00000000 00012c69 00096e30 00092440  |....i,..0n..@$..|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cf40: 00093610 00000000 00000000 00092440  |.6..........@$..|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cf50: 00000000 000043b1 00058f44 00000000  |.....C..D.......|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cf60: 00093610 0009cfec 00000000 00068b95  |.6..............|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cf70: 00000000 00093610 18001000 00000000  |.....6..........|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cf80: 000934c0 00093610 000043b1 000014e4  |.4...6...C......|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cf90: 00093628 00000000 00000000 00000000  |(6..............|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cfa0: 00000000 00000000 000934c0 00093628  |.........4..(6..|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cfb0: 00000000 18001000 00058ef0 00000000  |................|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cfc0: 00000000 00093610 000043b1 00067705  |.....6...C...w..|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cfd0: 00000000 00093610 18001000 00000000  |.....6..........|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cfe0: 000934c0 0009cfec 00000000 00040010  |.4..............|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9cff0: 00027100 00058ef0 000043b1 00067615  |.q.......C...v..|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9d000: 000043b1 00000028 00000000 00000028  |.C..(.......(...|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9d010: 00000003 00063b7b 00000812 00000000  |....{;..........|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9d020: 00062a98 00058d24 00058cc4 000644ab  |.*..$........D..|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9d030: 0004227e 00040c2f 0009d068 00000003  |~"../...h.......|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9d040: 00000028 00000000 000000a0 00000000  |(...............|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9d050: 000000a0 00000000 0009d068 09896800  |........h....h..|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9d060: 09896800 09896800 30363334 627f6c00  |.h...h..4360.l.b|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9d070: f35eff3f 00002409 0009d0a0 00000000  |?.^..$..........|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9d080: 000a0000 00058c8c 00002f5c bbadbadd  |........\/......|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9d090: bbadbadd 00002417 00002409 00000320  |.....$...$.. ...|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9d0a0: 21857dfd 55582631 23270bc4 7a3681cd  |.}.!1&XU..'#..6z|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9d0b0: de4cd7ed 0009af88 66918f11 5febdbeb  |..L........f..._|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9d0c0: 84f54b2a 157d1f36 1aee0c37 13bcd886  |*K..6.}.7.......|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9d0d0: 193898e7 0f670f50 2091bdfe 2fa6df6c  |..8.P.g.... l../|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9d0e0: c96759ee b530fc02 a87c41f2 0d7a0947  |.Yg...0..A|.G.z.|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 cons: 9d0f0: 7b419c7c 8a1e2de6 1b62f403 9b189979  ||.A{.-....b.y...|
+Apr 15 23:00:21 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77: console dump complete
+Apr 15 23:00:22 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+4000ms: sharedram=0xffc70038 fw_init=0x870ca017 EP_CMD=0x0006
+Apr 15 23:00:22 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+4000ms: TCM scan — no changes
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77: T+5000ms DIAGNOSTIC: console_ptr=0x8009ccbe sharedram=0xffc70038
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77: T+5000ms dump 0x9D0A0..0x9D500 (BSS/heap extension)
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d0a0: 21857dfd 55582631 23270bc4 7a3681cd
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d0b0: de4cd7ed 0009af88 66918f11 5febdbeb
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d0c0: 84f54b2a 157d1f36 1aee0c37 13bcd886
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d0d0: 193898e7 0f670f50 2091bdfe 2fa6df6c
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d0e0: c96759ee b530fc02 a87c41f2 0d7a0947
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d0f0: 7b419c7c 8a1e2de6 1b62f403 9b189979
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d100: ff9f3639 9f5b6dfd e81710c5 b67a9d67
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d110: e852b995 fad4ac7b bf42d6e0 b82e9ae0
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d120: f4cf4fda ef9ee0e5 518a28f0 0c0ff955
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d130: e66244d3 3362bf91 426ca798 e2f1190a
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d140: 309e68d8 0fe6a7fd 8b62b29d 175d6d76
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d150: d2c5175f 05ff24c9 946371a9 16f7376c
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d160: e05bf9f6 d73f55e4 e3c0701b a9682fe1
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d170: 7c96dcbf bfcf399b 90a86883 5884183e
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d180: dbde89a8 55665779 3e08bae5 761fe40c
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d190: bacacb78 b7963563 39e944a8 2f851fcd
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d1a0: 91ff4cf6 73268786 d06e035a e89d50b1
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d1b0: 2c39f7bb 65147803 de0b1990 b924cce4
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d1c0: 87573f15 7ddadae2 c9231973 7c3c9224
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d1d0: 6952ddbd 541740e9 3d281b51 d050e0c9
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d1e0: edb61f8a dc7b84ae a8438b0c 5524e240
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d1f0: 50fbfedb fbdbf125 0fbce52f 6f9f5ebb
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d200: 4fb55060 41e130f2 f2db1c2d 40bdf729
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d210: 04306214 b8769ccc 0ea3bb5b 1eb79588
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d220: 3a0aa31b a401caad cb912b68 1a87f557
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d230: 6f264ba2 61bdfd02 e2c36ed7 1c08989a
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d240: 60da7e48 b88ac100 1f53f14e b99faa90
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d250: 086f2488 c367eca6 3feafd7a 5dba9bd8
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d260: 138a8732 2454ea98 8ce90cf6 7d9d4142
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d270: bc793b28 d2aafeb0 e756d767 4737efe6
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d280: 5c406193 af0cd0e8 bfbac15e b509963b
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d290: 02992d49 0a4a8242 a4aaa671 f794ff8b
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d2a0: 47273d7f 52eb52e4 4b507671 ef54c321
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d2b0: de2c44b6 d2049e2d ff67fbe9 24f60aaf
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d2c0: 2c9b0acd 1cf4a092 d2374a2d da824ef7
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d2d0: 463c8015 cd2c269c 5fa68401 9eb5afe1
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d2e0: 3010682b 0bc0e57c d0538f33 766ddce6
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d2f0: 9dd6a318 8033ee07 7c2587ba 5c871802
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d300: 4ef8b38a cd1da745 6adadbe8 98e77757
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d310: 1e10a02b cd49840a dfec8e77 c2bf7040
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d320: 80b9b69a 521b00dc 9e20bfcb 8ea8e677
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d330: d400d226 2ba21868 c5d6c1bd f8fcedf5
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d340: 2e2a08e9 a127187a 50fd06f6 097e6123
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d350: 832210cc 3a2f79be afd3d5ad 4df7d7fa
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d360: 541c84d1 aaefbd21 70ebf6d7 03fe49c9
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d370: 6371424b 5e040f02 fd8fef53 bbac798d
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d380: b22a75d8 350355ca fa1ba736 f35568aa
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d390: e14df1c0 97711d2d a7e39eab 36c391d6
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d3a0: c23b2b94 4e064a65 72797756 f88b222a
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d3b0: 0c4e6f10 6bc03b6b 397d7a5b 514fb4f4
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d3c0: a2096980 918b5269 affb57eb 253c6f59
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d3d0: e4fb31e0 85247c51 4cf31e7f 333b1f76
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d3e0: 8c83042c 5bd0b202 5ad51c6a f173d01f
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d3f0: 72da7196 46b4cb9f 653f6cac fc2ff4f0
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d400: dee5b6cd 18470ec9 09435527 cc582a6d
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d410: 24ff28ab 6d6e42a9 76b08da1 82ca0197
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d420: 7734e4f7 8fcdfe6e 396ab7c1 19828407
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d430: 50b1cf67 7548ef31 4b3fd2c9 4524005d
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d440: 6cde03f7 7cc457d9 61d02e23 f7230bab
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d450: 3dedfe81 9fe98c03 889c9e25 a3d4e087
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d460: 74ee94ef 1c8cf3ab 8302e34f 41abda5e
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d470: fc57357e 11f74f90 976247f1 0081ec7f
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d480: df1735ef d7a141e9 9b5e2c4f 8a6845b3
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d490: df74dfbb 9bd75397 11b91618 86d0c74b
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d4a0: d2d5e0ff e656400e b9c6420b 80598723
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d4b0: 62fb0caf e184ad3a 419dd0f1 bca286aa
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d4c0: ee7a6070 c93d2ab0 040d6d9d 8c3a6ee8
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d4d0: f6e1054f 5bf387bb 5165a14f 4995c8dc
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d4e0: bd5b75c7 b15f6203 46faad80 25943d45
+Apr 15 23:00:23 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 bss5s: 9d4f0: 14035228 2641d51f 76c79d62 d3248730
+Apr 15 23:00:24 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+6000ms: sharedram=0xffc70038 fw_init=0x870ca017 EP_CMD=0x0006
+Apr 15 23:00:24 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+6000ms: TCM scan — no changes
+Apr 15 23:00:26 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+8000ms: sharedram=0xffc70038 fw_init=0x870ca017 EP_CMD=0x0006
+Apr 15 23:00:26 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+8000ms: TCM scan — no changes
+Apr 15 23:00:29 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+10000ms: sharedram=0xffc70038 fw_init=0x870ca017 EP_CMD=0x0006
+Apr 15 23:00:29 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+10000ms: TCM scan — no changes
+Apr 15 23:00:31 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+12000ms: sharedram=0xffc70038 fw_init=0x870ca017 EP_CMD=0x0006
+Apr 15 23:00:31 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+12000ms: TCM scan — no changes
+Apr 15 23:00:33 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+14000ms: sharedram=0xffc70038 fw_init=0x870ca017 EP_CMD=0x0006
+Apr 15 23:00:33 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+14000ms: TCM scan — no changes
+Apr 15 23:00:35 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+16000ms: sharedram=0xffc70038 fw_init=0x870ca017 EP_CMD=0x0006
+Apr 15 23:00:35 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+16000ms: TCM scan — no changes
+Apr 15 23:00:37 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+18000ms: sharedram=0xffc70038 fw_init=0x870ca017 EP_CMD=0x0006
+Apr 15 23:00:37 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+18000ms: TCM scan — no changes
+Apr 15 23:00:40 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+20000ms: sharedram=0xffc70038 fw_init=0x870ca017 EP_CMD=0x0006
+Apr 15 23:00:40 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+20000ms: TCM scan — no changes
+Apr 15 23:00:40 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77: T+20000ms DIAGNOSTIC: console_ptr=0x8009ccbe sharedram=0xffc70038
+Apr 15 23:00:40 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77: T+20000ms dump olmsg/trap 0x9D0A0..0x9D100
+Apr 15 23:00:40 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 olm20s: 9d0a0: 21857dfd 55582631 23270bc4 7a3681cd
+Apr 15 23:00:40 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 olm20s: 9d0b0: de4cd7ed 0009af88 66918f11 5febdbeb
+Apr 15 23:00:40 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 olm20s: 9d0c0: 84f54b2a 157d1f36 1aee0c37 13bcd886
+Apr 15 23:00:40 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 olm20s: 9d0d0: 193898e7 0f670f50 2091bdfe 2fa6df6c
+Apr 15 23:00:40 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 olm20s: 9d0e0: c96759ee b530fc02 a87c41f2 0d7a0947
+Apr 15 23:00:40 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 olm20s: 9d0f0: 7b419c7c 8a1e2de6 1b62f403 9b189979
+Apr 15 23:00:42 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+22000ms: sharedram=0xffc70038 fw_init=0x870ca017 EP_CMD=0x0006
+Apr 15 23:00:42 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+22000ms: TCM scan — no changes
+Apr 15 23:00:44 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+24000ms: sharedram=0xffc70038 fw_init=0x870ca017 EP_CMD=0x0006
+Apr 15 23:00:44 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+24000ms: TCM scan — no changes
+Apr 15 23:00:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+26000ms: sharedram=0xffc70038 fw_init=0x870ca017 EP_CMD=0x0006
+Apr 15 23:00:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+26000ms: TCM scan — no changes
+Apr 15 23:00:48 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+28000ms: sharedram=0xffc70038 fw_init=0x870ca017 EP_CMD=0x0006
+Apr 15 23:00:48 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 T+28000ms: TCM scan — no changes
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77: TIMEOUT — FW silent for 30s — final TCM scan:
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x6c000]=0x008965bc
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x70000]=0xc0c900e3
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x74000]=0x20e86158
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x78000]=0xcc9ce141
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x7c000]=0x401ae2a0
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x80000]=0x981353f8
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x84000]=0x8effc98d
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x88000]=0x67d733b9
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x8c000]=0x35c4fcc7
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x90000]=0x842709e1
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x94000]=0x4648656d
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x98000]=0x00000000
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x9c000]=0x5354414b
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x9d000]=0x000043b1
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x9d0a4]=0x55582631
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x9e000]=0x5780b619
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x9f0cc]=0x870ca017
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x9ff00]=0x397edd47
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x9ff1c]=0x6d6f7273
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x9cc5c]=0x8009ccbe
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x9fffc]=0xffc70038
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 final: TCM[0x0..0x3F] (FW code at reset-vector region):
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 exc: 0000: b80ef000 b82ef000 b839f000 b844f000
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 exc: 0010: b852f000 b860f000 b86ef000 b87cf000
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 exc: 0020: 4601480e 46034602 46054604 46074606
+Apr 15 23:00:51 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.77 exc: 0030: 46814680 46834682 46854684 f3ef4686

@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.77: PCIe2 BAC register clear before ARM — fix pcidongle_probe hang
+# Phase 5.2 test.78: full PCIe2 BAC register dump (0x000-0x1FF) pre-ARM
 #
-# test.76 RESULT: SURVIVED. ASPM theory DISPROVED.
-#   ASPM disabled on EP before ARM release — firmware STILL froze at T+2s.
-#   Same pattern as test.75: console_ptr updated at T+2s, then silence.
-#   Post-timeout crash: select_core(PCIE2) after FW started → known dangerous (test.66).
-#   ASPM was NOT the root cause of pcidongle_probe hang.
+# test.77 RESULT: SURVIVED. Stale H2D mailbox theory DISPROVED.
+#   H2D0=0xffffffff, H2D1=0xffffffff pre-ARM (stale doorbells).
+#   Cleared H2D0/H2D1/INTMASK/MBMASK to 0 before ARM release.
+#   Firmware STILL froze in pcie_dngl_probe at T+2s — identical to test.75/76.
+#   Post-timeout SURVIVED (select_core(PCIE2) crash fixed in test.77).
 #
-# test.77 HYPOTHESIS: stale PCIe2 BAC registers survive watchdog reset.
-#   INTMASK/MAILBOXMASK/H2D_MAILBOX_0/H2D_MAILBOX_1 from prior session
-#   confuse firmware's hnd_pcie2_init (tight poll loop or wrong state machine).
-#   Fix: read + log all key PCIe2 BAC regs; clear them before ARM release.
+# test.78 HYPOTHESIS: stale DMA channel registers (offsets 0x100-0x1FF in PCIe2 BAC)
+#   survive the watchdog reset and have enable bits set or error/busy status.
+#   When firmware's hnddma_attach/pcie_dngl_probe tries to initialize these DMA
+#   channels, it may hang waiting for them to go idle, or the ARM may freeze on
+#   an AXI bus transaction to a busy/hung DMA sub-block.
 #
-# test.77 KEY CHANGES from test.76:
-#   1. Read all PCIe2 BAC registers (INTMASK, MBINT, MBMASK, H2D0, H2D1) pre-ARM.
-#   2. Clear INTMASK, MBMASK, H2D_MAILBOX_0, H2D_MAILBOX_1 to 0 before ARM.
-#   3. Fixed post-timeout crash: removed select_core(PCIE2), added masking to exc dump.
-#   4. ASPM disable kept (harmless, belt-and-suspenders).
+# test.78 KEY CHANGES from test.77:
+#   1. Add full PCIe2 BAC dump: all 128 registers at offsets 0x000-0x1FF (4/line).
+#   2. Keep named register reads (INTMASK/MBINT/MBMASK/H2D0/H2D1/IOCTL/RESET).
+#   3. Keep H2D0/H2D1/INTMASK/MBMASK clears (from test.77, confirmed safe).
+#   4. NOT clearing DMA channel regs yet — need to see the dump first.
+#   5. Everything else identical to test.77.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -30,14 +32,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.77.stage${STAGE}"
+LOG="$LOG_DIR/test.78.stage${STAGE}"
 
-echo "=== test.77: PCIe2 BAC reg clear + stale state fix --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.78: full PCIe2 BAC dump (0x000-0x1FF) pre-ARM --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; PCIe2 BAC regs read+cleared (INTMASK/MBMASK/H2D0/H2D1→0) before ARM; pci_set_master before ARM; activate() preserves BusMaster; 30s masking+FW wait; TCM scan every 2s (from T+200ms); FULL console dump at T+3s; BSS dump 0x9D0A0..0x9D500 at T+5s; olmsg dump at T+20s; NO BAR0 writes; TIMEOUT: TCM[0..3F] dump with masking; RP restore on timeout" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; PCIe2 BAC full dump 0x000-0x1FF; named regs (INTMASK/MBINT/MBMASK/H2D0/H2D1/IOCTL/RESET); H2D0/H2D1/INTMASK/MBMASK cleared; pci_set_master before ARM; activate() preserves BusMaster; 30s masking+FW wait; TCM scan every 2s (from T+200ms); FULL console dump at T+3s; BSS dump 0x9D0A0..0x9D500 at T+5s; olmsg dump at T+20s; NO BAR0 writes; TIMEOUT: TCM[0..3F] dump with masking; RP restore on timeout" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -92,7 +94,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.77 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.78 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -102,7 +104,7 @@ insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
 echo "Module loaded. Waiting 65s (30s FW wait + 35s margin for TIMEOUT path)..." | tee -a "$LOG"
-echo "(test.77: ASPM disabled + PCIe2 BAC regs cleared before ARM; 30s wait; TCM scan every 2s from T+200ms; console dump at T+3s; BSS dump 0x9D0A0..0x9D500 at T+5s; TIMEOUT → TCM[0..3F] with masking + RP restore)" | tee -a "$LOG"
+echo "(test.78: ASPM disabled + PCIe2 BAC full dump 0x000-0x1FF + named regs + H2D0/H2D1/INTMASK/MBMASK cleared before ARM; 30s wait; TCM scan every 2s from T+200ms; console dump at T+3s; BSS dump 0x9D0A0..0x9D500 at T+5s; TIMEOUT → TCM[0..3F] with masking + RP restore)" | tee -a "$LOG"
 sleep 65
 
 # Capture results
@@ -115,5 +117,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.77: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.77)" | tee -a "$LOG"
+echo "*** test.78: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.78)" | tee -a "$LOG"
