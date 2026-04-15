@@ -1,66 +1,62 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, about to run test.82)
+## Current state (2026-04-16, about to run test.83)
 
 Git branch: main (pushed to origin)
 
-## test.81 RESULT: CRASHED (~31s after ARM release)
+## test.82 RESULT: SURVIVED 30s, then CRASHED in final TCM scan
 
-**test.81 enabled MSI before ARM release but without registering an IRQ handler.**
-Machine CRASHED exactly at the 30s timeout + cleanup boundary. No masking loop
-output captured (journal buffer lost on hard reboot).
+**test.82 proved MSI theory DEAD. Machine survived the masking loop but
+crashed during the oversized final TCM scan (50+ BAR2 reads).**
 
-### test.81 crash analysis:
-1. pci_enable_msi() succeeded (returned 0), ADDR=0xfee00738, DATA=0x00000000
-2. DATA=0 is expected with VT-d interrupt remapping (IRTE index 0 is valid)
-3. No IRQ handler registered → unhandled interrupts from firmware
-4. Crash occurred when cleanup restored RP error reporting (SERR/AER/DevCtl)
-   while MSI was still active → suppressed errors cascaded
-5. Cleanup order was wrong: RP restore BEFORE pci_disable_msi()
-6. Also found: baseline log array indices were wrong (stale from scan expansion)
+### test.82 key findings:
+1. MSI_count=0 at EVERY 2s sample (T+2s through T+28s) → firmware NEVER fires MSIs
+2. MSI_EN=1 confirmed (MSGCTL=0x0081), IRQ handler registered, no crash during 30s loop
+3. sharedram=0xffc70038 unchanged — firmware still hangs in pcidongle_probe
+4. TCM[0x9a000-0x9af00] zeroed by T+2s (firmware clearing BSS)
+5. TCM[0x9d000] changed to 0x000043b1 (counter/timer stopped = firmware hung)
+6. Console text identical to previous tests: pciedngl_probe called, then hung
+7. CRASHED reading TCM[0x78000] during final scan (4th address in 50+ loop)
 
-### MSI state captured (pre-crash, from device-side CONFIGADDR/CONFIGDATA):
-- Device-side MSI view confirmed firmware CAN see config space values
-- CAP=0x00816805, ADDR=0xfee00738, DATA=0x00000000
+### test.82 cleanup:
+- MSI code entirely removed (theory dead)
+- Final TCM scan reduced to 3 reads: sharedram, console_ptr, fw_init_done
 
-## test.82 PLAN (about to run)
+## test.83 PLAN (about to run)
 
-**Goal:** Re-test MSI hypothesis with proper IRQ handler to prevent crash.
+**Goal:** Test whether firmware's pcidongle_probe is polling PCIe2 INTMASK/MBMASK
+waiting for the host to signal interrupt readiness.
 
-**Key changes from test.81:**
-1. ADD: request_irq() with atomic-counting dummy handler after pci_enable_msi
-2. FIX: cleanup order — free_irq → pci_disable_msi → restore RP (was wrong)
-3. FIX: stale array indices in baseline log (52/46/48/51 instead of 20/14/16/19)
-4. ADD: read MSI message control at 0x5A to verify MSI Enable bit is set
-5. ADD: log MSI interrupt count at each 2s TCM scan and at timeout
-6. KEEP: wider TCM scan, ASPM disable, reg clears, console/BSS dumps, masking
+**Key changes from test.82:**
+1. SET INTMASK=0x00FF0300 and MBMASK=0x00FF0300 pre-ARM (was cleared to 0)
+   - Values from brcmf_pcie_intr_enable(): int_d2h_db (0xFF0000) | int_fn0 (0x0300)
+   - Normal driver sets these AFTER sharedram, but PCI-CDC firmware may expect BEFORE
+2. REMOVE: all MSI code (proven irrelevant by test.82)
+3. FIX: final scan reduced from 50+ reads to 3 (sharedram, console_ptr, fw_init_done)
+   - test.82 crashed at TCM[0x78000] during the oversized final scan
 
 **Expected outcomes:**
-- Machine SURVIVES (crash was from missing handler + wrong cleanup order)
-- MSI count > 0: firmware IS firing MSIs → MSI relevant to probe hang
-- MSI count == 0: firmware never fired → MSI not the issue
-- If sharedram changes: MSI was the fix → BREAKTHROUGH
-- If firmware still hangs with MSI count > 0: MSI fires but isn't what unblocks probe
+- Machine SURVIVES (final scan fix)
+- If sharedram changes: INTMASK/MBMASK was the missing piece → BREAKTHROUGH
+- If firmware still hangs: INTMASK/MBMASK not what it's waiting for
 
-**If MSI doesn't fix the hang, next hypotheses:**
+**If INTMASK/MBMASK doesn't fix the hang, next hypotheses:**
+- SB-to-PCIe translation window registers (firmware can't map host memory)
 - DMA/IOMMU: firmware tries DMA during pcidongle_probe, IOMMU blocks it
-  (test: allocate DMA buffer or try with intel_iommu=off)
+  (test: intel_iommu=off kernel parameter)
 - Force firmware trap: corrupt a data structure to trigger RTE trap handler
-  which dumps PC/SP/registers to known TCM location
 
-## Run test.82 (after build):
+## Run test.83 (after build):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
 
 ## After test — what to do:
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.82" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.82.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.82.*'`
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.83" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.83.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.83.*'`
 3. Key things to check:
-   a. Did we SURVIVE? (masking loop output present = yes)
-   b. MSI_count at each 2s scan — did firmware fire MSIs?
-   c. MSGCTL MSI_EN bit — is MSI truly enabled?
-   d. Did sharedram change? → BREAKTHROUGH if so
-   e. TCM scan — any new CHANGED entries?
-   f. Console dump — same pcidongle_probe message?
+   a. Did we SURVIVE? (RP settings restored = yes)
+   b. INTMASK/MBMASK readback — did the writes stick?
+   c. Did sharedram change? → BREAKTHROUGH if so
+   d. Console dump — different from previous tests?
 
 ## Key confirmed findings
 - BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
@@ -84,11 +80,13 @@ output captured (journal buffer lost on hard reboot).
 - TCM[0x90000-0x9E000] has no dense stack cluster at 64-byte granularity ✗ (test.80)
 - MSI enable without IRQ handler → CRASH in cleanup (RP restore while MSI active) ✗ (test.81)
 - pci_enable_msi works (ret=0), device-side sees ADDR=0xfee00738 ✓ (test.81)
+- MSI with IRQ handler: MSI_count=0 across 30s → firmware NEVER fires MSIs ✗ (test.82)
+- MSI theory DEAD ✗ (test.82)
 - select_core(BCMA_CORE_PCIE2) after firmware starts → CRASH ✗ (test.66/76)
 - PCIe2 wrapper pre-ARM: IOCTL=0x1 RESET_CTL=0x0 (safe to read/write pre-ARM) ✓
 - PCIe2 BAC pre-ARM: INTMASK=0x0, MBMASK=0x0, H2D0=0xffffffff, H2D1=0xffffffff ✓
 
-## Console text decoded (test.78/79/80 T+3s)
+## Console text decoded (test.78/79/80/82 T+3s)
 Ring buffer at 0x9ccc7, write ptr 0x9ccbe (wrapped):
 - "125888.000 Chipcommon: rev 43, caps 0x58680001, chipst 0x9a4d pmurev 17, pmucaps 0x10a22b11"
 - "125888.000 wl_probe called"
@@ -105,7 +103,7 @@ Firmware prints CDC protocol banner (not FullDongle MSGBUF).
 ## Key files
 - Source: phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 - Test script: phase5/work/test-staged-reset.sh
-- Logs: phase5/logs/test.82.stage0, test.82.journal (after test)
+- Logs: phase5/logs/test.83.journal (after test)
 - Build: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build && make -C "$KDIR" M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
 
 ## Test history summary (recent)
@@ -123,4 +121,5 @@ Firmware prints CDC protocol banner (not FullDongle MSGBUF).
 - test.79: SURVIVED — cleared unknown regs 0x100-0x108/0x1E0; stack dump at 0x9E000 = wrong region
 - test.80: SURVIVED — stack-finder scan found only 6 scattered hits; no stack cluster
 - test.81: CRASHED — MSI enable without IRQ handler; crash in cleanup (RP restore while MSI active)
-- test.82: PENDING — MSI enable + dummy IRQ handler; counting MSIs; fixed cleanup order
+- test.82: SURVIVED 30s, CRASHED in final scan — MSI_count=0 across 30s; MSI theory DEAD
+- test.83: PENDING — INTMASK/MBMASK set to 0x00FF0300 pre-ARM; minimal final scan; no MSI
