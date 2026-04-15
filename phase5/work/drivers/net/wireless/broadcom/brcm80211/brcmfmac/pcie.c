@@ -1984,26 +1984,33 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			 ({u16 c; pci_read_config_word(devinfo->pdev, PCI_COMMAND, &c); c;}));
 	}
 
-	/* test.80: stack-finder scan — locate firmware stack in TCM.
+	/* test.81: enable MSI before ARM release — test if firmware needs MSI
+	 * configured in PCIe config space to complete pcidongle_probe.
 	 *
-	 * test.79 RESULT: SURVIVED. Machine rebooted after test (in boot -1).
-	 * - PCIe2 core rev=1 (confirms rev <= 13 config restore applies)
-	 * - Cleared 0x100-0x108 OK; 0x1E0 readback=0x00070000 (bits 18:16 hardwired)
-	 * - Firmware STILL hangs in pcidongle_probe — clearing regs did NOT help
-	 * - Stack dump at 0x9E000-0x9F000 = HIGH ENTROPY DATA = firmware binary/rodata,
-	 *   NOT stack frames. Wrong memory region!
+	 * test.80 RESULT: SURVIVED. Stack-finder scan found only 6 scattered
+	 * code-range hits in 0x90000-0x9E000 — no dense cluster, no stack.
+	 * Values like 0x1000/0x1001 are common constants, not return addresses.
+	 * 64-byte sampling too coarse for ARM stack frames (8-16 bytes each).
+	 * Stack-finding approach is a dead end.
 	 *
-	 * test.80 approach: FIND the stack instead of guessing.
-	 * At timeout, read one word every 64 bytes from 0x90000 to 0x9E000.
-	 * That's 0xE000/0x40 = 896 reads. For each, flag values in the firmware
-	 * code address range (0x00001000-0x00070000). Return addresses on ARM stack
-	 * frames are dense and distinctive against heap/BSS/zero-fill data.
-	 * A cluster of code-range values reveals the stack location.
+	 * SHIFT STRATEGY: stop diagnosing WHERE the firmware is stuck.
+	 * Start testing WHAT it's waiting for.
 	 *
-	 * Keep: ASPM disable, named reg clears, INTMASK/MBMASK/H2D0/H2D1,
-	 *       unknown reg clears (0x100-0x108/0x1E0), console+BSS dumps.
-	 * Remove: full BAC dump (confirmed identical across tests, not useful)
-	 * Remove: old stack dump at 0x9E000-0x9F000 (wrong region)
+	 * test.81 hypothesis: firmware reads its own PCIe config space from
+	 * the device side (via CONFIGADDR/CONFIGDATA at 0x120/0x124) during
+	 * pcidongle_probe. It may poll for MSI to be configured (MSI addr/data
+	 * are currently 0x0/0x0). By enabling MSI BEFORE ARM release, the
+	 * firmware sees valid MSI config and can complete probe.
+	 *
+	 * Changes from test.80:
+	 * 1. ADD: pci_enable_msi(pdev) BEFORE ARM release
+	 * 2. ADD: Log host-side MSI config before/after enable
+	 * 3. ADD: Verify device-side view via CONFIGADDR/CONFIGDATA
+	 * 4. ADD: Wider TCM scan (0x9A000-0x9FFFC every 0x100) to catch
+	 *    PCI-CDC handshake at non-standard locations
+	 * 5. REMOVE: Stack-finder scan (failed — dead end)
+	 * 6. REMOVE: Probe dump at 0x9AF00 (not useful)
+	 * 7. KEEP: ASPM disable, reg clears, console+BSS dumps, masking
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		struct brcmf_core *pcie2_core_info;
@@ -2014,7 +2021,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		/* Print PCIe2 core revision */
 		pcie2_core_info = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_PCIE2);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.80: PCIe2 core id=0x%x rev=%d\n",
+			 "BCM4360 test.81: PCIe2 core id=0x%x rev=%d\n",
 			 pcie2_core_info ? pcie2_core_info->id : 0,
 			 pcie2_core_info ? pcie2_core_info->rev : -1);
 
@@ -2023,14 +2030,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		pci_read_config_dword(devinfo->pdev,
 				      BRCMF_PCIE_REG_LINK_STATUS_CTRL, &lsc);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.80: EP LINK_STATUS_CTRL=0x%08x ASPM_bits=0x%x\n",
+			 "BCM4360 test.81: EP LINK_STATUS_CTRL=0x%08x ASPM_bits=0x%x\n",
 			 lsc, lsc & BRCMF_PCIE_LINK_STATUS_CTRL_ASPM_ENAB);
 		if (lsc & BRCMF_PCIE_LINK_STATUS_CTRL_ASPM_ENAB) {
 			pci_write_config_dword(devinfo->pdev,
 					       BRCMF_PCIE_REG_LINK_STATUS_CTRL,
 					       lsc & ~BRCMF_PCIE_LINK_STATUS_CTRL_ASPM_ENAB);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.80: ASPM disabled (was 0x%x) before ARM\n",
+				 "BCM4360 test.81: ASPM disabled (was 0x%x) before ARM\n",
 				 lsc & BRCMF_PCIE_LINK_STATUS_CTRL_ASPM_ENAB);
 		}
 
@@ -2048,7 +2055,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		pcie2_ioctl   = brcmf_pcie_read_reg32(devinfo, 0x1408);
 		pcie2_reset   = brcmf_pcie_read_reg32(devinfo, 0x1800);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.80: PCIe2 pre-ARM: INTMASK=0x%x MBINT=0x%x MBMASK=0x%x H2D0=0x%x H2D1=0x%x IOCTL=0x%x RESET=0x%x\n",
+			 "BCM4360 test.81: PCIe2 pre-ARM: INTMASK=0x%x MBINT=0x%x MBMASK=0x%x H2D0=0x%x H2D1=0x%x IOCTL=0x%x RESET=0x%x\n",
 			 pcie2_intmask, pcie2_mbint, pcie2_mbmask,
 			 pcie2_h2d0, pcie2_h2d1, pcie2_ioctl, pcie2_reset);
 
@@ -2068,15 +2075,82 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		brcmf_pcie_write_reg32(devinfo, 0x108, 0);
 		brcmf_pcie_write_reg32(devinfo, 0x1E0, 0);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.80: cleared INTMASK/MBMASK/H2D0/H2D1 + unknown regs 0x100-0x108, 0x1E0 → 0\n");
+			 "BCM4360 test.81: cleared INTMASK/MBMASK/H2D0/H2D1 + unknown regs 0x100-0x108, 0x1E0 → 0\n");
 
 		/* Readback to verify clears took effect */
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.80: post-clear readback: 0x100=0x%08x 0x104=0x%08x 0x108=0x%08x 0x1E0=0x%08x\n",
+			 "BCM4360 test.81: post-clear readback: 0x100=0x%08x 0x104=0x%08x 0x108=0x%08x 0x1E0=0x%08x\n",
 			 brcmf_pcie_read_reg32(devinfo, 0x100),
 			 brcmf_pcie_read_reg32(devinfo, 0x104),
 			 brcmf_pcie_read_reg32(devinfo, 0x108),
 			 brcmf_pcie_read_reg32(devinfo, 0x1E0));
+
+		/* test.81: Enable MSI before ARM release.
+		 * The firmware reads its own config space during pcidongle_probe.
+		 * If it polls for valid MSI address/data and sees zeros, it may hang.
+		 */
+		{
+			u16 msi_cap_pre, msi_cap_post;
+			u32 msi_addr_lo_pre, msi_addr_hi_pre, msi_data_pre;
+			u32 msi_addr_lo_post, msi_addr_hi_post, msi_data_post;
+			u32 dev_msi_cap, dev_msi_addr_lo, dev_msi_addr_hi, dev_msi_data;
+			int msi_ret;
+
+			/* Read MSI state BEFORE enable */
+			pci_read_config_word(devinfo->pdev,
+					     BRCMF_PCIE_CFGREG_MSI_CAP, &msi_cap_pre);
+			pci_read_config_dword(devinfo->pdev,
+					      BRCMF_PCIE_CFGREG_MSI_ADDR_L, &msi_addr_lo_pre);
+			pci_read_config_dword(devinfo->pdev,
+					      BRCMF_PCIE_CFGREG_MSI_ADDR_H, &msi_addr_hi_pre);
+			pci_read_config_dword(devinfo->pdev,
+					      BRCMF_PCIE_CFGREG_MSI_DATA, &msi_data_pre);
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.81: MSI BEFORE enable: CAP=0x%04x ADDR=0x%08x:%08x DATA=0x%08x\n",
+				 msi_cap_pre, msi_addr_hi_pre, msi_addr_lo_pre, msi_data_pre);
+
+			/* Enable MSI */
+			msi_ret = pci_enable_msi(devinfo->pdev);
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.81: pci_enable_msi() returned %d\n", msi_ret);
+
+			/* Read MSI state AFTER enable */
+			pci_read_config_word(devinfo->pdev,
+					     BRCMF_PCIE_CFGREG_MSI_CAP, &msi_cap_post);
+			pci_read_config_dword(devinfo->pdev,
+					      BRCMF_PCIE_CFGREG_MSI_ADDR_L, &msi_addr_lo_post);
+			pci_read_config_dword(devinfo->pdev,
+					      BRCMF_PCIE_CFGREG_MSI_ADDR_H, &msi_addr_hi_post);
+			pci_read_config_dword(devinfo->pdev,
+					      BRCMF_PCIE_CFGREG_MSI_DATA, &msi_data_post);
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.81: MSI AFTER enable: CAP=0x%04x ADDR=0x%08x:%08x DATA=0x%08x\n",
+				 msi_cap_post, msi_addr_hi_post, msi_addr_lo_post, msi_data_post);
+
+			/* Verify device-side view via CONFIGADDR/CONFIGDATA (0x120/0x124).
+			 * PCIe2 core is still selected — safe pre-ARM.
+			 * Write config space offset to 0x120, read result from 0x124.
+			 */
+			brcmf_pcie_write_reg32(devinfo, 0x120,
+					       BRCMF_PCIE_CFGREG_MSI_CAP);
+			dev_msi_cap = brcmf_pcie_read_reg32(devinfo, 0x124);
+
+			brcmf_pcie_write_reg32(devinfo, 0x120,
+					       BRCMF_PCIE_CFGREG_MSI_ADDR_L);
+			dev_msi_addr_lo = brcmf_pcie_read_reg32(devinfo, 0x124);
+
+			brcmf_pcie_write_reg32(devinfo, 0x120,
+					       BRCMF_PCIE_CFGREG_MSI_ADDR_H);
+			dev_msi_addr_hi = brcmf_pcie_read_reg32(devinfo, 0x124);
+
+			brcmf_pcie_write_reg32(devinfo, 0x120,
+					       BRCMF_PCIE_CFGREG_MSI_DATA);
+			dev_msi_data = brcmf_pcie_read_reg32(devinfo, 0x124);
+
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 test.81: device-side MSI view: CAP=0x%08x ADDR=0x%08x:%08x DATA=0x%08x\n",
+				 dev_msi_cap, dev_msi_addr_hi, dev_msi_addr_lo, dev_msi_data);
+		}
 
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 	}
@@ -2127,11 +2201,23 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	 *   0x6C000..0x9C000: free TCM area (firmware heap/stack activity)
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-		/* 21 strategic TCM scan locations */
+		/* test.81: expanded TCM scan — original 21 + wider 0x9A000-0x9FC00 range.
+		 * PCI-CDC might write handshake at non-MSGBUF locations.
+		 * Total: ~45 locations (still fast, ~1 read each).
+		 */
 		static const u32 t66_scan[] = {
 			0x6C000, 0x70000, 0x74000, 0x78000,
 			0x7C000, 0x80000, 0x84000, 0x88000,
 			0x8C000, 0x90000, 0x94000, 0x98000,
+			/* Wider coverage of upper TCM (every 0x100 from 0x9A000) */
+			0x9A000, 0x9A100, 0x9A200, 0x9A300,
+			0x9A400, 0x9A500, 0x9A600, 0x9A700,
+			0x9A800, 0x9A900, 0x9AA00, 0x9AB00,
+			0x9AC00, 0x9AD00, 0x9AE00, 0x9AF00,
+			0x9B000, 0x9B100, 0x9B200, 0x9B300,
+			0x9B400, 0x9B500, 0x9B600, 0x9B700,
+			0x9B800, 0x9B900, 0x9BA00, 0x9BB00,
+			0x9BC00, 0x9BD00, 0x9BE00, 0x9BF00,
 			0x9C000, 0x9D000,
 			0x9D0A4,  /* olmsg shared_info magic_start */
 			0x9E000,
@@ -2139,7 +2225,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			0x9FF00,
 			0x9FF1C,  /* NVRAM start */
 			0x9cc5c,  /* console ring write pointer (virtual addr field) */
-			0x9FFFC,  /* ramsize-4 (FullDongle sharedram ptr) */
+			0x9FFFC,  /* ramsize-4 (FullDongle/PCI-CDC sharedram ptr) */
 		};
 		u32 t66_prev[ARRAY_SIZE(t66_scan)];
 		struct pci_dev *rp = devinfo->pdev->bus ? devinfo->pdev->bus->self : NULL;
@@ -2202,14 +2288,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 				pci_read_config_word(devinfo->pdev, PCI_COMMAND, &ep_cmd);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.80: RP=%s masked CMD BC DevCtl AER; "
+					  "BCM4360 test.81: RP=%s masked CMD BC DevCtl AER; "
 					  "RootCtl=0x%04x ext_cap0=0x%08x nvram_token=0x%08x EP_CMD=0x%04x\n",
 					  pci_name(rp), rtctl, ext_cap0,
 					  sharedram_addr_written, ep_cmd);
 			}
 		} else {
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.80: no root port — skipping masking\n");
+				  "BCM4360 test.81: no root port — skipping masking\n");
 		}
 
 		/* Baseline TCM scan — read all 20 locations before FW has had time to run */
@@ -2217,7 +2303,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			t66_prev[i] = brcmf_pcie_read_ram32(devinfo, t66_scan[i]);
 
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.80: TCM baseline: sharedram[0x9FFFC]=0x%08x "
+			  "BCM4360 test.81: TCM baseline: sharedram[0x9FFFC]=0x%08x "
 			  "magic[0x9D0A4]=0x%08x fw_init[0x9F0CC]=0x%08x console_ptr[0x9cc5c]=0x%08x\n",
 			  t66_prev[20], t66_prev[14], t66_prev[16], t66_prev[19]);
 
@@ -2228,7 +2314,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 		/* Step 2: FW wait + per-inner-tick re-masking (20×10ms inner × 150 outer = 30s) */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.80: starting FW wait + masking loop (30s max, re-mask every 10ms)\n");
+			  "BCM4360 test.81: starting FW wait + masking loop (30s max, re-mask every 10ms)\n");
 
 		for (outer = 0; outer < 150; outer++) {
 			/* Every 2s (10 outer iters, but NOT outer==0): TCM memory activity scan.
@@ -2241,7 +2327,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 				pci_read_config_word(devinfo->pdev, PCI_COMMAND, &ep_cmd);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.80 T+%04dms: sharedram=0x%08x fw_init=0x%08x EP_CMD=0x%04x\n",
+					  "BCM4360 test.81 T+%04dms: sharedram=0x%08x fw_init=0x%08x EP_CMD=0x%04x\n",
 					  outer * 200, fw_sharedram, fw_init_done_last, ep_cmd);
 
 				/* Scan all 20 TCM locations; log any that changed */
@@ -2250,7 +2336,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 					if (cur != t66_prev[i]) {
 						dev_emerg(&devinfo->pdev->dev,
-							  "BCM4360 test.80 T+%04dms: TCM[0x%05x] CHANGED 0x%08x → 0x%08x\n",
+							  "BCM4360 test.81 T+%04dms: TCM[0x%05x] CHANGED 0x%08x → 0x%08x\n",
 							  outer * 200, t66_scan[i],
 							  t66_prev[i], cur);
 						t66_prev[i] = cur;
@@ -2259,7 +2345,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				}
 				if (!changed)
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.80 T+%04dms: TCM scan — no changes\n",
+						  "BCM4360 test.81 T+%04dms: TCM scan — no changes\n",
 						  outer * 200);
 			}
 
@@ -2272,7 +2358,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				u32 off;
 
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.80: T+%04dms full console dump 0x9cc00..0x9d100\n",
+					  "BCM4360 test.81: T+%04dms full console dump 0x9cc00..0x9d100\n",
 					  outer * 200);
 
 				for (off = 0x9cc00; off < 0x9d100; off += 16) {
@@ -2282,7 +2368,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					u32 w3 = brcmf_pcie_read_ram32(devinfo, off + 12);
 					/* Print 4 words with LE ASCII chars */
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.80 cons: %05x: %08x %08x %08x %08x"
+						  "BCM4360 test.81 cons: %05x: %08x %08x %08x %08x"
 						  "  |%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c|\n",
 						  off,
 						  w0, w1, w2, w3,
@@ -2309,7 +2395,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				}
 
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.80: console dump complete\n");
+					  "BCM4360 test.81: console dump complete\n");
 			}
 
 			/* test.76: At T+5s (outer==25): diagnostic dump — NO BAR0 writes.
@@ -2325,11 +2411,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 								devinfo->ci->ramsize - 4);
 
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.80: T+5000ms DIAGNOSTIC: "
+					  "BCM4360 test.81: T+5000ms DIAGNOSTIC: "
 					  "console_ptr=0x%08x sharedram=0x%08x\n",
 					  cons_ptr, sharedram_now);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.80: T+5000ms dump 0x9D0A0..0x9D500 (BSS/heap extension)\n");
+					  "BCM4360 test.81: T+5000ms dump 0x9D0A0..0x9D500 (BSS/heap extension)\n");
 				for (off = 0x9D0A0; off < 0x9D500; off += 16) {
 					u32 w0 = brcmf_pcie_read_ram32(devinfo, off);
 					u32 w1 = brcmf_pcie_read_ram32(devinfo, off + 4);
@@ -2337,7 +2423,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					u32 w3 = brcmf_pcie_read_ram32(devinfo, off + 12);
 
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.80 bss5s: %05x: %08x %08x %08x %08x\n",
+						  "BCM4360 test.81 bss5s: %05x: %08x %08x %08x %08x\n",
 						  off, w0, w1, w2, w3);
 				}
 			}
@@ -2353,11 +2439,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 								devinfo->ci->ramsize - 4);
 
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.80: T+20000ms DIAGNOSTIC: "
+					  "BCM4360 test.81: T+20000ms DIAGNOSTIC: "
 					  "console_ptr=0x%08x sharedram=0x%08x\n",
 					  cons_ptr, sharedram_now);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.80: T+20000ms dump olmsg/trap 0x9D0A0..0x9D100\n");
+					  "BCM4360 test.81: T+20000ms dump olmsg/trap 0x9D0A0..0x9D100\n");
 				for (off = 0x9D0A0; off < 0x9D100; off += 16) {
 					u32 w0 = brcmf_pcie_read_ram32(devinfo, off);
 					u32 w1 = brcmf_pcie_read_ram32(devinfo, off + 4);
@@ -2365,7 +2451,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					u32 w3 = brcmf_pcie_read_ram32(devinfo, off + 12);
 
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.80 olm20s: %05x: %08x %08x %08x %08x\n",
+						  "BCM4360 test.81 olm20s: %05x: %08x %08x %08x %08x\n",
 						  off, w0, w1, w2, w3);
 				}
 			}
@@ -2422,7 +2508,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						       chk_magic == 0xffffffff &&
 						       chk_cons  == 0xffffffff);
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.80 T+%04dms: sharedram→0x%08x "
+						  "BCM4360 test.81 T+%04dms: sharedram→0x%08x "
 						  "9d000=0x%08x magic=0x%08x cons=0x%08x %s\n",
 						  outer * 200 + (inner + 1) * 10, fw_sharedram,
 						  chk_9d000, chk_magic, chk_cons,
@@ -2438,7 +2524,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						 * send H2D_MAILBOX_1 (HOSTRDY_DB1 protocol).
 						 */
 						dev_emerg(&devinfo->pdev->dev,
-							  "BCM4360 test.80: FW-ACK (sharedram=0x%08x "
+							  "BCM4360 test.81: FW-ACK (sharedram=0x%08x "
 							  "not valid RAM); sending H2D_MAILBOX_1, "
 							  "updating baseline, continuing poll\n",
 							  fw_sharedram);
@@ -2458,7 +2544,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				if (fid != fw_init_done_last) {
 					fw_init_done_last = fid;
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.80 T+%04dms: fw_init_done CHANGED to 0x%08x\n",
+						  "BCM4360 test.81 T+%04dms: fw_init_done CHANGED to 0x%08x\n",
 						  outer * 200 + inner * 10, fid);
 					if (fid != 0)
 						goto t66_fw_init_done;
@@ -2495,7 +2581,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		msleep(1);
 
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.80: TIMEOUT — FW silent for 30s — final TCM scan:\n");
+			  "BCM4360 test.81: TIMEOUT — FW silent for 30s — final TCM scan:\n");
 		for (i = 0; i < (int)ARRAY_SIZE(t66_scan); i++) {
 			u32 cur;
 
@@ -2525,7 +2611,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 			cur = brcmf_pcie_read_ram32(devinfo, t66_scan[i]);
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.80 final: TCM[0x%05x]=0x%08x%s\n",
+				  "BCM4360 test.81 final: TCM[0x%05x]=0x%08x%s\n",
 				  t66_scan[i], cur,
 				  cur != t66_prev[i] ? " CHANGED" : "");
 		}
@@ -2541,7 +2627,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			u32 off;
 
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.80 final: TCM[0x0..0x3F] (FW code at reset-vector region):\n");
+				  "BCM4360 test.81 final: TCM[0x0..0x3F] (FW code at reset-vector region):\n");
 			for (off = 0; off < 0x40; off += 16) {
 				u32 w0, w1, w2, w3;
 				u16 bc, dc, devsta, secsta;
@@ -2573,82 +2659,29 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				w2 = brcmf_pcie_read_ram32(devinfo, off + 8);
 				w3 = brcmf_pcie_read_ram32(devinfo, off + 12);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.80 exc: %04x: %08x %08x %08x %08x\n",
+					  "BCM4360 test.81 exc: %04x: %08x %08x %08x %08x\n",
 					  off, w0, w1, w2, w3);
 			}
 		}
 
-		/* test.80: Stack-finder scan TCM[0x90000..0x9E000].
-		 * Read one word every 64 bytes (896 reads total).
-		 * Flag values in firmware code range (0x00001000-0x00070000)
-		 * as likely return addresses. Clustered hits = stack location.
-		 * Re-mask every 8 reads (every 512 bytes) to limit overhead.
+		/* test.81: Post-timeout MSI state check.
+		 * Read MSI config space again to see if firmware changed it.
 		 */
 		{
-			u32 soff, val;
-			int hit_count = 0;
-			int remask_counter = 0;
+			u16 msi_cap_timeout;
+			u32 msi_addr_lo_timeout, msi_addr_hi_timeout, msi_data_timeout;
 
+			pci_read_config_word(devinfo->pdev,
+					     BRCMF_PCIE_CFGREG_MSI_CAP, &msi_cap_timeout);
+			pci_read_config_dword(devinfo->pdev,
+					      BRCMF_PCIE_CFGREG_MSI_ADDR_L, &msi_addr_lo_timeout);
+			pci_read_config_dword(devinfo->pdev,
+					      BRCMF_PCIE_CFGREG_MSI_ADDR_H, &msi_addr_hi_timeout);
+			pci_read_config_dword(devinfo->pdev,
+					      BRCMF_PCIE_CFGREG_MSI_DATA, &msi_data_timeout);
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.80 stackfind: scanning TCM[0x90000..0x9E000] every 64 bytes:\n");
-			for (soff = 0x90000; soff < 0x9E000; soff += 64) {
-				if (remask_counter == 0) {
-					u16 bc, dc, devsta, secsta;
-					u32 rtsta;
-
-					if (rp) {
-						pci_write_config_word(rp, PCI_COMMAND,
-								      rp_cmd_orig & ~PCI_COMMAND_SERR);
-						pci_read_config_word(rp, PCI_BRIDGE_CONTROL, &bc);
-						pci_write_config_word(rp, PCI_BRIDGE_CONTROL,
-								      bc & ~PCI_BRIDGE_CTL_SERR);
-						if (pcie_cap) {
-							pci_read_config_word(rp, pcie_cap + PCI_EXP_DEVCTL, &dc);
-							pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVCTL,
-									      dc & ~0x000f);
-							pci_read_config_word(rp, pcie_cap + PCI_EXP_DEVSTA, &devsta);
-							pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVSTA, devsta);
-							pci_read_config_dword(rp, pcie_cap + PCI_EXP_RTSTA, &rtsta);
-							pci_write_config_dword(rp, pcie_cap + PCI_EXP_RTSTA, rtsta);
-						}
-						pci_read_config_word(rp, PCI_SEC_STATUS, &secsta);
-						pci_write_config_word(rp, PCI_SEC_STATUS, secsta);
-					}
-					msleep(10);
-				}
-				remask_counter = (remask_counter + 1) & 7;
-
-				val = brcmf_pcie_read_ram32(devinfo, soff);
-
-				/* Flag values in firmware code address range */
-				if (val >= 0x00001000 && val <= 0x00070000) {
-					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.80 stkHIT: 0x%05x = 0x%08x (code-range)\n",
-						  soff, val);
-					hit_count++;
-				}
-			}
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.80 stackfind: %d code-range hits in 0x90000-0x9E000\n",
-				  hit_count);
-
-			/* Phase 2: if hits found, do a dense dump around the first cluster.
-			 * For now, also dump 16 words around 0x9AF80 area (seen in console
-			 * as a data pointer — might be stack frame area).
-			 */
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.80 probe: dumping TCM[0x9AF00..0x9B000]:\n");
-			for (soff = 0x9AF00; soff < 0x9B000; soff += 16) {
-				u32 s0, s1, s2, s3;
-
-				s0 = brcmf_pcie_read_ram32(devinfo, soff);
-				s1 = brcmf_pcie_read_ram32(devinfo, soff + 4);
-				s2 = brcmf_pcie_read_ram32(devinfo, soff + 8);
-				s3 = brcmf_pcie_read_ram32(devinfo, soff + 12);
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.80 prb: %05x: %08x %08x %08x %08x\n",
-					  soff, s0, s1, s2, s3);
-			}
+				  "BCM4360 test.81: MSI at TIMEOUT: CAP=0x%04x ADDR=0x%08x:%08x DATA=0x%08x\n",
+				  msi_cap_timeout, msi_addr_hi_timeout, msi_addr_lo_timeout, msi_data_timeout);
 		}
 
 		if (rp) {
@@ -2661,13 +2694,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
 						       rp_aer_orig);
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.80: RP settings restored\n");
+				  "BCM4360 test.81: RP settings restored\n");
 		}
+		pci_disable_msi(devinfo->pdev);
 		return -ENODEV;
 
 t66_fw_init_done:
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.80: olmsg FW_INIT_DONE at T+%dms val=0x%08x "
+			  "BCM4360 test.81: olmsg FW_INIT_DONE at T+%dms val=0x%08x "
 			  "— olmsg protocol confirmed! sharedram=0x%08x\n",
 			  outer * 200 + (inner + 1) * 10, fw_init_done_last, fw_sharedram);
 		/* olmsg firmware initialized — restore RP and return ENODEV for now.
@@ -2683,13 +2717,14 @@ t66_fw_init_done:
 				pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
 						       rp_aer_orig);
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.80: RP settings restored\n");
+				  "BCM4360 test.81: RP settings restored\n");
 		}
+		pci_disable_msi(devinfo->pdev);
 		return -ENODEV;
 
 t66_fw_ready:
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.80: FW READY (FullDongle) at T+%dms sharedram=0x%08x "
+			  "BCM4360 test.81: FW READY (FullDongle) at T+%dms sharedram=0x%08x "
 			  "— proceeding with probe init\n",
 			  outer * 200 + (inner + 1) * 10, fw_sharedram);
 		/* DO NOT restore RP here — firmware has just written sharedram and may
@@ -2702,7 +2737,7 @@ t66_fw_ready:
 		if (fw_sharedram < devinfo->ci->rambase ||
 		    fw_sharedram >= devinfo->ci->rambase + devinfo->ci->ramsize) {
 			brcmf_err(bus,
-				  "BCM4360 test.80: Invalid shared RAM address 0x%08x\n",
+				  "BCM4360 test.81: Invalid shared RAM address 0x%08x\n",
 				  fw_sharedram);
 			/* Restore RP before returning on invalid address */
 			if (rp) {
@@ -2715,6 +2750,7 @@ t66_fw_ready:
 					pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
 							       rp_aer_orig);
 			}
+			pci_disable_msi(devinfo->pdev);
 			return -ENODEV;
 		}
 		/* Directly init shared RAM — bypasses the unmasked second wait loop
@@ -2723,7 +2759,7 @@ t66_fw_ready:
 		 * firmware D2H doorbell writes to uninitialised host rings.
 		 */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.80: calling init_share_ram_info(0x%08x) "
+			  "BCM4360 test.81: calling init_share_ram_info(0x%08x) "
 			  "(RP masking still active)\n",
 			  fw_sharedram);
 		{
@@ -2742,7 +2778,7 @@ t66_fw_ready:
 					pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
 							       rp_aer_orig);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.80: RP settings restored (post-init)\n");
+					  "BCM4360 test.81: RP settings restored (post-init)\n");
 			}
 			return t74_init_ret;
 		}
