@@ -1923,7 +1923,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 			clk = READCC32(devinfo, clk_ctl_st);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.46 pre-BBPLL: clk_ctl_st=0x%08x min_res=0x%08x max_res=0x%08x res_state=0x%08x pmustatus=0x%08x HT=%s\n",
+				 "BCM4360 test.47 pre-BBPLL: clk_ctl_st=0x%08x min_res=0x%08x max_res=0x%08x res_state=0x%08x pmustatus=0x%08x HT=%s\n",
 				 clk,
 				 READCC32(devinfo, min_res_mask),
 				 READCC32(devinfo, max_res_mask),
@@ -1933,7 +1933,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 			/* Raise PMU ceiling first, then floor. Order matters. */
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.46: raising max_res_mask+min_res_mask to 0xFFFFF\n");
+				 "BCM4360 test.47: raising max_res_mask+min_res_mask to 0xFFFFF\n");
 			WRITECC32(devinfo, max_res_mask, 0xFFFFF);
 			WRITECC32(devinfo, min_res_mask, 0xFFFFF);
 
@@ -1946,18 +1946,18 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			} while (!(pmu_st & 0x04) && retries < 10);
 
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.46 BBPLL: pmustatus=0x%08x clk_ctl_st=0x%08x HAVEHT=%s (retries=%d)\n",
+				 "BCM4360 test.47 BBPLL: pmustatus=0x%08x clk_ctl_st=0x%08x HAVEHT=%s (retries=%d)\n",
 				 pmu_st, READCC32(devinfo, clk_ctl_st),
 				 (pmu_st & 0x04) ? "YES" : "NO", retries);
 
 			if (!(pmu_st & 0x04)) {
 				dev_err(&devinfo->pdev->dev,
-					"BCM4360 test.46: BBPLL failed — aborting\n");
+					"BCM4360 test.47: BBPLL failed — aborting\n");
 				return -ENODEV;
 			}
 
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.46: BBPLL up — proceeding to ARM release (B. injected via activate)\n");
+				 "BCM4360 test.47: BBPLL up — proceeding to ARM release (B. injected via activate)\n");
 		}
 	}
 
@@ -1980,7 +1980,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		arm_rst    = brcmf_pcie_read_reg32(devinfo, 0x1800); /* wrapper RESET_CTL */
 		arm_clkst  = brcmf_pcie_read_reg32(devinfo, 0x01E0); /* core clk_ctl_st */
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.46 ARM-release: IOCTL=0x%08x RESET_CTL=0x%08x ARM_CLKST=0x%08x\n",
+			 "BCM4360 test.47 ARM-release: IOCTL=0x%08x RESET_CTL=0x%08x ARM_CLKST=0x%08x\n",
 			 arm_ioctl, arm_rst, arm_clkst);
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 	}
@@ -1991,38 +1991,53 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	loop_counter = BRCMF_PCIE_FW_UP_TIMEOUT / 50;
 	while ((sharedram_addr == sharedram_addr_written) && (loop_counter)) {
 		msleep(50);
-		/* test.46: log PCIe error registers every iteration to capture crash type.
+		/* test.47: log PCIe error + LINK STATUS registers every iteration.
+		 * test.46 finding: SERR and all error reporting already OFF — crash is NOT
+		 * from PCIe error signaling. Adding LnkSta to detect link down/retrain.
+		 * Hypothesis: firmware watchdog (~1s) resets internal PCIe2 core → link down.
 		 * Config-space reads survive device errors (unlike MMIO).
 		 * PCI_STATUS: master/target abort, parity error flags.
-		 * PCI_EXP_DEVSTA: correctable/uncorrectable/fatal error bits.
-		 * BR_DEVSTA: same from host bridge — shows what host side sees.
+		 * PCI_EXP_DEVSTA: error status (expected unchanged — errors masked).
+		 * PCI_EXP_LNKSTA: link status — Active, Width, Speed, Training bits.
+		 * BR_DEVSTA / BR_LNKSTA: same from host bridge perspective.
 		 */
 		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 			int iter = (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 50) - (int)loop_counter + 1;
 			u16 pci_status, devsta_dev, devsta_br;
+			u16 lnksta_dev, lnksta_br;
 			int pcie_cap_dev, pcie_cap_br;
 			struct pci_dev *bridge;
 
 			devsta_dev = 0;
 			devsta_br = 0;
+			lnksta_dev = 0;
+			lnksta_br = 0;
 			pci_read_config_word(devinfo->pdev, PCI_STATUS, &pci_status);
 			pcie_cap_dev = pci_find_capability(devinfo->pdev, PCI_CAP_ID_EXP);
-			if (pcie_cap_dev)
+			if (pcie_cap_dev) {
 				pci_read_config_word(devinfo->pdev,
 						     pcie_cap_dev + PCI_EXP_DEVSTA,
 						     &devsta_dev);
+				pci_read_config_word(devinfo->pdev,
+						     pcie_cap_dev + PCI_EXP_LNKSTA,
+						     &lnksta_dev);
+			}
 			bridge = (devinfo->pdev->bus) ? devinfo->pdev->bus->self : NULL;
 			if (bridge) {
 				pcie_cap_br = pci_find_capability(bridge, PCI_CAP_ID_EXP);
-				if (pcie_cap_br)
+				if (pcie_cap_br) {
 					pci_read_config_word(bridge,
 							     pcie_cap_br + PCI_EXP_DEVSTA,
 							     &devsta_br);
+					pci_read_config_word(bridge,
+							     pcie_cap_br + PCI_EXP_LNKSTA,
+							     &lnksta_br);
+				}
 			}
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.46: iter %d val=0x%08x PCI_STA=0x%04x DEV_DEVSTA=0x%04x BR_DEVSTA=0x%04x\n",
+				  "BCM4360 test.47: iter %d val=0x%08x PCI_STA=0x%04x DEV_DEVSTA=0x%04x DEV_LNKSTA=0x%04x BR_DEVSTA=0x%04x BR_LNKSTA=0x%04x\n",
 				  iter, sharedram_addr,
-				  pci_status, devsta_dev, devsta_br);
+				  pci_status, devsta_dev, lnksta_dev, devsta_br, lnksta_br);
 			/* Every 20 iterations: check pmustatus */
 			if (iter % 20 == 0) {
 				u32 pmu_st;
@@ -2030,7 +2045,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 				pmu_st = READCC32(devinfo, pmustatus);
 				dev_info(&devinfo->pdev->dev,
-					 "BCM4360 test.46: iter %d pmustatus=0x%08x clk_ctl_st=0x%08x HT=%s\n",
+					 "BCM4360 test.47: iter %d pmustatus=0x%08x clk_ctl_st=0x%08x HT=%s\n",
 					 iter, pmu_st,
 					 READCC32(devinfo, clk_ctl_st),
 					 (READCC32(devinfo, clk_ctl_st) & 0x20000) ? "YES" : "NO");
@@ -2049,7 +2064,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		struct brcmf_core *arm_core, *pcie2_core;
 		u32 i, tcm_val;
 
-		brcmf_err(bus, "BCM4360 test.46: FW timeout — did not write sharedram ptr in 5s\n");
+		brcmf_err(bus, "BCM4360 test.47: FW timeout — did not write sharedram ptr in 5s\n");
 
 		/* Diagnostic 1: ChipCommon clk_ctl_st + pmustatus after 5s.
 		 * HAVEHT (bit 17 of clk_ctl_st, 0x20000) = BBPLL available to CC.
@@ -2058,7 +2073,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 */
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.46 post-timeout: CC clk_ctl_st=0x%08x res_state=0x%08x pmustatus=0x%08x HT=%s\n",
+			 "BCM4360 test.47 post-timeout: CC clk_ctl_st=0x%08x res_state=0x%08x pmustatus=0x%08x HT=%s\n",
 			 READCC32(devinfo, clk_ctl_st),
 			 READCC32(devinfo, res_state),
 			 READCC32(devinfo, pmustatus),
@@ -2067,7 +2082,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		/* Diagnostic 2: ARM wrapper registers after 5s — did ARM reset itself? */
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.46 post-timeout: ARM IOCTL=0x%08x RESET_CTL=0x%08x ARM_CLKST=0x%08x\n",
+			 "BCM4360 test.47 post-timeout: ARM IOCTL=0x%08x RESET_CTL=0x%08x ARM_CLKST=0x%08x\n",
 			 brcmf_pcie_read_reg32(devinfo, 0x1408),
 			 brcmf_pcie_read_reg32(devinfo, 0x1800),
 			 brcmf_pcie_read_reg32(devinfo, 0x01E0));
@@ -2077,7 +2092,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		arm_core   = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_ARM_CR4);
 		pcie2_core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_PCIE2);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.46 post-timeout: ARM_CR4=%s PCIE2=%s\n",
+			 "BCM4360 test.47 post-timeout: ARM_CR4=%s PCIE2=%s\n",
 			 arm_core   ? (brcmf_chip_iscoreup(arm_core)   ? "UP" : "DOWN") : "NULL",
 			 pcie2_core ? (brcmf_chip_iscoreup(pcie2_core) ? "UP" : "DOWN") : "NULL");
 
@@ -2087,14 +2102,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		for (i = 0; i < 16; i += 4) {
 			tcm_val = brcmf_pcie_read_ram32(devinfo, i);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.46 post-timeout: TCM[0x%04x]=0x%08x\n",
+				 "BCM4360 test.47 post-timeout: TCM[0x%04x]=0x%08x\n",
 				 i, tcm_val);
 		}
 		/* Also read TCM[ramsize-8..ramsize-1] to check NVRAM area */
 		for (i = devinfo->ci->ramsize - 8; i < devinfo->ci->ramsize; i += 4) {
 			tcm_val = brcmf_pcie_read_ram32(devinfo, i);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.46 post-timeout: TCM[0x%05x]=0x%08x\n",
+				 "BCM4360 test.47 post-timeout: TCM[0x%05x]=0x%08x\n",
 				 i, tcm_val);
 		}
 
@@ -2104,7 +2119,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	/* Firmware initialized: log the detected shared pointer */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.46: FW init detected! sharedram_addr=0x%08x\n",
+			 "BCM4360 test.47: FW init detected! sharedram_addr=0x%08x\n",
 			 sharedram_addr);
 	}
 
@@ -2252,7 +2267,7 @@ static void brcmf_pcie_buscore_activate(void *ctx, struct brcmf_chip *chip,
 	 */
 	if (chip->chip == BRCM_CC_4360_CHIP_ID) {
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.46 activate: writing rstvec=0x%08x to TCM[0] (normal firmware)\n",
+			 "BCM4360 test.47 activate: writing rstvec=0x%08x to TCM[0] (normal firmware)\n",
 			 rstvec);
 	}
 	brcmf_pcie_write_tcm32(devinfo, 0, rstvec);
