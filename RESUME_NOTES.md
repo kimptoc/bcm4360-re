@@ -1,59 +1,69 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-15, about to run test.76)
+## Current state (2026-04-15, about to run test.77)
 
 Git branch: main (pushed to origin)
 
-## test.75 RESULT: SURVIVED
+## test.76 RESULT: SURVIVED (but crashed in post-timeout cleanup)
 
-**test.75 confirmed:** Firmware runs to "pcie_dngl_probe called" at T+2s, then FREEZES.
-- console_ptr changed at T+2s (0x5354414b → 0x8009ccbe = firmware wrote ring ptr)
-- After T+2s: ZERO TCM changes in 28 seconds (T+2s..T+30s)
-- sharedram[0x9FFFC] = 0xffc70038 (nvram_token) ALWAYS — firmware never wrote pcie_shared
-- olmsg/trap region 0x9D0A0..0x9D100: IDENTICAL at baseline, T+5s, T+20s = static firmware binary data
-- No trap magic found → firmware is in CPU BUS STALL, not exception
+**test.76 confirmed:** ASPM theory is DEAD.
+- ASPM disabled on EP before ARM release (was 0x3, cleared to 0x0) ✓
+- Firmware STILL froze at T+2s, same as test.75
+- console_ptr updated at T+2s (0x5354414b → 0x8009ccbe), then silence for 30s
+- sharedram[0x9FFFC] = 0xffc70038 throughout (firmware never wrote pcie_shared)
+- TIMEOUT at T+30s
+- Post-timeout crash: `brcmf_pcie_select_core(BCMA_CORE_PCIE2)` crashed machine
+  (known dangerous after firmware starts — same as test.66)
+  Only 1 exc line logged before crash (4 words at 0x0000)
+- PCIe2 wrapper pre-ARM: IOCTL=0x00000001 RESET_CTL=0x00000000
 
-**Root cause identified:**
+**ASPM hypothesis is WRONG:** disabling ASPM on EP did not fix pcidongle_probe hang.
 
-`brcmf_pcie_reset_device()` reads ASPM state (L0s+L1 = 0x3 from prior session),
-disables for watchdog reset, then RESTORES ASPM (L0s+L1 enabled).
-ARM is released with ASPM active → PCIe link enters L1 → pipe clock gated.
-Firmware's `pcidongle_probe` → `hnd_pcie2_init` accesses PCIe2 LTSSM/pipe-clock
-domain registers → CPU bus stall (no instruction executes, no memory writes).
+## test.77 HYPOTHESIS
 
-**Why this doesn't happen on fresh boot:**
-- Fresh boot: ASPM starts disabled (PCI standard default) → firmware works fine
-- SBR: ASPM was enabled by prior session → reset_device restores it → hang
+Stale PCIe2 BAC registers from prior firmware session may persist through
+the watchdog reset (or be set to unexpected values by brcmf_pcie_buscore_setup).
+The firmware's hnd_pcie2_init reads INTMASK/MAILBOXMASK/H2D_MAILBOX_0/1
+and gets confused by non-zero stale values → tight polling loop or wrong state.
 
-## test.76 PLAN (built, ready to run)
+Fix: read and log all key PCIe2 BAC registers pre-ARM; clear INTMASK,
+MAILBOXMASK, H2D_MAILBOX_0, H2D_MAILBOX_1 to 0 before ARM release.
 
-**Goal:** Disable ASPM on EP before ARM release to unblock pcidongle_probe.
+Also fixed in test.77:
+- Post-timeout crash: removed `brcmf_pcie_select_core(BCMA_CORE_PCIE2)` from
+  TIMEOUT path (was crashing machine)
+- Exception vector reads now have per-read masking
+- Updated all log messages from test.76 → test.77
 
-**Key changes from test.75:**
-1. Disable ASPM bits 0:1 in EP LINK_STATUS_CTRL (0xBC) just before ARM release
-2. Log PCIe2 wrapper IOCTL/RESET_CTL before ARM (diagnostic)
-3. Extended BSS dump at T+5s: 0x9D0A0..0x9D500 (was ..0x9D100)
-4. Post-timeout: dump ARM exception vectors TCM[0x0..0x3F]
-5. Post-timeout: PCIe2 wrapper state + EP ASPM verification
+## test.77 PLAN (built, ready to run)
+
+**Goal:** Clear stale PCIe2 BAC registers before ARM release; see if firmware
+advances past pcidongle_probe hang.
+
+**Key changes from test.76:**
+1. Read PCIe2: INTMASK(0x24), MBINT(0x48), MBMASK(0x4C), H2D0(0x140), H2D1(0x144)
+2. Clear INTMASK, MBMASK, H2D_MAILBOX_0, H2D_MAILBOX_1 to 0 before ARM
+3. Fixed post-timeout: remove select_core(PCIE2), add masking to TCM[0..3F] reads
+4. ASPM disable kept (harmless)
 
 **Expected outcomes:**
-- SURVIVE (ASPM is safe to disable before ARM)
-- IF ASPM was the cause: firmware writes pcie_shared → sharedram changes → FW READY
-- IF still hangs: look at extended BSS dump and exception vectors for next clue
-- PCIe2 wrapper IOCTL should show CLK_EN=1 (confirming core accessible)
+- IF stale BAC regs were the cause: firmware writes pcie_shared → FW READY
+- IF still hangs: log the PCIe2 register values to inform next theory
+- Post-timeout should now SURVIVE (no more select_core crash)
 
 **Module build:** done (warning only: brcmf_pcie_write_ram32 unused)
-**Test script:** updated to test.76 (log = test.76.stage0), waits 65s
+**Test script:** updated to test.77 (log = test.77.stage0), waits 65s
 
-## Run test.76 (if not yet run):
+## Run test.77 (if not yet run):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
 
 ## After test — what to do:
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.76" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.76.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.76.*'`
-3. Check if sharedram changed (FW wrote pcie_shared) — grep for "FW READY" or "FW-ACK"
-4. If FW READY: next step is implementing olmsg/FullDongle ring protocol
-5. If still hangs: examine exception vectors + PCIe2 wrapper + extended BSS dump
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.77" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.77.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.77.*'`
+3. Check PCIe2 BAC register values: grep for "PCIe2 pre-ARM"
+4. Check if sharedram changed (FW wrote pcie_shared) — grep for "FW READY" or "FW-ACK"
+5. If FW READY: next step is implementing olmsg/FullDongle ring protocol
+6. If still hangs: examine PCIe2 register values + next theory
 
 ## Key confirmed findings
 - BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
@@ -65,28 +75,29 @@ domain registers → CPU bus stall (no instruction executes, no memory writes).
 - SBMBX alone does NOT trigger pcie_shared write ✓ (test.73)
 - H2D_MAILBOX_0 via BAR0 = RING DOORBELL → writing during init CRASHES ✗ (test.71/74)
 - Firmware prints: RTE banner + wl_probe + pcie_dngl_probe ✓
-- Firmware FREEZES in pcidongle_probe (CPU bus stall, no exception) ✓ (test.75)
-- Root cause: ASPM L1 enabled → pipe clock gated → PCIe2 LTSSM register access hangs ✓
-- ASPM disable (EP LINK_STATUS_CTRL bits 0:1) is safe before ARM release (test.76 to confirm)
+- Firmware FREEZES in pcidongle_probe (no exception, no trap) ✓ (test.75/76)
+- ASPM disable on EP does NOT fix pcidongle_probe hang ✗ (test.76)
+- select_core(BCMA_CORE_PCIE2) after firmware starts → CRASH ✗ (test.66/76)
+- PCIe2 wrapper pre-ARM: IOCTL=0x1 RESET_CTL=0x0 (safe to read/write pre-ARM) ✓
+- PCIe2 BAC regs pre-ARM: INTMASK/MBMASK/H2D0/H2D1 values TBD (test.77 will reveal)
 
 ## Console structure (decoded from test.71/73 T+3s dump)
 - Region 0x9cc00..0x9d100 = console header + ring buffer + BSS runtime data
 - 0x9cc5c = virtual write ptr (0x8009ccbe = phys 0x9ccbe at T+2s)
 - 0x9cc68 = 0x9ccc7 = ring buffer physical base
 - Last messages: "wl_probe called", "pcie_dngl_probe called", RTE banner
-- After banner: console frozen (firmware in pcidongle_probe CPU stall)
+- After banner: console frozen (firmware in pcidongle_probe stall)
 
-## BSS data decoded (from test.75 T+3s dump)
+## BSS data decoded (from test.75/76 T+3s dump)
 - 0x9d000 = 0x000043b1 (changed from 0 at T+2s = some firmware counter/timer)
-- 0x9d060..0x9d080: si_t structure with "4360" chip ID at 0x9d068
-- 0x9d078 = 0x0009d0a0 (pointer to 0x9d0a0)
+- 0x9d060..0x9d080: si_t structure with "4360" chip ID
 - 0x9d084/0x9d088 = 0xbbadbadd (RTE heap uninitialized = heap never allocated there)
 - 0x9d0a4 = 0x575c2631 (static firmware binary data, NOT olmsg magic)
 
 ## Key files
 - Source: phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 - Test script: phase5/work/test-staged-reset.sh
-- Logs: phase5/logs/test.76.stage0, test.76.journal (after test)
+- Logs: phase5/logs/test.77.stage0, test.77.journal (after test)
 - Build: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build && make -C "$KDIR" M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
 
 ## Test history summary (recent)
@@ -97,5 +108,6 @@ domain registers → CPU bus stall (no instruction executes, no memory writes).
 - test.72: CRASHED after SBMBX write — stale masking race
 - test.73: SURVIVED — SBMBX only (fresh masking); firmware never wrote sharedram
 - test.74: CRASHED — H2D_MAILBOX_0 BAR0 write (ring doorbell during init) → immediate crash
-- test.75: SURVIVED — pure diagnostic; firmware freezes in pcidongle_probe (ASPM L1 root cause found)
-- test.76: PENDING — ASPM disable before ARM release; should unblock pcidongle_probe
+- test.75: SURVIVED — pure diagnostic; firmware freezes in pcidongle_probe (ASPM L1 theory)
+- test.76: SURVIVED (crash in post-timeout cleanup) — ASPM disable did NOT fix hang; theory dead
+- test.77: PENDING — PCIe2 BAC reg clear before ARM; post-timeout crash fixed
