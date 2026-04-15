@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.43: BBPLL up + ARM release with bus mastering OFF.
+# Phase 5.2 test.45: B. injected via buscore_activate — correct TCM[0] fix.
 #
-# test.42 PASS: PMU mask writes safe — BBPLL came up in ~10ms, HAVEHT=YES.
-# test.41 CRASHED: BBPLL + ARM release → hard crash (ARM/firmware, not PMU).
+# test.44 CRASHED (same timing as test.43 — 19 iters = ~950ms):
+#   Root cause: brcmf_pcie_buscore_activate() overwrote TCM[0] with firmware
+#   reset vector (0xb80ef000) AFTER our branch-to-self write. Both tests ran
+#   identical firmware → identical crash. Our pre-activate overwrite was a no-op.
 #
-# test.43: release ARM with bus mastering disabled (pci_clear_master).
-# Firmware can execute in TCM but cannot DMA to host or fire interrupts.
-# If PC survives: TCM changes prove ARM executed.
-# If crash: firmware corrupts PCIe2 core from ARM side (not host DMA).
+# test.45 FIX: B. (0xEAFFFFFE) now written inside brcmf_pcie_buscore_activate()
+#   for BCM4360, replacing rstvec. This is the LAST write to TCM before ARM is
+#   released — guaranteed to be what ARM sees at address 0x00000000.
+#
+# Expected:
+#   If crash at ~19 iters: hardware timer fires ~950ms after ARM release
+#     regardless of code — crash is NOT firmware-driven.
+#   If PASS: firmware execution (via rstvec at TCM[0]) is crash source.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -21,14 +27,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.43.stage${STAGE}"
+LOG="$LOG_DIR/test.45.stage${STAGE}"
 
-echo "=== test.43: raise PMU max_res_mask+min_res_mask — bring BBPLL up before ARM release — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.45: B. via activate — correct TCM[0] fix — isolate ARM startup from firmware — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: BBPLL up; bus mastering OFF; ARM release; monitor TCM" | tee -a "$LOG" ;;
+    0) echo "Stage 0: BBPLL up; B. injected via activate; ARM release; monitor" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -76,7 +82,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.43 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) — test.45 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -98,5 +104,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.43: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "*** test.45: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
 echo "Log saved to $LOG" | tee -a "$LOG"
