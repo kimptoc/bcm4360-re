@@ -2105,14 +2105,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 				pci_read_config_word(devinfo->pdev, PCI_COMMAND, &ep_cmd);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.71: RP=%s masked CMD BC DevCtl AER; "
+					  "BCM4360 test.72: RP=%s masked CMD BC DevCtl AER; "
 					  "RootCtl=0x%04x ext_cap0=0x%08x nvram_token=0x%08x EP_CMD=0x%04x\n",
 					  pci_name(rp), rtctl, ext_cap0,
 					  sharedram_addr_written, ep_cmd);
 			}
 		} else {
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.71: no root port — skipping masking\n");
+				  "BCM4360 test.72: no root port — skipping masking\n");
 		}
 
 		/* Baseline TCM scan — read all 20 locations before FW has had time to run */
@@ -2120,7 +2120,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			t66_prev[i] = brcmf_pcie_read_ram32(devinfo, t66_scan[i]);
 
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.71: TCM baseline: sharedram[0x9FFFC]=0x%08x "
+			  "BCM4360 test.72: TCM baseline: sharedram[0x9FFFC]=0x%08x "
 			  "magic[0x9D0A4]=0x%08x fw_init[0x9F0CC]=0x%08x console_ptr[0x9cc5c]=0x%08x\n",
 			  t66_prev[20], t66_prev[14], t66_prev[16], t66_prev[19]);
 
@@ -2131,7 +2131,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 		/* Step 2: FW wait + per-inner-tick re-masking (20×10ms inner × 150 outer = 30s) */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.71: starting FW wait + masking loop (30s max, re-mask every 10ms)\n");
+			  "BCM4360 test.72: starting FW wait + masking loop (30s max, re-mask every 10ms)\n");
 
 		for (outer = 0; outer < 150; outer++) {
 			/* Every 2s (10 outer iters, but NOT outer==0): TCM memory activity scan.
@@ -2144,7 +2144,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 				pci_read_config_word(devinfo->pdev, PCI_COMMAND, &ep_cmd);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.71 T+%04dms: sharedram=0x%08x fw_init=0x%08x EP_CMD=0x%04x\n",
+					  "BCM4360 test.72 T+%04dms: sharedram=0x%08x fw_init=0x%08x EP_CMD=0x%04x\n",
 					  outer * 200, fw_sharedram, fw_init_done_last, ep_cmd);
 
 				/* Scan all 20 TCM locations; log any that changed */
@@ -2153,7 +2153,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 					if (cur != t66_prev[i]) {
 						dev_emerg(&devinfo->pdev->dev,
-							  "BCM4360 test.71 T+%04dms: TCM[0x%05x] CHANGED 0x%08x → 0x%08x\n",
+							  "BCM4360 test.72 T+%04dms: TCM[0x%05x] CHANGED 0x%08x → 0x%08x\n",
 							  outer * 200, t66_scan[i],
 							  t66_prev[i], cur);
 						t66_prev[i] = cur;
@@ -2162,11 +2162,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				}
 				if (!changed)
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.71 T+%04dms: TCM scan — no changes\n",
+						  "BCM4360 test.72 T+%04dms: TCM scan — no changes\n",
 						  outer * 200);
 			}
 
-			/* test.71: At T+3s (outer==15), full console buffer hex dump.
+			/* test.72: At T+3s (outer==15), full console buffer hex dump.
 			 * Read EVERY word from 0x9cc00..0x9d100 (4-byte stride), print 4 per line.
 			 * This decodes the complete ring buffer structure including zeros,
 			 * so we can identify buf_addr/bufsize/write_idx and read firmware console output.
@@ -2175,7 +2175,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				u32 off;
 
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.71: T+%04dms full console dump 0x9cc00..0x9d100\n",
+					  "BCM4360 test.72: T+%04dms full console dump 0x9cc00..0x9d100\n",
 					  outer * 200);
 
 				for (off = 0x9cc00; off < 0x9d100; off += 16) {
@@ -2185,7 +2185,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					u32 w3 = brcmf_pcie_read_ram32(devinfo, off + 12);
 					/* Print 4 words with LE ASCII chars */
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.71 cons: %05x: %08x %08x %08x %08x"
+						  "BCM4360 test.72 cons: %05x: %08x %08x %08x %08x"
 						  "  |%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c|\n",
 						  off,
 						  w0, w1, w2, w3,
@@ -2212,10 +2212,10 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				}
 
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.71: console dump complete\n");
+					  "BCM4360 test.72: console dump complete\n");
 			}
 
-			/* test.71: At T+5s (outer==25): send H2D mailbox signal.
+			/* test.72: At T+5s (outer==25): send H2D mailbox signal.
 			 * Hypothesis: firmware is waiting for host "ready" doorbell before
 			 * writing sharedram_addr. Two attempts:
 			 *   A) SBMBX config-space write (safe, no BAR0 MMIO)
@@ -2224,19 +2224,19 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			 */
 			if (outer == 25) {
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.71: T+%04dms sending H2D mailbox signal\n",
+					  "BCM4360 test.72: T+%04dms sending H2D mailbox signal\n",
 					  outer * 200);
 
 				/* A: SBMBX doorbell via config space (no BAR0 needed) */
 				pci_write_config_dword(devinfo->pdev, BRCMF_PCIE_REG_SBMBX, 1);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.71: SBMBX doorbell written (config 0x98=1)\n");
+					  "BCM4360 test.72: SBMBX doorbell written (config 0x98=1)\n");
 
 				/* B: H2D_MAILBOX_0 via PCIE2 BAR0 (at T+5s, past dangerous window) */
 				brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
 				brcmf_pcie_write_reg32(devinfo, BRCMF_PCIE_PCIE2REG_H2D_MAILBOX_0, 1);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.71: H2D_MAILBOX_0=1 written via PCIE2 BAR0\n");
+					  "BCM4360 test.72: H2D_MAILBOX_0=1 written via PCIE2 BAR0\n");
 			}
 
 			/* Inner: re-mask + poll sharedram AND fw_init_done every 10ms for 200ms */
@@ -2277,15 +2277,57 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				/* Poll A: ramsize-4 for FullDongle sharedram pointer */
 				fw_sharedram = brcmf_pcie_read_ram32(devinfo,
 								      devinfo->ci->ramsize - 4);
-				if (fw_sharedram != sharedram_addr_written)
-					goto t66_fw_ready;
+				if (fw_sharedram != sharedram_addr_written) {
+					/* Validate: distinguish real firmware write from PCIe
+					 * bus error (all-ones). Read 3 known-stable locations.
+					 * If ALL return 0xffffffff, the BAR0 write disrupted
+					 * the device — it's a bus error, not firmware data.
+					 */
+					u32 chk_9d000 = brcmf_pcie_read_ram32(devinfo, 0x9d000);
+					u32 chk_magic = brcmf_pcie_read_ram32(devinfo, 0x9D0A4);
+					u32 chk_cons  = brcmf_pcie_read_ram32(devinfo, 0x9cc5c);
+					bool all_ff = (fw_sharedram == 0xffffffff &&
+						       chk_9d000 == 0xffffffff &&
+						       chk_magic == 0xffffffff &&
+						       chk_cons  == 0xffffffff);
+					dev_emerg(&devinfo->pdev->dev,
+						  "BCM4360 test.72 T+%04dms: sharedram→0x%08x "
+						  "9d000=0x%08x magic=0x%08x cons=0x%08x %s\n",
+						  outer * 200 + (inner + 1) * 10, fw_sharedram,
+						  chk_9d000, chk_magic, chk_cons,
+						  all_ff ? "PCIe-ERR" : "dev-ok");
+					if (!all_ff) {
+						if (fw_sharedram < devinfo->ci->rambase +
+						    devinfo->ci->ramsize) {
+							/* Valid RAM address — FW is ready */
+							goto t66_fw_ready;
+						}
+						/* Non-RAM address (e.g. 0xffffffff): firmware ACK.
+						 * Update baseline so we detect next change, and
+						 * send H2D_MAILBOX_1 (HOSTRDY_DB1 protocol).
+						 */
+						dev_emerg(&devinfo->pdev->dev,
+							  "BCM4360 test.72: FW-ACK (sharedram=0x%08x "
+							  "not valid RAM); sending H2D_MAILBOX_1, "
+							  "updating baseline, continuing poll\n",
+							  fw_sharedram);
+						sharedram_addr_written = fw_sharedram;
+						brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
+						brcmf_pcie_write_reg32(devinfo,
+								       BRCMF_PCIE_PCIE2REG_H2D_MAILBOX_1,
+								       1);
+					}
+					/* else: PCIe bus error — device disrupted by BAR0 write.
+					 * Keep polling with masking; device may recover.
+					 */
+				}
 
 				/* Poll B: fw_init_done for olmsg protocol */
 				fid = brcmf_pcie_read_ram32(devinfo, 0x9F0CC);
 				if (fid != fw_init_done_last) {
 					fw_init_done_last = fid;
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.71 T+%04dms: fw_init_done CHANGED to 0x%08x\n",
+						  "BCM4360 test.72 T+%04dms: fw_init_done CHANGED to 0x%08x\n",
 						  outer * 200 + inner * 10, fid);
 					if (fid != 0)
 						goto t66_fw_init_done;
@@ -2322,7 +2364,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		msleep(1);
 
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.71: TIMEOUT — FW silent for 30s — final TCM scan:\n");
+			  "BCM4360 test.72: TIMEOUT — FW silent for 30s — final TCM scan:\n");
 		for (i = 0; i < (int)ARRAY_SIZE(t66_scan); i++) {
 			u32 cur;
 
@@ -2352,7 +2394,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 			cur = brcmf_pcie_read_ram32(devinfo, t66_scan[i]);
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.71 final: TCM[0x%05x]=0x%08x%s\n",
+				  "BCM4360 test.72 final: TCM[0x%05x]=0x%08x%s\n",
 				  t66_scan[i], cur,
 				  cur != t66_prev[i] ? " CHANGED" : "");
 		}
@@ -2367,13 +2409,13 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
 						       rp_aer_orig);
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.71: RP settings restored\n");
+				  "BCM4360 test.72: RP settings restored\n");
 		}
 		return -ENODEV;
 
 t66_fw_init_done:
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.71: olmsg FW_INIT_DONE at T+%dms val=0x%08x "
+			  "BCM4360 test.72: olmsg FW_INIT_DONE at T+%dms val=0x%08x "
 			  "— olmsg protocol confirmed! sharedram=0x%08x\n",
 			  outer * 200 + (inner + 1) * 10, fw_init_done_last, fw_sharedram);
 		/* olmsg firmware initialized — restore RP and return ENODEV for now.
@@ -2389,14 +2431,14 @@ t66_fw_init_done:
 				pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
 						       rp_aer_orig);
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.71: RP settings restored\n");
+				  "BCM4360 test.72: RP settings restored\n");
 		}
 		return -ENODEV;
 
 t66_fw_ready:
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.71: FW READY (FullDongle) at T+%dms sharedram=0x%08x "
-			  "— proceeding with full probe init\n",
+			  "BCM4360 test.72: FW READY (FullDongle) at T+%dms sharedram=0x%08x "
+			  "— proceeding with probe init\n",
 			  outer * 200 + (inner + 1) * 10, fw_sharedram);
 		/* Restore RP now that firmware is stable */
 		if (rp) {
@@ -2409,8 +2451,21 @@ t66_fw_ready:
 				pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
 						       rp_aer_orig);
 		}
-		/* Fall through to normal init */
-		sharedram_addr_written = fw_sharedram;
+		/* Validate sharedram is a real RAM address */
+		if (fw_sharedram < devinfo->ci->rambase ||
+		    fw_sharedram >= devinfo->ci->rambase + devinfo->ci->ramsize) {
+			brcmf_err(bus,
+				  "BCM4360 test.72: Invalid shared RAM address 0x%08x\n",
+				  fw_sharedram);
+			return -ENODEV;
+		}
+		/* Directly init shared RAM — bypasses the unmasked second wait loop
+		 * at the bottom of this function which would crash on BAR2 reads.
+		 */
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.72: calling init_share_ram_info(0x%08x)\n",
+			  fw_sharedram);
+		return brcmf_pcie_init_share_ram_info(devinfo, fw_sharedram);
 	}
 
 	brcmf_dbg(PCIE, "Wait for FW init\n");
