@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.65: Fix activate() CMD bug + RP restoration on timeout
+# Phase 5.2 test.66: Extended 60s wait + full TCM memory activity scan
 #
-# test.64 RESULT: sharedram=0xffc70038 throughout 20s — firmware never wrote it.
-#   - pci_set_master() was called but activate() IMMEDIATELY undid it:
-#     activate() (leftover from test.49) cleared BusMaster before ARM release.
-#   - EP_CMD=0x0402 throughout (BusMaster=0) confirms firmware never had DMA.
-#   - Machine crashed at T+20s timeout because RP masking not restored on timeout path.
+# test.65 RESULT: SURVIVED 20s. BusMaster fix confirmed (CMD=0x0006 throughout).
+#   - sharedram=0xffc70038 ENTIRE 20s — firmware never writes ramsize-4.
+#   - TCM[0]=0xb80ef000 stable throughout (ARM alive, no crash-restarts).
+#   - RP restore on timeout works — no crash at cleanup.
 #
-# test.65 FIXES:
-#   1. brcmf_pcie_buscore_activate(): remove CMD manipulation — just read+log CMD.
-#      BusMaster set by pci_set_master() before activate() call will be preserved.
-#   2. Timeout path: restore RP settings before return -ENODEV (prevents T+20s crash).
-#   3. Outer loop: read TCM[0] every ~2s to detect ARM crash-restart.
-#   4. All test.64 labels → test.65.
+# test.66 ADDS:
+#   1. Extended wait: 60s (300 outer × 200ms) — more time for firmware to signal
+#   2. TCM memory scan every 2s: 20 strategic locations to see what FW is writing
+#      Key addrs: 0x9D0A4 (olmsg magic?), 0x9F0CC (fw_init_done?), 0x9FFFC (sharedram)
+#   3. PCIe2 mailbox register reads every 10s — detect FW interrupt attempts
+#   4. Also polls fw_init_done (olmsg protocol) alongside ramsize-4 (FullDongle)
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -26,14 +25,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.65.stage${STAGE}"
+LOG="$LOG_DIR/test.66.stage${STAGE}"
 
-echo "=== test.65: activate() CMD fix + RP restore on timeout --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.66: extended 60s wait + TCM memory activity scan --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; pci_set_master before ARM; activate() preserves BusMaster; masking+FW wait (10ms re-mask); RP restore on timeout; full probe on READY" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; pci_set_master before ARM; activate() preserves BusMaster; 60s masking+FW wait; TCM scan every 2s; PCIe2 mailbox every 10s; fw_init_done poll; RP restore on timeout" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -88,7 +87,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.65 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.66 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -97,9 +96,9 @@ modprobe cfg80211 2>/dev/null || true
 insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
-echo "Module loaded. Waiting 30s (20s FW wait + margin for full probe)..." | tee -a "$LOG"
-echo "(test.65: BusMaster preserved; NVRAM token kept; FW READY → full probe; TIMEOUT → -ENODEV + RP restore)" | tee -a "$LOG"
-sleep 30
+echo "Module loaded. Waiting 75s (60s FW wait + margin for full probe)..." | tee -a "$LOG"
+echo "(test.66: 60s wait; TCM scan every 2s; fw_init_done poll; FW READY → full probe; TIMEOUT → -ENODEV + RP restore)" | tee -a "$LOG"
+sleep 75
 
 # Capture results
 echo "" | tee -a "$LOG"
@@ -111,5 +110,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.65: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.65)" | tee -a "$LOG"
+echo "*** test.66: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.66)" | tee -a "$LOG"

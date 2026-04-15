@@ -2008,34 +2008,55 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 	}
 
-	/* test.65: BusMaster enabled + NVRAM marker preserved.
+	/* test.66: Extended diagnostic — 60s wait + full TCM memory activity scan.
 	 *
-	 * test.63 RESULT: SURVIVED 20s, no crash. BUT sharedram=0x00000000 throughout.
-	 *   - Firmware never wrote sharedram_addr in 20 seconds.
-	 *   - Root cause A: CMD=0x0402 → BusMaster=0. SBR clears CMD; pci_enable_device()
-	 *     restores Mem but NOT BusMaster. Without BusMaster, firmware PCIe2 DMA init
-	 *     fails → firmware crash-restarts every ~3s (the periodic events we mask).
-	 *   - Root cause B: write_ram32(0) clobbered NVRAM length token (0xffc70038),
-	 *     breaking firmware NVRAM discovery.
+	 * test.65 RESULT: SURVIVED 60s, BusMaster=1 confirmed (CMD=0x0006 throughout),
+	 *   TCM[0]=0xb80ef000 stable, but sharedram=0xffc70038 ENTIRE 20s.
+	 *   Firmware runs without crashing but never writes ramsize-4.
 	 *
-	 * test.64 fixes (both applied above):
-	 *   1. pci_set_master() before ARM release → firmware can DMA
-	 *   2. NVRAM length token (0xffc70038) preserved at ramsize-4
+	 * Phase4 finding: firmware is "PCI-CDC (FullMAC), NOT olmsg offload" but reads
+	 *   board config from SROM/OTP. Two candidate protocols:
+	 *   A) FullDongle: firmware writes sharedram_addr to ramsize-4 (0x9FFFC)
+	 *   B) olmsg offload: firmware writes fw_init_done at 0x9F0CC
+	 *      (SHARED_INFO_OFFSET=0x9D0A4 + SI_FW_INIT_DONE=0x2028)
 	 *
-	 * Detection: poll for value != sharedram_addr_written (i.e., != 0xffc70038).
-	 * The standard brcmfmac protocol: firmware reads the NVRAM token, parses
-	 * NVRAM, initializes PCIe2, then OVERWRITES ramsize-4 with sharedram_addr.
+	 * test.66 adds:
+	 *   1. Extended wait: 60s (300 outer × 200ms)
+	 *   2. TCM memory scan every 2s: 20 strategic locations to see what firmware
+	 *      IS writing — detect activity in olmsg region, FullDongle region, etc.
+	 *   3. PCIe2 core mailbox register reads every 10s: detect firmware interrupt
+	 *      attempts (if firmware tries to signal host via mailbox)
+	 *   4. Also poll fw_init_done (0x9F0CC) in inner loop alongside ramsize-4
 	 *
-	 * Extra diagnostic: log endpoint CMD every 200ms to confirm BusMaster stays set.
-	 * Masking stays in place — restoring RP error settings could trigger a crash.
+	 * Key scan addresses:
+	 *   0x9D0A4: shared_info magic_start (olmsg protocol)
+	 *   0x9F0CC: fw_init_done (olmsg) = SHARED_INFO_OFFSET + SI_FW_INIT_DONE
+	 *   0x9FFFC: ramsize-4 (FullDongle sharedram pointer)
+	 *   0x6C000..0x9C000: free TCM area (firmware heap/stack activity)
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+		/* 20 strategic TCM scan locations */
+		static const u32 t66_scan[] = {
+			0x6C000, 0x70000, 0x74000, 0x78000,
+			0x7C000, 0x80000, 0x84000, 0x88000,
+			0x8C000, 0x90000, 0x94000, 0x98000,
+			0x9C000, 0x9D000,
+			0x9D0A4,  /* olmsg shared_info magic_start */
+			0x9E000,
+			0x9F0CC,  /* olmsg fw_init_done */
+			0x9FF00,
+			0x9FF1C,  /* NVRAM start */
+			0x9FFFC,  /* ramsize-4 (FullDongle sharedram ptr) */
+		};
+		u32 t66_prev[ARRAY_SIZE(t66_scan)];
 		struct pci_dev *rp = devinfo->pdev->bus ? devinfo->pdev->bus->self : NULL;
 		u16 rp_cmd_orig = 0, rp_bc_orig = 0, rp_devctl_orig = 0;
 		u32 rp_aer_orig = 0;
 		int pcie_cap = 0, aer_cap = 0;
 		int outer, inner;
 		u32 fw_sharedram = sharedram_addr_written; /* NVRAM token (0xffc70038) */
+		u32 fw_init_done_last = 0;
+		int i;
 
 		/* Step 1: initial masking — disable RP error escalation */
 		if (rp) {
@@ -2088,44 +2109,93 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 				pci_read_config_word(devinfo->pdev, PCI_COMMAND, &ep_cmd);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.65: RP=%s masked CMD BC DevCtl AER; "
+					  "BCM4360 test.66: RP=%s masked CMD BC DevCtl AER; "
 					  "RootCtl=0x%04x ext_cap0=0x%08x nvram_token=0x%08x EP_CMD=0x%04x\n",
 					  pci_name(rp), rtctl, ext_cap0,
 					  sharedram_addr_written, ep_cmd);
 			}
 		} else {
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.65: no root port — skipping masking\n");
+				  "BCM4360 test.66: no root port — skipping masking\n");
 		}
 
-		/* Step 2: FW wait + per-inner-tick re-masking (20×10ms inner × 100 outer = 20s) */
-		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.65: starting FW wait + masking loop (20s max, re-mask every 10ms)\n");
+		/* Baseline TCM scan — read all 20 locations before FW has had time to run */
+		for (i = 0; i < (int)ARRAY_SIZE(t66_scan); i++)
+			t66_prev[i] = brcmf_pcie_read_ram32(devinfo, t66_scan[i]);
 
-		for (outer = 0; outer < 100; outer++) {
-			/* Log every outer iteration (200ms) with current sharedram + EP CMD.
-			 * Also read TCM[0] (rstvec) every ~2s (every 10 outer iters) to detect
-			 * ARM crash-restart: if TCM[0] changes, firmware restarted.
-			 */
-			{
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.66: TCM baseline: sharedram[0x9FFFC]=0x%08x "
+			  "magic[0x9D0A4]=0x%08x fw_init[0x9F0CC]=0x%08x\n",
+			  t66_prev[19], t66_prev[14], t66_prev[16]);
+
+		/* Also read PCIe2 mailbox at baseline */
+		{
+			u32 mbint, mbmask;
+
+			brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
+			mbint  = brcmf_pcie_read_reg32(devinfo,
+						       BRCMF_PCIE_PCIE2REG_MAILBOXINT);
+			mbmask = brcmf_pcie_read_reg32(devinfo,
+						       BRCMF_PCIE_PCIE2REG_MAILBOXMASK);
+			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.66: PCIe2 baseline: MAILBOXINT=0x%08x MAILBOXMASK=0x%08x\n",
+				  mbint, mbmask);
+		}
+
+		/* Step 2: FW wait + per-inner-tick re-masking (20×10ms inner × 300 outer = 60s) */
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.66: starting FW wait + masking loop (60s max, re-mask every 10ms)\n");
+
+		for (outer = 0; outer < 300; outer++) {
+			/* Every 2s (10 outer iters): TCM memory activity scan */
+			if (outer % 10 == 0) {
 				u16 ep_cmd;
+				int changed = 0;
 
 				pci_read_config_word(devinfo->pdev, PCI_COMMAND, &ep_cmd);
-				if (outer % 10 == 0) {
-					u32 tcm0 = brcmf_pcie_read_ram32(devinfo, 0);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.66 T+%04dms: sharedram=0x%08x fw_init=0x%08x EP_CMD=0x%04x\n",
+					  outer * 200, fw_sharedram, fw_init_done_last, ep_cmd);
 
-					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.65 T+%03dms: sharedram=0x%08x EP_CMD=0x%04x TCM[0]=0x%08x\n",
-						  outer * 200, fw_sharedram, ep_cmd, tcm0);
-				} else {
-					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.65 T+%03dms: sharedram=0x%08x EP_CMD=0x%04x\n",
-						  outer * 200, fw_sharedram, ep_cmd);
+				/* Scan all 20 TCM locations; log any that changed */
+				for (i = 0; i < (int)ARRAY_SIZE(t66_scan); i++) {
+					u32 cur = brcmf_pcie_read_ram32(devinfo, t66_scan[i]);
+
+					if (cur != t66_prev[i]) {
+						dev_emerg(&devinfo->pdev->dev,
+							  "BCM4360 test.66 T+%04dms: TCM[0x%05x] CHANGED 0x%08x → 0x%08x\n",
+							  outer * 200, t66_scan[i],
+							  t66_prev[i], cur);
+						t66_prev[i] = cur;
+						changed++;
+					}
 				}
+				if (!changed)
+					dev_emerg(&devinfo->pdev->dev,
+						  "BCM4360 test.66 T+%04dms: TCM scan — no changes\n",
+						  outer * 200);
 			}
 
-			/* Inner: re-mask + poll sharedram every 10ms for 200ms */
+			/* Every 10s (50 outer iters): PCIe2 mailbox registers */
+			if (outer % 50 == 0) {
+				u32 mbint, mbmask;
+
+				brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
+				mbint  = brcmf_pcie_read_reg32(devinfo,
+							       BRCMF_PCIE_PCIE2REG_MAILBOXINT);
+				mbmask = brcmf_pcie_read_reg32(devinfo,
+							       BRCMF_PCIE_PCIE2REG_MAILBOXMASK);
+				brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.66 T+%04dms: PCIe2 MAILBOXINT=0x%08x MAILBOXMASK=0x%08x\n",
+					  outer * 200, mbint, mbmask);
+			}
+
+			/* Inner: re-mask + poll sharedram AND fw_init_done every 10ms for 200ms */
 			for (inner = 0; inner < 20; inner++) {
+				u32 fid;
+
 				msleep(10);
 
 				/* Re-mask + unconditional RW1C-clear every 10ms */
@@ -2157,22 +2227,52 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					pci_write_config_word(rp, PCI_SEC_STATUS, secsta);
 				}
 
+				/* Poll A: ramsize-4 for FullDongle sharedram pointer */
 				fw_sharedram = brcmf_pcie_read_ram32(devinfo,
 								      devinfo->ci->ramsize - 4);
-				/* Detect FW write: value changed from NVRAM token */
 				if (fw_sharedram != sharedram_addr_written)
-					goto t65_fw_ready;
+					goto t66_fw_ready;
+
+				/* Poll B: fw_init_done for olmsg protocol */
+				fid = brcmf_pcie_read_ram32(devinfo, 0x9F0CC);
+				if (fid != fw_init_done_last) {
+					fw_init_done_last = fid;
+					dev_emerg(&devinfo->pdev->dev,
+						  "BCM4360 test.66 T+%04dms: fw_init_done CHANGED to 0x%08x\n",
+						  outer * 200 + inner * 10, fid);
+					if (fid != 0)
+						goto t66_fw_init_done;
+				}
 			}
 		}
 
-		/* Timeout — FW did not write sharedram in 20s.
-		 * Restore RP settings BEFORE returning so the system doesn't crash
-		 * during driver cleanup (firmware is still running and generating
-		 * PCIe errors; we need the RP to be in a known state for cleanup).
-		 * test.64 crashed here because RP masking was dropped without cleanup.
+		/* Timeout — FW did not signal in 60s.
+		 * Dump final TCM scan before restoring RP.
 		 */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.65: TIMEOUT — FW did not write sharedram in 20s — restoring RP\n");
+			  "BCM4360 test.66: TIMEOUT — FW silent for 60s — final TCM scan:\n");
+		for (i = 0; i < (int)ARRAY_SIZE(t66_scan); i++) {
+			u32 cur = brcmf_pcie_read_ram32(devinfo, t66_scan[i]);
+
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.66 final: TCM[0x%05x]=0x%08x%s\n",
+				  t66_scan[i], cur,
+				  cur != t66_prev[i] ? " CHANGED" : "");
+		}
+		{
+			u32 mbint, mbmask;
+
+			brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
+			mbint  = brcmf_pcie_read_reg32(devinfo,
+						       BRCMF_PCIE_PCIE2REG_MAILBOXINT);
+			mbmask = brcmf_pcie_read_reg32(devinfo,
+						       BRCMF_PCIE_PCIE2REG_MAILBOXMASK);
+			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.66 final: PCIe2 MAILBOXINT=0x%08x MAILBOXMASK=0x%08x\n",
+				  mbint, mbmask);
+		}
+
 		if (rp) {
 			pci_write_config_word(rp, PCI_COMMAND, rp_cmd_orig);
 			pci_write_config_word(rp, PCI_BRIDGE_CONTROL, rp_bc_orig);
@@ -2183,18 +2283,49 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
 						       rp_aer_orig);
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.65: RP settings restored\n");
+				  "BCM4360 test.66: RP settings restored\n");
 		}
 		return -ENODEV;
 
-t65_fw_ready:
+t66_fw_init_done:
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.65: FW READY at T+%dms sharedram=0x%08x "
+			  "BCM4360 test.66: olmsg FW_INIT_DONE at T+%dms val=0x%08x "
+			  "— olmsg protocol confirmed! sharedram=0x%08x\n",
+			  outer * 200 + (inner + 1) * 10, fw_init_done_last, fw_sharedram);
+		/* olmsg firmware initialized — restore RP and return ENODEV for now.
+		 * Future: implement olmsg communication to bring up WiFi.
+		 */
+		if (rp) {
+			pci_write_config_word(rp, PCI_COMMAND, rp_cmd_orig);
+			pci_write_config_word(rp, PCI_BRIDGE_CONTROL, rp_bc_orig);
+			if (pcie_cap)
+				pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVCTL,
+						      rp_devctl_orig);
+			if (aer_cap)
+				pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
+						       rp_aer_orig);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.66: RP settings restored\n");
+		}
+		return -ENODEV;
+
+t66_fw_ready:
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.66: FW READY (FullDongle) at T+%dms sharedram=0x%08x "
 			  "— proceeding with full probe init\n",
 			  outer * 200 + (inner + 1) * 10, fw_sharedram);
-		/* Fall through to normal init: set sharedram_addr_written so the wait
-		 * loop below sees it already changed and skips immediately.
-		 */
+		/* Restore RP now that firmware is stable */
+		if (rp) {
+			pci_write_config_word(rp, PCI_COMMAND, rp_cmd_orig);
+			pci_write_config_word(rp, PCI_BRIDGE_CONTROL, rp_bc_orig);
+			if (pcie_cap)
+				pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVCTL,
+						      rp_devctl_orig);
+			if (aer_cap)
+				pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
+						       rp_aer_orig);
+		}
+		/* Fall through to normal init */
 		sharedram_addr_written = fw_sharedram;
 	}
 

@@ -1,10 +1,25 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-15, about to run test.65)
+## Current state (2026-04-15, about to run test.66)
 
 Git branch: main (pushed to origin)
 
-## test.64 RESULT: sharedram=0xffc70038 throughout — firmware never wrote it; crash at T+20s
+## test.65 RESULT: SURVIVED 20s — BusMaster fix confirmed, sharedram still stuck
+
+**BusMaster fix confirmed: EP_CMD=0x0006 (Mem+BusMaster) throughout all 20s**
+- TCM[0]=0xb80ef000 stable — ARM alive, no crash-restarts detected
+- sharedram=0xffc70038 ENTIRE 20s — firmware never writes ramsize-4
+- RP restored on timeout — no crash during cleanup (test.64 fix works)
+
+**Root issue: firmware never signals ready via FullDongle protocol (ramsize-4)**
+- Phase4 analysis: firmware is "PCI-CDC (FullMAC), NOT olmsg offload"
+- BUT firmware reads board config from SROM/OTP (not TCM NVRAM)
+- Two candidate protocols to test:
+  A) FullDongle: firmware writes sharedram_addr to 0x9FFFC (ramsize-4)
+  B) olmsg offload: firmware writes fw_init_done at 0x9F0CC (SHARED_INFO_OFFSET+0x2028)
+- Previous test.65 only polled 0x9FFFC — missed if firmware uses protocol B
+
+## test.64 RESULT (earlier): sharedram=0xffc70038 throughout — firmware never wrote it; crash at T+20s
 
 **Machine SURVIVED 20s but crashed at TIMEOUT path. NVRAM token unchanged.**
 - sharedram=0xffc70038 all 20 seconds — firmware never wrote sharedram_addr ✗
@@ -23,48 +38,36 @@ Git branch: main (pushed to origin)
 - Driver cleanup path then accessed device with firmware still generating errors
 - This caused the crash between "ABOUT TO TIMEOUT" and "TIMEOUT" messages
 
-## test.65 PLAN (about to run)
+## test.66 PLAN (about to run)
 
-**Two fixes:**
-1. **Fix activate()**: Remove `cmd &= ~PCI_COMMAND_MASTER` + `cmd |= PCI_COMMAND_INTX_DISABLE`
-   + `pci_write_config_word(...)` — just read and log CMD. BusMaster set by pci_set_master()
-   will now be PRESERVED through ARM release.
-2. **RP restoration on timeout**: Before `return -ENODEV`, restore rp_cmd_orig, rp_bc_orig,
-   rp_devctl_orig, rp_aer_orig — prevents crash during driver cleanup.
+**Key diagnostics added:**
+1. **60s wait** (300 outer × 200ms) — more time for slower firmware init
+2. **TCM memory scan every 2s**: 20 strategic locations:
+   - 0x9D0A4: olmsg shared_info magic_start
+   - 0x9F0CC: olmsg fw_init_done (SHARED_INFO_OFFSET + 0x2028)
+   - 0x9FFFC: FullDongle sharedram pointer (ramsize-4)
+   - 0x6C000..0x9C000: firmware heap/stack activity detection
+3. **PCIe2 mailbox reads every 10s**: detect if firmware tries to signal host via interrupt
+4. **Poll fw_init_done in inner loop**: catches olmsg protocol alongside FullDongle
 
-**Extra diagnostics:**
-- TCM[0] (rstvec) read every ~2s (every 10 outer iterations) — detect ARM crash-restart
-  If TCM[0] changes value, ARM restarted (firmware crash-reboot)
-- EP CMD still logged every 200ms to confirm BusMaster stays set
-
-**Module build:** done (test.65 built successfully, warning only: write_ram32 unused)
-**Test script:** updated to test.65 (log = test.65.stage0), waits 30s
+**Module build:** done (test.66 built successfully, warning only: write_ram32 unused)
+**Test script:** updated to test.66 (log = test.66.stage0), waits 75s
 
 **Expected outcomes:**
-- EP_CMD should show BusMaster=1 (0x0406) throughout — confirms fix works
-- Firmware initializes PCIe2 DMA, writes sharedram_addr (value changes from 0xffc70038)
-- "FW READY" message logged, fall through to full brcmfmac init
-- WiFi device may appear: `ip link show` or `iw dev`
-- If still crashes: BusMaster is set, something else is wrong
-- If sharedram still 0xffc70038 after 20s: firmware still stuck (NVRAM issue? PMU?)
+- If FullDongle: ramsize-4 (0x9FFFC) changes from 0xffc70038 → sharedram_addr
+  → "FW READY (FullDongle)" logged, full brcmfmac init proceeds
+- If olmsg: fw_init_done (0x9F0CC) becomes non-zero
+  → "FW_INIT_DONE" logged, need to implement olmsg protocol
+- If TCM changes in 0x6C000-0x9C000 region: firmware IS running but using different address
+- If PCIe2 MAILBOXINT changes: firmware tried to signal host via mailbox interrupt
+- If nothing changes for 60s: fundamental initialization issue (SROM/OTP? different protocol?)
 
 **After test — what to do (whether PASS or crash):**
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.65" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.65.journal'` (or -b 0 if survived)
-3. `sudo chown kimptoc:users phase5/logs/test.65.*`
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.66" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.66.journal'` (or -b 0 if survived)
+3. `sudo chown kimptoc:users phase5/logs/test.66.*`
 4. git add logs + commit + push
-5. Analyze: look for "FW READY" vs TIMEOUT, check EP_CMD values, check TCM[0]
-
-**After FW READY + survived:**
-1. Check WiFi: `ip link show` or `iw dev`
-2. Check brcmfmac loaded: `lsmod | grep brcm`
-3. Test WiFi scanning if possible
-
-**After a crash:**
-1. Check EP_CMD first line after activate — is BusMaster set now?
-2. Check TCM[0] values — are they changing? (crash-restart detected)
-3. Check if "FW READY" was logged before crash
-4. If BusMaster IS set but sharedram still doesn't change: NVRAM issue or PMU issue
+5. Analyze: check for TCM changes (what did firmware write?), fw_init_done, PCIe2 mailbox
 
 ## Key confirmed findings
 - BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
@@ -113,13 +116,14 @@ Git branch: main (pushed to origin)
 - test.64: SURVIVED 20s then CRASHED at timeout — sharedram=0xffc70038 throughout
   BusMaster=0 entire time (activate() leftover from test.49 was clearing it)
   CRASH at T+20s: RP masking not restored before return -ENODEV → cleanup crash
-- test.65: FIX — activate() no longer clears BusMaster; RP restored on timeout
+- test.65: SURVIVED 20s — BusMaster fix confirmed (CMD=0x0006), sharedram still stuck
+- test.66: DIAGNOSTIC — 60s wait + TCM scan (20 locations) + PCIe2 mailbox + fw_init_done poll
 
 ## Key files
 - Source: phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 - Test script: phase5/work/test-staged-reset.sh
-- Logs: phase5/logs/test.65.stage0, test.65.journal (after test)
+- Logs: phase5/logs/test.66.stage0, test.66.journal (after test)
 - Build: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build && make -C "$KDIR" M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
 
-## Run test.65 (if not yet run):
+## Run test.66 (if not yet run):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
