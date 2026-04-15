@@ -714,26 +714,27 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 	if (!devinfo->ci)
 		return;
 
-	/* BCM4360: test.39 — enable watchdog reset.
+	/* BCM4360: test.40 — read pllcontrol registers before watchdog reset.
 	 *
-	 * test.38 finding: PMU is alive (min_res_mask write → res_state changed
-	 * instantly), but BBPLL is off. ALP (crystal) is available (clk_ctl_st
-	 * bit 6), but HT (BBPLL) never appears even with all PMU resources raised.
-	 * Without BBPLL, the ARM core has no execution clock — it appears "up"
-	 * (iscoreup checks OCP clock, not BBPLL) but cannot execute a single
-	 * instruction. TCM was completely unchanged across all tests.
+	 * test.39 results: watchdog survived on IOMMU group 8. After watchdog,
+	 * clk_ctl_st=0x50040: HAVEALP (bit 16) set, BP_ON_ALP (bit 18) set,
+	 * HAVEHT (bit 17) NOT set. pmustatus=0x2a: HAVEALP (bit 3) set,
+	 * HAVEHT (bit 2) NOT set. BBPLL is off and never comes up.
+	 * bcma.ko has "PMU resource config unknown or not needed for 0x43A0".
 	 *
-	 * Tests 8-10 crashed from watchdog reset on IOMMU group 6 (PCIe link-down
-	 * event was not isolated). Now on IOMMU group 8 (crash-protective) and
-	 * tests 37/38 wrote CHIPCOMMON registers without crashing. Safe to try.
+	 * New hypothesis: ARM might be executing on ALP clock (37 MHz) but
+	 * firmware immediately waits for HAVEHT (BBPLL) and loops forever.
+	 * OR: the ARM's bus to TCM requires HT clock, so ARM can't fetch
+	 * instructions without BBPLL.
 	 *
-	 * Watchdog reset causes a full chip reset including BBPLL restart via
-	 * PMU startup sequence. After reset, BBPLL locks, ARM has execution clock,
-	 * and firmware should initialize normally.
-	 *
-	 * Fall through to the standard watchdog reset code below.
+	 * test.40 diagnostic: read pllcontrol[0..5] to see if EFI has programmed
+	 * the BCM4360 PLL dividers. Read ARM wrapper registers after release.
+	 * Read pmustatus periodically during the 5s wait to detect if BBPLL
+	 * starts up (ARM requests it via FORCEHT in ARM's clk_ctl_st).
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+		u32 i;
+
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 		dev_info(&devinfo->pdev->dev,
 			 "BCM4360 EFI state: clk_ctl_st=0x%08x min_res=0x%08x max_res=0x%08x res_state=0x%08x\n",
@@ -745,8 +746,17 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 			 "BCM4360 EFI PMU: pmustatus=0x%08x pmucontrol=0x%08x\n",
 			 READCC32(devinfo, pmustatus),
 			 READCC32(devinfo, pmucontrol));
+
+		/* Read pllcontrol registers 0..5 (PLL frequency table) */
+		for (i = 0; i < 6; i++) {
+			WRITECC32(devinfo, pllcontrol_addr, i);
+			dev_info(&devinfo->pdev->dev,
+				 "BCM4360 pllcontrol[%u]=0x%08x\n",
+				 i, READCC32(devinfo, pllcontrol_data));
+		}
+
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.39: allowing watchdog reset (IOMMU group 8 is crash-protective)\n");
+			 "BCM4360 test.40: allowing watchdog reset (IOMMU group 8 is crash-protective)\n");
 		/* fall through to standard reset code */
 	}
 
@@ -1838,17 +1848,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 sharedram_addr_written);
 
 	/* test.39: watchdog reset enabled for BCM4360.
-	 *
-	 * test.38 result: PMU alive (res_state 0x13b→0x13f in ~1ms) but BBPLL
-	 * is off — HT never appeared even with all PMU resources raised. TCM
-	 * completely unchanged across all tests → ARM never executed a single
-	 * instruction. Root cause: without BBPLL, ARM has no execution clock.
-	 *
-	 * test.39: brcmf_pcie_reset_device now falls through to the standard
-	 * watchdog reset path (WRITECC32 watchdog=4, msleep(100)). Full chip
-	 * reset causes PMU startup sequence which relocks BBPLL. After reset,
-	 * ARM has execution clock and firmware should initialize normally.
-	 * Log pre-ARM state to confirm BBPLL is up (HT=YES expected).
+	 * test.39 result: watchdog survived on IOMMU group 8. After watchdog,
+	 * BBPLL still off (HAVEHT=0 in pmustatus, HAVEALP=1). PMU domain is
+	 * always-on: min_res/max_res/res_state unchanged. Watchdog did NOT
+	 * bring up BBPLL. BCM4360 needs explicit BBPLL initialization.
+	 * test.40: added pllcontrol reads + ARM wrapper diagnostics.
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		/* Read-only: log PMU/HT state just before ARM release */
@@ -1891,19 +1895,28 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			return -ENODEV; /* clean abort, no crash */
 		}
 
-		/* test.39: log post-watchdog-reset PMU state. Expect HT=YES. */
+		/* test.40: log post-watchdog-reset PMU state + pllcontrol[0..5]. */
 		{
-			u32 clk;
+			u32 clk, i;
 
 			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 			clk = READCC32(devinfo, clk_ctl_st);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.39 pre-ARM: clk_ctl_st=0x%08x min_res=0x%08x max_res=0x%08x res_state=0x%08x HT=%s\n",
+				 "BCM4360 test.40 pre-ARM: clk_ctl_st=0x%08x min_res=0x%08x max_res=0x%08x res_state=0x%08x pmustatus=0x%08x HT=%s\n",
 				 clk,
 				 READCC32(devinfo, min_res_mask),
 				 READCC32(devinfo, max_res_mask),
 				 READCC32(devinfo, res_state),
+				 READCC32(devinfo, pmustatus),
 				 (clk & 0x20000) ? "YES" : "NO");
+
+			/* Read pllcontrol[0..5] after watchdog — should be same if PMU is always-on */
+			for (i = 0; i < 6; i++) {
+				WRITECC32(devinfo, pllcontrol_addr, i);
+				dev_info(&devinfo->pdev->dev,
+					 "BCM4360 test.40 post-wd pllcontrol[%u]=0x%08x\n",
+					 i, READCC32(devinfo, pllcontrol_data));
+			}
 		}
 	}
 
@@ -1912,18 +1925,51 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	if (err)
 		return err;
 
+	/* test.40: immediately after ARM release, read ARM wrapper registers.
+	 * ARM wrapper IOCTL at wrapper_base+0x408 = core_base+0x1408.
+	 * ARM wrapper RESET_CTL at wrapper_base+0x800 = core_base+0x1800.
+	 * ARM core clk_ctl_st at core_base+0x1E0 (if implemented by ARM).
+	 * These confirm ARM is truly "up" and show its clock state at release.
+	 */
+	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+		u32 arm_ioctl, arm_rst, arm_clkst;
+
+		brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
+		arm_ioctl  = brcmf_pcie_read_reg32(devinfo, 0x1408); /* wrapper IOCTL */
+		arm_rst    = brcmf_pcie_read_reg32(devinfo, 0x1800); /* wrapper RESET_CTL */
+		arm_clkst  = brcmf_pcie_read_reg32(devinfo, 0x01E0); /* core clk_ctl_st */
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 test.40 ARM-release: IOCTL=0x%08x RESET_CTL=0x%08x ARM_CLKST=0x%08x\n",
+			 arm_ioctl, arm_rst, arm_clkst);
+		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+	}
+
 	brcmf_dbg(PCIE, "Wait for FW init\n");
 
 	sharedram_addr = sharedram_addr_written;
 	loop_counter = BRCMF_PCIE_FW_UP_TIMEOUT / 50;
 	while ((sharedram_addr == sharedram_addr_written) && (loop_counter)) {
 		msleep(50);
-		/* Per-iteration log: last visible entry before any crash tells us timing */
-		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID)
+		/* test.40: log every iteration (crash timing), pmustatus every 20 */
+		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+			int iter = (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 50) - (int)loop_counter + 1;
+
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.39: wait iter %d val=0x%08x\n",
-				  (int)(BRCMF_PCIE_FW_UP_TIMEOUT / 50) - (int)loop_counter + 1,
-				  sharedram_addr);
+				  "BCM4360 test.40: wait iter %d val=0x%08x\n",
+				  iter, sharedram_addr);
+			/* Every 20 iterations: check pmustatus to see if BBPLL came up */
+			if (iter % 20 == 0) {
+				u32 pmu_st;
+
+				brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+				pmu_st = READCC32(devinfo, pmustatus);
+				dev_info(&devinfo->pdev->dev,
+					 "BCM4360 test.40: iter %d pmustatus=0x%08x clk_ctl_st=0x%08x HT=%s\n",
+					 iter, pmu_st,
+					 READCC32(devinfo, clk_ctl_st),
+					 (READCC32(devinfo, clk_ctl_st) & 0x20000) ? "YES" : "NO");
+			}
+		}
 		sharedram_addr = brcmf_pcie_read_ram32(devinfo,
 						       devinfo->ci->ramsize -
 						       4);
@@ -1937,23 +1983,35 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		struct brcmf_core *arm_core, *pcie2_core;
 		u32 i, tcm_val;
 
-		brcmf_err(bus, "BCM4360 test.39: FW timeout — did not write sharedram ptr in 5s\n");
+		brcmf_err(bus, "BCM4360 test.40: FW timeout — did not write sharedram ptr in 5s\n");
 
-		/* Diagnostic 1: clk_ctl_st after ARM release. If HT=YES, ARM ran and
-		 * initialized clocks. test.39: post-watchdog-reset — check if BBPLL/HT came up.
+		/* Diagnostic 1: ChipCommon clk_ctl_st + pmustatus after 5s.
+		 * HAVEHT (bit 17 of clk_ctl_st, 0x20000) = BBPLL available to CC.
+		 * HAVEALP (bit 16, 0x10000) = ALP available.
+		 * pmustatus bit 2 (0x04) = HAVEHT at PMU level.
 		 */
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.39 post-timeout: clk_ctl_st=0x%08x res_state=0x%08x HT=%s\n",
+			 "BCM4360 test.40 post-timeout: CC clk_ctl_st=0x%08x res_state=0x%08x pmustatus=0x%08x HT=%s\n",
 			 READCC32(devinfo, clk_ctl_st),
 			 READCC32(devinfo, res_state),
+			 READCC32(devinfo, pmustatus),
 			 (READCC32(devinfo, clk_ctl_st) & 0x20000) ? "YES" : "NO");
 
-		/* Diagnostic 2: ARM CR4 and PCIE2 core states after timeout */
+		/* Diagnostic 2: ARM wrapper registers after 5s — did ARM reset itself? */
+		brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
+		dev_info(&devinfo->pdev->dev,
+			 "BCM4360 test.40 post-timeout: ARM IOCTL=0x%08x RESET_CTL=0x%08x ARM_CLKST=0x%08x\n",
+			 brcmf_pcie_read_reg32(devinfo, 0x1408),
+			 brcmf_pcie_read_reg32(devinfo, 0x1800),
+			 brcmf_pcie_read_reg32(devinfo, 0x01E0));
+		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+
+		/* Diagnostic 3: ARM CR4 and PCIE2 core states after timeout */
 		arm_core   = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_ARM_CR4);
 		pcie2_core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_PCIE2);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.39 post-timeout: ARM_CR4=%s PCIE2=%s\n",
+			 "BCM4360 test.40 post-timeout: ARM_CR4=%s PCIE2=%s\n",
 			 arm_core   ? (brcmf_chip_iscoreup(arm_core)   ? "UP" : "DOWN") : "NULL",
 			 pcie2_core ? (brcmf_chip_iscoreup(pcie2_core) ? "UP" : "DOWN") : "NULL");
 
@@ -1963,14 +2021,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		for (i = 0; i < 16; i += 4) {
 			tcm_val = brcmf_pcie_read_ram32(devinfo, i);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.39 post-timeout: TCM[0x%04x]=0x%08x\n",
+				 "BCM4360 test.40 post-timeout: TCM[0x%04x]=0x%08x\n",
 				 i, tcm_val);
 		}
 		/* Also read TCM[ramsize-8..ramsize-1] to check NVRAM area */
 		for (i = devinfo->ci->ramsize - 8; i < devinfo->ci->ramsize; i += 4) {
 			tcm_val = brcmf_pcie_read_ram32(devinfo, i);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.39 post-timeout: TCM[0x%05x]=0x%08x\n",
+				 "BCM4360 test.40 post-timeout: TCM[0x%05x]=0x%08x\n",
 				 i, tcm_val);
 		}
 
@@ -1980,7 +2038,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	/* Firmware initialized: log the detected shared pointer */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.39: FW init detected! sharedram_addr=0x%08x\n",
+			 "BCM4360 test.40: FW init detected! sharedram_addr=0x%08x\n",
 			 sharedram_addr);
 	}
 
