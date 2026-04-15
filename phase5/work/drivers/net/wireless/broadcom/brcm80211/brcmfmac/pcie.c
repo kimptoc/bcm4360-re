@@ -1985,174 +1985,162 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 	}
 
-	/* test.61: extended masking + status-register clearing + 20s heartbeat.
+	/* test.62: same masking as test.61, but now combined with the real FW wait loop.
 	 *
-	 * test.60 RESULT: CRASH at tick 39/40 (~T+7800-8000ms).
-	 *   - BC=0x0000 DC=0x0000 at ALL 39 ticks — firmware never restored error bits
-	 *   - Per-tick re-masking shifted crash from ~5s (test.59) to ~8s (test.60)
-	 *   - Pattern: crash at 2s, 5s, 8s — periodic firmware PCIE2 events every ~3s
-	 *   - RootCtl read from sysfs = 0x0000 (SECEE/SENFEE/SEFEE all already 0)
-	 *   - aer_cap=0: extended config space inaccessible via Linux (ECAM broken?)
+	 * test.61 RESULT: SURVIVED 20s (all 100 ticks, 6+ PCIE2 events suppressed).
+	 *   - DS=0x0010 (AuxPwr only) throughout — no error bits accumulated in DevSta/SecSta/RootSta
+	 *   - Status clearing + per-tick re-masking defeated all periodic ~3s PCIE2 events
+	 *   - ext_cap0=0x20000000 — ECAM accessible; cap_id=0 at 0x100 (null/vendor cap), next=0x200
+	 *   - Status registers (DS/SS/RS) stayed clean; writes themselves (not the bits) are what help:
+	 *     the unconditional RW1C writes reset PCH internal state, not any accumulated error flags.
+	 *   - Masking is NOT restored on exit (advisor: restoring could trigger a crash post-module)
 	 *
-	 * Conclusions from test.59+60:
-	 *   - BC/DC masking works: initial clear suppressed 2s event; per-tick re-mask
-	 *     suppressed 5s event. Each run of re-masking buys one extra 3s period.
-	 *   - BC/DC always read 0: firmware doesn't persist the error bits; the writes
-	 *     are side-effecting something else (PCH internal state, or racing a brief
-	 *     firmware set+clear within the 200ms interval).
-	 *   - RootCtl was already 0 — not the missing path.
-	 *   - Remaining escalation path: status register accumulation (DevSta/SecSta/
-	 *     RootSta) triggering Intel PCH SMM; or hardware AER invisible to Linux.
+	 * test.62 goal: confirm BAR0 reads (brcmf_pcie_read_ram32) are safe under masking,
+	 * and that the BCM4360 firmware actually writes its sharedram pointer.
+	 * Strategy:
+	 *   1. Initial masking (same as test.61: CMD, BC, DevCtl, AER_RC, status regs).
+	 *   2. Combined FW wait + periodic re-masking:
+	 *      outer loop: 200ms masking tick; inner loop: 20×10ms sharedram polls.
+	 *      Sentinel = 0 (driver wrote 0 to ramsize-4 before ARM release).
+	 *      Filter 0xFFFFFFFF (transient PCIE2 completion timeout) — not a valid FW ptr.
+	 *   3. On FW ready: log sharedram_addr + tick; return -ENODEV ("test.63 next").
+	 *   4. On 20s timeout: log + return -ENODEV.
 	 *
-	 * test.61 strategy:
-	 *   1. Same initial masking as test.60 (CMD, BC, DevCtl, AER_RC if accessible).
-	 *   2. Log RootCtl at init (verify 0x0000).
-	 *   3. Read ext_cap[0x100] to check if ECAM is accessible at all.
-	 *   4. 100 × 200ms heartbeat = 20s (covers 6+ periodic events at ~3s each).
-	 *   5. Per tick: re-mask BC+DevCtl+CMD; ALSO read+RW1C-clear DevSta, SecSta,
-	 *      RootSta. Log all before clearing — catch any nonzero status bits.
+	 * Masking is left in place on exit (NOT restored) to avoid re-triggering a crash.
+	 * test.63 will proceed past -ENODEV and attempt full driver init.
 	 *
 	 * Interpreting results:
-	 *   Any status register nonzero at crash tick → confirms SMM polling that reg.
-	 *   SURVIVED 20s → status clearing is the key; test.62 integrates into normal init.
-	 *   Crash at ~11s again → status clearing helped one more event; log which regs.
-	 *   Crash at ~8s → status clearing didn't help; revisit AER / completion timeout.
+	 *   FW writes sharedram within 20s → BAR0 reads safe; proceed to test.63 (full init).
+	 *   Crash during FW wait → BAR0 MMIO reads are not safe even under masking; investigate.
+	 *   Timeout (no FW write) → masking interfered with FW init somehow; investigate.
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		struct pci_dev *rp = devinfo->pdev->bus ? devinfo->pdev->bus->self : NULL;
 		u16 rp_cmd_orig = 0, rp_bc_orig = 0, rp_devctl_orig = 0;
 		u32 rp_aer_orig = 0;
 		int pcie_cap = 0, aer_cap = 0;
-		int i;
+		int outer, inner;
+		u32 fw_sharedram = sharedram_addr_written; /* sentinel = 0 */
 
-		/* Step 1+2: find root port and disable error escalation */
+		/* Step 1: initial masking — disable RP error escalation */
 		if (rp) {
 			u16 rtctl = 0;
 			u32 ext_cap0 = 0xdeadbeef;
 
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.61: root port = %s; disabling error escalation\n",
-				  pci_name(rp));
+			pcie_cap = pci_find_capability(rp, PCI_CAP_ID_EXP);
+			aer_cap  = pci_find_ext_capability(rp, PCI_EXT_CAP_ID_ERR);
 
-			/* 2a. SERR enable in bridge PCI_COMMAND */
 			pci_read_config_word(rp, PCI_COMMAND, &rp_cmd_orig);
 			pci_write_config_word(rp, PCI_COMMAND,
 					      rp_cmd_orig & ~PCI_COMMAND_SERR);
 
-			/* 2b. SERR forwarding in PCI_BRIDGE_CONTROL */
 			pci_read_config_word(rp, PCI_BRIDGE_CONTROL, &rp_bc_orig);
 			pci_write_config_word(rp, PCI_BRIDGE_CONTROL,
 					      rp_bc_orig & ~PCI_BRIDGE_CTL_SERR);
 
-			/* 2c. PCIe DevCtl error enables (bits 0-3: CERE NFERE FERE URRE) */
-			pcie_cap = pci_find_capability(rp, PCI_CAP_ID_EXP);
 			if (pcie_cap) {
 				pci_read_config_word(rp, pcie_cap + PCI_EXP_DEVCTL,
 						     &rp_devctl_orig);
 				pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVCTL,
 						      rp_devctl_orig & ~0x000f);
-
-				/* Read RootCtl (expected 0x0000 from sysfs pre-check) */
 				pci_read_config_word(rp, pcie_cap + PCI_EXP_RTCTL, &rtctl);
 			}
 
-			/* 2d. AER root error command */
-			aer_cap = pci_find_ext_capability(rp, PCI_EXT_CAP_ID_ERR);
 			if (aer_cap) {
 				pci_read_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
 						      &rp_aer_orig);
 				pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND, 0);
 			}
 
-			/* 2e. Probe extended config space at 0x100 (check ECAM availability) */
 			pci_read_config_dword(rp, 0x100, &ext_cap0);
 
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.61: masked: CMD=0x%04x→0x%04x BC=0x%04x→0x%04x "
-				  "DevCtl=0x%04x→0x%04x AER_RC=0x%08x→0x00000000 "
-				  "(pcie_cap=%d aer_cap=%d RootCtl=0x%04x ext_cap0=0x%08x)\n",
-				  rp_cmd_orig, rp_cmd_orig & ~PCI_COMMAND_SERR,
-				  rp_bc_orig, rp_bc_orig & ~PCI_BRIDGE_CTL_SERR,
-				  rp_devctl_orig, rp_devctl_orig & ~0x000f,
-				  rp_aer_orig, pcie_cap, aer_cap, rtctl, ext_cap0);
-		} else {
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.61: no root port found — skipping error masking\n");
-		}
-
-		/* Step 3: heartbeat — 100 × 200ms = 20s; re-mask + clear status each tick */
-		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.61: starting heartbeat (100×200ms=20s); re-masking+clearing each tick\n");
-		for (i = 0; i < 100; i++) {
-			u16 cmd, bc = 0, dc = 0, devsta = 0, secsta = 0;
-			u32 rtsta = 0;
-
-			msleep(200);
-
-			/* Read endpoint CMD */
-			pci_read_config_word(devinfo->pdev, PCI_COMMAND, &cmd);
-
-			if (rp) {
-				/* Read BC + DevCtl BEFORE re-masking */
-				pci_read_config_word(rp, PCI_BRIDGE_CONTROL, &bc);
-				if (pcie_cap)
-					pci_read_config_word(rp, pcie_cap + PCI_EXP_DEVCTL, &dc);
-
-				/* Re-apply BC + DevCtl masking */
-				pci_write_config_word(rp, PCI_BRIDGE_CONTROL,
-						      bc & ~PCI_BRIDGE_CTL_SERR);
-				if (pcie_cap)
-					pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVCTL,
-							      dc & ~0x000f);
-
-				/* Re-apply CMD SERR masking */
-				pci_write_config_word(rp, PCI_COMMAND,
-						      rp_cmd_orig & ~PCI_COMMAND_SERR);
-
-				/* Read + RW1C-clear DevSta (RP) — captures CorrErr/NFED/FED/URD */
-				if (pcie_cap) {
-					pci_read_config_word(rp, pcie_cap + PCI_EXP_DEVSTA, &devsta);
-					if (devsta & ~PCI_EXP_DEVSTA_AUXPD)
-						pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVSTA,
-								      devsta);
-				}
-
-				/* Read + RW1C-clear Secondary Status */
+			/* RW1C-clear status regs unconditionally at init */
+			if (pcie_cap) {
+				u16 devsta; u32 rtsta;
+				pci_read_config_word(rp, pcie_cap + PCI_EXP_DEVSTA, &devsta);
+				pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVSTA, devsta);
+				pci_read_config_dword(rp, pcie_cap + PCI_EXP_RTSTA, &rtsta);
+				pci_write_config_dword(rp, pcie_cap + PCI_EXP_RTSTA, rtsta);
+			}
+			{
+				u16 secsta;
 				pci_read_config_word(rp, PCI_SEC_STATUS, &secsta);
-				if (secsta)
-					pci_write_config_word(rp, PCI_SEC_STATUS, secsta);
-
-				/* Read + RW1C-clear RootSta — PME + error pending */
-				if (pcie_cap) {
-					pci_read_config_dword(rp, pcie_cap + PCI_EXP_RTSTA, &rtsta);
-					if (rtsta)
-						pci_write_config_dword(rp, pcie_cap + PCI_EXP_RTSTA,
-								       rtsta);
-				}
+				pci_write_config_word(rp, PCI_SEC_STATUS, secsta);
 			}
 
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.61 tick=%03d/100 T+%05dms CMD=0x%04x "
-				  "BC=0x%04x DC=0x%04x DS=0x%04x SS=0x%04x RS=0x%08x\n",
-				  i + 1, (i + 1) * 200, cmd, bc, dc, devsta, secsta, rtsta);
-		}
-
-		/* Survived */
-		dev_emerg(&devinfo->pdev->dev, "BCM4360 test.61: SURVIVED 20s!\n");
-
-		if (rp) {
-			pci_write_config_word(rp, PCI_COMMAND, rp_cmd_orig);
-			pci_write_config_word(rp, PCI_BRIDGE_CONTROL, rp_bc_orig);
-			if (pcie_cap)
-				pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVCTL,
-						      rp_devctl_orig);
-			if (aer_cap)
-				pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
-						       rp_aer_orig);
+				  "BCM4360 test.62: RP=%s masked CMD BC DevCtl AER; "
+				  "RootCtl=0x%04x ext_cap0=0x%08x sentinel=0x%08x\n",
+				  pci_name(rp), rtctl, ext_cap0, sharedram_addr_written);
+		} else {
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.61: RP error reporting restored\n");
+				  "BCM4360 test.62: no root port — skipping masking\n");
 		}
 
+		/* Step 2: FW wait + periodic re-masking (200ms outer × 20×10ms inner = 20s max) */
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.62: starting FW wait + masking loop (20s max)\n");
+
+		for (outer = 0; outer < 100; outer++) {
+			/* Re-mask + unconditional RW1C-clear every 200ms */
+			if (rp) {
+				u16 bc, dc, devsta, secsta;
+				u32 rtsta;
+
+				pci_read_config_word(rp, PCI_BRIDGE_CONTROL, &bc);
+				pci_write_config_word(rp, PCI_BRIDGE_CONTROL,
+						      bc & ~PCI_BRIDGE_CTL_SERR);
+
+				if (pcie_cap) {
+					pci_read_config_word(rp, pcie_cap + PCI_EXP_DEVCTL, &dc);
+					pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVCTL,
+							      dc & ~0x000f);
+				}
+
+				pci_write_config_word(rp, PCI_COMMAND,
+						      rp_cmd_orig & ~PCI_COMMAND_SERR);
+
+				/* Unconditional RW1C: writes reset PCH state (not bit values) */
+				if (pcie_cap) {
+					pci_read_config_word(rp, pcie_cap + PCI_EXP_DEVSTA, &devsta);
+					pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVSTA, devsta);
+					pci_read_config_dword(rp, pcie_cap + PCI_EXP_RTSTA, &rtsta);
+					pci_write_config_dword(rp, pcie_cap + PCI_EXP_RTSTA, rtsta);
+				}
+				pci_read_config_word(rp, PCI_SEC_STATUS, &secsta);
+				pci_write_config_word(rp, PCI_SEC_STATUS, secsta);
+			}
+
+			/* Log every 5 outer iterations (1s) */
+			if (outer % 5 == 0) {
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.62 T+%02ds: FW waiting (sharedram still 0x%08x)\n",
+					  (outer * 200) / 1000, fw_sharedram);
+			}
+
+			/* Inner: poll sharedram every 10ms for 200ms */
+			for (inner = 0; inner < 20; inner++) {
+				msleep(10);
+				fw_sharedram = brcmf_pcie_read_ram32(devinfo,
+								      devinfo->ci->ramsize - 4);
+				/* Skip 0 (sentinel) and 0xFFFFFFFF (transient PCIE2 completion timeout) */
+				if (fw_sharedram != sharedram_addr_written &&
+				    fw_sharedram != 0xFFFFFFFF)
+					goto t62_fw_ready;
+				fw_sharedram = sharedram_addr_written; /* normalize 0xFFFF back */
+			}
+		}
+
+		/* Timeout */
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.62: TIMEOUT — FW did not write sharedram in 20s\n");
+		return -ENODEV;
+
+t62_fw_ready:
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.62: FW READY at T+%dms sharedram=0x%08x "
+			  "— BAR0 reads safe under masking; test.63 will proceed\n",
+			  outer * 200 + (inner + 1) * 10, fw_sharedram);
 		return -ENODEV;
 	}
 
