@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.62: masking + FW wait combined — does BCM4360 firmware init under masking?
+# Phase 5.2 test.63: fix sentinel bug + full probe on FW READY
 #
-# test.61 RESULT: SURVIVED 20s (all 100 ticks, 6+ PCIE2 events suppressed)
-#   - DS=0x0010 (AuxPwr only) throughout — no error bits in DevSta/SecSta/RootSta
-#   - Status writes (unconditional RW1C) + BC/DevCtl re-masking are what prevent crashes
-#   - ext_cap0=0x20000000 — ECAM accessible; masking NOT restored on exit
+# test.62 RESULT: CRASHED at ~T+20s
+#   - Sentinel bug: write_ram32(0) was BEFORE NVRAM, so NVRAM overwrote sentinel with
+#     0xffc70038. Firmware checked ramsize-4 == 0, saw non-zero, skipped sharedram write.
+#   - Crash was 7th ~3s periodic event at T+20s hitting a re-masking gap.
+#   - BAR2 reads (brcmf_pcie_read_ram32) confirmed SAFE: 2000+ reads, no crash during loop.
 #
-# test.62 STRATEGY: same initial masking, then combined FW wait + periodic re-masking
-#   - Outer loop: 200ms masking tick; inner loop: 20×10ms sharedram polls
-#   - Sentinel = 0 (driver wrote 0 to ramsize-4 before ARM release)
-#   - Filter 0xFFFFFFFF (transient PCIE2 completion timeout)
-#   - FW ready → log sharedram_addr + tick; return -ENODEV ("test.63 next")
-#   - Masking left in place on exit (NOT restored)
+# test.63 STRATEGY:
+#   - Fixed sentinel: write_ram32(0) now happens AFTER NVRAM write
+#   - Re-mask every 10ms (inner loop) instead of every 200ms (outer loop only)
+#   - FW READY → log sharedram_addr; fall through to full probe init (no -ENODEV)
+#   - TIMEOUT → log + return -ENODEV
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -25,14 +25,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.62.stage${STAGE}"
+LOG="$LOG_DIR/test.63.stage${STAGE}"
 
-echo "=== test.62: masking + FW wait combined --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.63: sentinel fix + full probe --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; BAR0 probe; BBPLL; ARM release; RP error masking; FW wait with 200ms re-masking ticks" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; write_ram32(0) AFTER NVRAM; ARM release; masking+FW wait (10ms re-mask); full probe on READY" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -87,7 +87,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.62 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.63 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
@@ -96,9 +96,9 @@ modprobe cfg80211 2>/dev/null || true
 insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
 insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
 
-echo "Module loaded. Waiting 25s (20s FW wait + margin)..." | tee -a "$LOG"
-echo "(test.62: combined FW wait + 200ms masking ticks; returns -ENODEV if FW detected or timeout)" | tee -a "$LOG"
-sleep 25
+echo "Module loaded. Waiting 30s (20s FW wait + margin for full probe)..." | tee -a "$LOG"
+echo "(test.63: sentinel fixed; FW READY → full probe init; TIMEOUT → -ENODEV; 10ms re-mask)" | tee -a "$LOG"
+sleep 30
 
 # Capture results
 echo "" | tee -a "$LOG"
@@ -110,5 +110,5 @@ echo "=== Module state ===" | tee -a "$LOG"
 lsmod | grep brcm | tee -a "$LOG" || echo "  (brcmfmac not loaded)" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "*** test.62: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
-echo "Log saved to $LOG (test.62)" | tee -a "$LOG"
+echo "*** test.63: PC SURVIVED stage=$STAGE! ***" | tee -a "$LOG"
+echo "Log saved to $LOG (test.63)" | tee -a "$LOG"

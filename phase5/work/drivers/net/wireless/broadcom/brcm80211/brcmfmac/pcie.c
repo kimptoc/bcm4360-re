@@ -1802,11 +1802,6 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	resetintr = get_unaligned_le32(fw->data);
 	release_firmware(fw);
 
-	/* reset last 4 bytes of RAM address. to be used for shared
-	 * area. This identifies when FW is running
-	 */
-	brcmf_pcie_write_ram32(devinfo, devinfo->ci->ramsize - 4, 0);
-
 	if (nvram) {
 		address = devinfo->ci->rambase + devinfo->ci->ramsize -
 			  nvram_len;
@@ -1840,11 +1835,20 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			 "BCM4360 debug: WARNING - no NVRAM loaded!\n");
 	}
 
+	/* test.63: write 0 AFTER NVRAM so NVRAM doesn't overwrite the sentinel.
+	 * In the stock driver the write is before NVRAM, which means the last
+	 * 4 bytes of NVRAM (NVRAM trailer) overwrite the sentinel, leaving a
+	 * non-zero value that prevents firmware change detection.
+	 * Writing 0 here — after all host data is in TCM — is the correct order.
+	 * Firmware checks ramsize-4 == 0 before writing its sharedram_addr.
+	 */
+	brcmf_pcie_write_ram32(devinfo, devinfo->ci->ramsize - 4, 0);
+
 	sharedram_addr_written = brcmf_pcie_read_ram32(devinfo,
 						       devinfo->ci->ramsize -
 						       4);
 	dev_info(&devinfo->pdev->dev,
-		 "BCM4360 debug: sharedram marker before ARM release = 0x%08x\n",
+		 "BCM4360 debug: sharedram sentinel after NVRAM+zero = 0x%08x (expect 0x00000000)\n",
 		 sharedram_addr_written);
 
 	/* test.39: watchdog reset enabled for BCM4360.
@@ -1985,34 +1989,27 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 	}
 
-	/* test.62: same masking as test.61, but now combined with the real FW wait loop.
+	/* test.63: Fix sentinel bug + let full probe continue on FW READY.
 	 *
-	 * test.61 RESULT: SURVIVED 20s (all 100 ticks, 6+ PCIE2 events suppressed).
-	 *   - DS=0x0010 (AuxPwr only) throughout — no error bits accumulated in DevSta/SecSta/RootSta
-	 *   - Status clearing + per-tick re-masking defeated all periodic ~3s PCIE2 events
-	 *   - ext_cap0=0x20000000 — ECAM accessible; cap_id=0 at 0x100 (null/vendor cap), next=0x200
-	 *   - Status registers (DS/SS/RS) stayed clean; writes themselves (not the bits) are what help:
-	 *     the unconditional RW1C writes reset PCH internal state, not any accumulated error flags.
-	 *   - Masking is NOT restored on exit (advisor: restoring could trigger a crash post-module)
+	 * test.62 RESULT: CRASHED at ~T+20s; FW never wrote sharedram.
+	 *   - Root cause 1: sentinel bug — write_ram32(0) was BEFORE NVRAM write,
+	 *     so NVRAM last-4-bytes (0xffc70038) overwrote our zero. Firmware checks
+	 *     ramsize-4 == 0 before writing sharedram_addr; seeing non-zero, it either
+	 *     skips the write or writes something == 0xffc70038 (undetectable).
+	 *   - Root cause 2: crash at T+20s is the 7th ~3s periodic firmware event
+	 *     hitting a re-masking gap between outer ticks; add inner-loop re-masking.
+	 *   - BAR2 reads (brcmf_pcie_read_ram32) confirmed SAFE: 2000+ reads, no crash.
+	 *   - Sentinel fixed above: write_ram32(0) now happens AFTER NVRAM (confirmed 0).
 	 *
-	 * test.62 goal: confirm BAR0 reads (brcmf_pcie_read_ram32) are safe under masking,
-	 * and that the BCM4360 firmware actually writes its sharedram pointer.
-	 * Strategy:
-	 *   1. Initial masking (same as test.61: CMD, BC, DevCtl, AER_RC, status regs).
-	 *   2. Combined FW wait + periodic re-masking:
-	 *      outer loop: 200ms masking tick; inner loop: 20×10ms sharedram polls.
-	 *      Sentinel = 0 (driver wrote 0 to ramsize-4 before ARM release).
-	 *      Filter 0xFFFFFFFF (transient PCIE2 completion timeout) — not a valid FW ptr.
-	 *   3. On FW ready: log sharedram_addr + tick; return -ENODEV ("test.63 next").
-	 *   4. On 20s timeout: log + return -ENODEV.
+	 * test.63 strategy:
+	 *   1. Same initial masking as test.61/62.
+	 *   2. Re-mask inside inner loop (every 10ms) to close the 200ms event gap.
+	 *   3. sentinel = 0; detect when FW writes non-zero, non-0xFFFFFFFF.
+	 *   4. FW READY → log sharedram_addr; set sharedram_addr_written = sharedram_addr;
+	 *      fall through to the normal init path (brcmf_pcie_init_share_ram_info).
+	 *   5. TIMEOUT → return -ENODEV (investigate further).
 	 *
-	 * Masking is left in place on exit (NOT restored) to avoid re-triggering a crash.
-	 * test.63 will proceed past -ENODEV and attempt full driver init.
-	 *
-	 * Interpreting results:
-	 *   FW writes sharedram within 20s → BAR0 reads safe; proceed to test.63 (full init).
-	 *   Crash during FW wait → BAR0 MMIO reads are not safe even under masking; investigate.
-	 *   Timeout (no FW write) → masking interfered with FW init somehow; investigate.
+	 * Masking stays in place on exit (restoring could trigger a crash).
 	 */
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		struct pci_dev *rp = devinfo->pdev->bus ? devinfo->pdev->bus->self : NULL;
@@ -2020,7 +2017,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		u32 rp_aer_orig = 0;
 		int pcie_cap = 0, aer_cap = 0;
 		int outer, inner;
-		u32 fw_sharedram = sharedram_addr_written; /* sentinel = 0 */
+		u32 fw_sharedram = 0; /* sentinel = 0 (write_ram32(0) done after NVRAM above) */
 
 		/* Step 1: initial masking — disable RP error escalation */
 		if (rp) {
@@ -2069,79 +2066,83 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			}
 
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.62: RP=%s masked CMD BC DevCtl AER; "
+				  "BCM4360 test.63: RP=%s masked CMD BC DevCtl AER; "
 				  "RootCtl=0x%04x ext_cap0=0x%08x sentinel=0x%08x\n",
 				  pci_name(rp), rtctl, ext_cap0, sharedram_addr_written);
 		} else {
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.62: no root port — skipping masking\n");
+				  "BCM4360 test.63: no root port — skipping masking\n");
 		}
 
-		/* Step 2: FW wait + periodic re-masking (200ms outer × 20×10ms inner = 20s max) */
+		/* Step 2: FW wait + per-inner-tick re-masking (20×10ms inner × 100 outer = 20s) */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.62: starting FW wait + masking loop (20s max)\n");
+			  "BCM4360 test.63: starting FW wait + masking loop (20s max, re-mask every 10ms)\n");
 
 		for (outer = 0; outer < 100; outer++) {
-			/* Re-mask + unconditional RW1C-clear every 200ms */
-			if (rp) {
-				u16 bc, dc, devsta, secsta;
-				u32 rtsta;
+			/* Log every outer iteration (200ms) with current sharedram value */
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.63 T+%03dms: sharedram=0x%08x\n",
+				  outer * 200, fw_sharedram);
 
-				pci_read_config_word(rp, PCI_BRIDGE_CONTROL, &bc);
-				pci_write_config_word(rp, PCI_BRIDGE_CONTROL,
-						      bc & ~PCI_BRIDGE_CTL_SERR);
-
-				if (pcie_cap) {
-					pci_read_config_word(rp, pcie_cap + PCI_EXP_DEVCTL, &dc);
-					pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVCTL,
-							      dc & ~0x000f);
-				}
-
-				pci_write_config_word(rp, PCI_COMMAND,
-						      rp_cmd_orig & ~PCI_COMMAND_SERR);
-
-				/* Unconditional RW1C: writes reset PCH state (not bit values) */
-				if (pcie_cap) {
-					pci_read_config_word(rp, pcie_cap + PCI_EXP_DEVSTA, &devsta);
-					pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVSTA, devsta);
-					pci_read_config_dword(rp, pcie_cap + PCI_EXP_RTSTA, &rtsta);
-					pci_write_config_dword(rp, pcie_cap + PCI_EXP_RTSTA, rtsta);
-				}
-				pci_read_config_word(rp, PCI_SEC_STATUS, &secsta);
-				pci_write_config_word(rp, PCI_SEC_STATUS, secsta);
-			}
-
-			/* Log every 5 outer iterations (1s) */
-			if (outer % 5 == 0) {
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.62 T+%02ds: FW waiting (sharedram still 0x%08x)\n",
-					  (outer * 200) / 1000, fw_sharedram);
-			}
-
-			/* Inner: poll sharedram every 10ms for 200ms */
+			/* Inner: re-mask + poll sharedram every 10ms for 200ms */
 			for (inner = 0; inner < 20; inner++) {
 				msleep(10);
+
+				/* Re-mask + unconditional RW1C-clear every 10ms */
+				if (rp) {
+					u16 bc, dc, devsta, secsta;
+					u32 rtsta;
+
+					pci_read_config_word(rp, PCI_BRIDGE_CONTROL, &bc);
+					pci_write_config_word(rp, PCI_BRIDGE_CONTROL,
+							      bc & ~PCI_BRIDGE_CTL_SERR);
+
+					if (pcie_cap) {
+						pci_read_config_word(rp, pcie_cap + PCI_EXP_DEVCTL, &dc);
+						pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVCTL,
+								      dc & ~0x000f);
+					}
+
+					pci_write_config_word(rp, PCI_COMMAND,
+							      rp_cmd_orig & ~PCI_COMMAND_SERR);
+
+					/* Unconditional RW1C: writes reset PCH state */
+					if (pcie_cap) {
+						pci_read_config_word(rp, pcie_cap + PCI_EXP_DEVSTA, &devsta);
+						pci_write_config_word(rp, pcie_cap + PCI_EXP_DEVSTA, devsta);
+						pci_read_config_dword(rp, pcie_cap + PCI_EXP_RTSTA, &rtsta);
+						pci_write_config_dword(rp, pcie_cap + PCI_EXP_RTSTA, rtsta);
+					}
+					pci_read_config_word(rp, PCI_SEC_STATUS, &secsta);
+					pci_write_config_word(rp, PCI_SEC_STATUS, secsta);
+				}
+
 				fw_sharedram = brcmf_pcie_read_ram32(devinfo,
 								      devinfo->ci->ramsize - 4);
-				/* Skip 0 (sentinel) and 0xFFFFFFFF (transient PCIE2 completion timeout) */
-				if (fw_sharedram != sharedram_addr_written &&
-				    fw_sharedram != 0xFFFFFFFF)
-					goto t62_fw_ready;
-				fw_sharedram = sharedram_addr_written; /* normalize 0xFFFF back */
+				/* Detect FW write: non-zero (sentinel) and non-0xFFFFFFFF (timeout) */
+				if (fw_sharedram != 0 && fw_sharedram != 0xFFFFFFFF)
+					goto t63_fw_ready;
+				if (fw_sharedram == 0xFFFFFFFF)
+					fw_sharedram = 0; /* normalize completion timeout back */
 			}
 		}
 
-		/* Timeout */
+		/* Timeout — FW did not write sharedram in 20s */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.62: TIMEOUT — FW did not write sharedram in 20s\n");
+			  "BCM4360 test.63: ABOUT TO TIMEOUT (loop complete, crash=cleanup if you see this)\n");
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.63: TIMEOUT — FW did not write sharedram in 20s\n");
 		return -ENODEV;
 
-t62_fw_ready:
+t63_fw_ready:
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.62: FW READY at T+%dms sharedram=0x%08x "
-			  "— BAR0 reads safe under masking; test.63 will proceed\n",
+			  "BCM4360 test.63: FW READY at T+%dms sharedram=0x%08x "
+			  "— proceeding with full probe init\n",
 			  outer * 200 + (inner + 1) * 10, fw_sharedram);
-		return -ENODEV;
+		/* Fall through to normal init: set sharedram_addr so the wait loop below
+		 * sees a non-zero value and skips, then validation + init_share_ram_info run.
+		 */
+		sharedram_addr_written = fw_sharedram;
 	}
 
 	brcmf_dbg(PCIE, "Wait for FW init\n");

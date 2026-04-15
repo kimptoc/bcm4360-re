@@ -1,54 +1,68 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-15, about to run test.62)
+## Current state (2026-04-15, about to run test.63)
 
 Git branch: main (pushed to origin)
 
-## test.61 RESULT: SURVIVED 20s — MAJOR MILESTONE
+## test.62 RESULT: CRASHED at ~T+20s — two root causes identified
 
-**All 100 ticks logged (T+200ms through T+20000ms), 6+ periodic PCIE2 events suppressed**
-- DS=0x0010 (AuxPwr only) throughout — no error bits in DevSta/SecSta/RootSta
-- SS=0x0000 and RS=0x00000000 throughout — status registers stayed clean
-- ext_cap0=0x20000000 — ECAM is accessible! (Cap ID=0 at 0x100, next ptr=0x200)
-- Key insight: unconditional RW1C writes reset PCH internal state (not bit values)
-- Per-tick BC/DevCtl/CMD re-masking + status clearing defeats ALL periodic ~3s events
-- Masking NOT restored on exit (to avoid re-triggering crashes post-module)
+**Survived T+0..T+19s (2000+ BAR2 reads), then crashed**
+- Crash is the 7th ~3s periodic firmware event hitting a re-masking gap at T+20s
+- Firmware NEVER wrote sharedram_addr throughout 20s
 
-## test.62 PLAN (about to run)
+**Root cause 1 (sentinel bug):** write_ram32(0) was at line 1808 BEFORE the NVRAM copy at line 1816.
+- NVRAM (228 bytes) written at offset 0x9ff1c covers 0x9ff1c..0x9ffff, including 0x9fffc (ramsize-4)
+- Last 4 bytes of NVRAM blob = 0xffc70038, which OVERWROTE our zero
+- So sharedram_addr_written = 0xffc70038 (not 0)
+- Firmware checks ramsize-4 == 0 before writing sharedram_addr; sees 0xffc70038 → skips write
+- Detection loop compared against 0xffc70038 → never detects firmware's actual write
 
-**Strategy: same masking + combined FW wait loop (test -ENODEV still returned)**
+**Root cause 2 (re-masking gap):** Masking was only per outer tick (every 200ms).
+- The 7th periodic event at ~T+20s hit a gap between outer=95 (T+19s mask) and outer=96 (T+19.2s mask)
+- Machine crashed before TIMEOUT message was logged
 
-Goal: confirm two things:
-1. BAR0 MMIO reads (brcmf_pcie_read_ram32) are safe under masking
-2. BCM4360 firmware actually writes sharedram_addr within 20s
+**Key confirmed findings from test.62:**
+- BAR2 reads (brcmf_pcie_read_ram32 via TCM) are SAFE: 2000+ reads, no crash during loop
+- 0xffc70038 = last 4 bytes of NVRAM blob (not a firmware-written sharedram address)
+- 6 periodic PCIE2 events at T+2,5,8,11,14,17s all suppressed successfully
 
-Design:
-- Initial masking identical to test.61 (CMD, BC, DevCtl, AER, status regs)
-- Outer loop: 200ms masking tick; inner loop: 20×10ms sharedram polls
-- Sentinel = 0 (driver wrote 0 to ramsize-4 at line 1808 before ARM release)
-- Filter 0xFFFFFFFF (transient PCIE2 completion timeout)
-- On FW ready: log sharedram_addr + timing; return -ENODEV ("test.63 next")
-- Masking NOT restored on exit
+## test.63 PLAN (about to run)
 
-**Module build:** done (test.62 built successfully, no errors)
-**Test script:** updated to test.62 (log = test.62.stage0)
+**Two fixes + full probe:**
+1. **Sentinel fix**: write_ram32(0) moved to AFTER NVRAM write (code at line ~1808 area, now after line 1817)
+   - Firmware will see 0 at ramsize-4 → writes actual sharedram_addr
+2. **Tighter masking**: re-mask every 10ms (inner loop) instead of every 200ms
+   - Closes the ~200ms window that the 7th event exploited
+3. **Full probe on FW READY**: no return -ENODEV on fw_ready path
+   - Sets sharedram_addr_written = fw_sharedram; falls through to normal init
+   - brcmf_pcie_init_share_ram_info(devinfo, sharedram_addr) will be called
+4. **TIMEOUT**: returns -ENODEV (investigate if firmware still doesn't write)
+
+**Expected outcome if sentinel fix works:**
+- Firmware writes sharedram_addr within 2-3s of ARM release (maybe even sooner with correct sentinel)
+- Full brcmfmac init proceeds: ring buffers, IRQs, etc.
+- WiFi device appears operational
+- BCM4360 802.11ac finally works on this MacBook Pro
+
+**Module build:** done (test.63 built successfully, no errors)
+**Test script:** updated to test.63 (log = test.63.stage0), waits 30s
 
 **After test — what to do (whether PASS or crash):**
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.62" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.62.journal'` (or -b 0 if survived)
-3. `sudo chown kimptoc:users phase5/logs/test.62.*`
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.63" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.63.journal'` (or -b 0 if survived)
+3. `sudo chown kimptoc:users phase5/logs/test.63.*`
 4. git add logs + commit + push
-5. Analyze: did FW write sharedram? At what time? → plan test.63
+5. Analyze results
 
 **After a crash:**
-1. Look for last logged T+ time — crash during FW wait means BAR0 reads still unsafe
-2. Check if crash happened during inner loop (10ms polls) or outer loop (masking)
-3. Compare crash timing to 3s periodic pattern (2s, 5s, 8s...)
+1. Check if "FW READY" was logged → sentinel fix worked, crash is in full probe
+2. Check if sharedram=0 always → firmware still doesn't write even with fixed sentinel → deeper issue
+3. Note the T+Xms when crash occurred
 
-**After success (FW READY logged):**
-1. Note the T+Xms when sharedram was detected (typically 2-3s after ARM release)
-2. Note the sharedram_addr value — should be in [rambase, rambase+ramsize)
-3. test.63: remove the -ENODEV and let full probe continue
+**After success (FW READY + survived 30s):**
+1. Check if WiFi device appears: `ip link show` or `iw dev`
+2. Check if brcmfmac is loaded: `lsmod | grep brcm`
+3. Test WiFi scanning if possible
 
 ## Test history summary
 - test.42: PASS — BBPLL only (no ARM) → HAVEHT=YES confirmed
@@ -82,12 +96,13 @@ Design:
   BC/DC always 0x0000; per-tick re-masking suppressed 5s event; RootCtl=0x0000
 - test.61: SURVIVED 20s! — status clearing + re-masking defeats all events
   DS=0x0010 (AuxPwr) always; SS/RS always 0; ext_cap0=0x20000000 (ECAM accessible)
+- test.62: CRASHED at ~T+20s (two root causes found — see above)
 
 ## Key files
 - Source: phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 - Test script: phase5/work/test-staged-reset.sh
-- Logs: phase5/logs/test.62.stage0, test.62.journal (after test)
+- Logs: phase5/logs/test.63.stage0, test.63.journal (after test)
 - Build: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build && make -C "$KDIR" M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
 
-## Run test.62 (if not yet run):
+## Run test.63 (if not yet run):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
