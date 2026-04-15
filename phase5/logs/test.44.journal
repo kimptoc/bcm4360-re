@@ -1,0 +1,54 @@
+Apr 15 08:02:17 nixos kernel: brcmfmac: loading out-of-tree module taints kernel.
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffd45842400000
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 EFI state: clk_ctl_st=0x00050040 min_res=0x0000013b max_res=0x0000013f res_state=0x0000013b
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 EFI PMU: pmustatus=0x0000002a pmucontrol=0x01770181
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[0]=0x00000000
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[1]=0x00000000
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[2]=0x00000c31
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[3]=0x00133333
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[4]=0x06060c03
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[5]=0x00000606
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.40: allowing watchdog reset (IOMMU group 8 is crash-protective)
+Apr 15 08:02:17 nixos kernel: brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.Apple Inc.-MacBookPro11,1.bin failed with error -2
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffd45842400000
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: NVRAM loaded, len=228, writing to TCM 0x9ff1c
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: sharedram marker before ARM release = 0xffc70038
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pre-ARM: clk_ctl_st=0x00050040 res_state=0x0000013b HT=NO
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44 pre-BBPLL: clk_ctl_st=0x00050040 min_res=0x0000013b max_res=0x0000013f res_state=0x0000013b pmustatus=0x0000002a HT=NO
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: raising max_res_mask+min_res_mask to 0xFFFFF
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44 BBPLL: pmustatus=0x0000002e clk_ctl_st=0x01030040 HAVEHT=YES (retries=1)
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: logging original TCM exception vectors
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44 orig TCM[0x00]=0xb80ef000
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44 orig TCM[0x04]=0xb82ef000
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44 orig TCM[0x08]=0xb839f000
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44 orig TCM[0x0c]=0xb844f000
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44 orig TCM[0x10]=0xb852f000
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44 orig TCM[0x14]=0xb860f000
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44 orig TCM[0x18]=0xb86ef000
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44 orig TCM[0x1c]=0xb87cf000
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: overwriting TCM[0x00..0x1C] with B. (0xEAFFFFFE)
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: verifying TCM[0x00]=0xeafffffe (expect 0xEAFFFFFE)
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: BBPLL up, vectors overwritten — proceeding with ARM release
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44 ARM-release: IOCTL=0x00000001 RESET_CTL=0x00000000 ARM_CLKST=0x070b0040
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 1 val=0xffc70038
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 2 val=0xffc70038
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 3 val=0xffc70038
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 4 val=0xffc70038
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 5 val=0xffc70038
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 6 val=0xffc70038
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 7 val=0xffc70038
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 8 val=0xffc70038
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 9 val=0xffc70038
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 10 val=0xffc70038
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 11 val=0xffc70038
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 12 val=0xffc70038
+Apr 15 08:02:17 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 13 val=0xffc70038
+Apr 15 08:02:18 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 14 val=0xffc70038
+Apr 15 08:02:18 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 15 val=0xffc70038
+Apr 15 08:02:18 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 16 val=0xffc70038
+Apr 15 08:02:18 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 17 val=0xffc70038
+Apr 15 08:02:18 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 18 val=0xffc70038
+Apr 15 08:02:18 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.44: wait iter 19 val=0xffc70038
