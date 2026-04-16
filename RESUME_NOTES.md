@@ -1,8 +1,11 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, PREPARING test.88)
+## Current state (2026-04-16, RUNNING test.88)
 
 Git branch: main (pushed to origin)
+Module built successfully. About to run test.88.
+Test dumps call targets 0x67358, 0x64248, 0x63C24 + stack scan 0x9F000-0x9FFF8.
+3s max loop with re-masking every 10ms.
 
 ## test.87 RESULT: SURVIVED — counter timing + code dumps obtained
 
