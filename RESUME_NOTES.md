@@ -1,15 +1,113 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, ABOUT TO RUN test.94 — module built, not yet run)
+## Current state (2026-04-16, ABOUT TO RUN test.95 — module built, not yet run)
 
 Git branch: main (pushed to origin)
-Module built successfully. About to run test.94.
-Test.94 dumps (at T+200ms, outer==1):
-  A. VTABLE: TCM[0x58CD0-0x58D40] = 28 words — reads [0x58cf4] = actual hang function
-  B. STACK-LOW: TCM[0x9C400-0x9D000] = 192 words — active frames just above STAK fill
-All with per-100-word masking. Total ~220 words — well within proven safe limit.
-Key question: what function does [0x58cf4] point to? (that's the hang candidate called via blx r3 at 0x644dc)
-Also look for Thumb LR values in STACK-LOW: 0x644df, 0x644ff, 0x6451b, 0x67194, 0x67314
+Module built successfully. About to run test.95.
+Test.95 dumps (at T+200ms, outer==1):
+  CODE: TCM[0x840-0xB40] = 192 words — covers 0x848 (tail call target = likely hang) and 0xa4c
+  Per-100-word re-masking. Total ~192 words — well within safe limit (2.7s total).
+Key question: what does 0x848 do? Does it contain a hardware register polling loop?
+Also: 0xa4c (called on 0x5250 failure) — is it a cleanup or a blocking call?
+
+## test.94 RESULT: SURVIVED (vtable read), CRASHED in STACK-LOW at word 154
+
+**test.94 ran in boot -1. Module survived vtable dump, crashed at word 154/192 of STACK-LOW.**
+**VTABLE: VT[0x58cf4] = 0x1FC3 → hang function is at 0x1FC2 (Thumb). CONFIRMED.**
+
+**Key findings from VTABLE dump (0x58CD0-0x58D40):**
+- VT[0x58cd4] = 0x00058c9c (nested vtable/struct ptr)
+- VT[0x58cd8] = 0x00004999 (function at 0x4998)
+- VT[0x58cdc] = 0x0009664c (BSS data ptr)
+- **VT[0x58cf4] = 0x00001FC3** → Call 1 function (blx r3 at 0x644dc) = 0x1FC2 (Thumb) ← HANG CANDIDATE
+- VT[0x58cf8] = 0x00001FB5 → vtable[+8] fn at 0x1FB4
+- VT[0x58cfc] = 0x00001F79 → vtable[+12] fn at 0x1F78
+- VT[0x58d24] = 0x00000001, VT[0x58d28..0x58d3c] = small fn pointers (0x4167C-0x416E3)
+
+**Disassembly of 0x1FC2 (from arm-none-eabi-objdump on test.87 bytes):**
+```
+1fc2:  mov  r2, r1
+1fc4:  ldr  r1, [r0, #24]  ; r1 = obj->si_ptr (field+0x18)
+1fc6:  mov  r3, r0          ; r3 = obj
+1fc8:  ldr  r0, [r1, #20]  ; r0 = si_ptr->dev (field+0x14)
+1fca:  mov  r1, r3          ; r1 = obj (restore)
+1fcc:  b.w  0x2208          ; TAIL CALL → 0x2208
+```
+→ 0x1FC2 is a TRAMPOLINE, not the actual hang. Rearranges args and tail calls to 0x2208.
+
+**0x1FB4 (vtable[+8]):** identical trampoline → b.w 0x235C
+**0x1F78 (vtable[+12]):** real function, calls 0x2E70 and 0x7DC4
+
+**Analysis of 0x2208 (the REAL init function):**
+```
+push.w {r0,r1,r4,r5,r6,r7,r8,lr}   ; 8 regs = 32 bytes stack frame
+r7 = *0x232C = 0x00062A14           ; global state ptr
+r4=arg0(obj), r6=arg1, r5=arg2
+r3 = *0x62A14 = 0x58CF0             ; vtable/state ptr (from test.93)
+if (r3 & 2): optional debug print
+if r6==0 || r5==0: error path
+...
+r8 = 0
+bl 0x1FD0           ; allocate 76-byte struct (malloc via 0x7D60)
+obj->field12 = result
+if (alloc failed): error path
+r0 = *0x62A14 & 0x10                ; 0x58CF0 & 0x10 = 0x10 (SET!)
+if bit4 NOT set: return early (0x231C)
+r1 = *0x2350 (timer priority value)
+r0 = 0
+bl 0x5250           ; register timer/callback
+if (r0 == 0): success path:
+    r0 = *0x237c = 0x00000000 (NULL!)
+    r6 = 0
+    b.w 0x848       ; TAIL CALL → 0x848 ← likely actual hang location!
+```
+
+**0x1FD0 (struct constructor called by 0x2208):**
+- mallocs 76 bytes via 0x7D60
+- memsets to 0 via 0x91C
+- field52 = 0x740 = 1856, field60 = 0x3E8 = 1000, field64 = 28, field68 = 12, field72 = 4
+- These look like timer/retry parameters (period_ms, timeout_ms, max_retry)
+
+**STACK-LOW findings (0x9C400-0x9CDFC, crashed at 0x9CDFC):**
+- 0x9C400-0x9CC54: ALL STAK fill (0x5354414b) — 0x1454 bytes = 5.2KB unused
+- 0x9CC58-0x9CDFC: console ring buffer + BSS data (NOT stack frames)
+  - 0x9CC5C = console write ptr (0x8009CCBE)
+  - 0x9CCC0-0x9CDD8 = decoded console strings
+  - 0x9CC88 = 0x000475B5 (ODD → Thumb fn ptr at 0x475B4 in struct)
+- Stack frames NOT yet read (need 0x9CE00-0x9D000 or higher)
+- Crash at ~3.25s total (exceeding ~3s PCIe crash window)
+
+## test.95 PLAN: Disassemble 0x848 (tail call target = likely hang)
+
+**Goal:** Find the polling loop or blocking call in function 0x848.
+
+**Approach:**
+1. Keep all proven init (BBPLL, BusMaster, ASPM, masking)
+2. Release ARM
+3. At outer==1 (T+200ms): dump TCM[0x840-0xB40] = 192 words
+   - Covers 0x848 (tail call target from 0x2208) and 0xa4c (cleanup fn)
+   - Per-100-word re-masking
+4. 2s outer timeout, re-mask every 10ms (inner loop unchanged)
+
+**Expected outcomes:**
+- 0x848: find the function structure — is it a bus registration, polling loop, or RTOS wait?
+- If 0x848 calls another function: that function is the next target
+- 0xa4c: understand what cleanup/fallback does
+
+**Total timing:** T+200ms + 192 words × ~13ms = T+200ms + 2.5s = T+2.7s (SAFE, < 3s window)
+
+## Run test.95 (after build):
+  cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
+
+## After test — what to do:
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.95" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.95.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.95.*'`
+3. Key things to check:
+   a. SURVIVED? (RP settings restored = yes)
+   b. Extract code dump: `grep "BCM4360 test.95 code:" test.95.journal`
+   c. Disassemble: `python3 ... | arm-none-eabi-objdump ...` (same method as test.94)
+   d. Look for: LDR+CMP+BNE loops (hardware polling), WFI, CPSID, blocking calls
+   e. Is there a loop reading from a fixed hardware address repeatedly?
 
 ## test.93 RESULT: SURVIVED (both runs) — vtable pointer decoded, stack top is NVRAM
 
@@ -99,7 +197,7 @@ EROM disasm: phase5/analysis/test92_erom_disasm.txt
 Disassembly: phase5/analysis/test90_disassembly.txt
 Log: phase5/logs/test.90.journal
 
-## test.90 PLAN: Disassemble 0x670d8 (deep init)
+## test.89 RESULT: SURVIVED — 0x43b1 is STATIC constant (stored once, not incremented)
 
 **test.89 ran in boot -1. Key findings from fast-sampling:**
 1. T+0ms: ctr=0x00000000 (ARM just released)
@@ -143,61 +241,7 @@ Log: phase5/logs/test.89.journal
 Log: phase5/logs/test.91.journal
 Dump: phase5/analysis/test91_dump.txt (431 words: 0x64400-0x64ab8)
 
-## test.94 PLAN: Vtable entries + active stack frames (after test.93 decoded vtable pointer)
-
-**Goal:** Read TCM[0x58cf4] = the function called via vtable (hang candidate); find active stack LR values.
-
-**Approach:**
-1. Keep all proven init (BBPLL, BusMaster, ASPM, masking)
-2. Release ARM
-3. At outer==1 (T+200ms): two dumps with per-100-word re-masking:
-   a. VTABLE: TCM[0x58CD0-0x58D40] = 28 words (includes [0x58cf4] = Call 1 fn ptr)
-   b. STACK-LOW: TCM[0x9C400-0x9D000] = 192 words (active frames just above STAK fill)
-4. 2s timeout, re-mask every 10ms
-
-**Expected outcomes:**
-- VTABLE[0x58cf4]: function pointer → tells us which function is being called (hang candidate)
-- STACK-LOW: Thumb LR values 0x644df/0x644ff/0x6451b/0x67194/0x67314 → call depth at hang
-- Next step: if [0x58cf4] has valid address, dump that function's code
-
-## test.92 PLAN: Stack dump near STAK + EROM parser dump (with per-100-word masking)
-
-**Goal:** Get stack frames to see call depth at hang; disassemble EROM parser at 0x2704.
-
-**Approach:**
-1. Keep all proven init (BBPLL, BusMaster, ASPM, masking)
-2. Release ARM
-3. At outer==1 (T+200ms): two dumps with re-masking every 100 words:
-   a. STACK: TCM[0x9BC00-0x9C400] = 512 words (near STAK marker at 0x9BF00)
-   b. FUNC: TCM[0x2600-0x2900] = 192 words (covers fn at 0x2704)
-4. 2s timeout, re-mask every 10ms (outer loop unchanged)
-
-**Expected outcomes:**
-- STACK: return addresses 0x67194 (after bl 0x64590) and 0x67314 visible in frames
-  → tells us how deep into si_attach firmware got before hang
-- FUNC dump of 0x2704: see if EROM parser itself contains any blocking ops
-  (probably not — simple reader; hang is in the vtable core-init calls)
-
-## test.90 PLAN: Disassemble 0x670d8 (deep init)
-
-**Goal:** Find the polling loop or blocking call inside function 0x670d8.
-
-**Approach:**
-1. Keep all proven init (BBPLL, BusMaster, ASPM, masking)
-2. Release ARM
-3. Baseline read of ctr/shared/cons (single read — confirm state)
-4. At outer==1 (T+200ms): dump TCM[0x66E00-0x67340] = 336 words
-   - Covers 0x66e64 (initial device op) and 0x670d8 (deep init)
-   - Connects to existing test.88 dump at 0x67340
-   - Look for: LDR + CMP + BNE loops, CPSID, WFI, or deep call chains
-5. 2s timeout, re-mask every 10ms
-6. NO core switching (lethal)
-
-**Expected outcomes:**
-- Find polling loop in 0x670d8 → identifies WHAT hardware firmware is waiting for
-- If no loops: hang is in something 0x670d8 calls → need another dump level
-
-## test.88 RESULT: CRASHED in cleanup — but all data obtained
+## test.88 RESULT: CRASHED cleanup — but all data obtained
 
 **test.88 ran in boot -1 (also partial in boot -2). Key findings:**
 1. All three call targets disassembled — NO infinite loops, CPSID, or WFI in any
@@ -210,124 +254,7 @@ Dump: phase5/analysis/test91_dump.txt (431 words: 0x64400-0x64ab8)
 8. Counter: T+200ms=0x43b1 (RUNNING), T+400ms=FROZEN
 9. CRASHED during cleanup (no RP restore messages)
 
-**CRITICAL DISCOVERY: 0x43b1 might not be a counter**
-- Function at 0x673cc: `MOVW R0, #0x43b1; BX LR` — returns constant 0x43b1
-- If TCM[0x9d000] is set once to 0x43b1 (not incremented), WFI-disproof is INVALID
-- Firmware may have completed init normally and be sitting in WFI idle
-- test.89 must resolve this with high-frequency sampling
-
 Full disassembly: phase5/analysis/test88_disassembly.txt
-
-### test.89 PLAN: High-frequency sampling to resolve 0x43b1 question
-
-**Goal:** Determine if TCM[0x9d000] is a counter (values 0→1→2→...→0x43b1) or
-a static value (jumps 0→0x43b1 in one step).
-
-**Approach:**
-1. Keep all pre-ARM setup (BBPLL, BusMaster, ASPM, config clearing)
-2. Release ARM
-3. Immediately sample TCM[0x9d000] in tight loop: 100 reads with udelay(1000) = 1ms each
-4. Also sample TCM[0x9FFFC] (pcie_shared) and TCM[0x9cc5c] (console write ptr)
-5. Log all values — look for intermediate values vs instant jump
-6. After 100ms fast sampling, do 10 more reads at 200ms intervals (2s)
-7. Exit at ~2.1s max
-8. NO core switching (lethal)
-
-**Expected outcomes:**
-- If intermediate values (0, 1, 2, ...): 0x9d000 IS a counter, WFI-disproof stands
-- If 0→0x43b1 instant: 0x9d000 is STATIC, firmware may be in WFI, project pivot needed
-
-## test.87 RESULT: SURVIVED — counter timing + code dumps obtained
-
-**test.87 survived 3s cleanly. Key findings:**
-1. Counter froze between T+200ms and T+400ms (value 0x43b1) — firmware hangs within 400ms
-2. pciedngl_probe disassembled: linear function making calls to 0x67358, 0x64248, 0x63C24
-3. No polling loops in pciedngl_probe itself — hang is inside a called function
-4. TCB at 0x9d080 = 0x000A0000 (top of 640KB TCM)
-5. Code at 0x2100-0x24FF disassembled — downstream callees, no obvious polling loops either
-6. Init spin at 0x168 confirmed: `beq #0x168` (spin while *0x224 == NULL)
-7. WFI at 0x1C1E confirmed in disassembly (idle helper function)
-
-### test.88 PLAN: Dump call targets + stack area to find hang location
-
-**Goal:** Identify EXACTLY which function the firmware is stuck in by:
-1. Dumping code at the three call targets from pciedngl_probe:
-   - 0x67340-0x67500 (target 0x67358: register_bus/attach call with many args)
-   - 0x64200-0x64400 (target 0x64248: result-checked call)
-   - 0x63C00-0x63D00 (target 0x63C24: conditional second call)
-2. Scanning stack area 0x9F000-0x9FFF8 for Thumb return addresses
-3. Looking for LDR+CMP+BNE polling loops, WFI, or CPSID in the call targets
-
-**Approach:** Same as test.87 — 3s max, re-mask every 10ms, dump at T+1s, no core switch.
-
-## test.86 RESULT: CRASHED at T+2s (ARM core switch)
-
-**test.86 crashed immediately when select_core(ARM_CR4) was called at T+2s.**
-**Core switching after firmware starts is CONFIRMED LETHAL (tests 66/76/86).**
-**WFI theory DISPROVEN: frozen counter at 0x9d000 means TRUE HANG, not WFI idle.**
-(WFI only halts CPU core — timers/peripherals keep running. Counter froze = real hang.)
-
-## test.85 RESULT: CRASHED at ~T+18-20s
-
-**test.85 proved STATUS/DevSta clearing theory DEAD — firmware still hangs.**
-**CRITICAL: Crash timing scales with loop length (20s loop → crash at ~T+18-20s).**
-
-### test.85 key findings:
-1. STATUS cleared successfully: 0x08100006 → 0x00100006 (bit 11 gone) — firmware STILL hangs
-2. DevSta cleared: 0x00132c10 → 0x00102c10 — firmware STILL hangs
-3. PCIe caps: 0x48(PM id=1), 0x58(MSI id=5), 0x68(VPD id=9), 0xAC(PCIe Express id=0x10)
-4. PCIe Express: DevCtl+Sta=0x00132c10 LnkCtl+Sta=0x10110140
-5. PM_CSR(0x4C)=0x00004008
-6. sharedram=0xffc70038 unchanged for 18s — firmware completely dead
-7. TCM[0x9d000] counter went 0→0x43b1 then frozen (same as all tests)
-8. TCM[0x9a000-0x9af00] zeroed (firmware BSS init area)
-9. CRASHED between T+18s and T+20s (no RP restore messages)
-10. STATUS/DevSta clearing theory DEAD
-
-### Firmware disassembly findings (from this session):
-- NO spin loops in firmware code except exception handler init at 0x168
-- WFI instruction at 0x1C1E (idle helper: WFI; BX LR)
-- pciedngl_probe at 0x1E90 — traced full call chain
-- Firmware protocol = PCI-CDC (confirmed by RTE banner)
-- 0x168 spin loop: loads function pointer from *0x224, spins while NULL, calls through it
-  (this is the startup spin — waits for c_init to set up the entry point)
-- After init, firmware enters WFI-based idle loop (normal behavior)
-- The "hang" is likely: firmware completed init normally, sitting in WFI,
-  waiting for host commands via PCI-CDC protocol that our MSGBUF driver never sends
-
-### test.87 PLAN: TCM firmware code dump + counter timing (NO core switch)
-
-**Goal:** Find what pciedngl_probe is polling/waiting for by:
-1. Tracking exact counter freeze timing (when does the hang happen?)
-2. Dumping firmware code around pciedngl_probe for deeper disassembly
-3. Finding the stack pointer in TCM to trace the call chain
-
-**Approach:**
-1. Keep all pre-ARM setup from test.85 (BBPLL, BusMaster, ASPM, config clearing)
-2. Release ARM, start 3s monitoring loop (15 outer × 200ms)
-3. Every 200ms: read TCM counter at 0x9d000, log RUNNING/FROZEN
-4. At outer==5 (T+1s): dump firmware code + TCB via BAR2 (safe reads):
-   - pciedngl_probe code: 0x1E90-0x20FF (~0x170 bytes)
-   - Init spin loop: 0x0160-0x022F
-   - WFI idle helper: 0x1C00-0x1C3F
-   - Thread control block / si_t: 0x9d020-0x9d0FF
-   - Extended callees: 0x2100-0x24FF
-5. Exit at T+3s max — crash scales ~90-100% of loop length
-6. Restore RP cleanly
-7. NO core switching (lethal per tests 66/76/86)
-
-## Run test.89 (after build):
-  cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
-
-## After test — what to do:
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.89" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.89.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.89.*'`
-3. Key things to check:
-   a. Did we SURVIVE? (RP settings restored = yes)
-   b. TCM[0x9d000] samples: do intermediate values exist? (0, 1, 2, ..., 0x43b1)
-   c. If instant 0→0x43b1: STATIC value, WFI theory back on table
-   d. If gradual: COUNTER confirmed, firmware truly hung
-   e. pcie_shared (0x9FFFC) and console ptr (0x9cc5c) timing
 
 ## Key confirmed findings
 - BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
@@ -346,41 +273,21 @@ a static value (jumps 0→0x43b1 in one step).
 - PCIe2 BAC dump: 0x120/0x124 = CONFIGADDR/CONFIGDATA, NOT DMA ✓ (test.78 corrected)
 - PCIe2 core rev=1 ✓ (test.79)
 - Clearing 0x100-0x108, 0x1E0 does NOT fix hang ✗ (test.79)
-- 0x1E0 bits vary by boot (0x00070000 in test.79, 0x00030000 in test.80/81)
-- TCM[0x9E000-0x9F000] = firmware binary, NOT stack ✗ (test.79)
-- TCM[0x90000-0x9E000] has no dense stack cluster at 64-byte granularity ✗ (test.80)
-- MSI enable without IRQ handler → CRASH in cleanup (RP restore while MSI active) ✗ (test.81)
-- pci_enable_msi works (ret=0), device-side sees ADDR=0xfee00738 ✓ (test.81)
-- MSI with IRQ handler: MSI_count=0 across 30s → firmware NEVER fires MSIs ✗ (test.82)
-- MSI theory DEAD ✗ (test.82)
-- INTMASK/MBMASK: wrote 0x00FF0300, readback 0x00000300 (0xFF0000 rejected, PCIe2 rev=1) ✗ (test.83)
-- INTMASK/MBMASK theory DEAD ✗ (test.83)
-- ALL BAR2 reads in timeout path crash (test.82 + test.83 both crashed at "minimal" scan)
-- Device-side BARs valid after SBR: BAR0=0xb0600004 BAR1=0 BAR2=0xb0400004 ✓ (test.84)
-- Device-side STATUS has Signaled Target Abort (bit 11) SET after SBR ✓ (test.84)
-- BAR hypothesis DEAD (BARs valid) ✗ (test.84)
-- STATUS clearing (bit 11 Signaled Target Abort) does NOT fix firmware hang ✗ (test.85)
-- DevSta clearing does NOT fix firmware hang ✗ (test.85)
-- STATUS clearing theory DEAD ✗ (test.85)
-- Crash timing scales with loop length: 30s→T+28-30s, 20s→T+18-20s (test.82-85)
-- PCIe caps: PM@0x48, MSI@0x58, VPD@0x68, PCIe_Express@0xAC ✓ (test.85)
-- Firmware has NO spin loops except init handler at 0x168 ✓ (disassembly)
-- WFI instruction at 0x1C1E (idle helper) ✓ (disassembly)
-- pciedngl_probe at 0x1E90, full call chain traced ✓ (disassembly)
 - select_core after firmware starts → CRASH ✗ (test.66/76 PCIe2, test.86 ARM CR4)
 - Core switching after FW start CONFIRMED LETHAL across ALL core types ✗ (test.66/76/86)
 - WFI theory DEAD: frozen counter = TRUE HANG, not WFI idle (WFI keeps timers running) ✗
+  UPDATE: counter at 0x9d000 is STATIC value (not a counter) — set once to 0x43b1
+  BUT: sharedram NEVER changes = firmware NEVER completes init = GENUINE HANG ✓
 - PCIe2 wrapper pre-ARM: IOCTL=0x1 RESET_CTL=0x0 (safe to read/write pre-ARM) ✓
-- PCIe2 BAC pre-ARM: INTMASK=0x0, MBMASK=0x0, H2D0=0xffffffff, H2D1=0xffffffff ✓
 - Counter freezes at 0x43b1 between T+200ms and T+400ms — hang is VERY early ✓ (test.87)
 - TCM top = 0xA0000 (640KB), stack grows down from there ✓ (test.87 TCB)
 - pciedngl_probe calls into 0x67358, 0x64248, 0x63C24 — hang is inside one of these ✓ (test.87 disasm)
 - All 3 call targets have NO infinite loops, CPSID, or WFI ✓ (test.88 disasm)
 - TARGET 1 (0x67358) calls 0x670d8 (deep init) — most likely hang location ✓ (test.88)
-- Function at 0x673cc returns constant 0x43b1 — same as "frozen counter" value ✓ (test.88)
-- 0x43b1 may be STATIC, not a counter — WFI-disproof may be INVALID ⚠ (test.88)
-- "STAK" marker at TCM[0x9bf00] — stack region near 0x9c000 ✓ (test.88)
-- Full disassembly saved: phase5/analysis/test88_disassembly.txt ✓
+- 0x670d8 calls si_attach (0x64590) which dispatches vtable calls ✓ (test.90)
+- si_attach vtable fn at 0x1FC2 = TRAMPOLINE → tail calls 0x2208 ✓ (test.94 disasm)
+- 0x2208 allocates struct, calls 0x5250, then tail calls 0x848 ✓ (test.94 disasm)
+- 0x848 = NEXT UNKNOWN — likely the actual hang location ← PENDING test.95
 
 ## Console text decoded (test.78/79/80/82/83/84 T+3s)
 Ring buffer at 0x9ccc7, write ptr 0x9ccbe (wrapped):
@@ -391,7 +298,7 @@ Ring buffer at 0x9ccc7, write ptr 0x9ccbe (wrapped):
 Firmware prints CDC protocol banner (not FullDongle MSGBUF).
 
 ## BSS data decoded (from test.75-80 T+3s/T+5s dump)
-- 0x9d000 = 0x000043b1 (counter/timer, stops at T+2s = firmware hung)
+- 0x9d000 = 0x000043b1 (static value, set once at T+12ms then firmware freezes)
 - 0x9d060..0x9d080: si_t structure with "4360" chip ID
 - 0x9d084/0x9d088 = 0xbbadbadd (RTE heap uninitialized = heap never allocated there)
 - 0x9d0a4+ = static firmware binary data (NOT olmsg magic)
@@ -399,29 +306,18 @@ Firmware prints CDC protocol banner (not FullDongle MSGBUF).
 ## Key files
 - Source: phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 - Test script: phase5/work/test-staged-reset.sh
-- Logs: phase5/logs/test.85.journal (after test)
+- Logs: phase5/logs/test.95.journal (after test)
 - Build: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build && make -C "$KDIR" M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
 
 ## Test history summary (recent)
-- test.68: SURVIVED 60s then CRASHED in TIMEOUT path — console buffer decoded
-- test.69: CRASHED in TIMEOUT path at TCM[0x88000] — msleep(1) insufficient
-- test.70: SURVIVED — per-read re-mask+msleep(10) in TIMEOUT path; no IOMMU faults
-- test.71: CRASHED after FW READY — H2D_MAILBOX_0=1 → immediate crash
-- test.72: CRASHED after SBMBX write — stale masking race
-- test.73: SURVIVED — SBMBX only (fresh masking); firmware never wrote sharedram
-- test.74: CRASHED — H2D_MAILBOX_0 BAR0 write (ring doorbell during init) → immediate crash
-- test.75: SURVIVED — pure diagnostic; firmware freezes in pcidongle_probe (ASPM L1 theory)
-- test.76: SURVIVED (crash in post-timeout cleanup) — ASPM disable did NOT fix hang; theory dead
-- test.77: SURVIVED — H2D0/H2D1 stale 0xffffffff cleared to 0; still hangs; theory dead
-- test.78: SURVIVED — full PCIe2 BAC dump; DMA theory wrong (0x120/0x124 = CONFIGADDR/CONFIGDATA)
-- test.79: SURVIVED — cleared unknown regs 0x100-0x108/0x1E0; stack dump at 0x9E000 = wrong region
-- test.80: SURVIVED — stack-finder scan found only 6 scattered hits; no stack cluster
-- test.81: CRASHED — MSI enable without IRQ handler; crash in cleanup (RP restore while MSI active)
-- test.82: SURVIVED 30s, CRASHED in final scan — MSI_count=0 across 30s; MSI theory DEAD
-- test.83: CRASHED in timeout path — INTMASK/MBMASK theory DEAD; even 3-read final scan crashes
-- test.84: CRASHED at ~T+30s — BARs valid, STATUS bit 11 SET; BAR hypothesis DEAD
 - test.85: CRASHED T+18-20s — STATUS/DevSta cleared, firmware STILL hung; STATUS theory DEAD
 - test.86: CRASHED T+2s — ARM core switch (select_core) crashed immediately; core switch LETHAL
 - test.87: SURVIVED — counter froze T+200-400ms at 0x43b1; pciedngl_probe disassembled; code dumps obtained
 - test.88: CRASHED cleanup — all 3 targets disassembled; NO loops/CPSID/WFI; 0x673cc returns 0x43b1 constant; 0x670d8 is next suspect
-- test.89: PENDING — high-frequency 0x9d000 sampling (1ms intervals) to resolve counter vs static question
+- test.89: SURVIVED — 0x43b1 is STATIC (stored once at T+12ms); WFI-disproof RESOLVED; sharedram confirms TRUE HANG
+- test.90: SURVIVED — 0x670d8 fully disassembled; calls si_attach (0x64590) at 0x67190; NO loops
+- test.91: CRASHED at word 431 — partial si_attach (0x64590) dump; vtable dispatch at 0x644dc
+- test.92: SURVIVED — STAK extends 0x9BC00-0x9C400; EROM parser at 0x2704 is benign
+- test.93: SURVIVED (×2) — D2[0x62a14]=0x58CF0 (vtable ptr); sk[0x9F800]=NVRAM (not stack)
+- test.94: SURVIVED vtable, CRASHED STACK-LOW at ~3.25s — VT[0x58cf4]=0x1FC3; 0x1FC2→0x2208→0x848
+- test.95: PENDING — code dump 0x840-0xB40 to find hang in 0x848 or 0xa4c

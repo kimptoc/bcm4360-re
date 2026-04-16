@@ -1,0 +1,105 @@
+# test.94 Analysis
+
+## Status: SURVIVED (partially - crashed at word 154 of STACK-LOW dump at ~3.25s)
+
+## VTABLE dump (complete) — VT[0x58CF0]:
+VT[0x58cd0]=0x00000000  (null)
+VT[0x58cd4]=0x00058c9c  (another vtable or struct ptr)
+VT[0x58cd8]=0x00004999  (function at 0x4998)
+VT[0x58cdc]=0x0009664c  (data ptr)
+VT[0x58ce0-0x58cf0]=0x00000000  (null entries)
+VT[0x58cf4]=0x00001FC3  <<< CALL 1 function (hang candidate)
+VT[0x58cf8]=0x00001FB5  (function at 0x1FB4)
+VT[0x58cfc]=0x00001F79  (function at 0x1F78)
+VT[0x58d00-0x58d20]=0x00000000  (null)
+VT[0x58d24]=0x00000001  (count/flag)
+VT[0x58d28]=0x0004167D  (function at 0x4167C)
+VT[0x58d2c]=0x0004168B  (function at 0x4168A)
+VT[0x58d30]=0x000416A0  (function at 0x4169F)
+VT[0x58d34]=0x000416B6  (function at 0x416B5)
+VT[0x58d38]=0x000416C7  (function at 0x416C6)
+VT[0x58d3c]=0x000416E4  (function at 0x416E3)
+
+## Call chain analysis (disassembled from test.87 + test.94 data):
+
+### 0x644DC: blx r3 (Call 1 via vtable[+4])
+r3 = VT[0x58cf4] = 0x1FC3 → calls 0x1FC2 (Thumb)
+
+### 0x1FC2 (VT function = TRAMPOLINE, 6 instructions):
+```
+mov r2, r1              ; r2 = arg1 (originally r1)
+ldr r1, [r0, #0x18]    ; r1 = obj->si_ptr (field+0x18)
+mov r3, r0              ; r3 = obj
+ldr r0, [r1, #0x14]    ; r0 = si_ptr->dev_obj (field+0x14)
+mov r1, r3              ; r1 = obj (restore)
+b.w 0x2208             ; TAIL CALL → 0x2208
+```
+→ 0x1FC2 rearranges args and calls 0x2208 (no stack frame, pure tail call)
+
+### 0x1FB4 (vtable[+8] = similar trampoline):
+Same structure as 0x1FC2 but tail calls to 0x235C
+
+### 0x1F78 (vtable[+12] = actual function):
+Calls 0x2E70 and 0x7DC4, has proper stack frame
+
+### 0x2208 (THE REAL INIT FUNCTION):
+```
+push.w {r0,r1,r4,r5,r6,r7,r8,lr}  ; 8 regs (32 bytes)
+r7 = *0x232C = 0x00062A14          ; global state ptr
+r4 = arg0 (obj)
+r6 = arg1
+r5 = arg2
+r3 = *0x62A14 = 0x58CF0            ; vtable ptr (global state)
+if (r3 & 2): debug print
+if (r6==0 || r5==0): error path
+...
+r8 = 0
+r0 = obj->field4
+r1 = obj
+r2 = obj->field0
+r3 = r6
+bl 0x1FD0               ; allocate 76-byte struct
+obj->field12 = r0
+if (r0 == 0): error path
+r0 = *0x62A14 & 0x10   ; test bit 4
+if (bit4 == 0): goto return (0x231C)
+r1 = *0x2350            ; timer priority/value
+r0 = 0
+bl 0x5250               ; REGISTER TIMER/CALLBACK?
+if (r0 == 0): success path → (0x230C)
+    → calls 0xa4c, then branches to 0x848
+```
+
+### Key: bit4 of *0x62A14 IS set:
+*0x62A14 = 0x58CF0 (from test.93)
+0x58CF0 & 0x10 = 0x10 (non-zero) → bit4 IS set!
+→ The code ALWAYS calls 0x5250 for this chip
+
+### 0x1FD0 (struct constructor called by 0x2208):
+- mallocs 76 bytes via 0x7D60
+- memsets to 0 via 0x91C
+- fills: field0=arg1, field4=arg2, field8=arg0, field12=arg3
+- field52 = 0x740 = 1856 (timer period ms?)
+- field60 = 0x3E8 = 1000 (timeout ms?)
+- field64 = 28, field68 = 12, field72 = 4 (retry counts?)
+- returns allocated ptr
+
+## STACK-LOW dump (partial, 0x9C400-0x9CDFC):
+- 0x9C400-0x9CC54: ALL STAK fill (0x5354414b) - unused stack
+- 0x9CC58-0x9CDFC: Console ring buffer + data structures (NOT stack frames)
+  - 0x9CC5C = console write ptr (0x8009CCBE)
+  - 0x9CCBE = actual ring buffer position
+  - 0x9CCC0-0x9CDD8: decoded console text ("125888.000 Chipcommon: rev 43..." + "wl_probe called" + "pciedngl_probe called")
+  - 0x9CC88: 0x000475B5 (ODD code address - possibly function ptr in struct)
+- CRASH at word 154 (0x9CDFC) at ~3.25s total = exceeded crash window
+
+## Functions NOT YET DISASSEMBLED (needed for next test):
+- 0x848: tail call target from 0x2208, likely the actual hang location
+- 0xa4c: called on 0x5250 failure
+- 0x5250: timer/callback registration function
+- 0x475B4: unknown function (ptr seen in stack data area)
+- 0x629C0, 0x62910: code addresses seen in data area
+
+## Next test plan (test.95):
+Dump code region 0x840-0xB40 (192 words = 2.5s from T+200ms = T+2.7s total)
+This covers 0x848 (tail call target = likely hang) and 0xa4c (cleanup function)

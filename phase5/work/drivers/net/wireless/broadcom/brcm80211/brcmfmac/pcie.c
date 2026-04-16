@@ -2020,7 +2020,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		/* Print PCIe2 core revision */
 		pcie2_core_info = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_PCIE2);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.94: PCIe2 core id=0x%x rev=%d\n",
+			 "BCM4360 test.95: PCIe2 core id=0x%x rev=%d\n",
 			 pcie2_core_info ? pcie2_core_info->id : 0,
 			 pcie2_core_info ? pcie2_core_info->rev : -1);
 
@@ -2029,14 +2029,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		pci_read_config_dword(devinfo->pdev,
 				      BRCMF_PCIE_REG_LINK_STATUS_CTRL, &lsc);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.94: EP LINK_STATUS_CTRL=0x%08x ASPM_bits=0x%x\n",
+			 "BCM4360 test.95: EP LINK_STATUS_CTRL=0x%08x ASPM_bits=0x%x\n",
 			 lsc, lsc & BRCMF_PCIE_LINK_STATUS_CTRL_ASPM_ENAB);
 		if (lsc & BRCMF_PCIE_LINK_STATUS_CTRL_ASPM_ENAB) {
 			pci_write_config_dword(devinfo->pdev,
 					       BRCMF_PCIE_REG_LINK_STATUS_CTRL,
 					       lsc & ~BRCMF_PCIE_LINK_STATUS_CTRL_ASPM_ENAB);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.94: ASPM disabled (was 0x%x) before ARM\n",
+				 "BCM4360 test.95: ASPM disabled (was 0x%x) before ARM\n",
 				 lsc & BRCMF_PCIE_LINK_STATUS_CTRL_ASPM_ENAB);
 		}
 
@@ -2054,7 +2054,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		pcie2_ioctl   = brcmf_pcie_read_reg32(devinfo, 0x1408);
 		pcie2_reset   = brcmf_pcie_read_reg32(devinfo, 0x1800);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.94: PCIe2 pre-ARM: INTMASK=0x%x MBINT=0x%x MBMASK=0x%x H2D0=0x%x H2D1=0x%x IOCTL=0x%x RESET=0x%x\n",
+			 "BCM4360 test.95: PCIe2 pre-ARM: INTMASK=0x%x MBINT=0x%x MBMASK=0x%x H2D0=0x%x H2D1=0x%x IOCTL=0x%x RESET=0x%x\n",
 			 pcie2_intmask, pcie2_mbint, pcie2_mbmask,
 			 pcie2_h2d0, pcie2_h2d1, pcie2_ioctl, pcie2_reset);
 
@@ -2081,11 +2081,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		brcmf_pcie_write_reg32(devinfo, 0x108, 0);
 		brcmf_pcie_write_reg32(devinfo, 0x1E0, 0);
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.94: SET INTMASK=0x00FF0300 MBMASK=0x00FF0300 + cleared H2D0/H2D1 + unknown regs 0x100-0x108, 0x1E0\n");
+			 "BCM4360 test.95: SET INTMASK=0x00FF0300 MBMASK=0x00FF0300 + cleared H2D0/H2D1 + unknown regs 0x100-0x108, 0x1E0\n");
 
 		/* Readback to verify writes took effect */
 		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.94: post-write readback: INTMASK=0x%08x MBMASK=0x%08x 0x100=0x%08x 0x1E0=0x%08x\n",
+			 "BCM4360 test.95: post-write readback: INTMASK=0x%08x MBMASK=0x%08x 0x100=0x%08x 0x1E0=0x%08x\n",
 			 brcmf_pcie_read_reg32(devinfo, BRCMF_PCIE_PCIE2REG_INTMASK),
 			 brcmf_pcie_read_reg32(devinfo, BRCMF_PCIE_PCIE2REG_MAILBOXMASK),
 			 brcmf_pcie_read_reg32(devinfo, 0x100),
@@ -2142,10 +2142,10 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				BRCMF_PCIE_PCIE2REG_CONFIGDATA);
 
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.94: dev-side config: CMD_STA=0x%08x BAR0=0x%08x BAR1=0x%08x BAR2=0x%08x\n",
+				 "BCM4360 test.95: dev-side config: CMD_STA=0x%08x BAR0=0x%08x BAR1=0x%08x BAR2=0x%08x\n",
 				 cfg04, cfg10, cfg14, cfg18);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.94: dev-side config: BAR2_CONFIG(0x4E0)=0x%08x BAR3_CONFIG(0x4F4)=0x%08x\n",
+				 "BCM4360 test.95: dev-side config: BAR2_CONFIG(0x4E0)=0x%08x BAR3_CONFIG(0x4F4)=0x%08x\n",
 				 cfg4e0, cfg4f4);
 
 			/* CLEAR STATUS error bits: write 0xFFFF to STATUS (RW1C)
@@ -2162,7 +2162,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			cfg04_after = brcmf_pcie_read_reg32(devinfo,
 				BRCMF_PCIE_PCIE2REG_CONFIGDATA);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.94: STATUS clear: before=0x%08x after=0x%08x\n",
+				 "BCM4360 test.95: STATUS clear: before=0x%08x after=0x%08x\n",
 				 cfg04, cfg04_after);
 
 			/* Walk capability list to find PCIe Express capability */
@@ -2188,7 +2188,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						cap_hdr >>= (ptr & 3) * 8;
 
 					dev_info(&devinfo->pdev->dev,
-						 "BCM4360 test.94: cap walk: ptr=0x%02x id=0x%02x next=0x%02x\n",
+						 "BCM4360 test.95: cap walk: ptr=0x%02x id=0x%02x next=0x%02x\n",
 						 ptr, cap_hdr & 0xFF,
 						 (cap_hdr >> 8) & 0xFF);
 
@@ -2220,7 +2220,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					BRCMF_PCIE_PCIE2REG_CONFIGDATA);
 
 				dev_info(&devinfo->pdev->dev,
-					 "BCM4360 test.94: PCIe cap@0x%02x: DevCtl+Sta=0x%08x LnkCtl+Sta=0x%08x\n",
+					 "BCM4360 test.95: PCIe cap@0x%02x: DevCtl+Sta=0x%08x LnkCtl+Sta=0x%08x\n",
 					 pcie_cap_off, devctl_sta, lnkctl_sta);
 
 				/* Clear DevSta RW1C error bits (upper 16 of DevCtl+Sta) */
@@ -2238,12 +2238,12 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					cfg_devctl_sta = brcmf_pcie_read_reg32(devinfo,
 						BRCMF_PCIE_PCIE2REG_CONFIGDATA);
 					dev_info(&devinfo->pdev->dev,
-						 "BCM4360 test.94: DevSta clear: before=0x%08x after=0x%08x\n",
+						 "BCM4360 test.95: DevSta clear: before=0x%08x after=0x%08x\n",
 						 devctl_sta, cfg_devctl_sta);
 				}
 			} else {
 				dev_info(&devinfo->pdev->dev,
-					 "BCM4360 test.94: PCIe cap NOT found (cap_ptr=0x%08x)\n",
+					 "BCM4360 test.95: PCIe cap NOT found (cap_ptr=0x%08x)\n",
 					 cap_ptr_reg);
 			}
 
@@ -2253,7 +2253,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			cfg_pm_csr = brcmf_pcie_read_reg32(devinfo,
 				BRCMF_PCIE_PCIE2REG_CONFIGDATA);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.94: PM_CSR(0x4C)=0x%08x\n",
+				 "BCM4360 test.95: PM_CSR(0x4C)=0x%08x\n",
 				 cfg_pm_csr);
 		}
 
@@ -2393,14 +2393,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 				pci_read_config_word(devinfo->pdev, PCI_COMMAND, &ep_cmd);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.94: RP=%s masked CMD BC DevCtl AER; "
+					  "BCM4360 test.95: RP=%s masked CMD BC DevCtl AER; "
 					  "RootCtl=0x%04x ext_cap0=0x%08x nvram_token=0x%08x EP_CMD=0x%04x\n",
 					  pci_name(rp), rtctl, ext_cap0,
 					  sharedram_addr_written, ep_cmd);
 			}
 		} else {
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.94: no root port — skipping masking\n");
+				  "BCM4360 test.95: no root port — skipping masking\n");
 		}
 
 		/* Baseline TCM scan — read all 20 locations before FW has had time to run */
@@ -2408,7 +2408,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			t66_prev[i] = brcmf_pcie_read_ram32(devinfo, t66_scan[i]);
 
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.94: TCM baseline: sharedram[0x9FFFC]=0x%08x "
+			  "BCM4360 test.95: TCM baseline: sharedram[0x9FFFC]=0x%08x "
 			  "magic[0x9D0A4]=0x%08x fw_init[0x9F0CC]=0x%08x console_ptr[0x9cc5c]=0x%08x\n",
 			  t66_prev[ARRAY_SIZE(t66_scan) - 1],  /* 0x9FFFC sharedram */
 			  t66_prev[46],  /* 0x9D0A4 magic */
@@ -2426,7 +2426,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 * Firmware hangs at ~T+12ms. No need to repeat 100ms fast-sampling.
 		 */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.94: ARM released. t+0 baseline: ctr=0x%08x shared=0x%08x cons=0x%08x\n",
+			  "BCM4360 test.95: ARM released. t+0 baseline: ctr=0x%08x shared=0x%08x cons=0x%08x\n",
 			  brcmf_pcie_read_ram32(devinfo, 0x9d000),
 			  brcmf_pcie_read_ram32(devinfo, devinfo->ci->ramsize - 4),
 			  brcmf_pcie_read_ram32(devinfo, 0x9cc5c));
@@ -2436,7 +2436,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 * Code dump added at outer==1 (T+200ms) to disassemble 0x670d8 deep-init.
 		 */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.94: starting FW wait + masking loop (2s max, re-mask every 10ms)\n");
+			  "BCM4360 test.95: starting FW wait + masking loop (2s max, re-mask every 10ms)\n");
 
 		for (outer = 0; outer < 10; outer++) {
 			/* Every 2s (10 outer iters, but NOT outer==0): TCM memory activity scan.
@@ -2449,7 +2449,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 				pci_read_config_word(devinfo->pdev, PCI_COMMAND, &ep_cmd);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.94 T+%04dms: sharedram=0x%08x fw_init=0x%08x EP_CMD=0x%04x\n",
+					  "BCM4360 test.95 T+%04dms: sharedram=0x%08x fw_init=0x%08x EP_CMD=0x%04x\n",
 					  outer * 200, fw_sharedram, fw_init_done_last, ep_cmd);
 
 				/* Scan all TCM locations; log any that changed */
@@ -2458,7 +2458,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 					if (cur != t66_prev[i]) {
 						dev_emerg(&devinfo->pdev->dev,
-							  "BCM4360 test.94 T+%04dms: TCM[0x%05x] CHANGED 0x%08x → 0x%08x\n",
+							  "BCM4360 test.95 T+%04dms: TCM[0x%05x] CHANGED 0x%08x → 0x%08x\n",
 							  outer * 200, t66_scan[i],
 							  t66_prev[i], cur);
 						t66_prev[i] = cur;
@@ -2467,7 +2467,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				}
 				if (!changed)
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.94 T+%04dms: TCM scan — no changes\n",
+						  "BCM4360 test.95 T+%04dms: TCM scan — no changes\n",
 						  outer * 200);
 			}
 
@@ -2479,38 +2479,50 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			if (outer > 0) {
 				u32 counter = brcmf_pcie_read_ram32(devinfo, 0x9d000);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.94 T+%04dms: counter=0x%08x %s\n",
+					  "BCM4360 test.95 T+%04dms: counter=0x%08x %s\n",
 					  outer * 200, counter,
 					  counter == t66_prev[43] ? "FROZEN" : "RUNNING");
 				/* t66_scan[43] = 0x9D000 — update tracked value */
 				t66_prev[43] = counter;
 			}
 
-			/* test.94: Two focused dumps at T+200ms (outer==1).
+			/* test.95: Code dump at 0x840-0xB40 (192 words = ~2.5s at T+200ms = safe).
 			 *
-			 * test.94 RESULTS (SURVIVED both runs):
-			 * D2[0x62a14] = 0x00058cf0 — vtable pointer; fn = TCM[0x58cf4] (UNKNOWN)
-			 * SK[0x9F800-0xA000] = NVRAM ("sromrev=11" etc) + uninitialized garbage.
-			 *   NO Thumb LR values found — NOT active stack. 0x9F800-0xA000 is NOT stack top.
-			 * Active frames must be just above STAK fill at 0x9C400
-			 *   (STAK confirmed 0x9BC00-0x9C400 in test.92).
+			 * test.94 RESULTS (crashed at word 154 of STACK-LOW at ~3.25s):
+			 *   VT[0x58cf4] = 0x1FC3  → hang fn at 0x1FC2 (Thumb)
+			 *   VT[0x58cf8] = 0x1FB5, VT[0x58cfc] = 0x1F79 (other vtable fns)
+			 *   STAK fill extends 0x9C400 → 0x9CC54 (only ~3KB used)
+			 *   0x9CC58-0x9CDFC = console ring buffer + BSS data (NOT stack frames)
+			 *   Missed 0x9CE00-0x9D000 due to crash.
+			 *   ODD code ptr at 0x9CC88: 0x000475B5 (Thumb fn at 0x475B4, in struct)
 			 *
-			 * Dump A — VTABLE: TCM[0x58CD0-0x58D40] = 28 words.
-			 *   Reads vtable entries around [0x58cf4] — names the hang candidate function.
-			 *   Expected: [0x58cf4] = function pointer called via blx r3 at 0x644dc.
+			 * Disassembly of 0x1FC2 (from test.87 bytes + arm-none-eabi-objdump):
+			 *   0x1FC2: mov r2,r1 / ldr r1,[r0,#24] / mov r3,r0 / ldr r0,[r1,#20]
+			 *           / mov r1,r3 / b.w 0x2208   ← TRAMPOLINE to 0x2208!
+			 *   0x1FB4: identical trampoline → b.w 0x235C
+			 *   0x1F78: full function, calls 0x2E70, 0x7DC4
 			 *
-			 * Dump B — STACK-LOW: TCM[0x9C400-0x9D000] = 192 words.
-			 *   Just above STAK fill; deepest active frames. Look for Thumb LR values:
-			 *   0x644df (blx at 0x644dc+3), 0x644ff (blx at 0x644fc+3), 0x6451b (blx at 0x6451a+1)
-			 *   0x67194 (bl 0x64590 in 0x670d8), 0x67314 (return from 0x670d8 caller)
+			 * 0x2208 (the REAL init fn called via 0x1FC2 tail call):
+			 *   push.w {r0,r1,r4,r5,r6,r7,r8,lr}
+			 *   r7 = *0x232C = 0x00062A14 (global state ptr)
+			 *   allocates 76-byte struct via malloc (0x7D60)
+			 *   struct fields: field52=0x740=1856, field60=0x3E8=1000, field64=28,68=12,72=4
+			 *   checks *0x62A14 & 0x10: 0x58CF0 & 0x10 = 0x10 (SET → takes this path)
+			 *   bl 0x5250 (timer/callback registration)
+			 *   eventually: b.w 0x848 (TAIL CALL to 0x848 = likely hang location!)
 			 *
-			 * Total: ~220 words — well within proven safe limit (704 in test.92).
+			 * test.95 GOAL: dump code at 0x840-0xB40 to disassemble:
+			 *   - 0x848 (tail call target = likely hang location)
+			 *   - 0xa4c (cleanup fn called on 0x5250 failure)
+			 *   Look for: LDR+CMP+BNE polling loops, WFI, CPSID
+			 *
+			 * 192 words × ~13ms = 2.5s; total with T+200ms = 2.7s (SAFE < 3s window)
 			 */
 			if (outer == 1) {
 				u32 addr;
 				u32 word_count;
 
-#define T94_REMASK() do {						\
+#define T95_REMASK() do {						\
 	if (rp) {							\
 		u16 _bc, _dc, _devsta, _secsta;			\
 		u32 _rtsta;						\
@@ -2535,38 +2547,26 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	}								\
 } while (0)
 
-				/* Dump A: VTABLE — vtable entries around [0x58cf4] */
+				/* CODE dump: 0x840-0xB40 (192 words)
+				 * Covers 0x848 (tail call target from 0x2208 = likely hang)
+				 * and 0xa4c (cleanup fn).
+				 * Each word logged as 4-byte hex at its address.
+				 */
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.94: VTABLE 0x58CD0-0x58D40 (find [0x58cf4] hang fn)\n");
+					  "BCM4360 test.95: CODE 0x840-0xB40 (0x848=hang? 0xa4c=cleanup)\n");
 				word_count = 0;
-				for (addr = 0x58CD0; addr < 0x58D40; addr += 4) {
+				for (addr = 0x840; addr < 0xB40; addr += 4) {
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.94 VT[0x%05x]=0x%08x\n",
+						  "BCM4360 test.95 code: %05x: %08x\n",
 						  addr,
 						  brcmf_pcie_read_ram32(devinfo, addr));
 					word_count++;
 					if (word_count % 100 == 0)
-						T94_REMASK();
+						T95_REMASK();
 				}
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.94: VTABLE done (%d words)\n", word_count);
-
-				/* Dump B: STACK-LOW — frames just above STAK fill at 0x9C400 */
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.94: STACK-LOW 0x9C400-0x9D000 (frames above STAK)\n");
-				word_count = 0;
-				for (addr = 0x9C400; addr < 0x9D000; addr += 4) {
-					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.94 SL[0x%05x]=0x%08x\n",
-						  addr,
-						  brcmf_pcie_read_ram32(devinfo, addr));
-					word_count++;
-					if (word_count % 100 == 0)
-						T94_REMASK();
-				}
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.94: STACK-LOW done (%d words)\n", word_count);
-#undef T94_REMASK
+					  "BCM4360 test.95: CODE done (%d words)\n", word_count);
+#undef T95_REMASK
 			}
 
 			/* Inner: re-mask + poll sharedram AND fw_init_done every 10ms for 200ms */
@@ -2621,7 +2621,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						       chk_magic == 0xffffffff &&
 						       chk_cons  == 0xffffffff);
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.94 T+%04dms: sharedram→0x%08x "
+						  "BCM4360 test.95 T+%04dms: sharedram→0x%08x "
 						  "9d000=0x%08x magic=0x%08x cons=0x%08x %s\n",
 						  outer * 200 + (inner + 1) * 10, fw_sharedram,
 						  chk_9d000, chk_magic, chk_cons,
@@ -2637,7 +2637,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						 * send H2D_MAILBOX_1 (HOSTRDY_DB1 protocol).
 						 */
 						dev_emerg(&devinfo->pdev->dev,
-							  "BCM4360 test.94: FW-ACK (sharedram=0x%08x "
+							  "BCM4360 test.95: FW-ACK (sharedram=0x%08x "
 							  "not valid RAM); sending H2D_MAILBOX_1, "
 							  "updating baseline, continuing poll\n",
 							  fw_sharedram);
@@ -2657,7 +2657,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				if (fid != fw_init_done_last) {
 					fw_init_done_last = fid;
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.94 T+%04dms: fw_init_done CHANGED to 0x%08x\n",
+						  "BCM4360 test.95 T+%04dms: fw_init_done CHANGED to 0x%08x\n",
 						  outer * 200 + inner * 10, fid);
 					if (fid != 0)
 						goto t66_fw_init_done;
@@ -2698,7 +2698,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 * Just print TIMEOUT, restore RP, and return cleanly.
 		 */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.94: TIMEOUT — FW silent for 2s — clean exit\n");
+			  "BCM4360 test.95: TIMEOUT — FW silent for 2s — clean exit\n");
 
 		/* Restore RP — no MSI to tear down (removed in test.85) */
 		if (rp) {
@@ -2711,13 +2711,13 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
 						       rp_aer_orig);
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.94: RP settings restored\n");
+				  "BCM4360 test.95: RP settings restored\n");
 		}
 		return -ENODEV;
 
 t66_fw_init_done:
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.94: olmsg FW_INIT_DONE at T+%dms val=0x%08x "
+			  "BCM4360 test.95: olmsg FW_INIT_DONE at T+%dms val=0x%08x "
 			  "— olmsg protocol confirmed! sharedram=0x%08x\n",
 			  outer * 200 + (inner + 1) * 10, fw_init_done_last, fw_sharedram);
 		/* olmsg firmware initialized — restore RP, return */
@@ -2731,13 +2731,13 @@ t66_fw_init_done:
 				pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
 						       rp_aer_orig);
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.94: RP settings restored\n");
+				  "BCM4360 test.95: RP settings restored\n");
 		}
 		return -ENODEV;
 
 t66_fw_ready:
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.94: FW READY (FullDongle) at T+%dms sharedram=0x%08x "
+			  "BCM4360 test.95: FW READY (FullDongle) at T+%dms sharedram=0x%08x "
 			  "— proceeding with probe init\n",
 			  outer * 200 + (inner + 1) * 10, fw_sharedram);
 		/* DO NOT restore RP here — firmware has just written sharedram and may
@@ -2750,7 +2750,7 @@ t66_fw_ready:
 		if (fw_sharedram < devinfo->ci->rambase ||
 		    fw_sharedram >= devinfo->ci->rambase + devinfo->ci->ramsize) {
 			brcmf_err(bus,
-				  "BCM4360 test.94: Invalid shared RAM address 0x%08x\n",
+				  "BCM4360 test.95: Invalid shared RAM address 0x%08x\n",
 				  fw_sharedram);
 			/* Restore RP before returning on invalid address */
 			if (rp) {
@@ -2771,7 +2771,7 @@ t66_fw_ready:
 		 * firmware D2H doorbell writes to uninitialised host rings.
 		 */
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.94: calling init_share_ram_info(0x%08x) "
+			  "BCM4360 test.95: calling init_share_ram_info(0x%08x) "
 			  "(RP masking still active)\n",
 			  fw_sharedram);
 		{
@@ -2788,7 +2788,7 @@ t66_fw_ready:
 					pci_write_config_dword(rp, aer_cap + PCI_ERR_ROOT_COMMAND,
 							       rp_aer_orig);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.94: RP settings restored (post-init)\n");
+					  "BCM4360 test.95: RP settings restored (post-init)\n");
 			}
 			return t74_init_ret;
 		}
