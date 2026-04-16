@@ -67,14 +67,25 @@ field28  = TCM[ws_addr + 0x1c]             ; completion flag (set by ISR)
 Also keep the test.99 pointer-sample probes (ctr/d11/ws/pd) as control — if
 those CHANGE between test.99 and test.100 it would invalidate the read.
 
-**Matrix interpretation (advisor):**
+**Pre-flight stability check (READ FIRST before applying matrix):**
+
+test.89 established firmware hard-freezes by T+12ms. test.99 confirmed
+control pointers are byte-identical across T+200/400/800ms. Therefore
+field20/field24/field28 MUST also be byte-identical across the three
+timepoints. **If they vary, that itself is the bigger story** (delayed
+code path, or the read isn't doing what we think — e.g. probe disturbing
+state, addr translation wrong). Stop, characterise the variation, and DO
+NOT apply the matrix to T+200ms values alone.
+
+**Matrix interpretation (advisor, refined):**
 
 | field24 | field20 | field28 | Conclusion |
 |---------|---------|---------|------------|
 | 1 | 1 | 0 | **Case A — spin-loop is live freeze.** Path B step 1 (D11 BCMA wrapper bring-up to enable D11 core / route ISR). |
 | 1 | 0 | 0 | **Case B — entered then cancelled.** Hang is in fn 0x162fc body AFTER bl 0x1624c returned via cancel path. Re-examine fn 0x162fc continuation. |
 | 1 | * | !=0 | Spin completed (field28 set), but firmware still hung downstream. Hang is past PHY wait — need to trace fn 0x1ab50 / fn 0x68a68 callees beyond the PHY register loop. |
-| 0 | * | * | **Case C — fn 0x1624c never entered.** Freeze is upstream in wl_probe. Probe candidates: fn 0x66e64, fn 0x649a4, fn 0x4718, fn 0x6491c, or fn 0x68a68 body before bl 0x1ab50. |
+| 0 | * | * | **Case C — fn 0x1624c never entered, struct zero-initialised.** Freeze is upstream in wl_probe. Probe candidates: fn 0x66e64, fn 0x649a4, fn 0x4718, fn 0x6491c, or fn 0x68a68 body before bl 0x1ab50. |
+| ∉{0,1} | * | * | **Case C′ — struct never touched, pre-init garbage** (test.97 saw garbage values here). Same upstream-freeze conclusion as C, but distinguishable from "BSS-zero never-entered" — different next-test framing. |
 
 **Risk profile:** identical to test.99. All probes are TCM reads via
 existing `brcmf_pcie_read_ram32` path, gated by the same masking macro.
