@@ -1,8 +1,15 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, EXECUTING test.86)
+## Current state (2026-04-16, EXECUTING test.87)
 
 Git branch: main (pushed to origin)
+
+## test.86 RESULT: CRASHED at T+2s (ARM core switch)
+
+**test.86 crashed immediately when select_core(ARM_CR4) was called at T+2s.**
+**Core switching after firmware starts is CONFIRMED LETHAL (tests 66/76/86).**
+**WFI theory DISPROVEN: frozen counter at 0x9d000 means TRUE HANG, not WFI idle.**
+(WFI only halts CPU core — timers/peripherals keep running. Counter froze = real hang.)
 
 ## test.85 RESULT: CRASHED at ~T+18-20s
 
@@ -32,51 +39,39 @@ Git branch: main (pushed to origin)
 - The "hang" is likely: firmware completed init normally, sitting in WFI,
   waiting for host commands via PCI-CDC protocol that our MSGBUF driver never sends
 
-### test.86 PLAN: Read ARM PC via debug registers
+### test.87 PLAN: TCM firmware code dump + counter timing (NO core switch)
 
-**Goal:** Confirm firmware's exact execution location to distinguish:
-- PC ≈ 0x1C1E → firmware in WFI idle (protocol mismatch confirmed, firmware is HEALTHY)
-- PC = 0x168 → stuck in init spin (function pointer never set)
-- PC elsewhere → real hang at identifiable location
+**Goal:** Find what pciedngl_probe is polling/waiting for by:
+1. Tracking exact counter freeze timing (when does the hang happen?)
+2. Dumping firmware code around pciedngl_probe for deeper disassembly
+3. Finding the stack pointer in TCM to trace the call chain
 
 **Approach:**
 1. Keep all pre-ARM setup from test.85 (BBPLL, BusMaster, ASPM, config clearing)
-2. Release ARM, wait 3s for firmware to complete init
-3. Select ARM CR4 core (BCMA_CORE_ARM_CR4 = 0x83E)
-4. Read ARM debug registers to get PC
-5. Quick TCM state check
-6. Exit at T+5s MAX to avoid PCH crash (crash scales with loop length)
-7. Restore RP cleanly
-
-**Implementation details:**
-1. Keep all pre-ARM setup from test.85 (BBPLL, BusMaster, ASPM, STATUS/DevSta clearing)
 2. Release ARM, start 3s monitoring loop (15 outer × 200ms)
-3. At outer==10 (T+2s):
-   - Read TCM counter (0x9d000) before switching cores
-   - Select ARM CR4 core, read wrapper IOCTL+RESET_CTL
-   - Halt CPU by setting CPUHALT (0x0020) in wrapper IOCTL
-   - Dump ARM core registers 0x00-0xFF (64 words)
-   - Dump ARM wrapper registers 0x1400-0x14FF
-   - Switch back to ChipCommon, re-read TCM counter after halt
-4. Exit at T+3s max — crash scales ~90-100% of loop length
-5. Restore RP cleanly
+3. Every 200ms: read TCM counter at 0x9d000, log RUNNING/FROZEN
+4. At outer==5 (T+1s): dump firmware code + TCB via BAR2 (safe reads):
+   - pciedngl_probe code: 0x1E90-0x20FF (~0x170 bytes)
+   - Init spin loop: 0x0160-0x022F
+   - WFI idle helper: 0x1C00-0x1C3F
+   - Thread control block / si_t: 0x9d020-0x9d0FF
+   - Extended callees: 0x2100-0x24FF
+5. Exit at T+3s max — crash scales ~90-100% of loop length
+6. Restore RP cleanly
+7. NO core switching (lethal per tests 66/76/86)
 
-**If ARM dump doesn't reveal PC, next step:**
-- test.87: Write to SBTOPCIMAILBOX (0x48 in PCIe2 core) to trigger mailbox interrupt
-  PCI-CDC firmware should respond if IRQs are enabled
-
-## Run test.86 (after build):
+## Run test.87 (after build):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
 
 ## After test — what to do:
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.86" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.86.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.86.*'`
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.87" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.87.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.87.*'`
 3. Key things to check:
    a. Did we SURVIVE? (RP settings restored = yes)
-   b. ARM wrapper IOCTL — was CPUHALT already set?
-   c. ARM core registers — any recognizable debug register values?
-   d. TCM counter frozen or was-running?
-   e. Did halting the CPU change anything?
+   b. Counter timing: which 200ms tick did it freeze?
+   c. pciedngl_probe code — look for LDR+CMP+BNE polling loops
+   d. TCB area — any values pointing into TCM (0x0000-0x9FFFF)?
+   e. If pointer-like value found, follow it to find stack frames with saved PC/LR
 
 ## Key confirmed findings
 - BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
@@ -116,7 +111,9 @@ Git branch: main (pushed to origin)
 - Firmware has NO spin loops except init handler at 0x168 ✓ (disassembly)
 - WFI instruction at 0x1C1E (idle helper) ✓ (disassembly)
 - pciedngl_probe at 0x1E90, full call chain traced ✓ (disassembly)
-- select_core(BCMA_CORE_PCIE2) after firmware starts → CRASH ✗ (test.66/76)
+- select_core after firmware starts → CRASH ✗ (test.66/76 PCIe2, test.86 ARM CR4)
+- Core switching after FW start CONFIRMED LETHAL across ALL core types ✗ (test.66/76/86)
+- WFI theory DEAD: frozen counter = TRUE HANG, not WFI idle (WFI keeps timers running) ✗
 - PCIe2 wrapper pre-ARM: IOCTL=0x1 RESET_CTL=0x0 (safe to read/write pre-ARM) ✓
 - PCIe2 BAC pre-ARM: INTMASK=0x0, MBMASK=0x0, H2D0=0xffffffff, H2D1=0xffffffff ✓
 
@@ -159,4 +156,5 @@ Firmware prints CDC protocol banner (not FullDongle MSGBUF).
 - test.83: CRASHED in timeout path — INTMASK/MBMASK theory DEAD; even 3-read final scan crashes
 - test.84: CRASHED at ~T+30s — BARs valid, STATUS bit 11 SET; BAR hypothesis DEAD
 - test.85: CRASHED T+18-20s — STATUS/DevSta cleared, firmware STILL hung; STATUS theory DEAD
-- test.86: PENDING — read ARM PC via debug registers; 5s max loop
+- test.86: CRASHED T+2s — ARM core switch (select_core) crashed immediately; core switch LETHAL
+- test.87: PENDING — TCM firmware code dump + counter timing; NO core switch; 3s max loop
