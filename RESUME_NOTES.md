@@ -1,11 +1,59 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, RUNNING test.89)
+## Current state (2026-04-16, RUNNING test.90)
 
 Git branch: main (pushed to origin)
-Module built successfully. About to run test.89.
-Test samples TCM[0x9d000] at 1ms intervals for 100ms, then 2s masking loop.
-Key question: is 0x43b1 a counter value or a static constant?
+Module built successfully. About to run test.90.
+Test dumps TCM[0x66E00-0x67340] at T+200ms to disassemble function 0x670d8 (deep init).
+Key question: does 0x670d8 contain a polling loop waiting for hardware?
+
+## test.89 RESULT: SURVIVED — 0x43b1 question RESOLVED
+
+**test.89 ran in boot -1. Key findings from fast-sampling:**
+1. T+0ms: ctr=0x00000000 (ARM just released)
+2. T+2ms: ctr=0x00058c8c (CHANGED — firmware running, some intermediate value)
+3. T+10ms: ctr=0x00058c8c (held for 8ms)
+4. T+12ms: ctr=0x000043b1 AND cons=0x8009ccbe (BOTH changed simultaneously)
+5. T+20ms+: ctr=0x000043b1 FROZEN, cons frozen, sharedram=0xffc70038 NEVER changes
+
+**RESOLVED: 0x43b1 IS a static constant, NOT a counter**
+- Function at 0x673cc returns MOVW R0, #0x43b1 → firmware stores it to 0x9d000
+- Previous "WFI-disproof" based on frozen counter was INVALID for values at T+200ms
+- BUT firmware IS genuinely hung: sharedram NEVER changes (even at 2s+)
+  - PCI-CDC firmware WOULD write sharedram on successful init
+  - Never changing = TRUE HANG, not WFI idle
+
+**TIMELINE reconstructed:**
+- T+0ms: ARM released, TCM[0x9d000]=0
+- T+2ms: firmware stored 0x58c8c to 0x9d000 (some intermediate init value)
+- T+10ms: still 0x58c8c (firmware executing init code)
+- T+12ms: firmware stored 0x43b1 to 0x9d000 (function 0x673cc result) AND initialized console
+- T+12ms+: EVERYTHING FROZEN — firmware hung at this exact point
+  - Console write ptr = 0x8009ccbe = TCM[0x9ccbe] (same as all previous tests)
+  - Last message = "pciedngl_probe called" (same as test.78-80 decode)
+  - Hang occurs inside pciedngl_probe → 0x67358 (TARGET 1) → 0x670d8 (deep init)
+
+**NEXT: disassemble 0x670d8** — the only unexamined function in the call chain
+Log: phase5/logs/test.89.journal
+
+## test.90 PLAN: Disassemble 0x670d8 (deep init)
+
+**Goal:** Find the polling loop or blocking call inside function 0x670d8.
+
+**Approach:**
+1. Keep all proven init (BBPLL, BusMaster, ASPM, masking)
+2. Release ARM
+3. Baseline read of ctr/shared/cons (single read — confirm state)
+4. At outer==1 (T+200ms): dump TCM[0x66E00-0x67340] = 336 words
+   - Covers 0x66e64 (initial device op) and 0x670d8 (deep init)
+   - Connects to existing test.88 dump at 0x67340
+   - Look for: LDR + CMP + BNE loops, CPSID, WFI, or deep call chains
+5. 2s timeout, re-mask every 10ms
+6. NO core switching (lethal)
+
+**Expected outcomes:**
+- Find polling loop in 0x670d8 → identifies WHAT hardware firmware is waiting for
+- If no loops: hang is in something 0x670d8 calls → need another dump level
 
 ## test.88 RESULT: CRASHED in cleanup — but all data obtained
 
