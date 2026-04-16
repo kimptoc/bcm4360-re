@@ -1,76 +1,56 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, EXECUTING test.85)
+## Current state (2026-04-16, preparing test.86)
 
 Git branch: main (pushed to origin)
 
-## test.84 RESULT: CRASHED at ~T+30s (between T+28s and timeout message)
+## test.85 RESULT: CRASHED at ~T+18-20s
 
-**test.84 proved BAR hypothesis DEAD — device-side BARs are valid after SBR.**
+**test.85 proved STATUS/DevSta clearing theory DEAD — firmware still hangs.**
+**CRITICAL: Crash timing scales with loop length (20s loop → crash at ~T+18-20s).**
 
-### test.84 key findings:
-1. Device-side config dump: CMD_STA=0x08100006 BAR0=0xb0600004 BAR1=0x00000000 BAR2=0xb0400004
-2. BAR2_CONFIG(0x4E0)=0x00000016 BAR3_CONFIG(0x4F4)=0x00000000
-3. **STATUS bit 11 (Signaled Target Abort) is SET** — residual error from SBR
-4. BARs are valid (non-zero, proper addresses) — BAR-zero hypothesis DEAD
-5. Firmware still freezes: sharedram=0xffc70038 unchanged across 28s
-6. Machine crashed at ~T+30s (same as test.82/83 — crash at loop end)
-7. Console text unchanged from previous tests (pciedngl_probe called, firmware hung)
+### test.85 key findings:
+1. STATUS cleared successfully: 0x08100006 → 0x00100006 (bit 11 gone) — firmware STILL hangs
+2. DevSta cleared: 0x00132c10 → 0x00102c10 — firmware STILL hangs
+3. PCIe caps: 0x48(PM id=1), 0x58(MSI id=5), 0x68(VPD id=9), 0xAC(PCIe Express id=0x10)
+4. PCIe Express: DevCtl+Sta=0x00132c10 LnkCtl+Sta=0x10110140
+5. PM_CSR(0x4C)=0x00004008
+6. sharedram=0xffc70038 unchanged for 18s — firmware completely dead
+7. TCM[0x9d000] counter went 0→0x43b1 then frozen (same as all tests)
+8. TCM[0x9a000-0x9af00] zeroed (firmware BSS init area)
+9. CRASHED between T+18s and T+20s (no RP restore messages)
+10. STATUS/DevSta clearing theory DEAD
 
-### test.84 cleanup applied to test.85:
-- BAR hypothesis DEAD — BARs valid
-- NEW THEORY: STATUS error bits (bit 11 = Signaled Target Abort) may cause firmware to spin
-- Clear STATUS RW1C error bits via CONFIGADDR/CONFIGDATA before ARM release
-- Walk device-side capability list and dump PCIe Express cap registers (DevSta, LnkSta)
-- Clear DevSta RW1C error bits too
-- Reduce loop from 30s to 20s to avoid the T+30s crash
+### Firmware disassembly findings (from this session):
+- NO spin loops in firmware code except exception handler init at 0x168
+- WFI instruction at 0x1C1E (idle helper: WFI; BX LR)
+- pciedngl_probe at 0x1E90 — traced full call chain
+- Firmware protocol = PCI-CDC (confirmed by RTE banner)
+- 0x168 spin loop: loads function pointer from *0x224, spins while NULL, calls through it
+  (this is the startup spin — waits for c_init to set up the entry point)
+- After init, firmware enters WFI-based idle loop (normal behavior)
+- The "hang" is likely: firmware completed init normally, sitting in WFI,
+  waiting for host commands via PCI-CDC protocol that our MSGBUF driver never sends
 
-## test.85 PLAN (about to run)
+### test.86 PLAN: Read ARM PC via debug registers
 
-**Goal:** Clear device-side STATUS/DevSta error bits and dump full PCIe caps before ARM release.
-Hypothesis: After SBR, STATUS bit 11 (Signaled Target Abort) is set. Firmware reads its own
-config STATUS in pcidongle_probe, sees the error, and spins/aborts PCIe init.
+**Goal:** Confirm firmware's exact execution location to distinguish:
+- PC ≈ 0x1C1E → firmware in WFI idle (protocol mismatch confirmed, firmware is HEALTHY)
+- PC = 0x168 → stuck in init spin (function pointer never set)
+- PC elsewhere → real hang at identifiable location
 
-**Evidence:** test.84 CMD_STA=0x08100006 has STATUS=0x0810, bit 11 (Signaled Target Abort) SET.
-brcmf_pcie_reset_device() saves/restores config regs after watchdog reset, but doesn't clear
-STATUS error bits — our SBR path does even less.
+**Approach:**
+1. Keep all pre-ARM setup from test.85 (BBPLL, BusMaster, ASPM, config clearing)
+2. Release ARM, wait 3s for firmware to complete init
+3. Select ARM CR4 core (BCMA_CORE_ARM_CR4 = 0x83E)
+4. Read ARM debug registers to get PC
+5. Quick TCM state check
+6. Exit at T+5s MAX to avoid PCH crash (crash scales with loop length)
+7. Restore RP cleanly
 
-**Key changes from test.84:**
-1. ADD: Clear STATUS RW1C error bits (write 0xFFFF0000 | CMD to offset 0x04) before ARM release
-2. ADD: Walk device-side capability list, dump PCIe Express cap registers (DevCtl+Sta, LnkCtl+Sta)
-3. ADD: Clear DevSta RW1C error bits if any set
-4. ADD: Read PM_CSR (offset 0x4C) for power management state
-5. FIX: Reduce loop from 150 (30s) to 100 (20s) — firmware dead by T+2s, avoids T+30s crash
-6. FIX: Remove T+20s diagnostic (unreachable with 20s loop)
-7. KEEP: Everything from test.84 (config dump, INTMASK/MBMASK, no BAR2 in timeout)
-
-**Expected outcomes:**
-- Machine SURVIVES (20s loop avoids the T+30s crash)
-- STATUS cleared successfully (readback shows bit 11 gone)
-- PCIe cap dump shows additional context (link state, device status)
-- If firmware STILL hangs: STATUS clearing alone doesn't fix it → need to look at
-  SBTOPCIE translation or get ARM PC via debug registers
-- If firmware PROCEEDS: STATUS clearing is the fix → BREAKTHROUGH
-
-**If firmware still hangs, next hypotheses (in priority order):**
-1. Get ARM PC via debug registers (halt CPU, read PC to find exact spin location)
-2. Force firmware trap to dump CPU state
-3. SBTOPCIE translation window setup (firmware may fail to write these)
-4. Disassemble firmware binary near "pciedngl_probe" to find spin loop
-5. Try intel_iommu=off kernel parameter
-
-## Run test.85 (after build):
-  cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
-
-## After test — what to do:
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.85" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.85.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.85.*'`
-3. Key things to check:
-   a. Did we SURVIVE? (RP settings restored = yes)
-   b. STATUS cleared? (before=0x08100006 → after should have bit 11 gone)
-   c. PCIe cap dump — any additional error bits in DevSta/LnkSta?
-   d. Did sharedram change? → BREAKTHROUGH if so
-   e. Console dump — any different from test.84?
+**Alternative approach (if debug regs don't work):**
+- Write to SBTOPCIMAILBOX (0x48 in PCIe2 core) — PCI-CDC firmware should respond
+  to mailbox interrupt if IRQs are enabled
 
 ## Key confirmed findings
 - BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
@@ -102,7 +82,14 @@ STATUS error bits — our SBR path does even less.
 - Device-side BARs valid after SBR: BAR0=0xb0600004 BAR1=0 BAR2=0xb0400004 ✓ (test.84)
 - Device-side STATUS has Signaled Target Abort (bit 11) SET after SBR ✓ (test.84)
 - BAR hypothesis DEAD (BARs valid) ✗ (test.84)
-- Loop crashes at ~T+30s consistently (test.82/83/84 all crashed between T+28s and timeout)
+- STATUS clearing (bit 11 Signaled Target Abort) does NOT fix firmware hang ✗ (test.85)
+- DevSta clearing does NOT fix firmware hang ✗ (test.85)
+- STATUS clearing theory DEAD ✗ (test.85)
+- Crash timing scales with loop length: 30s→T+28-30s, 20s→T+18-20s (test.82-85)
+- PCIe caps: PM@0x48, MSI@0x58, VPD@0x68, PCIe_Express@0xAC ✓ (test.85)
+- Firmware has NO spin loops except init handler at 0x168 ✓ (disassembly)
+- WFI instruction at 0x1C1E (idle helper) ✓ (disassembly)
+- pciedngl_probe at 0x1E90, full call chain traced ✓ (disassembly)
 - select_core(BCMA_CORE_PCIE2) after firmware starts → CRASH ✗ (test.66/76)
 - PCIe2 wrapper pre-ARM: IOCTL=0x1 RESET_CTL=0x0 (safe to read/write pre-ARM) ✓
 - PCIe2 BAC pre-ARM: INTMASK=0x0, MBMASK=0x0, H2D0=0xffffffff, H2D1=0xffffffff ✓
@@ -145,4 +132,5 @@ Firmware prints CDC protocol banner (not FullDongle MSGBUF).
 - test.82: SURVIVED 30s, CRASHED in final scan — MSI_count=0 across 30s; MSI theory DEAD
 - test.83: CRASHED in timeout path — INTMASK/MBMASK theory DEAD; even 3-read final scan crashes
 - test.84: CRASHED at ~T+30s — BARs valid, STATUS bit 11 SET; BAR hypothesis DEAD
-- test.85: PENDING — clear STATUS/DevSta error bits; walk PCIe caps; 20s loop
+- test.85: CRASHED T+18-20s — STATUS/DevSta cleared, firmware STILL hung; STATUS theory DEAD
+- test.86: PENDING — read ARM PC via debug registers; 5s max loop
