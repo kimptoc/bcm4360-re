@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.82: MSI enable + dummy IRQ handler before ARM release
+# Phase 5.2 test.96: dump fn 0x5250 (timer/callback reg called by 0x2208)
 #
-# test.81 RESULT: CRASHED ~31s after ARM release. MSI was enabled
-#   (pci_enable_msi returned 0, ADDR=0xfee00738) but no IRQ handler was
-#   registered. Crash occurred when cleanup restored RP error reporting
-#   while MSI was still active — unhandled interrupts cascaded.
+# test.95 RESULT: CLEAN EXIT. Dumped 0x840-0xB40 = all C runtime library.
+#   0x848 = strcmp loop body (NOT hang). 0xa4c annotation was wrong (mid-printf).
+#   b.w 0x848 from 0x2208 is a tail call into strcmp — benign.
+#   HANG LOCATION STILL UNKNOWN after test.95.
 #
-# test.82 FIXES from test.81:
-#   1. ADD: request_irq() with counting dummy handler after pci_enable_msi
-#   2. FIX: cleanup order — free_irq → pci_disable_msi → restore RP
-#   3. FIX: stale array indices in baseline log (wrong since scan expansion)
-#   4. ADD: read MSI message control at 0x5A to verify MSI Enable bit
-#   5. ADD: log MSI interrupt count at each TCM scan + at timeout
-#   6. KEEP: wider TCM scan, ASPM disable, reg clears, console/BSS dumps
+# test.96 PLAN: dump 0x5200-0x5400 (128 words) at T+200ms.
+#   fn 0x5250 called by 0x2208 (via bl 0x5250) before b.w 0x848 (strcmp).
+#   Looking for hardware-polling loop in 0x5250 that causes the hang.
+#   128 words × ~13ms = 1.7s total at T+200ms (well within 3s PCIe window).
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -26,14 +23,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.82.stage${STAGE}"
+LOG="$LOG_DIR/test.96.stage${STAGE}"
 
-echo "=== test.82: MSI enable + IRQ handler before ARM release --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.96: dump fn 0x5250 (timer/hang?) at T+200ms --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled + IRQ handler before ARM; pci_set_master before ARM; 30s masking+FW wait; wider TCM scan (0x9A000-0x9FFFC) every 2s; MSI count at each scan; console dump at T+3s; BSS dump at T+5s; olmsg dump at T+20s; TIMEOUT: final TCM+MSI scan; free_irq+disable_msi+RP restore" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled + IRQ handler before ARM; pci_set_master before ARM; 30s masking+FW wait; wider TCM scan; CODE DUMP 0x5200-0x5400 at T+200ms (fn 0x5250 = timer/hang?); free_irq+disable_msi+RP restore" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -88,7 +85,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.82 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.96 ===" | tee -a "$LOG"
 sync
 
 dmesg -C

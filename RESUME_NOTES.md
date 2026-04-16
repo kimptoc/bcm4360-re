@@ -1,14 +1,13 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, ABOUT TO RUN test.95 — module built, not yet run)
+## Current state (2026-04-16, ABOUT TO RUN test.96 — module built, not yet run)
 
 Git branch: main (pushed to origin)
-Module built successfully. About to run test.95.
-Test.95 dumps (at T+200ms, outer==1):
-  CODE: TCM[0x840-0xB40] = 192 words — covers 0x848 (tail call target = likely hang) and 0xa4c
-  Per-100-word re-masking. Total ~192 words — well within safe limit (2.7s total).
-Key question: what does 0x848 do? Does it contain a hardware register polling loop?
-Also: 0xa4c (called on 0x5250 failure) — is it a cleanup or a blocking call?
+Module built successfully. About to run test.96.
+Test.96 dumps (at T+200ms, outer==1):
+  CODE: TCM[0x5200-0x5400] = 128 words — covers fn 0x5250 (called by 0x2208 before b.w 0x848)
+  Per-100-word re-masking. Total 128 words — well within safe limit (1.9s total).
+Key question: does 0x5250 contain a hardware register polling loop that causes the hang?
 
 ## test.94 RESULT: SURVIVED (vtable read), CRASHED in STACK-LOW at word 154
 
@@ -59,7 +58,7 @@ bl 0x5250           ; register timer/callback
 if (r0 == 0): success path:
     r0 = *0x237c = 0x00000000 (NULL!)
     r6 = 0
-    b.w 0x848       ; TAIL CALL → 0x848 ← likely actual hang location!
+    b.w 0x848       ; TAIL CALL → 0x848 = strcmp (C library, NOT hang — CONFIRMED test.95)
 ```
 
 **0x1FD0 (struct constructor called by 0x2208):**
@@ -77,37 +76,67 @@ if (r0 == 0): success path:
 - Stack frames NOT yet read (need 0x9CE00-0x9D000 or higher)
 - Crash at ~3.25s total (exceeding ~3s PCIe crash window)
 
-## test.95 PLAN: Disassemble 0x848 (tail call target = likely hang)
+## test.95 RESULT: CLEAN EXIT — 0x840-0xB40 ALL C RUNTIME LIBRARY
 
-**Goal:** Find the polling loop or blocking call in function 0x848.
+**test.95 ran in boot -2 (and boot -1). Both SURVIVED with "TIMEOUT — FW silent for 2s — clean exit".**
+**CODE DUMP COMPLETE: 192 words at 0x840-0xB40 disassembled (test95_disasm.txt).**
+
+**CRITICAL CORRECTION: 0x848 is NOT a hang site — it is the loop body of strcmp.**
+The annotation "b.w 0x848 = likely actual hang location" was WRONG.
+
+**Functions found in 0x840-0xB40:**
+- 0x840-0x87a: `strcmp` — entry at 0x840 (b.n 0x848), loop at 0x842-0x856, exit at 0x858-0x87a
+- 0x87c-0x916: `strtol`/`strtoul` — whitespace skip, sign handling, 0x prefix, base conversion
+- 0x91c-0x968: `memset` — 4-byte aligned stores + byte tail
+- 0x96a-0xa2e: `memcpy` — LDMIA/STMIA 32-byte blocks, `tbb` jump table
+- 0xa30-0xaaa: console printf — 520-byte stack buffer, calls 0xfd8/0x7c8/0x5ac/0x1848
+- 0xabc-0xafa: callback dispatcher — 5-entry loop, `blx r3` dispatch with flag masking
+- 0xb04-0xb16: wrapper loading globals for 0xabc
+- 0xb18-0xb3f: heap free — adjusts accounting, walks linked list
+
+**0xa4c was wrongly annotated** — it is in the MIDDLE of console printf at 0xa30, not a cleanup fn.
+
+**Call chain from 0x2208:**
+  bl 0x5250 (timer/callback reg) → succeeds → b.w 0x848 (tail call into strcmp)
+  strcmp completes in microseconds. HANG IS ELSEWHERE.
+
+**si_attach disasm (test91_disasm.txt, 0x64400-0x64ab8):**
+- Function at 0x644??-0x64536: contains 3 vtable dispatches
+  - Call 1 (0x644dc): *(*(0x62a14)+4) — obj vtable ptr at offset 0 → vtable[1]
+  - Call 2 (0x644fc): r6=0x58cc4, ldr r3,[r6,#16] → vtable ptr at obj+16 → vtable[1]  
+  - Call 3 (0x6451a): r7=0x58ef0, ldr r3,[r7,#16] → vtable ptr at obj+16 → vtable[1]
+- si_attach at 0x64590: EROM-parsing loop, calls 0x2704 (EROM parser) for each core
+
+## test.96 PLAN: Disassemble fn 0x5250 (timer/callback registration)
+
+**Goal:** Determine if fn 0x5250 (called by 0x2208) contains hardware polling that causes the hang.
 
 **Approach:**
 1. Keep all proven init (BBPLL, BusMaster, ASPM, masking)
 2. Release ARM
-3. At outer==1 (T+200ms): dump TCM[0x840-0xB40] = 192 words
-   - Covers 0x848 (tail call target from 0x2208) and 0xa4c (cleanup fn)
+3. At outer==1 (T+200ms): dump TCM[0x5200-0x5400] = 128 words
+   - Covers fn 0x5250 (called by 0x2208 before the benign b.w 0x848/strcmp)
    - Per-100-word re-masking
 4. 2s outer timeout, re-mask every 10ms (inner loop unchanged)
 
 **Expected outcomes:**
-- 0x848: find the function structure — is it a bus registration, polling loop, or RTOS wait?
-- If 0x848 calls another function: that function is the next target
-- 0xa4c: understand what cleanup/fallback does
+- If 0x5250 contains LDR+CMP+BNE polling loops → IT IS THE HANG
+- If 0x5250 is a simple RTOS timer registration → hang is in vtable Call 2 or Call 3
+- Look for: reads from hardware-mapped addresses, wait-for-bit loops, CPSID/WFI
 
-**Total timing:** T+200ms + 192 words × ~13ms = T+200ms + 2.5s = T+2.7s (SAFE, < 3s window)
+**Total timing:** T+200ms + 128 words × ~13ms = T+200ms + 1.7s = T+1.9s (SAFE, < 3s window)
 
-## Run test.95 (after build):
+## Run test.96 (module already built):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
 
 ## After test — what to do:
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.95" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.95.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.95.*'`
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.96" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.96.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.96.*'`
 3. Key things to check:
    a. SURVIVED? (RP settings restored = yes)
-   b. Extract code dump: `grep "BCM4360 test.95 code:" test.95.journal`
-   c. Disassemble: `python3 ... | arm-none-eabi-objdump ...` (same method as test.94)
-   d. Look for: LDR+CMP+BNE loops (hardware polling), WFI, CPSID, blocking calls
-   e. Is there a loop reading from a fixed hardware address repeatedly?
+   b. Extract code dump: `grep "BCM4360 test.96 code:" test.96.journal`
+   c. Disassemble: python3 extract hex → arm-none-eabi-objdump --adjust-vma=0x5200 -M force-thumb
+   d. Look for: LDR+CMP+BNE loops, reads from BAR0-mapped addresses, hardware spin-waits
 
 ## test.93 RESULT: SURVIVED (both runs) — vtable pointer decoded, stack top is NVRAM
 
