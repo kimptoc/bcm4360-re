@@ -1,82 +1,141 @@
-# Offline disassembly: c_init() and the RTE banner site
+# Offline disassembly: c_init() and the freeze region
 
-**Date:** 2026-04-16 (post test.99)
-**Source binary:** `phase1/output/firmware_4352pci.bin` (442233 bytes, md5 812705b3...) — confirmed identical to the loaded `/lib/firmware/brcm/brcmfmac4360-pcie.bin`.
+**Date:** 2026-04-17
+**Source:** `phase1/output/firmware_4352pci.bin` (md5 812705b3...) ≡ `/lib/firmware/brcm/brcmfmac4360-pcie.bin`
+**Tool:** `cstool`/capstone via `command nix-shell -p python3Packages.capstone`
+  (note: shell-snapshot wraps `nix-shell` with `--command zsh`, which silently
+   drops `--run`; must invoke `command nix-shell` directly)
 
 ## Loader assumptions
 
-- Firmware loaded at TCM base 0x00000000. File offset == TCM virtual address for code/.data.
-- Pointer values in code may carry the high `0x80000000` bit (mirror/uncached alias) — but literal pools we inspected use the raw 0x000xxxxx form.
+- Firmware loaded at TCM base 0x00000000. File offset == TCM virtual address.
+- Pool literals use the raw 0x000xxxxx form (no high-bit alias).
 
-## Banner format string
+## c_init() — verified via disassembly
 
-| TCM addr | Content |
-|----------|---------|
-| 0x6bae4  | `\nRTE (%s-%s%s%s) %s on BCM%s r%d @ %d.%d/%d.%d/%d.%dMHz\n\0` |
-| 0x40c2f  | `6.30.223 (TOB) (r)` (banner version arg) |
-
-## c_init() — function start at TCM 0x642fc
-
-- Prologue at 0x642fc: `2d e9 f0 4f` (`push.w {r4-r11, lr}`) — large-frame Thumb-2 function.
-- Code body: 0x642fc … 0x6453e (~322 bytes).
+- Function starts at TCM **0x642fc** (`push.w {r4-r11, lr}` — full register save).
+- Function body: 0x642fc … 0x6453e (**0x242 = 578 bytes** — corrected).
 - Literal pool: 0x64540 … 0x6458c.
-- Next function (`si_attach`) starts at 0x64590 — matches RESUME_NOTES.
+- Pool order matched execution order (verified by LDR-literal scan).
+- Tail: `pop.w {r4-r11, pc}` at 0x64532 ✓.
 
-### Literal pool decoded (0x64540–0x6458c)
+### Annotated call sequence
 
-| Pool offset | Value      | Resolves to |
-|-------------|------------|-------------|
-| 0x64540     | 0x40bfa    | `"c_init"` (function name string) |
-| 0x64544     | 0x000f4240 | 1000000 (decimal — likely a delay/timeout const) |
-| 0x64548     | 0x4227e    | (data, not string) |
-| 0x6454c     | **0x6bae4** | **RTE banner format string** |
-| 0x64550     | 0x40c27    | `"PCI"` (banner arg) |
-| 0x64554     | 0x40c2b    | `"CDC"` (banner arg) |
-| 0x64558     | 0x40c42    | `"%s:   c_init: add PCI device\n\n"` |
-| 0x6455c     | 0x58cc4    | `"pciedngldev"` |
-| 0x64560     | **0x58cf0** | pciedngl_probe vtable (test.99 saw this written to *0x62a14) |
-| 0x64564     | **0x62a14** | TCM addr where vtable ptr is stored |
-| 0x64568     | 0x40c61    | `"%s: add WL device 0x%x\n"` |
-| 0x6456c     | 0x58ef0    | `"wl"` |
-| 0x64570     | 0x40c79    | `"rtecdc.c"` |
-| 0x64574     | 0x40c82    | `"%s: %s%s device binddev failed\n"` ← **failure path 1** |
-| 0x64578     | 0x40ca2    | `"PCIDEV"` |
-| 0x6457c     | 0x40ca9    | `"%s: %s%s device open failed\n"` ← **failure path 2** |
-| 0x64580     | 0x40cc6    | `"%s: netdev:  device open failed\n"` ← **failure path 3** |
-| 0x64584     | 0x40c2f    | `"6.30.223 (TOB) (r)"` (banner version arg) |
-| 0x64588     | 0x186a0    | 100000 (decimal — another timeout/const) |
-| 0x6458c     | 0x47704608 | `mov r0,r1; bx lr` — tiny inline trampoline (4 bytes) |
+```
+0x642fc  push.w {r4-r11, lr}                       <-- function entry
+...      [setup elided — sets up r4 (caller arg), r5 (flag word ptr)]
+0x643ce  ldr.w lr, =0x40c2f                        ; lr = "6.30.223 (TOB) (r)"
+...      [more setup; computes a divide for one of the MHz args]
+0x6443a  ldr r0, =0x6bae4                          ; arg0 = banner format
+0x64440  ldr r1, =0x40c27 ("PCI")                  ; arg1
+0x64444  ldr r2, =0x40c2b ("CDC")                  ; arg2
+0x64446  bl  0xa30                                  ; printf — RTE BANNER (test.80 ✓)
 
-## What c_init() actually does
+0x6444a  ldr r3, [r5]; tst r3, #2; beq             ; gated debug print
+0x64452  ldr r0, =0x40c42 ("c_init: add PCI device")
+0x64456  bl  0xa30                                  ; printf (gated)
 
-Sequence reconstructable from string args + test.80 console:
+0x6445a  ldr r0, =0x58cc4 ("pciedngldev")
+0x6445c  movw r1, #0x83c                            ; size? = 0x83c
+0x64460  movw r2, #0x4999                           ; magic? = 0x4999
+0x64464  bl  0x63b38                                ; "register/lookup device"
+0x64468  cbnz r0, 0x64474                           ; if r0!=0: skip vtable store
+                                                    ; (in test.99: r0==0, fell through)
+0x6446a  ldr r2, =0x58cf0                           ; vtable
+0x6446c  ldr r3, =0x62a14                           ; storage slot
+0x6446e  str r2, [r3]                               ; *0x62a14 = 0x58cf0  (test.99 ✓)
+0x64470  ldr r6, =0x58cc4 ("pciedngldev")           ; r6 = name marker
+0x64472  b   0x64476
+0x64474  movs r6, #0                                ; (alt path: r6 = 0)
 
-1. **Prints RTE banner** (`RTE (PCI-CDC) ... 6.30.223 (TOB) (r) on BCM4360 r3 @ 40/160/160 MHz`) → **OBSERVED in test.80**.
-2. Prints `"c_init: add PCI device"` → **NOT observed** in any test → freeze is between (1) and (2), or this string never gets consumed because the print path itself stalls.
-3. Sets `*0x62a14 = 0x58cf0` (pciedngl_probe vtable) → **OBSERVED populated in test.99**.
-4. Adds WL device (`add WL device 0x%x`).
-5. Three failure exit prints — **none observed** → freeze occurred mid-function, did not reach failure handlers.
+0x64476  mov r0, r4
+0x64478  bl  0x673cc                                ; <-- returns CONST 0x43b1
+                                                    ;   (fn 0x673cc body is just
+                                                    ;    movw r0,#0x43b1; bx lr —
+                                                    ;    NOT the counter writer)
+0x6447c..8a  r7 = (r0==0xffff) ? 0x4318 : r0       ; r7 = 0x43b1
 
-### Reconciling with test.99 / test.80 evidence
+0x6448c  ldr r3, [r5]; tst r3, #2; beq             ; gated print
+0x64494  ldr r0, =0x40c61 ("add WL device 0x%x")
+0x6449a  bl  0xa30                                  ; gated; never observed
 
-- test.99: `pd[0x62a14] = 0x00058cf0` → step (3) executed ✓
-- test.99: `d11[0x58f08] = 0` → step (4) (WL device add) did NOT complete (or D11 link is downstream of WL probe)
-- test.80 console: only the RTE banner appears → either step (2) print was never flushed before freeze, OR the pcidev_open subroutine called between steps spins indefinitely
+0x6449e  mov r2, r7                                 ; arg2 = 0x43b1 (WL dev id)
+0x644a0  ldr r0, =0x58ef0 ("wl")
+0x644a2  movw r1, #0x812
+0x644a6  bl  0x63b38                                ; second device register/lookup
+                                                    ; (for "wl" device)
+0x644aa  ldr r7, =0x58ef0 ("wl"); cmp r0,#0; ite ne; movne r7,#0
+                                                    ; r7 = 0 if r0!=0 else "wl"
 
-**Refined hypothesis:** c_init reaches step 3 (vtable assignment) and then enters either `pcidev_open` or `wl_probe` setup, where it stalls. The freeze is INSIDE c_init, somewhere after the vtable write but before the WL device print or failure paths.
+0x644b2  cbnz r6, 0x644be                           ; r6!=0 in our path → skip
+0x644b4  ldr r0, ="rtecdc.c"; bl 0x11e8 (assert)
+0x644be  cbnz r7, 0x644ca
+0x644c0  ldr r0, ="rtecdc.c"; bl 0x11e8 (assert)
 
-## Correction to RESUME_NOTES
+0x644ca  cmp r6,#0; beq 0x6452e (exit)
+0x644ce  cmp r7,#0; beq 0x6452e (exit)
+                                                    ; need both r6 and r7 non-zero
+                                                    ; to reach the dispatch chain
 
-Earlier notes said "freeze at pciedngl_probe called". That's inaccurate:
-- The string `"pciedngl_probe called"` does not appear in the firmware binary — what we saw was inferred from `pciedngldev` + a probe-style call pattern.
-- The actual observed firmware-printed sequence (test.80) ends after the **RTE banner**.
-- The vtable IS populated (test.99) → execution continues at least to step 3.
+0x644d2  ldr r3, =0x62a14
+0x644d4  mov r0, r6                                 ; arg0
+0x644d6  mov r1, r7                                 ; arg1
+0x644d8  ldr r3, [r3]                               ; r3 = *0x62a14 = 0x58cf0
+0x644da  ldr r3, [r3, #4]                          ; r3 = *(0x58cf0+4) = 0x1fc3 (Thumb)
+0x644dc  blx r3                                     ; <-- INDIRECT CALL to 0x1fc2
 
-## Next moves
+0x644de  cmp r0,#0; bge ...                         ; check return
+0x644e2  ldr r3, [r5]; tst r3, #1; beq             ; gated print
+0x644ea  ldr r0, =("device binddev failed")
+0x644f2  bl  0xa30                                  ; gated; never observed
 
-Concrete progressions from here (do NOT need a hardware test for any of these):
+0x644f6  ldr r3, [r6, #0x10]; r0 = r6              ; r6's vtable at +0x10
+0x644fa  ldr r3, [r3, #4]                          ; method at +4
+0x644fc  blx r3                                     ; <-- INDIRECT CALL via r6
+0x644fe  cbz r0, 0x64514                            ; if r0==0, skip
+... (similar pattern: device open call, gated failure print)
 
-1. **Identify where vtable 0x58cf0 points** — disassemble pciedngl_probe to see what it does.
-2. **Disassemble c_init body 0x642fc–0x6453e** — only ~322 bytes; should reveal exact subroutine call sequence.
-3. **Search for next subroutine called after the vtable store** — that subroutine is the freeze candidate.
-4. **`add WL device` printf site** — find which BL targets the wl_probe init path.
+0x64514  ldr r3, [r7, #0x10]                       ; r7's vtable at +0x10
+0x6451a  blx r3                                     ; <-- INDIRECT CALL via r7
+... (third device call, third gated failure print)
+
+0x6452e  mov r0, r4
+0x64530  add sp, #0x44
+0x64532  pop.w {r4-r11, pc}                        <-- function return
+```
+
+## Vtable at TCM 0x58cf0
+
+```
++0x00: 0x00000000  (null)
++0x04: 0x00001fc3  (Thumb code → 0x1fc2)  ← called by blx r3 at 0x644dc
++0x08: 0x00001fb5  (Thumb code → 0x1fb4)
++0x0c: 0x00001f79  (Thumb code → 0x1f78)
++0x10..+0x1c: 0
+```
+
+## Corrections to prior understanding
+
+| Prior claim | Actual finding |
+|-------------|----------------|
+| "fn 0x673cc writes counter 0x43b1 to *0x9d000" | **WRONG.** fn 0x673cc is `movw r0,#0x43b1; bx lr` — it just RETURNS the constant 0x43b1 (the WL device ID). The counter 0x43b1 at *0x9d000 must be written elsewhere — likely in 0x63b38 or a sub-call. |
+| "Freeze is between vtable store and WL print" | The WL print is gated by `tst r3,#2`. Its absence may be debug-flag, not freeze. |
+| "Pool order tells the story" | Confirmed by disassembly, but advisor was correct that this is post-hoc justification. |
+| Body size 322 bytes | Actually **578 bytes** (0x242). |
+
+## Remaining freeze candidates
+
+In execution order, BLs that ALWAYS execute past the vtable store:
+
+1. `0x64478 bl 0x673cc`              — eliminated (2-insn const return)
+2. `0x644a6 bl 0x63b38` ("wl" device) — possible
+3. `0x644dc blx 0x1fc2` (vtable +4) — possible — needs disasm of 0x1fc2
+4. `0x644fc blx via r6.[0x10]+4`     — possible (only if r6/r7 path taken)
+5. `0x6451a blx via r7.[0x10]+4`     — possible (same gate)
+
+## Concrete next moves (no hardware test needed)
+
+1. **Disassemble fn 0x1fc2** (vtable target at 0x58cf0+4) — what does it do?
+2. **Disassemble fn 0x63b38** ("device register/lookup") — does it have a wait loop?
+3. **Find what writes *0x9d000 = 0x43b1** — grep firmware for `mov.w Rn, #0x43b1` followed by a store. Or look inside 0x63b38 for stores to 0x9d000.
+4. **Cross-check test.80 console for "wl_probe called"** — that string would be printed somewhere along the c_init dispatch chain; finding its address localises which BL we passed.
