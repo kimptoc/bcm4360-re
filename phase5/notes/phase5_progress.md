@@ -462,6 +462,46 @@ we avoid that crash but fall into the wait loop crash instead.
    with a short timeout and appropriate error handling, then investigate the
    firmware ASSERT at `hndarm.c:397` and NVRAM configuration.
 
+## Phase 5.2: test.99 result (2026-04-16 23:28) — pointers frozen across T+200/400/800ms
+
+Multi-timepoint pointer sampling + console ring dump (256 bytes from 0x9ccc0).
+Clean exit, "RP settings restored". Log: `phase5/logs/test.99.journal`.
+
+**Pointer sample (T+200, T+400, T+800ms — all three identical):**
+```
+ctr[0x9d000]  = 0x000043b1   (static, set once at T+12ms — consistent with test.89)
+d11[0x58f08]  = 0x00000000   (D11 obj never linked — confirms test.98)
+ws [0x62ea8]  = 0x0009d0a4   (TCM ptr to static struct in BSS; non-zero)
+pd [0x62a14]  = 0x00058cf0   (vtable ptr — populated, consistent with test.93)
+```
+
+**Interpretation:**
+- Firmware is **hard-frozen** between T+12ms and T+800ms — no delayed code path,
+  no DPC/ISR execution writing any of these globals after the freeze.
+- `d11[0x58f08] = 0` confirms si_attach D11 obj linkage never occurred.
+- `pd[0x62a14] = 0x58cf0` is non-zero → some early init reached the vtable
+  lookup (consistent with code reaching vtable dispatch in si_attach prologue).
+- `ws[0x62ea8] = 0x9d0a4` is a static TCM pointer (firmware data section) —
+  the wait-struct ptr is set at firmware data init, not at runtime.
+
+**Console ring (256 bytes from 0x9ccc0, console_wp=0x8009ccbe):**
+- 0x9ccc0–0x9cd14: `"125888.001 Chipcommon: rev 43, caps 0x58680001, chipst 0x9a4d pmu rev 17, pmucaps 0x10a22b11"` — same ChipCommon banner seen in tests 78–80.
+- 0x9cd18–0x9cda4: BSS metadata (counters, pointers — not text).
+- 0x9cda8–0x9cdbc: `"125888.001 wl_probe call"` — truncated mid-message at the
+  end of the 256-byte window.
+- **Notably absent:** `"pciedngl_probe called"`. Since `console_wp = 0x9ccbe`
+  is the next-write position (most recent text ends at 0x9ccbe-1), the
+  "pciedngl_probe called" string from prior tests must live in the wrap-around
+  region — older text in the ring at offsets we did NOT dump (between 0x9cdc0
+  and 0x9ccbe via wrap). Wider/relocated dump needed if we want to see it.
+
+**Net conclusion:**
+Test.99 narrows nothing structurally beyond what test.98 already established
+— D11 obj is never linked, firmware is hard-frozen — but it eliminates the
+"delayed code path" hypothesis and re-confirms the freeze is at the same
+position. Path B (D11 prerequisite checks via BCMA wrapper reads) remains
+the next planned probe.
+
 ## Phase 5.2: Current state (as of 2026-04-16, POST test.98 — Path B triggered)
 
 Tests 26–97 are logged in `phase5/logs/test.*.journal` and not re-summarized here

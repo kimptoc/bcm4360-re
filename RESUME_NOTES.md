@@ -1,9 +1,46 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16 23:15, POST test.98 — Path B triggered; test.99 being planned)
+## Current state (2026-04-16 23:35, POST test.99 — pointers frozen across T+200/400/800ms)
 
-Git branch: main (pushed to origin — pending doc commit adds PLAN.md refactor,
-phase5_progress.md Path B section, test.98 log preservation, and this update).
+Git branch: main. Last pushed commit e6e1e28 (Pre-test.99: module built).
+Pending commit: test.99 result doc + journal preservation.
+
+**TEST.99 RESULT: firmware hard-frozen, no delayed code path, D11 obj still unlinked.**
+
+Test.99 ran cleanly at 23:28:52–23:28:56 (boot -1, journal
+`phase5/logs/test.99.journal`). "RP settings restored" — no host crash.
+Host session separately restarted ~23:31 (unrelated to the module run — the
+module test itself completed cleanly).
+
+Pointer sample — **IDENTICAL across T+200/400/800ms**:
+```
+ctr[0x9d000]  = 0x000043b1    (static, matches test.89)
+d11[0x58f08]  = 0x00000000    (D11 obj never linked — matches test.98)
+ws [0x62ea8]  = 0x0009d0a4    (TCM ptr to static struct in BSS)
+pd [0x62a14]  = 0x00058cf0    (vtable, matches test.93)
+```
+→ firmware is frozen by T+200ms with NO runtime change for the next 600ms.
+Eliminates any "delayed DPC/ISR writes" hypothesis for these globals.
+
+Console ring (256 bytes from 0x9ccc0): ChipCommon banner + "wl_probe call"
+(truncated). "pciedngl_probe called" text is NOT in this window — it's in the
+pre-wp wrap region (before 0x9ccbe) we didn't dump. A wider / relocated dump
+could capture whatever printed AFTER "pciedngl_probe called", which would
+narrow the freeze location much more than pointer sampling did.
+
+Per RESUME_NOTES rule "if console is frozen at 'pciedngl_probe called' and
+pointers unchanged → proceed to test.100 with D11 BCMA wrapper reads (Path B
+step 1)" — we have the second half (pointers unchanged) but cannot yet
+confirm the first half because our 256-byte window missed the wp region.
+
+**Next decision (test.100) is between two cheap options:**
+- (a) Wider / relocated console dump to capture post-"pciedngl_probe called"
+  text — cheapest possible probe, reuses existing scaffolding.
+- (b) D11 core BCMA wrapper reads (IOCTL/IOST/RESET_CTL) — the originally
+  planned Path B step 1, requires chip.c bus-ops scaffolding.
+
+Option (a) is strictly cheaper and blast-radius-safer; defer option (b) if
+(a) surfaces a post-"pciedngl_probe called" string.
 
 **TEST.98 RESULT: step1 = TCM[0x58f08] = 0x00000000 → hang is in si_attach.**
 
