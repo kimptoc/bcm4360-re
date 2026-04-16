@@ -133,9 +133,78 @@ In execution order, BLs that ALWAYS execute past the vtable store:
 4. `0x644fc blx via r6.[0x10]+4`     — possible (only if r6/r7 path taken)
 5. `0x6451a blx via r7.[0x10]+4`     — possible (same gate)
 
-## Concrete next moves (no hardware test needed)
+## Further tracing (round 2)
 
-1. **Disassemble fn 0x1fc2** (vtable target at 0x58cf0+4) — what does it do?
-2. **Disassemble fn 0x63b38** ("device register/lookup") — does it have a wait loop?
-3. **Find what writes *0x9d000 = 0x43b1** — grep firmware for `mov.w Rn, #0x43b1` followed by a store. Or look inside 0x63b38 for stores to 0x9d000.
-4. **Cross-check test.80 console for "wl_probe called"** — that string would be printed somewhere along the c_init dispatch chain; finding its address localises which BL we passed.
+### Struct schemas reverse-engineered
+
+The "strings" at 0x58cc4 ("pciedngldev") and 0x58ef0 ("wl") are actually
+struct headers whose first field is the name. Layout:
+
+```
+pciedngldev_struct @ 0x58cc4:        wl_struct @ 0x58ef0:
+  +0x00  name "pciedngldev\0"          +0x00  name "wl\0"
+  +0x10  ptr 0x58c9c                   +0x10  ptr 0x58f1c (-> ops table)
+  +0x14..0x2c  zero                    +0x14  0
+                                       +0x18  0   <-- *0x58f08 (test.99 read; 0)
+  +0x2c  vtable=0 (in binary)          +0x1c..  zero
+  +0x30  fn 0x1fc3                     +0x10  ptr to ops:
+  +0x34  fn 0x1fb5                       0x58f1c: 0x67615 (fn ptr)
+  +0x38  fn 0x1f79                       0x58f20..28: more fn ptrs
+```
+
+So `*0x58f08 = 0` (D11 obj never linked) is actually a field of the wl
+device descriptor at offset +0x18. This field is meant to be set by some
+later step; observing it as 0 means that step never ran.
+
+### fn 0x1fc2 (vtable +4 method on pciedngldev) — TAIL CALL
+
+```
+0x1fc2:  mov r2, r1                  ; arg2 = wl_struct
+0x1fc4:  ldr r1, [r0, #0x18]         ; r1 = pciedngldev[+0x18]
+0x1fc6:  mov r3, r0                  ; r3 = pciedngldev (save)
+0x1fc8:  ldr r0, [r1, #0x14]         ; r0 = pciedngldev[+0x18][+0x14]
+0x1fca:  mov r1, r3                  ; r1 = pciedngldev
+0x1fcc:  b.w 0x2208                  ; <-- TAIL JUMP to fn 0x2208
+```
+
+In binary, pciedngldev[+0x18] = 0 → so r1 = 0 → the next ldr would read
+TCM[0x14] (= the 5th word of the firmware vector table). This may be
+intentional if the field is populated by the lookup function 0x63b38, or
+may indicate a buggy uninit access.
+
+### fn 0x2208 = dngl_binddev
+
+Confirmed by debug print pool entry: `*0x2334 = 0x408d5 = "dngl_binddev"`.
+
+Function does:
+- print "dngl_binddev:" debug (if flag set)
+- if `r4[+0x38]==0 && r4[+0x3c]==0`: bind: `r4[+0x38]=r6; r4[+0x3c]=r5;
+  r6[+0x24]=r5; r5[+0x24]=r6` — two-way link
+- else: scan an array `r4[+0x40]` for matching entries (potential loop
+  hazard if array unterminated or counter wrong)
+
+So the dispatch chain c_init → fn 0x1fc2 → fn 0x2208 = c_init binds the
+PCI dongle device to the WL device. **This bind step is the most likely
+freeze location** — either inside dngl_binddev's array scan, or in a
+sub-call we haven't traced yet.
+
+## Open questions
+
+1. Inside fn 0x63b38 — does the first call (for "pciedngldev") actually
+   succeed and populate pciedngldev[+0x18], or does it leave field as 0?
+   (Need to trace 0x63b38 next.)
+2. Inside fn 0x2208 — does the array scan have an end condition that the
+   binary state can satisfy?
+3. *0x9d000 has no aligned literal-pool references — the writer must use
+   movw/movt or base+offset addressing. Search needs a code-pattern scan.
+
+## Working hypothesis
+
+c_init sequence on this hardware:
+1. RTE banner ✓
+2. fn 0x63b38 lookup/register `pciedngldev` — returned NULL → fall-through
+   path executed (vtable stored at *0x62a14) ✓
+3. fn 0x673cc returned 0x43b1 (device id) ✓
+4. fn 0x63b38 lookup/register `wl` — likely also returned NULL
+5. blx via vtable +4 → fn 0x1fc2 → fn 0x2208 (dngl_binddev)
+6. **FREEZE inside dngl_binddev or its callee.**
