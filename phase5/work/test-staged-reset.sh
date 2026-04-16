@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.96: dump fn 0x5250 (timer/callback reg called by 0x2208)
+# Phase 5.2 test.97: probe wait-struct at *0x62ea8 to confirm fn 0x1624c hang
 #
-# test.95 RESULT: CLEAN EXIT. Dumped 0x840-0xB40 = all C runtime library.
-#   0x848 = strcmp loop body (NOT hang). 0xa4c annotation was wrong (mid-printf).
-#   b.w 0x848 from 0x2208 is a tail call into strcmp — benign.
-#   HANG LOCATION STILL UNKNOWN after test.95.
+# test.96 RESULT: CRASHED after 6 code words (0x5200-0x5214). No RP restore.
+#   Pivoted to firmware binary analysis: confirmed binary == TCM image.
+#   fn 0x1624c = hardware PHY completion busy-wait (CONFIRMED HANG via binary).
+#   *0x62ea8 = heap_top - 0x2f5c (set at startup 0x63dba, valid before fn 0x1624c).
+#   Root cause hypothesis: D11 PHY ISR never fires → field28 stays 0 → infinite loop.
 #
-# test.96 PLAN: dump 0x5200-0x5400 (128 words) at T+200ms.
-#   fn 0x5250 called by 0x2208 (via bl 0x5250) before b.w 0x848 (strcmp).
-#   Looking for hardware-polling loop in 0x5250 that causes the hang.
-#   128 words × ~13ms = 1.7s total at T+200ms (well within 3s PCIe window).
+# test.97 PLAN: at T+200ms, read TCM[0x62ea8] + dereference to get field20/24/28.
+#   Expected: field20=1, field28=0 → confirms fn 0x1624c is the hang.
+#   Only ~14 reads → very low crash risk. Re-mask before/after reads.
+#   Also probe stack 0x9CE00-0x9CE20 for LR in fn 0x1624c range (0x16250-0x16294).
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -23,14 +24,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.96.stage${STAGE}"
+LOG="$LOG_DIR/test.97.stage${STAGE}"
 
-echo "=== test.96: dump fn 0x5250 (timer/hang?) at T+200ms --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.97: probe wait-struct *0x62ea8 at T+200ms (confirm fn 0x1624c hang) --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled + IRQ handler before ARM; pci_set_master before ARM; 30s masking+FW wait; wider TCM scan; CODE DUMP 0x5200-0x5400 at T+200ms (fn 0x5250 = timer/hang?); free_irq+disable_msi+RP restore" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled + IRQ handler before ARM; pci_set_master before ARM; 2s masking+FW wait; WAIT-STRUCT PROBE: read *0x62ea8 + fields +0x14/+0x18/+0x1c + stack probe 0x9CE00-0x9CE20 at T+200ms; free_irq+disable_msi+RP restore" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -85,7 +86,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.96 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.97 ===" | tee -a "$LOG"
 sync
 
 dmesg -C

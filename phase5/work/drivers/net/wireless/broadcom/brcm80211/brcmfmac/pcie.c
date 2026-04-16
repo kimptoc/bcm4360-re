@@ -2514,10 +2514,34 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			 *   128 words × ~13ms = 1.7s; total with T+200ms = 1.9s (SAFE < 3s window)
 			 */
 			if (outer == 1) {
-				u32 addr;
-				u32 word_count;
+				/* test.97: Probe wait-struct at *0x62ea8 to confirm fn 0x1624c hang.
+				 *
+				 * Binary analysis confirmed:
+				 *   fn 0x1624c = hardware PHY completion busy-wait:
+				 *     spins while (*0x62ea8)->field20==1 AND (*0x62ea8)->field28==0
+				 *     field20=1 means "operation in progress"
+				 *     field28=0 means "ISR hasn't fired yet"
+				 *   *0x62ea8 is initialized at startup to (heap_top - 0x2f5c)
+				 *   from startup code at 0x63dba: *(0x62ea8) = *(0x58c7c) - 0x2f5c
+				 *   So *0x62ea8 is VALID (non-NULL) when fn 0x1624c runs.
+				 *
+				 * Strategy: at T+200ms (firmware well and truly hung since T+12ms):
+				 *   1. Read TCM[0x62ea8] = P (wait struct ptr = heap_top - 0x2f5c)
+				 *   2. Read TCM[0x62eac] = heap_top (should be P + 0x2f5c)
+				 *   3. If P is valid TCM address: read P+0x14 (field20), P+0x18 (field24), P+0x1c (field28)
+				 *      Expected: field20=1, field24=1, field28=0 → confirms fn 0x1624c hang
+				 *   4. Read 8 stack words at 0x9CE00-0x9CE20 looking for LR in 0x16250-0x16294
+				 *
+				 * Only ~14 reads total → very low crash risk.
+				 * Re-mask before and after to protect against PCIe errors.
+				 */
+				{
+					u32 wait_ptr, heap_top_val;
+					u32 field20, field24, field28;
+					u32 stk;
+					int si;
 
-#define T96_REMASK() do {						\
+#define T97_REMASK() do {						\
 	if (rp) {							\
 		u16 _bc, _dc, _devsta, _secsta;			\
 		u32 _rtsta;						\
@@ -2542,26 +2566,63 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	}								\
 } while (0)
 
-				/* CODE dump: 0x5200-0x5400 (128 words)
-				 * Covers fn 0x5250 (called by 0x2208 via bl 0x5250).
-				 * Looking for hardware-polling loops that could be the hang.
-				 * Each word logged as 4-byte hex at its address.
+				T97_REMASK();
+
+				/* Read the wait struct pointer and heap top */
+				wait_ptr    = brcmf_pcie_read_ram32(devinfo, 0x62ea8);
+				heap_top_val = brcmf_pcie_read_ram32(devinfo, 0x62eac);
+
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.97 T+200ms: wait_ptr=0x%08x heap_top=0x%08x "
+					  "(expected: wait_ptr = heap_top - 0x2f5c = 0x%08x)\n",
+					  wait_ptr, heap_top_val,
+					  (heap_top_val >= 0x2f5c) ? heap_top_val - 0x2f5c : 0);
+
+				T97_REMASK();
+
+				/* Dereference wait_ptr to read the wait struct fields */
+				if (wait_ptr > 0 && wait_ptr < 0xA0000) {
+					field20 = brcmf_pcie_read_ram32(devinfo, wait_ptr + 0x14);
+					field24 = brcmf_pcie_read_ram32(devinfo, wait_ptr + 0x18);
+					field28 = brcmf_pcie_read_ram32(devinfo, wait_ptr + 0x1c);
+					dev_emerg(&devinfo->pdev->dev,
+						  "BCM4360 test.97: wait_struct[0x%05x]: "
+						  "field20=0x%08x field24=0x%08x field28=0x%08x\n",
+						  wait_ptr, field20, field24, field28);
+					dev_emerg(&devinfo->pdev->dev,
+						  "BCM4360 test.97: hang diagnosis: "
+						  "field20=%s field28=%s → %s\n",
+						  field20 == 1 ? "1(in-progress)" : "NOT-1(no-hang?)",
+						  field28 == 0 ? "0(ISR-never-fired)" : "NONZERO(should-exit)",
+						  (field20 == 1 && field28 == 0) ?
+						  "CONFIRMED fn0x1624c hang (ISR never fired)" :
+						  "UNEXPECTED — hang is elsewhere");
+				} else {
+					dev_emerg(&devinfo->pdev->dev,
+						  "BCM4360 test.97: wait_ptr=0x%08x is NULL or out-of-range "
+						  "— hang is NOT in fn 0x1624c!\n", wait_ptr);
+				}
+
+				T97_REMASK();
+
+				/* Read 8 stack words above STAK fill (0x9CE00) looking for LR values
+				 * in the fn 0x1624c range (0x1624c-0x16294).
+				 * Active stack frames must be above the STAK fill (0x9BC00-0x9C400).
 				 */
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.96: CODE 0x5200-0x5400 (fn0x5250=timer/hang?)\n");
-				word_count = 0;
-				for (addr = 0x5200; addr < 0x5400; addr += 4) {
+					  "BCM4360 test.97: stack probe 0x9CE00-0x9CE20\n");
+				for (si = 0; si < 8; si++) {
+					u32 saddr = 0x9CE00 + si * 4;
+
+					stk = brcmf_pcie_read_ram32(devinfo, saddr);
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.96 code: %05x: %08x\n",
-						  addr,
-						  brcmf_pcie_read_ram32(devinfo, addr));
-					word_count++;
-					if (word_count % 100 == 0)
-						T96_REMASK();
+						  "BCM4360 test.97 stk: %05x: %08x%s\n",
+						  saddr, stk,
+						  (stk >= 0x16250 && stk <= 0x16294) ?
+						  " ← LR in fn0x1624c!" : "");
 				}
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.96: CODE done (%d words)\n", word_count);
-#undef T96_REMASK
+#undef T97_REMASK
+				}
 			}
 
 			/* Inner: re-mask + poll sharedram AND fw_init_done every 10ms for 200ms */

@@ -204,30 +204,33 @@ The annotation "b.w 0x848 = likely actual hang location" was WRONG.
   - Call 3 (0x6451a): r7=0x58ef0, ldr r3,[r7,#16] → vtable ptr at obj+16 → vtable[1]
 - si_attach at 0x64590: EROM-parsing loop, calls 0x2704 (EROM parser) for each core
 
-## test.97 PLAN: Probe D11 core state at hang time — why does fn 0x1624c spin forever?
+## test.97 PLAN: Read wait-struct fields at T+200ms to confirm fn 0x1624c hang
 
-**Goal:** Understand why fn 0x1624c hangs. Two sub-questions:
-1. Is field20 of (*0x62ea8) == 1 when the loop starts? (if not, loop exits immediately)
-2. Why does field28 never get set? (D11 PHY ISR never fires?)
+**NEW FINDING (this session):** *0x62ea8 IS initialized before fn 0x1624c runs.
+Startup code at 0x63dba: `*(0x62ea8) = *(0x58c7c) - 0x2f5c` where *(0x58c7c) = heap_top.
+So the wait struct pointer is heap_top - 0x2f5c (valid, non-NULL, set BEFORE pciedngl_probe).
 
-**Strategy A: Read BSS struct at 0x62ea8 at T+12ms (hang time)**
-- At T+12ms firmware hangs → wait struct at *0x62ea8 should be frozen
-- Read TCM[0x62ea8] (ptr) → dereference → read fields 20, 24, 28 of the struct
-- Reveals: field20 value (is it 1?), field28 value (is it 0?)
+**Startup init sequence (confirmed from binary):**
+1. fn at 0x63d9e: sets *(0x62ea8) = *(0x58c7c) - 0x2f5c (heap_top - 0x2f5c)
+2. Also sets *(0x62eac) = *(0x58c7c) (heap_top)
+3. Then calls fn 0x672e4 → fn 0x670d8 → si_attach → fn 0x11648 → fn 0x18ffc → fn 0x1624c
 
-**Strategy B: Check if the wait struct is even initialized**
-- 0x62ea8 holds a pointer — what does it point to?
-- Is the struct initialized before fn 0x16f60 is called?
-- Who initializes it and sets field20=1?
+**fn 0x1624c WILL have valid *0x62ea8 when it runs → hang is confirmed in this loop.**
 
-**Strategy C: Read D11 core registers at T+12ms via BAR2**
-- D11 core at si_attach base — read IntStatus, IntMask, PSMDebug
-- Are D11 interrupts enabled? Is D11 PHY in a valid state?
+**Goal:** Read wait struct fields at T+200ms to confirm hang state:
+1. Read TCM[0x62ea8] = P (wait struct ptr — should be heap_top - 0x2f5c)
+2. Read P+0x14 (field20): should be 1 (firmware set it = 1 at 0x16258)
+3. Read P+0x18 (field24): should be 1 (firmware set it = 1 at 0x16258)
+4. Read P+0x1c (field28): should be 0 (ISR never set it → hang)
+5. Also read TCM[0x62eac] (heap_top) to compute/verify P
+6. Read 8 stack words above STAK fill (0x9CE00-0x9CE20) looking for LR in 0x16250-0x16294
 
-**Immediate next step (no hardware needed): Disassemble fn 0x01e8c area from binary**
-- Grep firmware binary for cross-references to 0x62ea8 (global wait-struct ptr)
-- Find who writes to *0x62ea8 (struct init) and who sets field20=1
-- disassemble fn around 0x1e8c (near 0x01e91 which is in PCIe2 vtable[0])
+**Why fn 0x1624c hangs (hypothesis):** D11 PHY ISR never fires → field28 never set.
+Field28 is set by the D11 interrupt handler. If D11 interrupts are not routed/enabled,
+the handler never runs, field28 stays 0, and fn 0x1624c spins forever.
+
+**Code change:** Replace 128-word code dump (outer==1) with 6-word targeted BSS read.
+Only ~6 reads → very low crash risk. Re-mask before and after.
 
 ## Run test.97 (to be built):
   cd /home/kimptoc/bcm4360-re/phase5/work && make && sudo ./test-staged-reset.sh 0
