@@ -1,12 +1,49 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, ABOUT TO RUN test.92 — module built, not yet run)
+## Current state (2026-04-16, ABOUT TO RUN test.93 — module built, not yet run)
 
 Git branch: main (pushed to origin)
-Module built successfully. About to run test.92.
-Test.92 dumps TCM[0x9BC00-0x9C400] (stack near STAK@0x9BF00) + TCM[0x2600-0x2900] (fn@0x2704 EROM parser) at T+200ms.
-Both loops re-mask RP every 100 words to avoid the 3s PCIe crash window.
-Key question: what stack frames are present at hang? What does the 0x2704 EROM parser look like?
+Module built successfully. About to run test.93.
+Test.93 dumps:
+  A. STACK-TOP: TCM[0x9F800-0xA000] = 128 words (find active frames above STAK fill)
+  B. DATA-62A14: TCM[0x62900-0x62B00] = 128 words (runtime vtable indirect at 0x62a14)
+  C. FN-63B38: TCM[0x63B00-0x63D00] = 128 words (core lookup function disassembly)
+All with per-100-word masking. Total 384 words — well within proven safe limit (704 in test.92).
+Key question: which blx r3 is the hang? (0x644dc, 0x644fc, or 0x6451a)
+Look for Thumb LR values: 0x644df, 0x644ff, 0x6451b in stack.
+
+## test.92 RESULT: SURVIVED — STAK fill confirmed above 0x9BC00; EROM parser analyzed
+
+**test.92 ran in boot -1 (survived, TIMEOUT clean exit). Key findings:**
+
+**Stack dump 0x9BC00-0x9C400: ENTIRELY STAK (0x5354414b)**
+- Active stack frames are ABOVE 0x9C400
+- Stack grows down from 0xA0000; estimated SP ~0x9F800
+  (860-byte zeroed struct in 0x670d8 frame + si_attach 60-byte frame + others)
+
+**EROM parser function at 0x2704 (0x2600-0x2900 dumped):**
+- Simple loop: loads EROM entries sequentially from TCM, returns when match found
+- r1 = &ptr, r2 = mask (or 0), r3 = match value
+- NO infinite loops, NO hardware register reads
+- CANNOT be the hang location
+
+**Function structure at 0x27ec (core registration, vtable call):**
+- `blx r3` at 0x2816 calls a vtable function (potential hang candidate)
+- But this is called by si_attach (0x64590) during core enumeration
+
+**Key insight: Vtable calls are in a function BEFORE si_attach in TCM:**
+- From test.91 dump (0x64400-0x6458c area):
+  - `bl 0x63b38` with r1=0x83c → looks up PCIe2 core object → r6
+  - `bl 0x63b38` with r1=0x812 → looks up D11/MAC core object → r7
+  - If both found: three vtable calls follow:
+    - Call 1 (0x644dc): via [0x62a14][4], args=(PCIe2_obj, D11_obj)
+    - Call 2 (0x644fc): PCIe2_obj->vtable[1](), if Call 1 succeeds
+    - Call 3 (0x6451a): D11_obj->vtable[1](), if Call 2 succeeds
+
+**test.92 hypothesis: hang is in one of the three vtable calls (PCIe2 or D11 core init)**
+
+Log: phase5/logs/test.92.journal
+EROM disasm: phase5/analysis/test92_erom_disasm.txt
 
 ## test.90 RESULT: SURVIVED — 0x670d8 disassembled; 0x64590 is next hang candidate
 
@@ -81,6 +118,24 @@ Log: phase5/logs/test.89.journal
 
 Log: phase5/logs/test.91.journal
 Dump: phase5/analysis/test91_dump.txt (431 words: 0x64400-0x64ab8)
+
+## test.93 PLAN: Stack top + vtable data + core lookup fn (after test.92 showed STAK below 0x9C400)
+
+**Goal:** Find active stack frames and vtable function that is hanging.
+
+**Approach:**
+1. Keep all proven init (BBPLL, BusMaster, ASPM, masking)
+2. Release ARM
+3. At outer==1 (T+200ms): three dumps with per-100-word re-masking:
+   a. STACK-TOP: TCM[0x9F800-0xA000] = 128 words (outermost frames near TCM top)
+   b. DATA-62A14: TCM[0x62900-0x62B00] = 128 words (vtable indirect at 0x62a14)
+   c. FN-63B38: TCM[0x63B00-0x63D00] = 128 words (core lookup fn at 0x63b38)
+4. 2s timeout, re-mask every 10ms
+
+**Expected outcomes:**
+- STACK-TOP: see Thumb LR values 0x644df/0x644ff/0x6451b → which blx r3 is the hang
+- DATA-62A14: see [0x62a14] = vtable ptr, then [vtable_ptr+4] = function being called
+- FN-63B38: disassemble 0x63b38 (si_findcoreidx?) for understanding
 
 ## test.92 PLAN: Stack dump near STAK + EROM parser dump (with per-100-word masking)
 
