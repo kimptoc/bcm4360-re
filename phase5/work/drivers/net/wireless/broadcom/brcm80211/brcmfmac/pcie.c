@@ -2514,35 +2514,40 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			 *   128 words × ~13ms = 1.7s; total with T+200ms = 1.9s (SAFE < 3s window)
 			 */
 			if (outer == 1 || outer == 2 || outer == 4) {
-				/* test.99: multi-timepoint pointer sampling + console ring dump.
+				/* test.100: PHY wait-struct field probe + control pointers.
 				 *
-				 * Advisor feedback on test.98 (single T+200ms sample):
-				 *   - Counter at 0x9d000 is a STATIC constant (0x43b1) written
-				 *     once by fn 0x673cc at T+12ms, NOT a running tick
-				 *     (test.89 timeline: 0→0x58c8c→0x43b1 then FROZEN).
-				 *   - test.98 reading *0x58f08=0 at T+200ms was ~188ms
-				 *     POST-freeze — consistent with many hang locations, not
-				 *     just D11 init.
+				 * Round 3+4 offline disasm anchored "wl_probe called\n" to
+				 * fn 0x67614 = wl_probe(), and BFS-confirmed exactly one
+				 * sub-call (fn 0x68a68) reaches the test.96 PHY spin-wait:
+				 *   wl_probe → 0x68a68 → 0x1ab50 → 0x16476 → 0x162fc → 0x1624c
+				 * fn 0x1624c is `while (ws->field20==1 && ws->field28==0)`,
+				 * with ws = *0x62ea8 = 0x9d0a4 (test.99 reading).
 				 *
-				 * Goal: narrow the hang BEFORE committing to D11 BCMA wrapper
-				 * reads. Cheap, read-only probes at three timepoints plus a
-				 * console ring dump at T+400ms.
+				 * Goal: decide between three hypotheses with one cheap probe:
+				 *   field24=1, field20=1, field28=0  → live spin-loop hang
+				 *                                      (next: D11 BCMA bring-up)
+				 *   field24=1, field20=0, field28=0  → entered, cancelled exit
+				 *                                      (hang in 0x162fc tail)
+				 *   field28!=0                        → spin completed, hang
+				 *                                      downstream of PHY wait
+				 *   field24=0                         → 0x1624c never entered
+				 *                                      (hang upstream in wl_probe)
 				 *
 				 * Probes at outer==1/2/4 (T+200/400/800ms):
-				 *   *0x9d000  — 0x43b1 static (freeze-detection sanity)
-				 *   *0x58f08  — D11 obj ->field0x18 (was 0 in test.98)
-				 *   *0x62ea8  — wait-struct pointer (garbage in test.97)
-				 *   *0x62a14  — pciedngl global (seen in fn 0x2208 analysis)
+				 *   ws_addr  = *0x62ea8  (sanity: should be 0x9d0a4)
+				 *   field20  = TCM[0x9d0a4 + 0x14]  (loop status flag)
+				 *   field24  = TCM[0x9d0a4 + 0x18]  ("in progress" set in setup)
+				 *   field28  = TCM[0x9d0a4 + 0x1c]  (completion flag, ISR-set)
+				 *   ctr/d11/pd = test.99 control pointers (regression check)
 				 *
-				 * Console dump at outer==2 (T+400ms):
-				 *   Read console write ptr at 0x9cc5c, then dump 64 words
-				 *   from 0x9ccc0 as ASCII to see what firmware printed
-				 *   before freezing.
+				 * Read-only TCM accesses via brcmf_pcie_read_ram32 — same
+				 * risk profile as test.99 (which exited cleanly).
 				 */
 				u32 p_ctr, p_d11, p_ws, p_pd;
+				u32 ws_addr, f20, f24, f28;
 				int tms = outer * 200;
 
-#define T99_REMASK() do {						\
+#define T100_REMASK() do {						\
 	if (rp) {							\
 		u16 _bc, _dc, _devsta, _secsta;				\
 		u32 _rtsta;						\
@@ -2567,57 +2572,42 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	}								\
 } while (0)
 
-				T99_REMASK();
+				/* Control pointers — should match test.99 (frozen). */
+				T100_REMASK();
 				p_ctr = brcmf_pcie_read_ram32(devinfo, 0x9d000);
-				T99_REMASK();
+				T100_REMASK();
 				p_d11 = brcmf_pcie_read_ram32(devinfo, 0x58f08);
-				T99_REMASK();
+				T100_REMASK();
 				p_ws  = brcmf_pcie_read_ram32(devinfo, 0x62ea8);
-				T99_REMASK();
+				T100_REMASK();
 				p_pd  = brcmf_pcie_read_ram32(devinfo, 0x62a14);
 
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.99 T+%04dms: ctr[0x9d000]=0x%08x "
+					  "BCM4360 test.100 T+%04dms: ctr[0x9d000]=0x%08x "
 					  "d11[0x58f08]=0x%08x ws[0x62ea8]=0x%08x "
 					  "pd[0x62a14]=0x%08x\n",
 					  tms, p_ctr, p_d11, p_ws, p_pd);
 
-				if (outer == 2) {
-					int ci;
-					u32 cons_wp;
-
-					T99_REMASK();
-					cons_wp = brcmf_pcie_read_ram32(devinfo, 0x9cc5c);
+				/* Wait-struct fields — the new test.100 probe. */
+				ws_addr = p_ws & 0x000fffff; /* mask to TCM offset */
+				if (ws_addr >= 0x100 && ws_addr + 0x1c < 0xa0000) {
+					T100_REMASK();
+					f20 = brcmf_pcie_read_ram32(devinfo, ws_addr + 0x14);
+					T100_REMASK();
+					f24 = brcmf_pcie_read_ram32(devinfo, ws_addr + 0x18);
+					T100_REMASK();
+					f28 = brcmf_pcie_read_ram32(devinfo, ws_addr + 0x1c);
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.99 T+%04dms: console_wp[0x9cc5c]=0x%08x\n",
-						  tms, cons_wp);
-
-					for (ci = 0; ci < 64; ci++) {
-						u32 caddr = 0x9ccc0 + ci * 4;
-						u32 w;
-						char c0, c1, c2, c3;
-
-						T99_REMASK();
-						w = brcmf_pcie_read_ram32(devinfo, caddr);
-
-						c0 = (w >>  0) & 0xff;
-						c1 = (w >>  8) & 0xff;
-						c2 = (w >> 16) & 0xff;
-						c3 = (w >> 24) & 0xff;
-						c0 = (c0 >= 0x20 && c0 < 0x7f) ? c0 : '.';
-						c1 = (c1 >= 0x20 && c1 < 0x7f) ? c1 : '.';
-						c2 = (c2 >= 0x20 && c2 < 0x7f) ? c2 : '.';
-						c3 = (c3 >= 0x20 && c3 < 0x7f) ? c3 : '.';
-
-						dev_emerg(&devinfo->pdev->dev,
-							  "BCM4360 test.99 cons: %05x: %08x %c%c%c%c\n",
-							  caddr, w, c0, c1, c2, c3);
-					}
+						  "BCM4360 test.100 T+%04dms: ws=0x%05x f20[+0x14]=0x%08x "
+						  "f24[+0x18]=0x%08x f28[+0x1c]=0x%08x\n",
+						  tms, ws_addr, f20, f24, f28);
+				} else {
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.99 T+%04dms: console dump complete\n",
-						  tms);
+						  "BCM4360 test.100 T+%04dms: ws=0x%08x out of TCM range, "
+						  "skipping field probes\n",
+						  tms, p_ws);
 				}
-#undef T99_REMASK
+#undef T100_REMASK
 			}
 
 			/* Inner: re-mask + poll sharedram AND fw_init_done every 10ms for 200ms */

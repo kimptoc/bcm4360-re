@@ -266,3 +266,153 @@ c_init sequence on this hardware:
    (c) successful but somehow didn't write +0x18 (unlikely per disasm).
 6. If wl path completed, dispatch chain c_init→fn 0x1fc2→fn 0x2208
    (dngl_binddev) would run, but no evidence either way.
+
+## Round 3 — wl_probe is fn 0x67614 (print site anchored)
+
+The console line "wl_probe called\n" is emitted by **`printf("%s called\n",
+"wl_probe")`** with format string at `0x40692` and name at `0x4a1ea`.
+Pool-table search found exactly ONE pool entry referencing `0x4a1ea`
+("wl_probe"): `*0x67890 = 0x4a1ea`. The LDR-literal that reads it is at
+`0x67622`, inside fn `0x67614`.
+
+→ **fn 0x67614 IS wl_probe()**. Sample disasm of its prologue:
+
+```
+0x67614: push.w {r4-r11, lr}; sub sp,#0x24
+0x6761a: r7=r0; r6=r1; r0=*0x6788c=0x40692 ("%s called\n")
+         r1=*0x67890=0x4a1ea ("wl_probe"); r8=r2; fp=r3; r5=[sp,#0x4c]
+0x67628: bl 0xa30                  ; printf "wl_probe called"  <-- VISIBLE
+0x6762e: r0=0; r1=0xb0
+0x67630: bl 0x7d60                 ; alloc(0xb0=176B) -> r4 (wl ctx)
+0x67636: cbnz r0, 0x6765e          ; if alloc OK -> continue
+         ; else: print "wl_attach failed" + return
+0x6765e..0x67666: memset(r4, 0, 0xb0); [r4]=r5 (parent ptr)
+0x67668: bl 0x66e64                ; first sub-init
+0x67672: bl 0x649a4                ; second sub-init -> r4[+0x90]
+0x67676: cbnz r0,0x6769c           ; if non-zero: continue
+         ; else: print "wl%d: %s wl_attach failed" + return
+0x676a0: bl 0x4718                 ; helper (uses 0x1148d)
+0x676ae: bl 0x6491c                ; -> r4[+0x8c]
+         ... continues with multi-arg call pushing 5 stack args
+```
+
+Vtable at `0x58f1c` (wl_struct[+0x10]):
+```
+[0x58f1c] = 0x67615   ; ops[0] = fn 0x67614 = wl_probe   <-- THE PRINTER
+[0x58f20] = 0x11649   ; ops[1] = fn 0x11648 ("D11 vtable[1]" in test.96)
+```
+
+So the call chain that emits the "wl_probe called" line is:
+
+```
+c_init                                  (0x644a6)
+  → fn 0x63b38(wl_struct, 0x812, 0x43b1)
+    → bl 0x9990 (alloc)                 (returns OK assumed)
+    → ldr r3,[r0,#0x10] → ldr r6,[r3]   ; r6 = wl_struct.ops[0] = 0x67615
+    → blx r6                            ; blx fn 0x67614 = wl_probe
+      → bl 0xa30 ("wl_probe called")    ; <-- LAST OBSERVED CONSOLE LINE
+      → bl 0x7d60 (alloc 176B)
+      → bl 0x66e64
+      → bl 0x649a4
+      → bl 0x4718
+      → bl 0x6491c
+      → ...                             ; FREEZE somewhere here
+```
+
+### What this means for the test.96 chain
+Earlier test.96 traced "Call 3 = D11_obj->vtable[1] = fn 0x11648 → fn 0x18ffc
+→ fn 0x16f60 → fn 0x16476 → fn 0x162fc". That chain is reachable ONLY if
+wl_probe (fn 0x67614 = ops[0]) RETURNS first, then c_init runs the dispatch
+calls at 0x644dc/0x644fc/0x6451a. We have NO evidence wl_probe returns. The
+freeze is more parsimoniously explained by hanging INSIDE wl_probe, not in
+the post-wl_probe dispatch chain. The fn 0x162fc PHY wait-loop chain must
+NOT be assumed to be the actual hang location.
+
+### What the wl_struct[+0x18] = 0 reading actually means
+In test.99, `*0x58f08 = wl_struct[+0x18] = 0`. fn 0x63b38's success path
+writes struct[+0x18] AT THE END (post-blx ops[0]). So wl_struct[+0x18] = 0
+is consistent with ops[0]=wl_probe never returning — i.e., wl_probe hung
+mid-body. It does NOT mean ops[0] was never called: the console proves it
+was, since we got "wl_probe called".
+
+### Open subroutines (in wl_probe, after the visible printf)
+| BL | Target | Returns into | Likely role |
+|----|--------|--------------|-------------|
+| 0x67630 | 0x7d60   | r4 (=wl ctx malloc) | malloc(0xb0) — well-tested earlier |
+| 0x67668 | 0x66e64  | (no save observed) | early sub-init |
+| 0x67672 | 0x649a4  | r4[+0x90] | sub-init returning a handle |
+| 0x676a0 | 0x4718   | — (uses r2=0x1148d ptr) | list/registry helper |
+| 0x676ae | 0x6491c  | r4[+0x8c] | another sub-init |
+| 0x67700 | 0x68a68  | r6 (-> 0x67730) | **5-stack-arg + 4-reg-arg call — REACHES PHY WAIT** |
+
+### Round 4 — call-graph BFS pinpoints freeze chain (D11 PHY wait, via wl_probe)
+
+Brute-force callgraph BFS (depth ≤ 4) from each wl_probe sub-fn:
+
+| Sub-fn | Reaches D11 PHY chain? |
+|--------|------------------------|
+| fn 0x66e64 | NO (visited 17 fns) |
+| fn 0x649a4 | NO (visited 19 fns) |
+| fn 0x4718  | NO (visited 1 fn) |
+| fn 0x6491c | NO (visited 44 fns) |
+| fn 0x14288 | NO (visited 1 fn) |
+| fn 0x79c   | NO (visited 1 fn) |
+| **fn 0x68a68** | **YES** (3 hits) |
+
+The exact path:
+
+```
+wl_probe @ 0x67614
+ → bl 0x68a68 @ 0x67700                  (BIG: 5 stack args + 4 reg args)
+   → bl 0x1ab50 @ 0x68bcc
+     → bl 0x16476 @ 0x1ad2e               (PHY register access wrapper)
+       → b.w 0x162fc                       (PHY-completion wrapper)
+         → bl 0x1624c @ 0x1632e            (SPIN WAIT — same as test.96)
+                                            ; while ws->field20==1 && ws->field28==0
+```
+
+`fn 0x68a68` is called from EXACTLY ONE site — wl_probe at 0x67700 — so this
+is the unique entry to that subtree. The freeze fingerprint is identical to
+the test.96 chain (D11 PHY ISR never fires → field28 stays 0). Now we have
+the correct call path leading there: NOT via c_init's Call 3 (0x6451a), but
+via wl_probe → fn 0x68a68 → fn 0x1ab50.
+
+### fn 0x162fc verified as PHY wait wrapper
+
+```
+0x162fc: push {r3..r7,lr}
+0x162fe: r3 = r0[+0x10a] (init flag); r4=r0; r5=r1; r7=r2
+0x16308: r6 = r0[+0x88]               ; HARDWARE BASE? sub-struct (D11 wrapper)
+0x1630c: cbnz r3, 0x16318             ; if not init, assert "wlc_bmac.c"
+0x1632c: r0 = *r4                     ; load wait struct
+0x1632e: bl 0x1624c                   ; SPIN WAIT for completion (same as test.96)
+0x16332: r6[+0x160] = r7              ; trigger reg
+0x16336: tst r5,#2 ...
+0x16340: r5 = r6[+0x166]  or  r6[+0x164]   ; result reg
+0x1634c: bl 0x1428c                   ; ?
+0x16352: pop, return r5
+```
+
+fn 0x162fc's purpose is "trigger D11 PHY operation via r6=r0[+0x88], wait for
+completion, read result". The hang is inside its bl 0x1624c.
+
+### Implication for test.100
+
+The freeze is the D11 PHY wait loop. Two test paths possible:
+
+(a) **Cheap confirmation probe** — sample wait-struct fields at T+200ms:
+    - addr = *0x62ea8 = 0x9d0a4 (already confirmed in test.99)
+    - field20 = TCM[0x9d0a4 + 0x14]
+    - field24 = TCM[0x9d0a4 + 0x18]
+    - field28 = TCM[0x9d0a4 + 0x1c]
+    - If field20==1 AND field28==0 → CONFIRMS PHY-wait hang fingerprint.
+    - If field20!=1 → freeze elsewhere (some other use of *0x62ea8).
+    - This is read-only TCM probes only — same risk profile as test.99.
+
+(b) **D11 BCMA wrapper bring-up** (Path B step 1) — heavier scaffolding
+    in chip.c bus-ops; requires writing to D11 IOCTL/RESET_CTL pre-ARM to
+    enable the D11 core BEFORE wl_probe runs.
+
+Recommend (a) first — single hardware cycle, trivial to implement, decides
+between two distinct hypotheses. (b) is the next step IF (a) confirms PHY
+wait.

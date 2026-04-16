@@ -1,6 +1,106 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, POST test.99 + offline disasm — c_init() located)
+## Current state (2026-04-17, PRE test.100 — wl_probe identified, PHY-wait chain isolated)
+
+Git branch: main. Last pushed commit e6e1e28 (Pre-test.99 module built).
+Pending commit: offline disasm Round 3+4 (wl_probe = fn 0x67614, freeze chain
+via fn 0x68a68 → fn 0x1ab50 → fn 0x16476 → fn 0x162fc → fn 0x1624c) and
+test.100 build (wait-struct field probe).
+
+### Offline disasm — wl_probe and freeze chain (no hardware test)
+
+`phase5/notes/offline_disasm_c_init.md` Round 3 + Round 4 (full detail).
+
+Anchored "wl_probe called\n" print site to fn 0x67614 (LDR-literal scan
+matched "wl_probe" string at 0x4a1ea via *0x67890). **fn 0x67614 IS
+wl_probe()**. It is called as `wl_struct.ops[0]` from inside fn 0x63b38 in
+c_init's wl-device registration step.
+
+Brute-force callgraph BFS (depth ≤ 6) from each of wl_probe's 7 sub-BLs
+shows EXACTLY ONE reaches the test.96 D11 PHY wait chain:
+
+```
+wl_probe @ 0x67614
+ → bl 0x68a68 @ 0x67700           (5 stack args + 4 reg args)
+   → bl 0x1ab50 @ 0x68bcc
+     → bl 0x16476 @ 0x1ad2e        (PHY register access wrapper)
+       → b.w 0x162fc                (PHY-completion wrapper)
+         → bl 0x1624c @ 0x1632e     (SPIN: while ws->f20==1 && ws->f28==0)
+```
+
+`fn 0x68a68` has exactly ONE caller — wl_probe at 0x67700 — so the entry to
+the spin-loop subtree is unique through wl_probe. The freeze fingerprint
+matches test.96's analysis (D11 PHY ISR never fires → field28 stays 0). The
+EARLIER claim that the hang was via c_init's "Call 3" (0x6451a) was wrong —
+that dispatch chain only runs AFTER wl_probe RETURNS, and wl_probe never
+returns (so wl_struct[+0x18] stays 0, as observed in test.99).
+
+Open questions remaining (will be answered by test.100):
+- Is the live freeze actually inside the fn 0x1624c spin-wait, or earlier
+  in the wl_probe path (e.g. inside fn 0x66e64 / fn 0x649a4 / fn 0x68a68
+  body before reaching the PHY chain)?
+- Wait struct address: test.99 read `*0x62ea8 = 0x9d0a4` — the static BSS
+  struct that fn 0x1624c spins on. We can probe its field20/24/28 directly.
+
+### test.100 PLAN — wait-struct field probe (cheap PHY-wait fingerprint check)
+
+**Goal:** decide between three concrete hypotheses with ONE more cheap
+read-only hardware cycle:
+
+1. PHY spin-loop is the live freeze location (advisor's "case A").
+2. fn 0x1624c entered then exited via the cancel path (case B).
+3. fn 0x1624c never entered — freeze is upstream in wl_probe (case C).
+
+**Probes (stage0, all read-only TCM accesses via brcmf_pcie_read_ram32):**
+
+Wait struct: addr = `*0x62ea8 = 0x9d0a4` (confirmed in test.99). Read fields
+at offsets +0x14/+0x18/+0x1c (= field20 / field24 / field28 in test.96
+analysis) at T+200/400/800ms to confirm stability:
+
+```
+ws_addr  = *0x62ea8                        ; should be 0x9d0a4
+field20  = TCM[ws_addr + 0x14]             ; status flag (loop var)
+field24  = TCM[ws_addr + 0x18]             ; "in progress" flag
+field28  = TCM[ws_addr + 0x1c]             ; completion flag (set by ISR)
+```
+
+Also keep the test.99 pointer-sample probes (ctr/d11/ws/pd) as control — if
+those CHANGE between test.99 and test.100 it would invalidate the read.
+
+**Matrix interpretation (advisor):**
+
+| field24 | field20 | field28 | Conclusion |
+|---------|---------|---------|------------|
+| 1 | 1 | 0 | **Case A — spin-loop is live freeze.** Path B step 1 (D11 BCMA wrapper bring-up to enable D11 core / route ISR). |
+| 1 | 0 | 0 | **Case B — entered then cancelled.** Hang is in fn 0x162fc body AFTER bl 0x1624c returned via cancel path. Re-examine fn 0x162fc continuation. |
+| 1 | * | !=0 | Spin completed (field28 set), but firmware still hung downstream. Hang is past PHY wait — need to trace fn 0x1ab50 / fn 0x68a68 callees beyond the PHY register loop. |
+| 0 | * | * | **Case C — fn 0x1624c never entered.** Freeze is upstream in wl_probe. Probe candidates: fn 0x66e64, fn 0x649a4, fn 0x4718, fn 0x6491c, or fn 0x68a68 body before bl 0x1ab50. |
+
+**Risk profile:** identical to test.99. All probes are TCM reads via
+existing `brcmf_pcie_read_ram32` path, gated by the same masking macro.
+test.99 ran cleanly (clean exit, RP restored) so test.100 should too. If
+the machine crashes anyway, that itself is a useful signal (different from
+test.99's clean exit).
+
+### Files to modify before run
+- `phase5/work/drivers/.../pcie.c` — replace test.99 probe block (lines
+  ~2516-2621) with test.100: 3-field wait-struct probes + control pointer
+  re-reads at T+200/400/800ms. Drop the console ring dump (test.99 already
+  read it; nothing changed).
+- `phase5/work/test-staged-reset.sh` — labels test.99 → test.100, LOG
+  filename test.99.stage${STAGE} → test.100.stage${STAGE}.
+
+### After running test.100
+- Map readings to the matrix above to choose next test.
+- Common-case (A) follow-up = test.101 = D11 core wrapper bring-up via
+  chip.c bus-ops (Path B step 1).
+- (B) follow-up = offline-disasm fn 0x162fc continuation past 0x16332.
+- (C) follow-up = test.101 = probe wl_probe sub-allocations (e.g. write a
+  "breadcrumb" by reading r4 alloc result via TCM probe of wl_struct[+0x90]).
+
+---
+
+## Pre-test.99 state (2026-04-17, retained for context)
 
 Git branch: main. Last pushed commit 75b52a1 (Post-test.99 doc).
 Pending commit: offline disasm of c_init() + corrected freeze location.
