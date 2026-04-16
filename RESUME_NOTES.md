@@ -1,11 +1,50 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, RUNNING test.88)
+## Current state (2026-04-16, PENDING test.89)
 
 Git branch: main (pushed to origin)
-Module built successfully. About to run test.88.
-Test dumps call targets 0x67358, 0x64248, 0x63C24 + stack scan 0x9F000-0x9FFF8.
-3s max loop with re-masking every 10ms.
+test.88 completed (CRASHED during cleanup, but data obtained).
+Next: test.89 — high-frequency sampling to determine if 0x9d000 is counter or static.
+
+## test.88 RESULT: CRASHED in cleanup — but all data obtained
+
+**test.88 ran in boot -1 (also partial in boot -2). Key findings:**
+1. All three call targets disassembled — NO infinite loops, CPSID, or WFI in any
+2. TARGET 1 (0x67358): alloc + calls 0x670d8 (deep init) — most likely hang location
+3. TARGET 2 (0x64248): struct allocator (0x4c bytes), returns — clean
+4. TARGET 3 (0x63C24): registration function, returns 0 — clean
+5. **CRITICAL: Function at 0x673cc returns constant 0x43b1** — same value as "frozen counter"
+6. Stack scan 0x9F000-0x9FFF8: mostly zeros, no dense return address cluster
+7. "STAK" marker at 0x9bf00 — stack region may be near 0x9c000
+8. Counter: T+200ms=0x43b1 (RUNNING), T+400ms=FROZEN
+9. CRASHED during cleanup (no RP restore messages)
+
+**CRITICAL DISCOVERY: 0x43b1 might not be a counter**
+- Function at 0x673cc: `MOVW R0, #0x43b1; BX LR` — returns constant 0x43b1
+- If TCM[0x9d000] is set once to 0x43b1 (not incremented), WFI-disproof is INVALID
+- Firmware may have completed init normally and be sitting in WFI idle
+- test.89 must resolve this with high-frequency sampling
+
+Full disassembly: phase5/analysis/test88_disassembly.txt
+
+### test.89 PLAN: High-frequency sampling to resolve 0x43b1 question
+
+**Goal:** Determine if TCM[0x9d000] is a counter (values 0→1→2→...→0x43b1) or
+a static value (jumps 0→0x43b1 in one step).
+
+**Approach:**
+1. Keep all pre-ARM setup (BBPLL, BusMaster, ASPM, config clearing)
+2. Release ARM
+3. Immediately sample TCM[0x9d000] in tight loop: 100 reads with udelay(1000) = 1ms each
+4. Also sample TCM[0x9FFFC] (pcie_shared) and TCM[0x9cc5c] (console write ptr)
+5. Log all values — look for intermediate values vs instant jump
+6. After 100ms fast sampling, do 10 more reads at 200ms intervals (2s)
+7. Exit at ~2.1s max
+8. NO core switching (lethal)
+
+**Expected outcomes:**
+- If intermediate values (0, 1, 2, ...): 0x9d000 IS a counter, WFI-disproof stands
+- If 0→0x43b1 instant: 0x9d000 is STATIC, firmware may be in WFI, project pivot needed
 
 ## test.87 RESULT: SURVIVED — counter timing + code dumps obtained
 
@@ -86,18 +125,18 @@ Test dumps call targets 0x67358, 0x64248, 0x63C24 + stack scan 0x9F000-0x9FFF8.
 6. Restore RP cleanly
 7. NO core switching (lethal per tests 66/76/86)
 
-## Run test.88 (after build):
+## Run test.89 (after build):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
 
 ## After test — what to do:
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.88" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.88.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.88.*'`
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.89" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.89.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.89.*'`
 3. Key things to check:
    a. Did we SURVIVE? (RP settings restored = yes)
-   b. Code at 0x67358: look for LDR+CMP+BNE polling loops or CPSID
-   c. Code at 0x64248: same — polling loops or infinite waits
-   d. Code at 0x63C24: same
-   e. Stack scan: Thumb return addresses (0x0001xxxx-0x0006Fxxx, bit 0 set) reveal call chain
+   b. TCM[0x9d000] samples: do intermediate values exist? (0, 1, 2, ..., 0x43b1)
+   c. If instant 0→0x43b1: STATIC value, WFI theory back on table
+   d. If gradual: COUNTER confirmed, firmware truly hung
+   e. pcie_shared (0x9FFFC) and console ptr (0x9cc5c) timing
 
 ## Key confirmed findings
 - BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
@@ -145,6 +184,12 @@ Test dumps call targets 0x67358, 0x64248, 0x63C24 + stack scan 0x9F000-0x9FFF8.
 - Counter freezes at 0x43b1 between T+200ms and T+400ms — hang is VERY early ✓ (test.87)
 - TCM top = 0xA0000 (640KB), stack grows down from there ✓ (test.87 TCB)
 - pciedngl_probe calls into 0x67358, 0x64248, 0x63C24 — hang is inside one of these ✓ (test.87 disasm)
+- All 3 call targets have NO infinite loops, CPSID, or WFI ✓ (test.88 disasm)
+- TARGET 1 (0x67358) calls 0x670d8 (deep init) — most likely hang location ✓ (test.88)
+- Function at 0x673cc returns constant 0x43b1 — same as "frozen counter" value ✓ (test.88)
+- 0x43b1 may be STATIC, not a counter — WFI-disproof may be INVALID ⚠ (test.88)
+- "STAK" marker at TCM[0x9bf00] — stack region near 0x9c000 ✓ (test.88)
+- Full disassembly saved: phase5/analysis/test88_disassembly.txt ✓
 
 ## Console text decoded (test.78/79/80/82/83/84 T+3s)
 Ring buffer at 0x9ccc7, write ptr 0x9ccbe (wrapped):
@@ -187,4 +232,5 @@ Firmware prints CDC protocol banner (not FullDongle MSGBUF).
 - test.85: CRASHED T+18-20s — STATUS/DevSta cleared, firmware STILL hung; STATUS theory DEAD
 - test.86: CRASHED T+2s — ARM core switch (select_core) crashed immediately; core switch LETHAL
 - test.87: SURVIVED — counter froze T+200-400ms at 0x43b1; pciedngl_probe disassembled; code dumps obtained
-- test.88: PENDING — dump call targets (0x67358, 0x64248, 0x63C24) + stack scan; find exact hang location
+- test.88: CRASHED cleanup — all 3 targets disassembled; NO loops/CPSID/WFI; 0x673cc returns 0x43b1 constant; 0x670d8 is next suspect
+- test.89: PENDING — high-frequency 0x9d000 sampling (1ms intervals) to resolve counter vs static question

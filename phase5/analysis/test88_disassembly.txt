@@ -1,0 +1,300 @@
+# BCM4360 Firmware Disassembly Analysis — test.88 + test.87
+# Generated 2026-04-16
+#
+# All code is ARM Cortex-R4 Thumb-2. Addresses are TCM offsets.
+# Decoded using custom Python Thumb-2 decoder (no capstone/objdump on NixOS).
+
+======================================================================
+  pciedngl_probe at 0x1E90 (from test.87)
+  Entry point called by wl_probe → firmware init
+======================================================================
+
+Call chain:
+  pciedngl_probe (0x1E90):
+    BL 0x00a30  — printf("pciedngl_probe called")
+    BL 0x66e64  — initial device operation
+    BL 0x07d60  — malloc(0x3c)
+    BL 0x0091c  — memset(ptr, 0, 0x3c)
+    BL 0x67358  — TARGET 1 (big init, calls 0x670d8 internally)
+    BL 0x09948  — post-processing
+    BL 0x09964  — post-processing
+    BL 0x64248  — TARGET 2 (struct alloc)
+    BL 0x63C24  — TARGET 3 (registration)
+    BL 0x01e44  — final setup
+    Return
+
+Full disassembly:
+
+  0x01e90: PUSH.W  {R4, R5, R6, R7, R8, R9, R10, R11, LR}
+  0x01e94: SUB     SP, SP, #0x14
+  0x01e96: MOV     R6, R0
+  0x01e98: MOV     R8, R1
+  0x01e9a: LDR     R0, [PC, #0xc0]  ; =>[0x01f5c]
+  0x01e9c: LDR     R1, [PC, #0xc0]  ; =>[0x01f60]
+  0x01ea0: MOV     R11, R3
+  0x01ea2: LDR.W   R10, [R13, #0x3c]
+  0x01ea6: BL      0x00a30  ; printf("pciedngl_probe called")
+  0x01eaa: MOV     R0, R6
+  0x01eac: BL      0x66e64  ; initial device operation
+  0x01eb0: MOVS    R1, #0x3c
+  0x01eb2: MOV     R7, R0
+  0x01eb4: MOVS    R0, #0x0
+  0x01eb6: BL      0x07d60  ; malloc(0x3c)
+  0x01eba: MOV     R4, R0
+  0x01ebc: CBNZ    R0, 0x01ec8      ; if malloc failed, error path
+  0x01ebe: MOV     R1, R10
+  0x01ec0: LDR     R0, [PC, #0xa0]
+  0x01ec2: BL      0x00a30
+  0x01ec6: B       0x01f40           ; → error exit
+
+  ; malloc succeeded — init the struct
+  0x01ec8: MOVS    R5, #0x0
+  0x01eca: MOVS    R1, #0x0
+  0x01ecc: MOVS    R2, #0x3c
+  0x01ece: BL      0x0091c  ; memset(ptr, 0, 0x3c)
+  0x01ed2: STR.W   R10, [R4, #0x0]
+  0x01ed6: STR     R6, [R4, #0x1c]
+  0x01ed8: MOV     R1, R7
+  0x01eda: STR     R7, [R4, #0x10]
+  0x01edc: MOV     R2, R8
+  0x01ede: MOV     R3, R9
+  0x01ee0: MOV     R0, R11
+  0x01ee8: BL      0x67358  ; *** TARGET 1 — big init ***
+  0x01eec: STR.W   R8, [R4, #0x18]
+  0x01ef0: STR     R0, [R4, #0xc]    ; stores TARGET 1 result
+  0x01ef2: BL      0x09948  ; post-processing
+  0x01ef6: STR     R0, [R4, #0x4]
+  0x01ef8: LDR     R0, [R4, #0xc]
+  0x01efa: BL      0x09964  ; post-processing
+  0x01efe: MOV     R1, R5            ; R5=0
+  0x01f00: LDR     R2, [R4, #0xc]
+  0x01f02: MOV     R3, R7
+  0x01f04: STR     R0, [R4, #0x8]
+  0x01f06: MOV     R0, R4
+  0x01f08: BL      0x64248  ; *** TARGET 2 — struct alloc ***
+  0x01f0c: STR     R0, [R4, #0x14]
+  0x01f0e: CBNZ    R0, 0x01f1a      ; if TARGET 2 returned non-NULL, continue
+  0x01f10: ; error — TARGET 2 returned NULL
+  0x01f14: BL      0x00a30
+  0x01f18: B       0x01f50           ; → cleanup + error exit
+
+  0x01f1a: MOV     R0, R5            ; R5=0
+  0x01f28: BL      0x63c24  ; *** TARGET 3 — registration ***
+  0x01f2c: CBZ     R0, 0x01f36       ; if TARGET 3 returned 0, success
+  0x01f2e: ; error — TARGET 3 returned nonzero
+  0x01f30: BL      0x00a30
+  0x01f34: B       0x01f50           ; → cleanup + error exit
+
+  0x01f36: MOV     R0, R4
+  0x01f38: BL      0x01e44  ; final setup
+  0x01f3c: MOV     R0, R4
+  0x01f3e: B       0x01f4a           ; → success exit
+
+  ; Error exit: free struct + assert
+  0x01f40: LDR     R0, [PC, #0x30]
+  0x01f42: MOVS    R1, #0xad
+  0x01f44: BL      0x011e8           ; ASSERT/error handler
+  0x01f48: MOVS    R0, #0x0
+  0x01f4a: ADD     SP, SP, #0x14
+  0x01f4c: POP.W   {R4, R5, R6, R7, R8, R9, R10, R11, PC}
+
+  ; Cleanup path (from TARGET 2/3 failure)
+  0x01f50: LDR     R0, [R4, #0x10]
+  0x01f52: MOV     R1, R4
+  0x01f54: MOVS    R2, #0x3c
+  0x01f56: BL      0x07d68  ; free(ptr, 0x3c)
+  0x01f5a: B       0x01f40
+
+======================================================================
+  TARGET 1: 0x67358 — Device attach/init (from test.88)
+  Called from pciedngl_probe at 0x01ee8
+======================================================================
+
+  0x67358: PUSH.W  {R0-R10, LR}
+  0x6735c: MOV     R8, R0
+  0x6735e: MOV     R7, R1
+  0x67360: MOV     R0, R1
+  0x67362: MOV.W   R1, #0x57
+  0x67366: MOV     R9, R2
+  0x67368: MOV     R10, R3
+  0x6736e: BL      0x07d60  ; malloc(size=R1, tag=0x57)
+  0x67372: MOV     R4, R0
+  0x67374: CBNZ    R0, 0x67386       ; if alloc OK, continue
+  ; alloc failed — log and return NULL
+  0x67376: MOV     R0, R7
+  0x67378: BL      0x07d6e  ; get size
+  0x6737c: MOV     R1, R0
+  0x6737e: LDR     R0, [PC, #0x48]
+  0x67380: BL      0x00a30  ; printf error
+  0x67384: B       0x673c0  ; → return R4 (NULL)
+
+  ; alloc succeeded
+  0x67386: ...setup args for 0x670d8...
+  0x67398: BL      0x670d8  ; *** DEEP INIT — this is where hang likely occurs ***
+  0x6739c: MOV     R8, R0
+  0x6739e: CBNZ    R0, 0x673b0       ; if 0x670d8 returned non-zero, success path
+  ; 0x670d8 returned 0/error — free and return
+  0x673a0: MOV     R1, R4
+  0x673a2: MOV     R0, R7
+  0x673a4: MOV.W   R2, #0x57
+  0x673a8: BL      0x07d68  ; free
+  0x673ac: MOV     R4, R8
+  0x673ae: B       0x673c0  ; → return
+
+  ; success — store additional fields
+  0x673b0: CBZ     R6, 0x673b4
+  0x673b2: LDR     R6, [R6, #0x0]
+  0x673b4: STR.W   R6, [R4, #0x80]
+  0x673b8: CBZ     R5, 0x673bc
+  0x673ba: LDR     R5, [R5, #0x0]
+  0x673bc: STR.W   R5, [R4, #0x84]
+  0x673c0: MOV     R0, R4
+  0x673c2: ADD     SP, SP, #0x10
+  0x673c4: POP.W   {R4-R10, PC}      ; return
+
+  *** CRITICAL: Standalone function at 0x673cc ***
+  0x673cc: MOVW    R0, #0x43b1       ; returns EXACTLY 0x43b1
+  0x673d0: BX      LR
+
+  0x673d2: MOVS    R0, #0x0          ; returns 0
+  0x673d4: BX      LR
+
+======================================================================
+  TARGET 2: 0x64248 — Structure allocator (from test.88)
+  Called from pciedngl_probe at 0x01f08
+======================================================================
+
+  0x64248: PUSH.W  {R3-R9, LR}
+  0x6424c: MOV     R8, R3
+  ; debug logging check
+  0x64256: LDR     R2, [R3, #0x0]
+  ; ... bounds check on slot count ...
+  0x6426a: CMP     R3, #0x7
+  0x6426c: BLS     0x64284           ; if slots ≤ 7, allocate new
+  ; else reuse existing slot
+  0x64284: MOV     R0, R8
+  0x64286: MOVS    R1, #0x4c
+  0x64288: BL      0x07d60  ; malloc(0x4c)
+  0x6428c: MOV     R6, R0
+  0x6428e: CBNZ    R0, 0x642a4       ; if alloc OK
+  ; alloc failed — log
+  0x642a4: MOVS    R1, #0x0
+  0x642a6: MOVS    R2, #0x4c
+  0x642a8: BL      0x0091c  ; memset(ptr, 0, 0x4c)
+  ; store fields
+  0x642b4: STR     R5, [R6, #0x0]
+  0x642b6: STR.W   R8, [R6, #0x4]
+  0x642ba: STR     R4, [R6, #0x8]
+  0x642be: MOV     R0, R6
+  0x642c0: POP.W   {R3-R9, PC}       ; return struct ptr
+
+  NO infinite loops, CPSID, or WFI found in TARGET 2.
+
+======================================================================
+  TARGET 3: 0x63C24 — Registration function (from test.88)
+  Called from pciedngl_probe at 0x01f28
+======================================================================
+
+  0x63c24: PUSH.W  {R3-R9, LR}
+  0x63c28: MOVS    R0, #0x10
+  0x63c2a: MOV     R4, R1
+  0x63c2c: MOVS    R1, #0x0
+  0x63c2e: MOV     R9, R2
+  0x63c30: MOV     R8, R3
+  0x63c32: BL      0x01298  ; malloc(0x10)
+  0x63c36: MOV     R5, R0
+  0x63c38: CBNZ    R0, 0x63c48       ; if alloc OK
+  ; alloc failed
+  0x63c3a: LDR     R0, [PC, #0x74]
+  0x63c3c: BL      0x00a30  ; printf error
+  0x63c40: MVN.W   R0, #0x1a         ; return -27
+  0x63c44: POP.W   {R3-R9, PC}
+
+  ; alloc succeeded — do lookups and register
+  0x63c48: LDR     R6, [PC, #0x68]   ; global ptr
+  0x63c4a: LDR     R0, [R6, #0x0]
+  0x63c4c: BL      0x09956           ; lookup
+  0x63c50: ...
+  0x63c72: BL      0x09940           ; get type
+  0x63c76: MOVW    R3, #0x812
+  ; ... store fields in struct ...
+  0x63ca4: STR     R5, [R3, #0x0]    ; link into list
+  0x63ca6: BL      0x099ac           ; release
+  0x63caa: MOVS    R0, #0x0          ; return 0 (success)
+  0x63cac: POP.W   {R3-R9, PC}
+
+  NO infinite loops, CPSID, or WFI found in TARGET 3.
+
+======================================================================
+  CRITICAL FINDING: 0x43b1 may NOT be a counter
+======================================================================
+
+Function at 0x673cc:
+  MOVW R0, #0x43b1
+  BX   LR
+
+This function returns the CONSTANT 0x43b1 — the SAME value that TCM[0x9d000]
+"freezes" at. This raises the possibility that:
+
+1. TCM[0x9d000] is set ONCE during init to 0x43b1 (a static value, not a counter)
+2. If true, the WFI-disproof is INVALID (was based on "frozen counter = CPU halted")
+3. Firmware may have completed init normally and be sitting in WFI idle
+4. The "hang" may actually be: firmware waiting for PCI-CDC commands the host never sends
+
+To resolve: test.89 must sample TCM[0x9d000] at high frequency (~1ms intervals)
+during the first 100-200ms after ARM release to see if intermediate values exist
+(0, 1, 2, ..., 0x43b1) or if it jumps straight from 0 to 0x43b1.
+
+======================================================================
+  Init spin at 0x168 — Startup entry
+======================================================================
+
+  0x00160: SUB     SP, SP, #0x30
+  0x00162: LDR     R4, [PC, #0x24]   ; load from *0x224
+  0x00164: LDR     R4, [R4, #0x0]
+  0x00166: CMP     R4, #0x0
+  0x00168: BEQ     0x00168           ; *** SPIN while *0x224 == NULL ***
+  0x0016a: MOV     R0, R13
+  0x0016c: BLX     R4                ; call through function pointer
+
+This is the startup spin — waits for c_init to set up the entry point at *0x224.
+Not related to the pciedngl_probe hang.
+
+======================================================================
+  Deep init target: 0x670d8 (NOT DUMPED YET)
+======================================================================
+
+Called from TARGET 1 at 0x67398. This is the most likely location of the hang,
+as it's the deepest call in the init chain. Need to dump 0x670d8-0x67300 region
+in a future test to trace further.
+
+======================================================================
+  Stack scan results (test.88): 0x9F000-0x9FFF8
+======================================================================
+
+Mostly zeros at 0x9F100-0x9F500.
+Random-looking data elsewhere (not clearly stack frames).
+No dense cluster of Thumb return addresses found.
+Stack may be at a different location or very shallow at time of dump.
+
+TCM state changes observed between pre-ARM and T+1s:
+  - 0x9bf00: 0x00000000 → 0x5354414b ("STAK" — stack marker)
+  - 0x9d000: 0x00000000 → 0x000043b1 (the value under investigation)
+  - 0x9a000-0x9af00: zeroed (BSS init)
+
+======================================================================
+  Summary of all code paths examined
+======================================================================
+
+NO infinite loops found in any of the three call targets.
+NO CPSID (interrupt disable) found.
+NO WFI found in any call target code.
+Only bounded array search loops (0x020a6, 0x0226c, 0x0229c).
+The only true infinite loop is the startup spin at 0x168 (BEQ self).
+
+The hang must be either:
+  a) Inside 0x670d8 (the deep init called from TARGET 1) — NOT YET DUMPED
+  b) Not a hang at all — firmware completed init and entered WFI idle
+     (if 0x9d000 is a static value, not a counter)
+
+test.89 will resolve this by determining if 0x9d000 is a counter or static.
