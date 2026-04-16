@@ -1,6 +1,6 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, RUNNING test.90)
+## Current state (2026-04-16, ABOUT TO RUN test.90 — module built, not yet run)
 
 Git branch: main (pushed to origin)
 Module built successfully. About to run test.90.
