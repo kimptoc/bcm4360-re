@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.97: probe wait-struct at *0x62ea8 to confirm fn 0x1624c hang
+# Phase 5.2 test.99: multi-timepoint pointer sampling + console ring dump
 #
-# test.96 RESULT: CRASHED after 6 code words (0x5200-0x5214). No RP restore.
-#   Pivoted to firmware binary analysis: confirmed binary == TCM image.
-#   fn 0x1624c = hardware PHY completion busy-wait (CONFIRMED HANG via binary).
-#   *0x62ea8 = heap_top - 0x2f5c (set at startup 0x63dba, valid before fn 0x1624c).
-#   Root cause hypothesis: D11 PHY ISR never fires → field28 stays 0 → infinite loop.
+# test.98 RESULT: step1=TCM[0x58f08]=0x00000000 at T+200ms → D11 obj field0x18
+#   never set. Counter=0x43b1 frozen. Interpretation revised after advisor
+#   review: counter is a STATIC constant (fn 0x673cc) written at T+12ms; the
+#   T+200ms sample is ~188ms POST-freeze. Result consistent with many hang
+#   locations, not just D11 init.
 #
-# test.97 PLAN: at T+200ms, read TCM[0x62ea8] + dereference to get field20/24/28.
-#   Expected: field20=1, field28=0 → confirms fn 0x1624c is the hang.
-#   Only ~14 reads → very low crash risk. Re-mask before/after reads.
-#   Also probe stack 0x9CE00-0x9CE20 for LR in fn 0x1624c range (0x16250-0x16294).
+# test.99 PLAN: sample *0x9d000 / *0x58f08 / *0x62ea8 / *0x62a14 at
+#   T+200/400/800ms, plus console ring dump at T+400ms (64 words from
+#   0x9ccc0, decoded as ASCII). Goal: narrow hang location via cheap
+#   read-only probes before committing to D11 BCMA wrapper reads (test.100).
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -24,14 +24,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.97.stage${STAGE}"
+LOG="$LOG_DIR/test.99.stage${STAGE}"
 
-echo "=== test.97: probe wait-struct *0x62ea8 at T+200ms (confirm fn 0x1624c hang) --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.99: multi-timepoint pointer sampling + console ring dump --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled + IRQ handler before ARM; pci_set_master before ARM; 2s masking+FW wait; WAIT-STRUCT PROBE: read *0x62ea8 + fields +0x14/+0x18/+0x1c + stack probe 0x9CE00-0x9CE20 at T+200ms; free_irq+disable_msi+RP restore" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled + IRQ handler before ARM; pci_set_master before ARM; 2s masking+FW wait; TEST.99 PROBES: pointer sample {0x9d000,0x58f08,0x62ea8,0x62a14} at T+200/400/800ms + console ring dump (0x9ccc0+256 bytes ASCII) at T+400ms; free_irq+disable_msi+RP restore" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -86,7 +86,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.97 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.99 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
