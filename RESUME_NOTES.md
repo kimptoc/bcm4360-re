@@ -1,11 +1,12 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, ABOUT TO RUN test.91 — module built, not yet run)
+## Current state (2026-04-16, ABOUT TO RUN test.92 — module built, not yet run)
 
 Git branch: main (pushed to origin)
-Module built successfully. About to run test.91.
-Test.91 dumps TCM[0x64400-0x65800] (si_attach at 0x64590) + stack [0x9F800-0xA0000] at T+200ms.
-Key question: where does 0x64590 (called from 0x670d8 at 0x67190 with r1=0x18000000) hang?
+Module built successfully. About to run test.92.
+Test.92 dumps TCM[0x9BC00-0x9C400] (stack near STAK@0x9BF00) + TCM[0x2600-0x2900] (fn@0x2704 EROM parser) at T+200ms.
+Both loops re-mask RP every 100 words to avoid the 3s PCIe crash window.
+Key question: what stack frames are present at hang? What does the 0x2704 EROM parser look like?
 
 ## test.90 RESULT: SURVIVED — 0x670d8 disassembled; 0x64590 is next hang candidate
 
@@ -66,25 +67,38 @@ Log: phase5/logs/test.90.journal
 **NEXT: disassemble 0x670d8** — the only unexamined function in the call chain
 Log: phase5/logs/test.89.journal
 
-## test.91 PLAN: Dump 0x64590 (si_attach) + stack top
+## test.91 RESULT: CRASHED at word 431 — partial si_attach disassembly obtained
 
-**Goal:** Find where 0x64590 hangs (called from 0x670d8 at 0x67190 with r1=0x18000000).
-Also verify call chain via return addresses on stack.
+**Crash cause:** Unmasked 1280-word code dump loop; at ~7ms/word, 431 × 7ms ≈ 3s hit PCIe crash window.
+
+**Partial disassembly (431 words, 0x64400-0x64ab8) — key findings:**
+- **0x64590 (si_attach):** reads ChipCommon+0xfc = EROM pointer register
+- Immediately branches to EROM parse loop, calls fn at **0x2704** (EROM entry reader)
+- **Vtable dispatch calls at 0x644dc and 0x644fc** (`blx r3`) — these init individual backplane cores
+  → Most likely hang points: one core's init fn reads backplane registers for a powered-off core
+
+**Stack location corrected:** STAK marker at 0x9BF00 (from test.88) → active frames near 0x9BC00.
+
+Log: phase5/logs/test.91.journal
+Dump: phase5/analysis/test91_dump.txt (431 words: 0x64400-0x64ab8)
+
+## test.92 PLAN: Stack dump near STAK + EROM parser dump (with per-100-word masking)
+
+**Goal:** Get stack frames to see call depth at hang; disassemble EROM parser at 0x2704.
 
 **Approach:**
 1. Keep all proven init (BBPLL, BusMaster, ASPM, masking)
 2. Release ARM
-3. At outer==1 (T+200ms): two dumps:
-   a. CODE: TCM[0x64400-0x65800] = 1280 words (covers 0x64590 with context)
-   b. STACK: TCM[0x9F800-0xA0000] = 512 words (top 2KB, grows down from 0xA0000)
-4. Total: 1792 words — fits in 200ms window
-5. 2s timeout, re-mask every 10ms
-6. NO core switching (lethal)
+3. At outer==1 (T+200ms): two dumps with re-masking every 100 words:
+   a. STACK: TCM[0x9BC00-0x9C400] = 512 words (near STAK marker at 0x9BF00)
+   b. FUNC: TCM[0x2600-0x2900] = 192 words (covers fn at 0x2704)
+4. 2s timeout, re-mask every 10ms (outer loop unchanged)
 
 **Expected outcomes:**
-- CODE: find 0x64590 = si_attach/si_create; look for polling loops, WFI, or more deep calls
-- STACK: find return addresses 0x67194 (after bl 0x64590) and 0x67314 (wrapper return)
-  → confirms how deep into 0x64590 the firmware got before hang
+- STACK: return addresses 0x67194 (after bl 0x64590) and 0x67314 visible in frames
+  → tells us how deep into si_attach firmware got before hang
+- FUNC dump of 0x2704: see if EROM parser itself contains any blocking ops
+  (probably not — simple reader; hang is in the vtable core-init calls)
 
 ## test.90 PLAN: Disassemble 0x670d8 (deep init)
 
