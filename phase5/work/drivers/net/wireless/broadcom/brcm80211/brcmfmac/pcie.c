@@ -2514,34 +2514,58 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			 *   128 words × ~13ms = 1.7s; total with T+200ms = 1.9s (SAFE < 3s window)
 			 */
 			if (outer == 1) {
-				/* test.97: Probe wait-struct at *0x62ea8 to confirm fn 0x1624c hang.
+				/* test.98: Pointer-chain reads to confirm hang at fn 0x16f60 line 0x16f7a.
 				 *
-				 * Binary analysis confirmed:
-				 *   fn 0x1624c = hardware PHY completion busy-wait:
-				 *     spins while (*0x62ea8)->field20==1 AND (*0x62ea8)->field28==0
-				 *     field20=1 means "operation in progress"
-				 *     field28=0 means "ISR hasn't fired yet"
-				 *   *0x62ea8 is initialized at startup to (heap_top - 0x2f5c)
-				 *   from startup code at 0x63dba: *(0x62ea8) = *(0x58c7c) - 0x2f5c
-				 *   So *0x62ea8 is VALID (non-NULL) when fn 0x1624c runs.
+				 * test.97 RESULT (T+200ms probe of wait-struct *0x62ea8):
+				 *   wait_ptr = 0x9d0a4 (correct: heap_top 0xa0000 - 0x2f5c)
+				 *   field20 = 0x66918f11 (garbage — NOT 1)
+				 *   field24 = 0x5febdbeb (garbage)
+				 *   field28 = 0x84f54b2a (garbage — NOT 0)
+				 *   → fn 0x1624c NEVER RAN — its setup code would have written
+				 *     field24=1 and field28=0 before entering the wait loop.
+				 *   → Hang is BEFORE fn 0x1624c in the call chain.
+				 *   Stack probe 0x9CE00 = ASCII "125888.000 RTE (PCI-CDC" = console ring
+				 *   buffer, NOT stack frames. Wrong range.
 				 *
-				 * Strategy: at T+200ms (firmware well and truly hung since T+12ms):
-				 *   1. Read TCM[0x62ea8] = P (wait struct ptr = heap_top - 0x2f5c)
-				 *   2. Read TCM[0x62eac] = heap_top (should be P + 0x2f5c)
-				 *   3. If P is valid TCM address: read P+0x14 (field20), P+0x18 (field24), P+0x1c (field28)
-				 *      Expected: field20=1, field24=1, field28=0 → confirms fn 0x1624c hang
-				 *   4. Read 8 stack words at 0x9CE00-0x9CE20 looking for LR in 0x16250-0x16294
+				 * CORRECTED CALL CHAIN (from binary disassembly):
+				 *   fn 0x16476 @ 0x1647a: b.w 0x162fc  (tail-calls fn 0x162fc, NOT 0x1624c!)
+				 *   fn 0x162fc @ 0x1632e: bl 0x1624c    (calls fn 0x1624c directly)
+				 *   fn 0x16f60 @ 0x16f7a: ldr.w r3,[r3,#0x120] ← HANG CANDIDATE (before loop)
+				 *     where r3 = *(r4+0x88) = hardware base ptr (potentially 0x18000000+)
+				 *     This hardware read is BEFORE the loop calling fn 0x16476.
 				 *
-				 * Only ~14 reads total → very low crash risk.
-				 * Re-mask before and after to protect against PCIe errors.
+				 * POINTER CHAIN to hardware base ptr (derived from firmware binary):
+				 *   D11_obj = 0x58ef0 (static)
+				 *   D11_obj->field0x18 = TCM[0x58f08] (runtime-set by si_attach)
+				 *
+				 *   fn 0x11648 @ 0x1164e: r4 = *(D11_obj+0x18) = TCM[0x58f08]
+				 *   fn 0x11648 @ 0x1166e: r0 = *(r4+8)            → passed to fn 0x18ffc
+				 *
+				 *   fn 0x18ffc @ 0x19000: r4 = *(r0+0x10)         → phy_sub_obj
+				 *   fn 0x18ffc @ 0x19050: bl 0x16f60 (LR=0x19054)
+				 *
+				 *   fn 0x16f60 @ 0x16f70: r3 = *(r4+0x88)         → hw_base_ptr
+				 *   fn 0x16f60 @ 0x16f7a: r3 = *(r3+0x120)        ← AHB/AXI read hangs ARM
+				 *
+				 * Chain:
+				 *   step1 = TCM[0x58f08]         (D11_obj->field0x18)
+				 *   step2 = TCM[step1 + 8]       (r0 to fn 0x18ffc)
+				 *   step3 = TCM[step2 + 0x10]    (r4 in fn 0x18ffc = phy_sub_obj)
+				 *   step4 = TCM[step3 + 0x88]    (r3 in fn 0x16f60 = hw_base_ptr)
+				 *   If step4 >= 0x18000000 → D11 bus read hangs ARM indefinitely.
+				 *
+				 * SECONDARY: stack probe 0x9FE00-0x9FF00 (64 words, SP ~0x9FE40):
+				 *   LR=0x19054: pushed by fn 0x18ffc when calling fn 0x16f60
+				 *   LR=0x11674: pushed by fn 0x11648 when calling fn 0x18ffc
+				 *
+				 * Only ~70 reads total → low crash risk.
 				 */
 				{
-					u32 wait_ptr, heap_top_val;
-					u32 field20, field24, field28;
+					u32 step1, step2, step3, step4;
 					u32 stk;
 					int si;
 
-#define T97_REMASK() do {						\
+#define T98_REMASK() do {						\
 	if (rp) {							\
 		u16 _bc, _dc, _devsta, _secsta;			\
 		u32 _rtsta;						\
@@ -2566,62 +2590,89 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	}								\
 } while (0)
 
-				T97_REMASK();
+				T98_REMASK();
 
-				/* Read the wait struct pointer and heap top */
-				wait_ptr    = brcmf_pcie_read_ram32(devinfo, 0x62ea8);
-				heap_top_val = brcmf_pcie_read_ram32(devinfo, 0x62eac);
-
+				/* PRIMARY: Walk pointer chain to hw_base_ptr */
+				step1 = brcmf_pcie_read_ram32(devinfo, 0x58f08);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.97 T+200ms: wait_ptr=0x%08x heap_top=0x%08x "
-					  "(expected: wait_ptr = heap_top - 0x2f5c = 0x%08x)\n",
-					  wait_ptr, heap_top_val,
-					  (heap_top_val >= 0x2f5c) ? heap_top_val - 0x2f5c : 0);
+					  "BCM4360 test.98: step1=TCM[0x58f08]=0x%08x "
+					  "(D11_obj->field0x18)\n", step1);
 
-				T97_REMASK();
+				if (step1 > 0 && step1 < 0xA0000) {
+					T98_REMASK();
+					step2 = brcmf_pcie_read_ram32(devinfo, step1 + 8);
+					dev_emerg(&devinfo->pdev->dev,
+						  "BCM4360 test.98: step2=TCM[0x%05x+8]=0x%08x "
+						  "(r0 to fn0x18ffc)\n", step1, step2);
 
-				/* Dereference wait_ptr to read the wait struct fields */
-				if (wait_ptr > 0 && wait_ptr < 0xA0000) {
-					field20 = brcmf_pcie_read_ram32(devinfo, wait_ptr + 0x14);
-					field24 = brcmf_pcie_read_ram32(devinfo, wait_ptr + 0x18);
-					field28 = brcmf_pcie_read_ram32(devinfo, wait_ptr + 0x1c);
-					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.97: wait_struct[0x%05x]: "
-						  "field20=0x%08x field24=0x%08x field28=0x%08x\n",
-						  wait_ptr, field20, field24, field28);
-					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.97: hang diagnosis: "
-						  "field20=%s field28=%s → %s\n",
-						  field20 == 1 ? "1(in-progress)" : "NOT-1(no-hang?)",
-						  field28 == 0 ? "0(ISR-never-fired)" : "NONZERO(should-exit)",
-						  (field20 == 1 && field28 == 0) ?
-						  "CONFIRMED fn0x1624c hang (ISR never fired)" :
-						  "UNEXPECTED — hang is elsewhere");
+					if (step2 > 0 && step2 < 0xA0000) {
+						T98_REMASK();
+						step3 = brcmf_pcie_read_ram32(devinfo, step2 + 0x10);
+						dev_emerg(&devinfo->pdev->dev,
+							  "BCM4360 test.98: step3=TCM[0x%05x+0x10]=0x%08x "
+							  "(phy_sub_obj, r4 in fn0x18ffc)\n",
+							  step2, step3);
+
+						if (step3 > 0 && step3 < 0xA0000) {
+							T98_REMASK();
+							step4 = brcmf_pcie_read_ram32(devinfo,
+										      step3 + 0x88);
+							dev_emerg(&devinfo->pdev->dev,
+								  "BCM4360 test.98: step4=TCM[0x%05x+0x88]=0x%08x "
+								  "%s\n",
+								  step3, step4,
+								  step4 >= 0x18000000u ?
+								  "HW-ADDR → D11 BUS HANG at fn0x16f7a CONFIRMED!" :
+								  step4 == 0 ?
+								  "NULL → hang is earlier (phy_sub_obj not init'd)" :
+								  "UNEXPECTED value");
+						} else {
+							dev_emerg(&devinfo->pdev->dev,
+								  "BCM4360 test.98: step3=0x%08x out of TCM "
+								  "range → phy_sub_obj not initialized\n",
+								  step3);
+						}
+					} else {
+						dev_emerg(&devinfo->pdev->dev,
+							  "BCM4360 test.98: step2=0x%08x out of TCM range\n",
+							  step2);
+					}
 				} else {
 					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.97: wait_ptr=0x%08x is NULL or out-of-range "
-						  "— hang is NOT in fn 0x1624c!\n", wait_ptr);
+						  "BCM4360 test.98: step1=0x%08x out of TCM range "
+						  "→ D11_obj->field0x18 not set (si_attach didn't run?)\n",
+						  step1);
 				}
 
-				T97_REMASK();
+				T98_REMASK();
 
-				/* Read 8 stack words above STAK fill (0x9CE00) looking for LR values
-				 * in the fn 0x1624c range (0x1624c-0x16294).
-				 * Active stack frames must be above the STAK fill (0x9BC00-0x9C400).
+				/* SECONDARY: Stack probe 0x9FE00-0x9FF00 (64 words, SP ~0x9FE40).
+				 * Looking for LR=0x19054 (fn0x18ffc called fn0x16f60 and is waiting)
+				 * and LR=0x11674 (fn0x11648 called fn0x18ffc and is waiting).
+				 * Also flag any value in the code ranges 0x16000-0x16500 or 0x18000-0x19100.
 				 */
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.97: stack probe 0x9CE00-0x9CE20\n");
-				for (si = 0; si < 8; si++) {
-					u32 saddr = 0x9CE00 + si * 4;
+					  "BCM4360 test.98: stack probe 0x9FE00-0x9FF00 (64 words)\n");
+				for (si = 0; si < 64; si++) {
+					u32 saddr = 0x9FE00 + si * 4;
+					const char *ann = "";
 
 					stk = brcmf_pcie_read_ram32(devinfo, saddr);
-					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.97 stk: %05x: %08x%s\n",
-						  saddr, stk,
-						  (stk >= 0x16250 && stk <= 0x16294) ?
-						  " ← LR in fn0x1624c!" : "");
+					if (stk == 0x19054)
+						ann = " ← LR: fn0x18ffc called fn0x16f60";
+					else if (stk == 0x11674)
+						ann = " ← LR: fn0x11648 called fn0x18ffc";
+					else if ((stk >= 0x16000 && stk <= 0x16600) ||
+						 (stk >= 0x18000 && stk <= 0x19200))
+						ann = " ← code-range LR candidate";
+					if (ann[0])
+						dev_emerg(&devinfo->pdev->dev,
+							  "BCM4360 test.98 stk: %05x: %08x%s\n",
+							  saddr, stk, ann);
 				}
-#undef T97_REMASK
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.98: stack probe complete\n");
+#undef T98_REMASK
 				}
 			}
 

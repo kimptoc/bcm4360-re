@@ -1,17 +1,40 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, POST test.96 — HANG LOCATION CONFIRMED via firmware binary analysis)
+## Current state (2026-04-16, POST test.97 — hang confirmed BEFORE fn 0x1624c; new candidate: fn 0x16f7a)
 
 Git branch: main (pushed to origin)
-**TEST.96 RESULT: CRASHED after only 6 words (0x5200-0x5214). No RP restore → confirmed PCIe crash.**
-**PIVOT: Used firmware binary /lib/firmware/brcm/brcmfmac4360-pcie.bin (442233 bytes) for all analysis.**
-**Confirmed: 6 TCM words match binary exactly → binary == TCM image (safe to disassemble offline).**
 
-**CONFIRMED HANG LOCATION: fn 0x1624c — hardware PHY completion busy-wait loop.**
-Full call chain: Call 3 (blx at 0x6451a) → fn 0x11648 → fn 0x18ffc → fn 0x16f60 → fn 0x16476 → fn 0x162?? → fn 0x1624c (HANG)
+**TEST.97 RESULT: fn 0x1624c NEVER RAN — hang is further up the call chain.**
+- wait_ptr = 0x9d0a4 ✓ (correct: heap_top 0xa0000 - 0x2f5c)
+- field20=0x66918f11, field24=0x5febdbeb, field28=0x84f54b2a → ALL GARBAGE (uninitialized heap)
+- fn 0x1624c setup code writes field24=1, field28=0 — since they're garbage, fn 0x1624c never ran.
+- Stack probe 0x9CE00 = ASCII "125888.000 RTE (PCI-CDC" = console ring buffer. Wrong range.
+- Machine crashed during test (log file truncated at module load).
+- Full journal recovered from journalctl -b -1: phase5/logs/test.97.journal
 
-**Next: Understand WHY fn 0x1624c hangs — identify who sets field20=1, why field28 never gets set.**
-Root cause hypothesis: D11 PHY ISR never fires (D11 not powered/clocked/initialized before PHY ops).
+**CORRECTED ANALYSIS (fn 0x16476 tail-call target was wrong):**
+- fn 0x16476 @ 0x1647a: `b.w 0x162fc` (tail-calls fn 0x162fc, NOT fn 0x1624c!)
+- fn 0x162fc @ 0x1632e: `bl 0x1624c` (fn 0x162fc calls fn 0x1624c)
+
+**NEW HANG CANDIDATE: fn 0x16f60 line 0x16f7a**
+```
+16f70: ldr.w r3, [r4, #136]  @ 0x88   ; r3 = *(r4+0x88) = hw_base_ptr
+16f7a: ldr.w r3, [r3, #288]  @ 0x120  ; reads *(hw_base_ptr+0x120) ← AHB/AXI HANG?
+```
+This hardware read is BEFORE the loop that calls fn 0x16476. If hw_base_ptr >= 0x18000000,
+the ARM stalls indefinitely on the AHB/AXI bus (D11 not clocked/powered → no ACK).
+
+**POINTER CHAIN (to be verified by test.98):**
+```
+step1 = TCM[0x58f08]         ; D11_obj->field0x18 (runtime-set by si_attach)
+step2 = TCM[step1 + 8]       ; r0 passed to fn 0x18ffc
+step3 = TCM[step2 + 0x10]    ; phy_sub_obj = r4 in fn 0x18ffc
+step4 = TCM[step3 + 0x88]    ; hw_base_ptr = r3 in fn 0x16f60
+```
+If step4 >= 0x18000000 → D11 bus read hangs ARM. Confirmed = D11 bus hang.
+If step4 == 0 → hang is earlier (phy_sub_obj not initialized yet by si_attach).
+
+**Next: Run test.98 — pointer-chain reads + stack probe at 0x9FE00-0x9FF00.**
 
 ## test.96 RESULT: CRASHED after 6 words — HANG CONFIRMED at fn 0x1624c via binary analysis
 
@@ -204,35 +227,21 @@ The annotation "b.w 0x848 = likely actual hang location" was WRONG.
   - Call 3 (0x6451a): r7=0x58ef0, ldr r3,[r7,#16] → vtable ptr at obj+16 → vtable[1]
 - si_attach at 0x64590: EROM-parsing loop, calls 0x2704 (EROM parser) for each core
 
-## test.97 PLAN: Read wait-struct fields at T+200ms to confirm fn 0x1624c hang
+## test.97 RESULT: fn 0x1624c never ran — hang is earlier
+(See full analysis in "Current state" section above. Journal: phase5/logs/test.97.journal)
 
-**NEW FINDING (this session):** *0x62ea8 IS initialized before fn 0x1624c runs.
-Startup code at 0x63dba: `*(0x62ea8) = *(0x58c7c) - 0x2f5c` where *(0x58c7c) = heap_top.
-So the wait struct pointer is heap_top - 0x2f5c (valid, non-NULL, set BEFORE pciedngl_probe).
+## test.98 PLAN: Pointer-chain reads to confirm D11 bus hang at fn 0x16f7a
 
-**Startup init sequence (confirmed from binary):**
-1. fn at 0x63d9e: sets *(0x62ea8) = *(0x58c7c) - 0x2f5c (heap_top - 0x2f5c)
-2. Also sets *(0x62eac) = *(0x58c7c) (heap_top)
-3. Then calls fn 0x672e4 → fn 0x670d8 → si_attach → fn 0x11648 → fn 0x18ffc → fn 0x1624c
+**Goal:** Walk pointer chain at T+200ms to find hw_base_ptr and determine if it's a hardware addr.
+Chain: TCM[0x58f08] → +8 → +0x10 → +0x88 → check if ≥ 0x18000000.
+Also: stack probe 0x9FE00-0x9FF00 for LR=0x19054 (fn0x18ffc→fn0x16f60) and LR=0x11674.
 
-**fn 0x1624c WILL have valid *0x62ea8 when it runs → hang is confirmed in this loop.**
+**Expected results:**
+- If step4 >= 0x18000000 → D11 bus hang confirmed. Next: pre-enable D11 core.
+- If step4 == 0 → hang even earlier; need to trace si_attach D11 core init.
+- If step1 == 0 → D11_obj->field0x18 not set; si_attach didn't initialize D11 obj.
 
-**Goal:** Read wait struct fields at T+200ms to confirm hang state:
-1. Read TCM[0x62ea8] = P (wait struct ptr — should be heap_top - 0x2f5c)
-2. Read P+0x14 (field20): should be 1 (firmware set it = 1 at 0x16258)
-3. Read P+0x18 (field24): should be 1 (firmware set it = 1 at 0x16258)
-4. Read P+0x1c (field28): should be 0 (ISR never set it → hang)
-5. Also read TCM[0x62eac] (heap_top) to compute/verify P
-6. Read 8 stack words above STAK fill (0x9CE00-0x9CE20) looking for LR in 0x16250-0x16294
-
-**Why fn 0x1624c hangs (hypothesis):** D11 PHY ISR never fires → field28 never set.
-Field28 is set by the D11 interrupt handler. If D11 interrupts are not routed/enabled,
-the handler never runs, field28 stays 0, and fn 0x1624c spins forever.
-
-**Code change:** Replace 128-word code dump (outer==1) with 6-word targeted BSS read.
-Only ~6 reads → very low crash risk. Re-mask before and after.
-
-## Run test.97 (to be built):
+## Run test.98 (to be built):
   cd /home/kimptoc/bcm4360-re/phase5/work && make && sudo ./test-staged-reset.sh 0
 
 ## test.93 RESULT: SURVIVED (both runs) — vtable pointer decoded, stack top is NVRAM
@@ -422,6 +431,10 @@ Full disassembly: phase5/analysis/test88_disassembly.txt
 - field28 set by D11 PHY ISR — ISR never fires → infinite loop ✓ (hypothesis)
 - D11 PHY register offsets in loop: 0x005e, 0x0060, 0x0062, 0x0078, 0x00d4 (from 0x4aff8) ✓
 - Firmware binary matches TCM image exactly (6 words verified) — safe for offline disassembly ✓
+- fn 0x1624c NEVER RAN at T+200ms — wait struct fields all garbage (uninitialized) ✓ (test.97)
+- fn 0x16476 tail-calls fn 0x162fc (NOT fn 0x1624c) ✓ (corrected from binary)
+- fn 0x16f60 @ 0x16f7a does hardware read BEFORE calling fn 0x16476 — AHB hang candidate ✓
+- Stack frames are near 0x9FE40 (not 0x9CE00 which is console ring buffer) ✓ (test.97)
 
 ## Console text decoded (test.78/79/80/82/83/84 T+3s)
 Ring buffer at 0x9ccc7, write ptr 0x9ccbe (wrapped):
@@ -456,3 +469,4 @@ Firmware prints CDC protocol banner (not FullDongle MSGBUF).
 - test.94: SURVIVED vtable, CRASHED STACK-LOW at ~3.25s — VT[0x58cf4]=0x1FC3; 0x1FC2→0x2208→0x848
 - test.95: SURVIVED — 0x840-0xB40 = C runtime (strcmp, strtol, memset, memcpy, printf); 0x848 = strcmp NOT hang
 - test.96: CRASHED after 6 words — pivoted to firmware binary analysis; fn 0x1624c confirmed as hang location
+- test.97: CRASHED (machine crash) — wait struct fields = garbage → fn 0x1624c never ran; hang is earlier; corrected: fn 0x16476 → fn 0x162fc (not fn 0x1624c directly)
