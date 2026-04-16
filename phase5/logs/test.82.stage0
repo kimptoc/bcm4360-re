@@ -1,5 +1,5 @@
 === test.82: MSI enable + IRQ handler before ARM release --- stage=0 ===
-Date: Thu 16 Apr 10:55:22 BST 2026
+Date: Thu 16 Apr 11:05:53 BST 2026
 
 Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled + IRQ handler before ARM; pci_set_master before ARM; 30s masking+FW wait; wider TCM scan (0x9A000-0x9FFFC) every 2s; MSI count at each scan; console dump at T+3s; BSS dump at T+5s; olmsg dump at T+20s; TIMEOUT: final TCM+MSI scan; free_irq+disable_msi+RP restore
 
