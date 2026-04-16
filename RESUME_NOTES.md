@@ -1,40 +1,87 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, POST test.97 — hang confirmed BEFORE fn 0x1624c; new candidate: fn 0x16f7a)
+## Current state (2026-04-16 23:15, POST test.98 — Path B triggered; test.99 being planned)
 
-Git branch: main (pushed to origin)
+Git branch: main (pushed to origin — pending doc commit adds PLAN.md refactor,
+phase5_progress.md Path B section, test.98 log preservation, and this update).
 
-**TEST.97 RESULT: fn 0x1624c NEVER RAN — hang is further up the call chain.**
-- wait_ptr = 0x9d0a4 ✓ (correct: heap_top 0xa0000 - 0x2f5c)
-- field20=0x66918f11, field24=0x5febdbeb, field28=0x84f54b2a → ALL GARBAGE (uninitialized heap)
-- fn 0x1624c setup code writes field24=1, field28=0 — since they're garbage, fn 0x1624c never ran.
-- Stack probe 0x9CE00 = ASCII "125888.000 RTE (PCI-CDC" = console ring buffer. Wrong range.
-- Machine crashed during test (log file truncated at module load).
-- Full journal recovered from journalctl -b -1: phase5/logs/test.97.journal
+**TEST.98 RESULT: step1 = TCM[0x58f08] = 0x00000000 → hang is in si_attach.**
 
-**CORRECTED ANALYSIS (fn 0x16476 tail-call target was wrong):**
-- fn 0x16476 @ 0x1647a: `b.w 0x162fc` (tail-calls fn 0x162fc, NOT fn 0x1624c!)
-- fn 0x162fc @ 0x1632e: `bl 0x1624c` (fn 0x162fc calls fn 0x1624c)
+Test.98 probe readings (from `phase5/logs/test.98.journal`, captured via
+journalctl -b -1 after the module+script mismatch caused the stage0 log to be
+labelled test.97 — raw partial preserved at `phase5/logs/test.98.stage0.partial`):
 
-**NEW HANG CANDIDATE: fn 0x16f60 line 0x16f7a**
 ```
-16f70: ldr.w r3, [r4, #136]  @ 0x88   ; r3 = *(r4+0x88) = hw_base_ptr
-16f7a: ldr.w r3, [r3, #288]  @ 0x120  ; reads *(hw_base_ptr+0x120) ← AHB/AXI HANG?
+step1 = TCM[0x58f08] = 0x00000000 (D11_obj->field0x18)
+step1 out of TCM range → D11_obj->field0x18 not set
+(si_attach didn't run / didn't reach D11 obj init)
+counter T+200ms = 0x000043b1 RUNNING
+counter T+400ms = 0x000043b1 FROZEN (stays frozen through 2s timeout)
+clean exit — no host crash
 ```
-This hardware read is BEFORE the loop that calls fn 0x16476. If hw_base_ptr >= 0x18000000,
-the ARM stalls indefinitely on the AHB/AXI bus (D11 not clocked/powered → no ACK).
 
-**POINTER CHAIN (to be verified by test.98):**
-```
-step1 = TCM[0x58f08]         ; D11_obj->field0x18 (runtime-set by si_attach)
-step2 = TCM[step1 + 8]       ; r0 passed to fn 0x18ffc
-step3 = TCM[step2 + 0x10]    ; phy_sub_obj = r4 in fn 0x18ffc
-step4 = TCM[step3 + 0x88]    ; hw_base_ptr = r3 in fn 0x16f60
-```
-If step4 >= 0x18000000 → D11 bus read hangs ARM. Confirmed = D11 bus hang.
-If step4 == 0 → hang is earlier (phy_sub_obj not initialized yet by si_attach).
+**Interpretation:**
+- Firmware DOES start and runs some early code (counter reaches 0x43b1).
+- Firmware freezes by T+400ms — a very early freeze, well before the D11 PHY
+  wait loop at fn 0x1624c (which is several function levels deep inside
+  si_attach's D11 bring-up).
+- The D11 object pointer at `*0x58f08` is NEVER populated, which means the
+  D11 section of si_attach hasn't reached the point where it links its
+  object into that global.
+- Previous hypothesis — "hang in fn 0x16f60 AHB read" — is INCORRECT; the
+  pointer-chain cannot be walked because its root entry is still 0.
 
-**Next: Run test.98 — pointer-chain reads + stack probe at 0x9FE00-0x9FF00.**
+**Revised root cause hypothesis:** si_attach cannot bring the D11 core up at
+all. A prerequisite (reset/enable/clock/power/interrupt-routing) is not in
+the state si_attach expects. Per GitHub issue #11 recommendation #3.
+
+**Pivot: Path B — D11 core prerequisite checks (phase5_progress.md).**
+
+### test.99 plan — D11 core BCMA state probe
+
+Goal: determine whether the D11 core is out of reset and clocked at ARM-release
+time, and whether firmware mutates the D11 core state before it freezes.
+
+Probes (stage0):
+1. Dump D11 core wrapper registers (IOCTL @0x408, IOST @0x40C, RESET_CTL @0x800)
+   via `brcmf_chip_iscoreup()` / `buscore_prep_addr()` path (chip.c bus ops).
+   Take reading PRE-ARM-release.
+2. Repeat the same read at T+200ms (during RUNNING window) and T+400ms (during
+   FROZEN window). If D11 state is identical at both samples → firmware never
+   touched the D11 core → si_attach bailed before D11 bring-up. If mutated
+   → firmware is trying to bring D11 up but failing mid-sequence.
+3. Also dump ChipCommon PMU `min_res_mask` / `max_res_mask` / `res_state` for
+   context (already captured in existing test harness — keep in test.99).
+
+Implementation notes:
+- Reuse existing stage=0 dispatch in `brcmf_pcie_exit_download_state()`.
+- D11 core enumerator index: derive from `brcmf_chip_get_core()` for
+  BCMA_CORE_80211 (or equivalent) in chip.c.
+- For reset_ctl/IOCTL offsets, model after how chip.c handles ARM CR4.
+- Probe read-only only — do NOT write D11 wrapper registers yet (would risk
+  the same PCIe-bus crash we hit with ARM CR4 writes in tests 19-20).
+
+After test.99 reading:
+- If D11 held in reset (RESET_CTL bit 0 = 1) pre-firmware → si_kattach /
+  enter_download_state didn't bring it out → host-side bring-up gap.
+- If D11 out of reset pre-firmware AND clocks present AND state unchanged at
+  T+400ms → firmware chooses not to touch D11 (hang is purely in si_attach
+  CPU-side logic, e.g. a malloc / NVRAM / global-init loop).
+- If D11 state changes between T+200 and T+400 → firmware got far enough to
+  start D11 bring-up — characterise the partial progress.
+
+### Files modified / state snapshot
+- `PLAN.md` — refactored to phase-level view; Current Status updated for test.98.
+- `phase5/notes/phase5_progress.md` — Path B section added; current state block
+  updated with test.98 result.
+- `phase5/logs/test.98.journal` — full kernel log for test.98 run (NEW).
+- `phase5/logs/test.98.stage0.partial` — partial stage0 log (header only before
+  the 23:02 shutdown; kept for provenance, not for analysis).
+- `phase5/logs/test.97.stage0` — restored to pre-test.98 clean state.
+- `phase5/work/drivers/.../pcie.c` — still has test.98 probes (pointer-chain
+  reads). Needs rewrite for test.99 D11 wrapper reads before next run.
+- `phase5/work/test-staged-reset.sh` — still labelled test.97. Needs update to
+  test.99 labels + LOG filename before next run.
 
 ## test.96 RESULT: CRASHED after 6 words — HANG CONFIRMED at fn 0x1624c via binary analysis
 

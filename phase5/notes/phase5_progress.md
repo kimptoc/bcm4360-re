@@ -461,3 +461,54 @@ we avoid that crash but fall into the wait loop crash instead.
 3. **Once ARM can be released without crashing**, re-enable the FW wait loop
    with a short timeout and appropriate error handling, then investigate the
    firmware ASSERT at `hndarm.c:397` and NVRAM configuration.
+
+## Phase 5.2: Current state (as of 2026-04-16, POST test.98 — Path B triggered)
+
+Tests 26–97 are logged in `phase5/logs/test.*.journal` and not re-summarized here
+— individual-test detail lives in commit messages and logs, not this file.
+
+**Where we are:**
+- ARM release crash resolved; firmware now executes through early init.
+- test.97: wait-struct at `*0x62ea8` read garbage heap (field20=0x66918f11,
+  field24=0x5febdbeb, field28=0x84f54b2a). Wait-loop-setup code (which writes
+  field24=1, field28=0) never ran → **fn 0x1624c is NOT the hang site**. The
+  hang is upstream of fn 0x1624c.
+- test.98 (ran 2026-04-16 23:02, log `phase5/logs/test.98.journal`, partial
+  stage0 capture `phase5/logs/test.98.stage0.partial`):
+  **step1 = TCM[0x58f08] = 0x00000000** → D11 object `field0x18` never set →
+  si_attach's D11 core initialization is the hang region, not the PHY wait.
+  Firmware counter progressed to 0x43b1 then froze (T+200ms RUNNING, T+400ms
+  FROZEN; clean 2s timeout exit, no host crash).
+
+**Revised working hypothesis:** si_attach cannot complete D11 core bring-up —
+the D11 core object is never linked into the global at `*0x58f08`. A
+prerequisite (clock/power/reset-state/interrupt routing) is missing.
+
+**Decision: Path B** (below). The original Path A (wait-struct downstream
+investigation) is shelved until/unless D11 prerequisites are satisfied and the
+hang moves downstream into fn 0x16f60 / fn 0x1624c territory.
+
+## Phase 5.2: Next steps — Path B (D11 prerequisite checks)
+
+Upstream prerequisite checks (GitHub issue #11 recommendation #3 —
+"earliest unmet prerequisite: clock/power/interrupt-mask/core-state"). Probe
+order, cheapest first:
+
+1. **D11 core BCMA state** (test.99) — read D11 core wrapper IOCTL/IOST/RESET_CTL
+   via chip.c bus ops. Is the D11 core out of reset and enabled at ARM-release
+   time, and does si_kattach leave it in the expected state? Also sample at
+   T+200ms to see whether firmware changed the D11 core state before freezing.
+2. **D11 core clock** — check ChipCommon clock-request registers and PMU
+   resource-up status for the D11 clock domain. A missing HT/ALP request is a
+   classic completion-never-fires cause.
+3. **D11 power** — check PMU `min_res_mask` / `res_state` for D11-related
+   resources. If the PHY rail isn't up, the PHY never signals done.
+4. **Interrupt mask / routing** — the firmware may poll a flag that an ISR is
+   supposed to set. Dump D11 `IntMask`/`IntStatus` (MMIO) and the PCIe MSI
+   mask. If the ISR path never fires, a polled-from-ISR flag stays stuck.
+5. **Compare to wl driver reset trace** — if any of the above is wrong, check
+   `phase5/logs/wl-trace` for the sequence the proprietary driver uses to
+   bring the D11 core up before firmware start.
+
+Each probe follows the established pattern: stage0 code dump → targeted
+TCM/MMIO read at T+200ms → commit pre-test + post-test notes.
