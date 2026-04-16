@@ -1,6 +1,6 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, preparing test.86)
+## Current state (2026-04-16, EXECUTING test.86)
 
 Git branch: main (pushed to origin)
 
@@ -48,9 +48,35 @@ Git branch: main (pushed to origin)
 6. Exit at T+5s MAX to avoid PCH crash (crash scales with loop length)
 7. Restore RP cleanly
 
-**Alternative approach (if debug regs don't work):**
-- Write to SBTOPCIMAILBOX (0x48 in PCIe2 core) — PCI-CDC firmware should respond
-  to mailbox interrupt if IRQs are enabled
+**Implementation details:**
+1. Keep all pre-ARM setup from test.85 (BBPLL, BusMaster, ASPM, STATUS/DevSta clearing)
+2. Release ARM, start 3s monitoring loop (15 outer × 200ms)
+3. At outer==10 (T+2s):
+   - Read TCM counter (0x9d000) before switching cores
+   - Select ARM CR4 core, read wrapper IOCTL+RESET_CTL
+   - Halt CPU by setting CPUHALT (0x0020) in wrapper IOCTL
+   - Dump ARM core registers 0x00-0xFF (64 words)
+   - Dump ARM wrapper registers 0x1400-0x14FF
+   - Switch back to ChipCommon, re-read TCM counter after halt
+4. Exit at T+3s max — crash scales ~90-100% of loop length
+5. Restore RP cleanly
+
+**If ARM dump doesn't reveal PC, next step:**
+- test.87: Write to SBTOPCIMAILBOX (0x48 in PCIe2 core) to trigger mailbox interrupt
+  PCI-CDC firmware should respond if IRQs are enabled
+
+## Run test.86 (after build):
+  cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
+
+## After test — what to do:
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.86" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.86.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.86.*'`
+3. Key things to check:
+   a. Did we SURVIVE? (RP settings restored = yes)
+   b. ARM wrapper IOCTL — was CPUHALT already set?
+   c. ARM core registers — any recognizable debug register values?
+   d. TCM counter frozen or was-running?
+   e. Did halting the CPU change anything?
 
 ## Key confirmed findings
 - BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
