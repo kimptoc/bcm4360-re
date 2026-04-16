@@ -37,38 +37,78 @@ the state si_attach expects. Per GitHub issue #11 recommendation #3.
 
 **Pivot: Path B — D11 core prerequisite checks (phase5_progress.md).**
 
-### test.99 plan — D11 core BCMA state probe
+### Revised interpretation (advisor input + test.89 context)
 
-Goal: determine whether the D11 core is out of reset and clocked at ARM-release
-time, and whether firmware mutates the D11 core state before it freezes.
+test.89 proved firmware actually freezes at T+12ms — not at T+200–400ms.
+The counter at 0x9d000 is a static constant (0x43b1) written exactly once
+by fn 0x673cc, not a running tick. Sequence is:
 
-Probes (stage0):
-1. Dump D11 core wrapper registers (IOCTL @0x408, IOST @0x40C, RESET_CTL @0x800)
-   via `brcmf_chip_iscoreup()` / `buscore_prep_addr()` path (chip.c bus ops).
-   Take reading PRE-ARM-release.
-2. Repeat the same read at T+200ms (during RUNNING window) and T+400ms (during
-   FROZEN window). If D11 state is identical at both samples → firmware never
-   touched the D11 core → si_attach bailed before D11 bring-up. If mutated
-   → firmware is trying to bring D11 up but failing mid-sequence.
-3. Also dump ChipCommon PMU `min_res_mask` / `max_res_mask` / `res_state` for
-   context (already captured in existing test harness — keep in test.99).
+```
+T+0ms:  ctr = 0                        (ARM released)
+T+2ms:  ctr = 0x58c8c                  (intermediate write)
+T+12ms: ctr = 0x43b1 + console init    (fn 0x673cc stores static; firmware
+                                        hangs at this exact point)
+T+12ms onward: nothing changes         (sharedram never writes)
+```
+
+Therefore:
+- test.98 reading `*0x58f08 = 0` at T+200ms was taken ~188ms AFTER the real
+  freeze. It is consistent with "hang is before D11 obj linkage" but DOES
+  NOT pinpoint the hang to D11 init specifically.
+- The proven hang location from earlier tests is
+  `pciedngl_probe → 0x67358 → 0x670d8 → deep init`; the fn 0x16f60 / fn
+  0x1624c chain was called-graph analysis, not execution evidence.
+- Jumping straight to D11 BCMA wrapper reads is premature — we need better
+  hang localisation first.
+
+### test.99 plan — console ring + multi-timepoint pointer sampling
+
+Goal: narrow the hang location using CHEAP, READ-ONLY probes before
+committing to D11 BCMA wrapper reads (which add bus-ops scaffolding and
+have a bigger blast radius if anything goes wrong).
+
+Probes (stage0, all read-only BAR2 accesses):
+
+1. **Console ring dump at T+400ms** (highest-signal probe).
+   - Read 256 bytes of TCM starting at the console-text base. Decode as ASCII
+     to text on the host side (skip unprintable bytes). If firmware printed
+     an ASSERT, a function-entry trace, or any identifiable string past
+     "pciedngl_probe called", hang location narrows to that call.
+   - Base address: locate via `console_ptr[0x9cc5c]` — when firmware is
+     running this holds a TCM pointer (e.g. 0x8009ccbe → text at 0x9ccbe).
+     Walk back from there to the ring start if needed. (Test.94 already
+     identified 0x9CCC0–0x9CDD8 as decoded console strings.)
+
+2. **Multi-timepoint TCM-pointer sampling** at T+20ms, T+200ms, T+400ms,
+   T+800ms (T+20ms is the first sample AFTER firmware freezes):
+   - `*0x9d000` — the 0x43b1 static (sanity check freeze detection works).
+   - `*0x58f08` — D11 obj `field0x18` (was 0 at T+200ms).
+   - `*0x62ea8` — wait-struct pointer (was garbage/uninit in test.97).
+   - `*0x62a14` — global seen in fn 0x2208 analysis (used by
+     `pciedngl_probe` path).
+   - If all four are identical across all timepoints → firmware is hard-
+     frozen after T+12ms and none of these globals got populated.
+   - If any change at T+200/400/800 → firmware has SOME delayed execution
+     path (e.g. interrupt-context code, DPC) we haven't accounted for.
+
+3. **Sharedram + fw_init re-check** at the same timepoints (already in the
+   existing T+200ms scan; extend to finer granularity).
 
 Implementation notes:
 - Reuse existing stage=0 dispatch in `brcmf_pcie_exit_download_state()`.
-- D11 core enumerator index: derive from `brcmf_chip_get_core()` for
-  BCMA_CORE_80211 (or equivalent) in chip.c.
-- For reset_ctl/IOCTL offsets, model after how chip.c handles ARM CR4.
-- Probe read-only only — do NOT write D11 wrapper registers yet (would risk
-  the same PCIe-bus crash we hit with ARM CR4 writes in tests 19-20).
+- `brcmf_pcie_read_ram32()` is the safe TCM read path — reuse, don't write.
+- Keep the re-mask loop structure intact (defeats 3s periodic events).
+- NO chip.c bus-ops, NO D11 BCMA wrapper reads yet — push that to test.100
+  if console + pointer sampling don't narrow the hang.
 
 After test.99 reading:
-- If D11 held in reset (RESET_CTL bit 0 = 1) pre-firmware → si_kattach /
-  enter_download_state didn't bring it out → host-side bring-up gap.
-- If D11 out of reset pre-firmware AND clocks present AND state unchanged at
-  T+400ms → firmware chooses not to touch D11 (hang is purely in si_attach
-  CPU-side logic, e.g. a malloc / NVRAM / global-init loop).
-- If D11 state changes between T+200 and T+400 → firmware got far enough to
-  start D11 bring-up — characterise the partial progress.
+- If console shows a text past "pciedngl_probe called" → hang is later than
+  currently thought; analyse the printed text for the failing subsystem.
+- If console is frozen at "pciedngl_probe called" and pointers unchanged →
+  hang is in pciedngl_probe BEFORE any subsystem logs → proceed to test.100
+  with D11 BCMA wrapper reads (Path B step 1).
+- If pointers change between T+20 and T+800 → delayed code path exists;
+  characterise which pointer moves and when.
 
 ### Files modified / state snapshot
 - `PLAN.md` — refactored to phase-level view; Current Status updated for test.98.
