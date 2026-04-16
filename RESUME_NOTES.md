@@ -1,10 +1,11 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, PENDING test.89)
+## Current state (2026-04-16, RUNNING test.89)
 
 Git branch: main (pushed to origin)
-test.88 completed (CRASHED during cleanup, but data obtained).
-Next: test.89 — high-frequency sampling to determine if 0x9d000 is counter or static.
+Module built successfully. About to run test.89.
+Test samples TCM[0x9d000] at 1ms intervals for 100ms, then 2s masking loop.
+Key question: is 0x43b1 a counter value or a static constant?
 
 ## test.88 RESULT: CRASHED in cleanup — but all data obtained
 
