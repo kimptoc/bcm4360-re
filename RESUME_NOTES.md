@@ -1,68 +1,76 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, EXECUTING test.84)
+## Current state (2026-04-16, EXECUTING test.85)
 
 Git branch: main (pushed to origin)
 
-## test.83 RESULT: CRASHED in timeout path (same as test.82)
+## test.84 RESULT: CRASHED at ~T+30s (between T+28s and timeout message)
 
-**test.83 proved INTMASK/MBMASK theory DEAD. Firmware still hangs in pcidongle_probe.**
+**test.84 proved BAR hypothesis DEAD — device-side BARs are valid after SBR.**
 
-### test.83 key findings:
-1. Wrote INTMASK=0x00FF0300 and MBMASK=0x00FF0300 pre-ARM
-2. Readback: INTMASK=0x00000300 MBMASK=0x00000300 — upper byte 0xFF0000 rejected (PCIe2 rev=1)
-3. 0xFF0000 = int_d2h_db mask (MSGBUF feature, not supported on this older core)
-4. Firmware still hung: sharedram=0xffc70038 unchanged across 30s
-5. CRASHED at "TIMEOUT — FW silent for 30s — minimal check:" — same pattern as test.82
-6. Even "minimal" 3-read final scan crashes. ALL BAR2 reads in timeout path are fatal.
-7. Console text unchanged: pciedngl_probe called, firmware hung
-8. BSS 0x9d000=0x000043b1 (timer stopped at T+2s as usual)
+### test.84 key findings:
+1. Device-side config dump: CMD_STA=0x08100006 BAR0=0xb0600004 BAR1=0x00000000 BAR2=0xb0400004
+2. BAR2_CONFIG(0x4E0)=0x00000016 BAR3_CONFIG(0x4F4)=0x00000000
+3. **STATUS bit 11 (Signaled Target Abort) is SET** — residual error from SBR
+4. BARs are valid (non-zero, proper addresses) — BAR-zero hypothesis DEAD
+5. Firmware still freezes: sharedram=0xffc70038 unchanged across 28s
+6. Machine crashed at ~T+30s (same as test.82/83 — crash at loop end)
+7. Console text unchanged from previous tests (pciedngl_probe called, firmware hung)
 
-### test.83 cleanup applied to test.84:
-- INTMASK/MBMASK theory DEAD — writes kept (harmless) but not the fix
-- ALL BAR2 reads removed from timeout path (test.82 + test.83 both crashed here)
-- Timeout path now: print TIMEOUT → restore RP → return cleanly
+### test.84 cleanup applied to test.85:
+- BAR hypothesis DEAD — BARs valid
+- NEW THEORY: STATUS error bits (bit 11 = Signaled Target Abort) may cause firmware to spin
+- Clear STATUS RW1C error bits via CONFIGADDR/CONFIGDATA before ARM release
+- Walk device-side capability list and dump PCIe Express cap registers (DevSta, LnkSta)
+- Clear DevSta RW1C error bits too
+- Reduce loop from 30s to 20s to avoid the T+30s crash
 
-## test.84 PLAN (about to run)
+## test.85 PLAN (about to run)
 
-**Goal:** Dump device-side config space via CONFIGADDR/CONFIGDATA BEFORE ARM release.
-Hypothesis: After SBR, device-side BAR registers may be zero/garbage. Firmware's
-pcidongle_probe reads these to set up DMA/translation. If invalid, firmware spins.
+**Goal:** Clear device-side STATUS/DevSta error bits and dump full PCIe caps before ARM release.
+Hypothesis: After SBR, STATUS bit 11 (Signaled Target Abort) is set. Firmware reads its own
+config STATUS in pcidongle_probe, sees the error, and spins/aborts PCIe init.
 
-**Evidence:** brcmf_pcie_reset_device() explicitly saves/restores config regs (0x04,
-0x4E0, 0x4F4, etc.) after watchdog reset — code exists because they CAN be lost.
+**Evidence:** test.84 CMD_STA=0x08100006 has STATUS=0x0810, bit 11 (Signaled Target Abort) SET.
+brcmf_pcie_reset_device() saves/restores config regs after watchdog reset, but doesn't clear
+STATUS error bits — our SBR path does even less.
 
-**Key changes from test.83:**
-1. ADD: Device-side config dump via CONFIGADDR/CONFIGDATA before ARM release (safe, ARM not running)
-   - Registers: STATUS_CMD(0x04), BAR0(0x10), BAR1(0x14), BAR2(0x18), BAR2_CONFIG(0x4E0), BAR3_CONFIG(0x4F4)
-2. FIX: Remove ALL BAR2 reads from timeout path (test.82 + test.83 both crashed here)
-   - Timeout now just prints message, restores RP, returns
-3. KEEP: INTMASK/MBMASK writes (harmless even though theory dead)
+**Key changes from test.84:**
+1. ADD: Clear STATUS RW1C error bits (write 0xFFFF0000 | CMD to offset 0x04) before ARM release
+2. ADD: Walk device-side capability list, dump PCIe Express cap registers (DevCtl+Sta, LnkCtl+Sta)
+3. ADD: Clear DevSta RW1C error bits if any set
+4. ADD: Read PM_CSR (offset 0x4C) for power management state
+5. FIX: Reduce loop from 150 (30s) to 100 (20s) — firmware dead by T+2s, avoids T+30s crash
+6. FIX: Remove T+20s diagnostic (unreachable with 20s loop)
+7. KEEP: Everything from test.84 (config dump, INTMASK/MBMASK, no BAR2 in timeout)
 
 **Expected outcomes:**
-- Machine SURVIVES (no BAR2 reads in timeout path)
-- Config dump shows whether BAR addresses are valid or zero/garbage
-- If BARs are zero: explains firmware hang → next step is to pre-load correct values
-- If BARs look correct: firmware hang is caused by something else
+- Machine SURVIVES (20s loop avoids the T+30s crash)
+- STATUS cleared successfully (readback shows bit 11 gone)
+- PCIe cap dump shows additional context (link state, device status)
+- If firmware STILL hangs: STATUS clearing alone doesn't fix it → need to look at
+  SBTOPCIE translation or get ARM PC via debug registers
+- If firmware PROCEEDS: STATUS clearing is the fix → BREAKTHROUGH
 
-**If BARs look correct, next hypotheses:**
-- SB-to-PCIe translation window registers (separate from config BARs)
-- DMA/IOMMU: firmware tries DMA during pcidongle_probe, IOMMU blocks it
-  (test: intel_iommu=off kernel parameter)
-- Force firmware trap: corrupt a data structure to trigger RTE trap handler
-- Disassemble firmware binary to identify pcidongle_probe spin loop from stack addresses
+**If firmware still hangs, next hypotheses (in priority order):**
+1. Get ARM PC via debug registers (halt CPU, read PC to find exact spin location)
+2. Force firmware trap to dump CPU state
+3. SBTOPCIE translation window setup (firmware may fail to write these)
+4. Disassemble firmware binary near "pciedngl_probe" to find spin loop
+5. Try intel_iommu=off kernel parameter
 
-## Run test.84 (after build):
+## Run test.85 (after build):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
 
 ## After test — what to do:
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.84" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.84.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.84.*'`
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.85" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.85.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.85.*'`
 3. Key things to check:
    a. Did we SURVIVE? (RP settings restored = yes)
-   b. Device-side config dump — are BAR addresses valid or zero?
-   c. Did sharedram change? → BREAKTHROUGH if so
-   d. Console dump — any different from test.83?
+   b. STATUS cleared? (before=0x08100006 → after should have bit 11 gone)
+   c. PCIe cap dump — any additional error bits in DevSta/LnkSta?
+   d. Did sharedram change? → BREAKTHROUGH if so
+   e. Console dump — any different from test.84?
 
 ## Key confirmed findings
 - BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
@@ -91,11 +99,15 @@ pcidongle_probe reads these to set up DMA/translation. If invalid, firmware spin
 - INTMASK/MBMASK: wrote 0x00FF0300, readback 0x00000300 (0xFF0000 rejected, PCIe2 rev=1) ✗ (test.83)
 - INTMASK/MBMASK theory DEAD ✗ (test.83)
 - ALL BAR2 reads in timeout path crash (test.82 + test.83 both crashed at "minimal" scan)
+- Device-side BARs valid after SBR: BAR0=0xb0600004 BAR1=0 BAR2=0xb0400004 ✓ (test.84)
+- Device-side STATUS has Signaled Target Abort (bit 11) SET after SBR ✓ (test.84)
+- BAR hypothesis DEAD (BARs valid) ✗ (test.84)
+- Loop crashes at ~T+30s consistently (test.82/83/84 all crashed between T+28s and timeout)
 - select_core(BCMA_CORE_PCIE2) after firmware starts → CRASH ✗ (test.66/76)
 - PCIe2 wrapper pre-ARM: IOCTL=0x1 RESET_CTL=0x0 (safe to read/write pre-ARM) ✓
 - PCIe2 BAC pre-ARM: INTMASK=0x0, MBMASK=0x0, H2D0=0xffffffff, H2D1=0xffffffff ✓
 
-## Console text decoded (test.78/79/80/82/83 T+3s)
+## Console text decoded (test.78/79/80/82/83/84 T+3s)
 Ring buffer at 0x9ccc7, write ptr 0x9ccbe (wrapped):
 - "125888.000 Chipcommon: rev 43, caps 0x58680001, chipst 0x9a4d pmurev 17, pmucaps 0x10a22b11"
 - "125888.000 wl_probe called"
@@ -112,7 +124,7 @@ Firmware prints CDC protocol banner (not FullDongle MSGBUF).
 ## Key files
 - Source: phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 - Test script: phase5/work/test-staged-reset.sh
-- Logs: phase5/logs/test.84.journal (after test)
+- Logs: phase5/logs/test.85.journal (after test)
 - Build: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build && make -C "$KDIR" M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
 
 ## Test history summary (recent)
@@ -132,4 +144,5 @@ Firmware prints CDC protocol banner (not FullDongle MSGBUF).
 - test.81: CRASHED — MSI enable without IRQ handler; crash in cleanup (RP restore while MSI active)
 - test.82: SURVIVED 30s, CRASHED in final scan — MSI_count=0 across 30s; MSI theory DEAD
 - test.83: CRASHED in timeout path — INTMASK/MBMASK theory DEAD; even 3-read final scan crashes
-- test.84: PENDING — device-side config dump; NO BAR2 reads in timeout; clean exit
+- test.84: CRASHED at ~T+30s — BARs valid, STATUS bit 11 SET; BAR hypothesis DEAD
+- test.85: PENDING — clear STATUS/DevSta error bits; walk PCIe caps; 20s loop
