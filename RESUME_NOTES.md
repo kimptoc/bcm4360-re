@@ -1,62 +1,68 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, EXECUTING test.83)
+## Current state (2026-04-16, EXECUTING test.84)
 
 Git branch: main (pushed to origin)
 
-## test.82 RESULT: SURVIVED 30s, then CRASHED in final TCM scan
+## test.83 RESULT: CRASHED in timeout path (same as test.82)
 
-**test.82 proved MSI theory DEAD. Machine survived the masking loop but
-crashed during the oversized final TCM scan (50+ BAR2 reads).**
+**test.83 proved INTMASK/MBMASK theory DEAD. Firmware still hangs in pcidongle_probe.**
 
-### test.82 key findings:
-1. MSI_count=0 at EVERY 2s sample (T+2s through T+28s) → firmware NEVER fires MSIs
-2. MSI_EN=1 confirmed (MSGCTL=0x0081), IRQ handler registered, no crash during 30s loop
-3. sharedram=0xffc70038 unchanged — firmware still hangs in pcidongle_probe
-4. TCM[0x9a000-0x9af00] zeroed by T+2s (firmware clearing BSS)
-5. TCM[0x9d000] changed to 0x000043b1 (counter/timer stopped = firmware hung)
-6. Console text identical to previous tests: pciedngl_probe called, then hung
-7. CRASHED reading TCM[0x78000] during final scan (4th address in 50+ loop)
+### test.83 key findings:
+1. Wrote INTMASK=0x00FF0300 and MBMASK=0x00FF0300 pre-ARM
+2. Readback: INTMASK=0x00000300 MBMASK=0x00000300 — upper byte 0xFF0000 rejected (PCIe2 rev=1)
+3. 0xFF0000 = int_d2h_db mask (MSGBUF feature, not supported on this older core)
+4. Firmware still hung: sharedram=0xffc70038 unchanged across 30s
+5. CRASHED at "TIMEOUT — FW silent for 30s — minimal check:" — same pattern as test.82
+6. Even "minimal" 3-read final scan crashes. ALL BAR2 reads in timeout path are fatal.
+7. Console text unchanged: pciedngl_probe called, firmware hung
+8. BSS 0x9d000=0x000043b1 (timer stopped at T+2s as usual)
 
-### test.82 cleanup:
-- MSI code entirely removed (theory dead)
-- Final TCM scan reduced to 3 reads: sharedram, console_ptr, fw_init_done
+### test.83 cleanup applied to test.84:
+- INTMASK/MBMASK theory DEAD — writes kept (harmless) but not the fix
+- ALL BAR2 reads removed from timeout path (test.82 + test.83 both crashed here)
+- Timeout path now: print TIMEOUT → restore RP → return cleanly
 
-## test.83 PLAN (about to run)
+## test.84 PLAN (about to run)
 
-**Goal:** Test whether firmware's pcidongle_probe is polling PCIe2 INTMASK/MBMASK
-waiting for the host to signal interrupt readiness.
+**Goal:** Dump device-side config space via CONFIGADDR/CONFIGDATA BEFORE ARM release.
+Hypothesis: After SBR, device-side BAR registers may be zero/garbage. Firmware's
+pcidongle_probe reads these to set up DMA/translation. If invalid, firmware spins.
 
-**Key changes from test.82:**
-1. SET INTMASK=0x00FF0300 and MBMASK=0x00FF0300 pre-ARM (was cleared to 0)
-   - Values from brcmf_pcie_intr_enable(): int_d2h_db (0xFF0000) | int_fn0 (0x0300)
-   - Normal driver sets these AFTER sharedram, but PCI-CDC firmware may expect BEFORE
-2. REMOVE: all MSI code (proven irrelevant by test.82)
-3. FIX: final scan reduced from 50+ reads to 3 (sharedram, console_ptr, fw_init_done)
-   - test.82 crashed at TCM[0x78000] during the oversized final scan
+**Evidence:** brcmf_pcie_reset_device() explicitly saves/restores config regs (0x04,
+0x4E0, 0x4F4, etc.) after watchdog reset — code exists because they CAN be lost.
+
+**Key changes from test.83:**
+1. ADD: Device-side config dump via CONFIGADDR/CONFIGDATA before ARM release (safe, ARM not running)
+   - Registers: STATUS_CMD(0x04), BAR0(0x10), BAR1(0x14), BAR2(0x18), BAR2_CONFIG(0x4E0), BAR3_CONFIG(0x4F4)
+2. FIX: Remove ALL BAR2 reads from timeout path (test.82 + test.83 both crashed here)
+   - Timeout now just prints message, restores RP, returns
+3. KEEP: INTMASK/MBMASK writes (harmless even though theory dead)
 
 **Expected outcomes:**
-- Machine SURVIVES (final scan fix)
-- If sharedram changes: INTMASK/MBMASK was the missing piece → BREAKTHROUGH
-- If firmware still hangs: INTMASK/MBMASK not what it's waiting for
+- Machine SURVIVES (no BAR2 reads in timeout path)
+- Config dump shows whether BAR addresses are valid or zero/garbage
+- If BARs are zero: explains firmware hang → next step is to pre-load correct values
+- If BARs look correct: firmware hang is caused by something else
 
-**If INTMASK/MBMASK doesn't fix the hang, next hypotheses:**
-- SB-to-PCIe translation window registers (firmware can't map host memory)
+**If BARs look correct, next hypotheses:**
+- SB-to-PCIe translation window registers (separate from config BARs)
 - DMA/IOMMU: firmware tries DMA during pcidongle_probe, IOMMU blocks it
   (test: intel_iommu=off kernel parameter)
 - Force firmware trap: corrupt a data structure to trigger RTE trap handler
+- Disassemble firmware binary to identify pcidongle_probe spin loop from stack addresses
 
-## Run test.83 (after build):
+## Run test.84 (after build):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
 
 ## After test — what to do:
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.83" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.83.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.83.*'`
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.84" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.84.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.84.*'`
 3. Key things to check:
    a. Did we SURVIVE? (RP settings restored = yes)
-   b. INTMASK/MBMASK readback — did the writes stick?
+   b. Device-side config dump — are BAR addresses valid or zero?
    c. Did sharedram change? → BREAKTHROUGH if so
-   d. Console dump — different from previous tests?
+   d. Console dump — any different from test.83?
 
 ## Key confirmed findings
 - BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
@@ -82,11 +88,14 @@ waiting for the host to signal interrupt readiness.
 - pci_enable_msi works (ret=0), device-side sees ADDR=0xfee00738 ✓ (test.81)
 - MSI with IRQ handler: MSI_count=0 across 30s → firmware NEVER fires MSIs ✗ (test.82)
 - MSI theory DEAD ✗ (test.82)
+- INTMASK/MBMASK: wrote 0x00FF0300, readback 0x00000300 (0xFF0000 rejected, PCIe2 rev=1) ✗ (test.83)
+- INTMASK/MBMASK theory DEAD ✗ (test.83)
+- ALL BAR2 reads in timeout path crash (test.82 + test.83 both crashed at "minimal" scan)
 - select_core(BCMA_CORE_PCIE2) after firmware starts → CRASH ✗ (test.66/76)
 - PCIe2 wrapper pre-ARM: IOCTL=0x1 RESET_CTL=0x0 (safe to read/write pre-ARM) ✓
 - PCIe2 BAC pre-ARM: INTMASK=0x0, MBMASK=0x0, H2D0=0xffffffff, H2D1=0xffffffff ✓
 
-## Console text decoded (test.78/79/80/82 T+3s)
+## Console text decoded (test.78/79/80/82/83 T+3s)
 Ring buffer at 0x9ccc7, write ptr 0x9ccbe (wrapped):
 - "125888.000 Chipcommon: rev 43, caps 0x58680001, chipst 0x9a4d pmurev 17, pmucaps 0x10a22b11"
 - "125888.000 wl_probe called"
@@ -103,7 +112,7 @@ Firmware prints CDC protocol banner (not FullDongle MSGBUF).
 ## Key files
 - Source: phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 - Test script: phase5/work/test-staged-reset.sh
-- Logs: phase5/logs/test.83.journal (after test)
+- Logs: phase5/logs/test.84.journal (after test)
 - Build: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build && make -C "$KDIR" M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
 
 ## Test history summary (recent)
@@ -122,4 +131,5 @@ Firmware prints CDC protocol banner (not FullDongle MSGBUF).
 - test.80: SURVIVED — stack-finder scan found only 6 scattered hits; no stack cluster
 - test.81: CRASHED — MSI enable without IRQ handler; crash in cleanup (RP restore while MSI active)
 - test.82: SURVIVED 30s, CRASHED in final scan — MSI_count=0 across 30s; MSI theory DEAD
-- test.83: PENDING — INTMASK/MBMASK set to 0x00FF0300 pre-ARM; minimal final scan; no MSI
+- test.83: CRASHED in timeout path — INTMASK/MBMASK theory DEAD; even 3-read final scan crashes
+- test.84: PENDING — device-side config dump; NO BAR2 reads in timeout; clean exit
