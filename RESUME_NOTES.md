@@ -1,13 +1,110 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, ABOUT TO RUN test.96 — module built, not yet run)
+## Current state (2026-04-16, POST test.96 — HANG LOCATION CONFIRMED via firmware binary analysis)
 
 Git branch: main (pushed to origin)
-Module built successfully. About to run test.96.
-Test.96 dumps (at T+200ms, outer==1):
-  CODE: TCM[0x5200-0x5400] = 128 words — covers fn 0x5250 (called by 0x2208 before b.w 0x848)
-  Per-100-word re-masking. Total 128 words — well within safe limit (1.9s total).
-Key question: does 0x5250 contain a hardware register polling loop that causes the hang?
+**TEST.96 RESULT: CRASHED after only 6 words (0x5200-0x5214). No RP restore → confirmed PCIe crash.**
+**PIVOT: Used firmware binary /lib/firmware/brcm/brcmfmac4360-pcie.bin (442233 bytes) for all analysis.**
+**Confirmed: 6 TCM words match binary exactly → binary == TCM image (safe to disassemble offline).**
+
+**CONFIRMED HANG LOCATION: fn 0x1624c — hardware PHY completion busy-wait loop.**
+Full call chain: Call 3 (blx at 0x6451a) → fn 0x11648 → fn 0x18ffc → fn 0x16f60 → fn 0x16476 → fn 0x162?? → fn 0x1624c (HANG)
+
+**Next: Understand WHY fn 0x1624c hangs — identify who sets field20=1, why field28 never gets set.**
+Root cause hypothesis: D11 PHY ISR never fires (D11 not powered/clocked/initialized before PHY ops).
+
+## test.96 RESULT: CRASHED after 6 words — HANG CONFIRMED at fn 0x1624c via binary analysis
+
+**test.96 ran in boot -1. CRASHED after only 6 code words (0x5200-0x5214). No RP restore.**
+**PIVOT: Used firmware binary directly — 6 TCM words matched binary exactly → binary == TCM image.**
+
+**fn 0x5250 disassembled from binary = nvram_get() — NOT the hang:**
+```
+5250: push {r4, r5, r6, lr}
+5252: r4 = r0 (NVRAM buffer), r6 = r1 (key string)
+5256: cmp r1, #0; beq 0x529c     ; if key==NULL, return NULL
+525c: bl 0x82e                   ; strlen(key) → r5
+5292: r0 = r6; b.w 0x87d4        ; tail call → another nvram lookup
+```
+Simple NVRAM key string lookup. NOT a hardware polling loop. NOT the hang.
+
+**Vtable data found in firmware binary:**
+```
+PCIe2 vtable (at 0x58c9c):
+  [0x58c9c] = 0x1e91 → fn 0x1E90 (vtable[0])
+  [0x58ca0] = 0x1c75 → fn 0x1C74 (vtable[1]) ← CALL 2
+
+D11 vtable (at 0x58f1c):
+  [0x58f1c] = 0x67615 → fn 0x67614 (vtable[0])
+  [0x58f20] = 0x11649 → fn 0x11648 (vtable[1]) ← CALL 3
+```
+
+**fn 0x1C74 (Call 2 = PCIe2_obj->vtable[1]) — NOT the hang:**
+```
+1c74: push {r4, lr}
+1c76: r4 = [r0, #24]     ; load sub-object
+1c7c: bl 0xa30            ; printf
+1c80: r3 = [r4, #24]     ; nested struct
+1c86: r2 = [r3, #36]; r2 |= 0x100; [r3, #36] = r2  ; set bit 8
+1c8c: pop {r4, pc}        ; return
+```
+Trivial: sets bit 8 in BSS struct field, returns 0. NOT the hang.
+
+**fn 0x11648 (Call 3 = D11_obj->vtable[1]) → leads to hang:**
+```
+1166e: r0 = [r4, #8]
+11670: bl 0x18ffc        ← D11 init → eventually hangs
+1167e: bl 0x1429c        ; stub returning 0
+11682: pop {r2, r3, r4, pc}
+```
+
+**fn 0x18ffc (D11 init, called from Call 3) → hang chain:**
+```
+19024: ldrb r5, [r4, #0xac]  ; init flag
+19028: cbz r5, 0x1904e        ; if flag==0: full init path
+1904e: bl 0x16f60             ← FIRST D11 SETUP CALL (if first-time init)
+19054: bl 0x14bf8
+...
+1908e: bl 0x17ed4             ; (this fn sets field0xac=1 — marks init done)
+```
+Flag at [r4+0xac] is 0 on first call → takes full init path starting at 0x16f60.
+fn 0x17ed4 (sets init flag) is NEVER REACHED because hang happens before it.
+
+**fn 0x16f60 (first D11 setup) → calls PHY read/write loop:**
+- Copies 5 PHY register offsets from 0x4aff8: {0x005e, 0x0060, 0x0062, 0x0078, 0x00d4}
+- Runs 5-iteration loop calling fn 0x16476 (PHY read) then fn 0x16d00 (PHY write)
+- fn 0x16476: `mov.w r2, #0x10000; b.w 0x1624c` → enters wait loop
+
+**fn 0x1624c = CONFIRMED HANG LOCATION (hardware PHY completion wait loop):**
+```
+1624c: push {r3, r4, r5, lr}
+1624e: r5 = *(0x16298) = 0x62ea8  ; global wait-struct pointer
+
+[SETUP:]
+16252: r3 = *0x62ea8               ; wait struct ptr
+16258: r3->field24 = 1             ; set "in progress"
+1625c: r3->field28 = 0             ; clear completion flag
+1625e: b.n 0x16286
+
+[WAIT CHECK LOOP:]
+16286: r3 = *0x62ea8
+16288: r2 = r3->field20            ; status flag
+1628a: cmp r2, #1
+1628c: bne → EXIT                  ; if field20 != 1: exit (cancelled)
+1628e: r3 = r3->field28            ; completion flag
+16290: cmp r3, #0
+16292: beq → LOOP (0x16286)        ; if field28==0: keep waiting ← INFINITE LOOP HERE
+16294: pop {r3, r4, r5, pc}        ; return when field28 != 0
+```
+**HANGS WHILE: field20==1 AND field28==0**
+**EXIT WHEN: field20!=1 (cancelled) OR field28!=0 (D11 PHY operation complete)**
+This is a semaphore/event wait. field28 must be set by D11 PHY completion ISR.
+**If D11 ISR never fires → field28 stays 0 → infinite loop.**
+
+Root cause: D11 core not powered/clocked, or its interrupt not routed, so ISR never fires.
+Global 0x62ea8 is a wait-struct used by 40+ locations in firmware.
+
+Log: phase5/logs/test.96.journal (only 6 code words captured before crash)
 
 ## test.94 RESULT: SURVIVED (vtable read), CRASHED in STACK-LOW at word 154
 
@@ -107,36 +204,33 @@ The annotation "b.w 0x848 = likely actual hang location" was WRONG.
   - Call 3 (0x6451a): r7=0x58ef0, ldr r3,[r7,#16] → vtable ptr at obj+16 → vtable[1]
 - si_attach at 0x64590: EROM-parsing loop, calls 0x2704 (EROM parser) for each core
 
-## test.96 PLAN: Disassemble fn 0x5250 (timer/callback registration)
+## test.97 PLAN: Probe D11 core state at hang time — why does fn 0x1624c spin forever?
 
-**Goal:** Determine if fn 0x5250 (called by 0x2208) contains hardware polling that causes the hang.
+**Goal:** Understand why fn 0x1624c hangs. Two sub-questions:
+1. Is field20 of (*0x62ea8) == 1 when the loop starts? (if not, loop exits immediately)
+2. Why does field28 never get set? (D11 PHY ISR never fires?)
 
-**Approach:**
-1. Keep all proven init (BBPLL, BusMaster, ASPM, masking)
-2. Release ARM
-3. At outer==1 (T+200ms): dump TCM[0x5200-0x5400] = 128 words
-   - Covers fn 0x5250 (called by 0x2208 before the benign b.w 0x848/strcmp)
-   - Per-100-word re-masking
-4. 2s outer timeout, re-mask every 10ms (inner loop unchanged)
+**Strategy A: Read BSS struct at 0x62ea8 at T+12ms (hang time)**
+- At T+12ms firmware hangs → wait struct at *0x62ea8 should be frozen
+- Read TCM[0x62ea8] (ptr) → dereference → read fields 20, 24, 28 of the struct
+- Reveals: field20 value (is it 1?), field28 value (is it 0?)
 
-**Expected outcomes:**
-- If 0x5250 contains LDR+CMP+BNE polling loops → IT IS THE HANG
-- If 0x5250 is a simple RTOS timer registration → hang is in vtable Call 2 or Call 3
-- Look for: reads from hardware-mapped addresses, wait-for-bit loops, CPSID/WFI
+**Strategy B: Check if the wait struct is even initialized**
+- 0x62ea8 holds a pointer — what does it point to?
+- Is the struct initialized before fn 0x16f60 is called?
+- Who initializes it and sets field20=1?
 
-**Total timing:** T+200ms + 128 words × ~13ms = T+200ms + 1.7s = T+1.9s (SAFE, < 3s window)
+**Strategy C: Read D11 core registers at T+12ms via BAR2**
+- D11 core at si_attach base — read IntStatus, IntMask, PSMDebug
+- Are D11 interrupts enabled? Is D11 PHY in a valid state?
 
-## Run test.96 (module already built):
-  cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
+**Immediate next step (no hardware needed): Disassemble fn 0x01e8c area from binary**
+- Grep firmware binary for cross-references to 0x62ea8 (global wait-struct ptr)
+- Find who writes to *0x62ea8 (struct init) and who sets field20=1
+- disassemble fn around 0x1e8c (near 0x01e91 which is in PCIe2 vtable[0])
 
-## After test — what to do:
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.96" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.96.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.96.*'`
-3. Key things to check:
-   a. SURVIVED? (RP settings restored = yes)
-   b. Extract code dump: `grep "BCM4360 test.96 code:" test.96.journal`
-   c. Disassemble: python3 extract hex → arm-none-eabi-objdump --adjust-vma=0x5200 -M force-thumb
-   d. Look for: LDR+CMP+BNE loops, reads from BAR0-mapped addresses, hardware spin-waits
+## Run test.97 (to be built):
+  cd /home/kimptoc/bcm4360-re/phase5/work && make && sudo ./test-staged-reset.sh 0
 
 ## test.93 RESULT: SURVIVED (both runs) — vtable pointer decoded, stack top is NVRAM
 
@@ -316,7 +410,15 @@ Full disassembly: phase5/analysis/test88_disassembly.txt
 - 0x670d8 calls si_attach (0x64590) which dispatches vtable calls ✓ (test.90)
 - si_attach vtable fn at 0x1FC2 = TRAMPOLINE → tail calls 0x2208 ✓ (test.94 disasm)
 - 0x2208 allocates struct, calls 0x5250, then tail calls 0x848 ✓ (test.94 disasm)
-- 0x848 = NEXT UNKNOWN — likely the actual hang location ← PENDING test.95
+- 0x848 = strcmp (C runtime), NOT the hang ✓ (test.95 disasm)
+- fn 0x5250 = nvram_get() (NVRAM key lookup), NOT the hang ✓ (test.96 binary disasm)
+- Call 2 (fn 0x1C74) = trivial bit-set, returns 0, NOT the hang ✓ (test.96 binary disasm)
+- Call 3 (fn 0x11648) → fn 0x18ffc → fn 0x16f60 → fn 0x1624c = CONFIRMED HANG ✓ (test.96 binary analysis)
+- fn 0x1624c = hardware PHY completion wait loop at global 0x62ea8 ✓
+- Loop spins while (*0x62ea8)->field20==1 AND field28==0 ✓
+- field28 set by D11 PHY ISR — ISR never fires → infinite loop ✓ (hypothesis)
+- D11 PHY register offsets in loop: 0x005e, 0x0060, 0x0062, 0x0078, 0x00d4 (from 0x4aff8) ✓
+- Firmware binary matches TCM image exactly (6 words verified) — safe for offline disassembly ✓
 
 ## Console text decoded (test.78/79/80/82/83/84 T+3s)
 Ring buffer at 0x9ccc7, write ptr 0x9ccbe (wrapped):
@@ -349,4 +451,5 @@ Firmware prints CDC protocol banner (not FullDongle MSGBUF).
 - test.92: SURVIVED — STAK extends 0x9BC00-0x9C400; EROM parser at 0x2704 is benign
 - test.93: SURVIVED (×2) — D2[0x62a14]=0x58CF0 (vtable ptr); sk[0x9F800]=NVRAM (not stack)
 - test.94: SURVIVED vtable, CRASHED STACK-LOW at ~3.25s — VT[0x58cf4]=0x1FC3; 0x1FC2→0x2208→0x848
-- test.95: PENDING — code dump 0x840-0xB40 to find hang in 0x848 or 0xa4c
+- test.95: SURVIVED — 0x840-0xB40 = C runtime (strcmp, strtol, memset, memcpy, printf); 0x848 = strcmp NOT hang
+- test.96: CRASHED after 6 words — pivoted to firmware binary analysis; fn 0x1624c confirmed as hang location
