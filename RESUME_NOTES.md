@@ -1,16 +1,40 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, ABOUT TO RUN test.93 — module built, not yet run)
+## Current state (2026-04-16, ABOUT TO RUN test.94 — module built, not yet run)
 
 Git branch: main (pushed to origin)
-Module built successfully. About to run test.93.
-Test.93 dumps:
-  A. STACK-TOP: TCM[0x9F800-0xA000] = 128 words (find active frames above STAK fill)
-  B. DATA-62A14: TCM[0x62900-0x62B00] = 128 words (runtime vtable indirect at 0x62a14)
-  C. FN-63B38: TCM[0x63B00-0x63D00] = 128 words (core lookup function disassembly)
-All with per-100-word masking. Total 384 words — well within proven safe limit (704 in test.92).
-Key question: which blx r3 is the hang? (0x644dc, 0x644fc, or 0x6451a)
-Look for Thumb LR values: 0x644df, 0x644ff, 0x6451b in stack.
+Module built successfully. About to run test.94.
+Test.94 dumps (at T+200ms, outer==1):
+  A. VTABLE: TCM[0x58CD0-0x58D40] = 28 words — reads [0x58cf4] = actual hang function
+  B. STACK-LOW: TCM[0x9C400-0x9D000] = 192 words — active frames just above STAK fill
+All with per-100-word masking. Total ~220 words — well within proven safe limit.
+Key question: what function does [0x58cf4] point to? (that's the hang candidate called via blx r3 at 0x644dc)
+Also look for Thumb LR values in STACK-LOW: 0x644df, 0x644ff, 0x6451b, 0x67194, 0x67314
+
+## test.93 RESULT: SURVIVED (both runs) — vtable pointer decoded, stack top is NVRAM
+
+**test.93 ran twice (boot -2 at 12:02, boot -1 at 12:10), BOTH SURVIVED.**
+Both showed "TIMEOUT — FW silent for 2s — clean exit" and "RP settings restored".
+
+**Key findings from D2 (DATA-62A14) dump:**
+- D2[0x62a14] = 0x00058cf0 → vtable pointer for Call 1 (blx r3 at 0x644dc)
+- Vtable is at TCM[0x58cf0]; entry [+4] = TCM[0x58cf4] = function pointer for Call 1
+- D2[0x62994] = 0x18000000 (ChipCommon base — confirms si_t struct location)
+- D2[0x62ab0] = 0x58680001 (chipcaps — matches si_t from console output)
+- D2[0x62ad4] = 0x00004360 (chip_id = BCM4360 ✓)
+- D2[0x62ad8] = 0x00000003 (chip_rev = 3 ✓)
+- D2[0x62ae0] = 0x00009a4d (chipst ✓)
+
+**Key findings from SK (STACK-TOP) dump [0x9F800-0xA000]:**
+- 0x9FF1C–0xA0000: NVRAM data ("sromrev=11\0boardtype=0x0552\0boardrev=0x1101\0...")
+- 0x9F800–0x9FF1B: random/uninitialized data — NO Thumb LR values in TCM code range
+- CONCLUSION: 0x9F800–0xA000 is NOT active stack. Active frames are near STAK fill at 0x9C400.
+
+**What remains unknown:**
+- TCM[0x58cf4] = ??? (the actual function being called — not yet read)
+- Stack LR values (to confirm call depth and which vtable call hangs)
+
+Log: phase5/logs/test.93.journal
 
 ## test.92 RESULT: SURVIVED — STAK fill confirmed above 0x9BC00; EROM parser analyzed
 
@@ -119,23 +143,22 @@ Log: phase5/logs/test.89.journal
 Log: phase5/logs/test.91.journal
 Dump: phase5/analysis/test91_dump.txt (431 words: 0x64400-0x64ab8)
 
-## test.93 PLAN: Stack top + vtable data + core lookup fn (after test.92 showed STAK below 0x9C400)
+## test.94 PLAN: Vtable entries + active stack frames (after test.93 decoded vtable pointer)
 
-**Goal:** Find active stack frames and vtable function that is hanging.
+**Goal:** Read TCM[0x58cf4] = the function called via vtable (hang candidate); find active stack LR values.
 
 **Approach:**
 1. Keep all proven init (BBPLL, BusMaster, ASPM, masking)
 2. Release ARM
-3. At outer==1 (T+200ms): three dumps with per-100-word re-masking:
-   a. STACK-TOP: TCM[0x9F800-0xA000] = 128 words (outermost frames near TCM top)
-   b. DATA-62A14: TCM[0x62900-0x62B00] = 128 words (vtable indirect at 0x62a14)
-   c. FN-63B38: TCM[0x63B00-0x63D00] = 128 words (core lookup fn at 0x63b38)
+3. At outer==1 (T+200ms): two dumps with per-100-word re-masking:
+   a. VTABLE: TCM[0x58CD0-0x58D40] = 28 words (includes [0x58cf4] = Call 1 fn ptr)
+   b. STACK-LOW: TCM[0x9C400-0x9D000] = 192 words (active frames just above STAK fill)
 4. 2s timeout, re-mask every 10ms
 
 **Expected outcomes:**
-- STACK-TOP: see Thumb LR values 0x644df/0x644ff/0x6451b → which blx r3 is the hang
-- DATA-62A14: see [0x62a14] = vtable ptr, then [vtable_ptr+4] = function being called
-- FN-63B38: disassemble 0x63b38 (si_findcoreidx?) for understanding
+- VTABLE[0x58cf4]: function pointer → tells us which function is being called (hang candidate)
+- STACK-LOW: Thumb LR values 0x644df/0x644ff/0x6451b/0x67194/0x67314 → call depth at hang
+- Next step: if [0x58cf4] has valid address, dump that function's code
 
 ## test.92 PLAN: Stack dump near STAK + EROM parser dump (with per-100-word masking)
 
