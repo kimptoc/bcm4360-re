@@ -1,0 +1,826 @@
+
+============================================================
+  pciedngl_probe @ 0x1E90 (624 bytes)
+============================================================
+  0x1e90: 2de9f04f     push.w   {r4, r5, r6, r7, r8, sb, sl, fp, lr}
+  0x1e94: 85b0         sub      sp, #0x14
+  0x1e96: 0646         mov      r6, r0
+  0x1e98: 8846         mov      r8, r1
+  0x1e9a: 3048         ldr      r0, [pc, #0xc0]  <-- load
+  0x1e9c: 9146         mov      sb, r2
+  0x1e9e: 3049         ldr      r1, [pc, #0xc0]  <-- load
+  0x1ea0: 9b46         mov      fp, r3
+  0x1ea2: ddf83ca0     ldr.w    sl, [sp, #0x3c]
+  0x1ea6: fef7c3fd     bl       #0xa30  <-- CALL
+  0x1eaa: 3046         mov      r0, r6
+  0x1eac: 64f0daff     bl       #0x66e64  <-- CALL
+  0x1eb0: 3c21         movs     r1, #0x3c
+  0x1eb2: 0746         mov      r7, r0
+  0x1eb4: 0020         movs     r0, #0
+  0x1eb6: 05f053ff     bl       #0x7d60  <-- CALL
+  0x1eba: 0446         mov      r4, r0
+  0x1ebc: 20b9         cbnz     r0, #0x1ec8
+  0x1ebe: 5146         mov      r1, sl
+  0x1ec0: 2848         ldr      r0, [pc, #0xa0]  <-- load
+  0x1ec2: fef7b5fd     bl       #0xa30  <-- CALL
+  0x1ec6: 3be0         b        #0x1f40  <-- branch
+  0x1ec8: 0025         movs     r5, #0
+  0x1eca: 0021         movs     r1, #0
+  0x1ecc: 3c22         movs     r2, #0x3c
+  0x1ece: fef725fd     bl       #0x91c  <-- CALL
+  0x1ed2: c4f800a0     str.w    sl, [r4]
+  0x1ed6: e661         str      r6, [r4, #0x1c]  <-- store
+  0x1ed8: 3946         mov      r1, r7
+  0x1eda: 2761         str      r7, [r4, #0x10]  <-- store
+  0x1edc: 4246         mov      r2, r8
+  0x1ede: 4b46         mov      r3, sb
+  0x1ee0: 5846         mov      r0, fp
+  0x1ee2: 0095         str      r5, [sp]  <-- store
+  0x1ee4: 0195         str      r5, [sp, #4]  <-- store
+  0x1ee6: 0295         str      r5, [sp, #8]  <-- store
+  0x1ee8: 65f036fa     bl       #0x67358  <-- CALL
+  0x1eec: c4f81880     str.w    r8, [r4, #0x18]
+  0x1ef0: e060         str      r0, [r4, #0xc]  <-- store
+  0x1ef2: 07f029fd     bl       #0x9948  <-- CALL
+  0x1ef6: 6060         str      r0, [r4, #4]  <-- store
+  0x1ef8: e068         ldr      r0, [r4, #0xc]  <-- load
+  0x1efa: 07f033fd     bl       #0x9964  <-- CALL
+  0x1efe: 2946         mov      r1, r5
+  0x1f00: e268         ldr      r2, [r4, #0xc]  <-- load
+  0x1f02: 3b46         mov      r3, r7
+  0x1f04: a060         str      r0, [r4, #8]  <-- store
+  0x1f06: 2046         mov      r0, r4
+  0x1f08: 62f09ef9     bl       #0x64248  <-- CALL
+  0x1f0c: 6061         str      r0, [r4, #0x14]  <-- store
+  0x1f0e: 20b9         cbnz     r0, #0x1f1a
+  0x1f10: 1349         ldr      r1, [pc, #0x4c]  <-- load
+  0x1f12: 1548         ldr      r0, [pc, #0x54]  <-- load
+  0x1f14: fef78cfd     bl       #0xa30  <-- CALL
+  0x1f18: 1ae0         b        #0x1f50  <-- branch
+  0x1f1a: 2846         mov      r0, r5
+  0x1f1c: 0e99         ldr      r1, [sp, #0x38]  <-- load
+  0x1f1e: 5246         mov      r2, sl
+  0x1f20: 124b         ldr      r3, [pc, #0x48]  <-- load
+  0x1f22: 0096         str      r6, [sp]  <-- store
+  0x1f24: cdf80490     str.w    sb, [sp, #4]
+  0x1f28: 61f07cfe     bl       #0x63c24  <-- CALL
+  0x1f2c: 18b1         cbz      r0, #0x1f36
+  0x1f2e: 1048         ldr      r0, [pc, #0x40]  <-- load
+  0x1f30: fef77efd     bl       #0xa30  <-- CALL
+  0x1f34: 0ce0         b        #0x1f50  <-- branch
+  0x1f36: 2046         mov      r0, r4
+  0x1f38: fff784ff     bl       #0x1e44  <-- CALL
+  0x1f3c: 2046         mov      r0, r4
+  0x1f3e: 04e0         b        #0x1f4a  <-- branch
+  0x1f40: 0c48         ldr      r0, [pc, #0x30]  <-- load
+  0x1f42: ad21         movs     r1, #0xad
+  0x1f44: fff750f9     bl       #0x11e8  <-- CALL
+  0x1f48: 0020         movs     r0, #0
+  0x1f4a: 05b0         add      sp, #0x14
+  0x1f4c: bde8f08f     pop.w    {r4, r5, r6, r7, r8, sb, sl, fp, pc}
+  0x1f50: 2069         ldr      r0, [r4, #0x10]  <-- load
+  0x1f52: 2146         mov      r1, r4
+  0x1f54: 3c22         movs     r2, #0x3c
+  0x1f56: 05f007ff     bl       #0x7d68  <-- CALL
+  0x1f5a: f1e7         b        #0x1f40  <-- branch
+  0x1f5c: 9206         lsls     r2, r2, #0x1a
+  0x1f5e: 0400         movs     r4, r0
+  0x1f60: f207         lsls     r2, r6, #0x1f
+  0x1f62: 0400         movs     r4, r0
+  0x1f64: 75a0         adr      r0, #0x1d4
+  0x1f66: 0400         movs     r4, r0
+  0x1f68: 8707         lsls     r7, r0, #0x1e
+  0x1f6a: 0400         movs     r4, r0
+  0x1f6c: 991c         adds     r1, r3, #2
+  0x1f6e: 0000         movs     r0, r0
+  0x1f70: 9f07         lsls     r7, r3, #0x1e
+  0x1f72: 0400         movs     r4, r0
+  0x1f74: e506         lsls     r5, r4, #0x1b
+  0x1f76: 0400         movs     r4, r0
+  0x1f78: 70b5         push     {r4, r5, r6, lr}
+  0x1f7a: 0e46         mov      r6, r1
+  0x1f7c: 0446         mov      r4, r0
+  0x1f7e: 78b1         cbz      r0, #0x1fa0
+  0x1f80: 8d8a         ldrh     r5, [r1, #0x14]  <-- load
+  0x1f82: 2430         adds     r0, #0x24
+  0x1f84: 2a46         mov      r2, r5
+  0x1f86: 0969         ldr      r1, [r1, #0x10]  <-- load
+  0x1f88: 00f072ff     bl       #0x2e70  <-- CALL
+  0x1f8c: 4ff48072     mov.w    r2, #0x100
+  0x1f90: a369         ldr      r3, [r4, #0x18]  <-- load
+  0x1f92: 3146         mov      r1, r6
+  0x1f94: 9a62         str      r2, [r3, #0x28]  <-- store
+  0x1f96: 0022         movs     r2, #0
+  0x1f98: 2069         ldr      r0, [r4, #0x10]  <-- load
+  0x1f9a: 05f013ff     bl       #0x7dc4  <-- CALL
+  0x1f9e: 05e0         b        #0x1fac  <-- branch
+  0x1fa0: 0348         ldr      r0, [pc, #0xc]  <-- load
+  0x1fa2: 4ff4a071     mov.w    r1, #0x140
+  0x1fa6: fff71ff9     bl       #0x11e8  <-- CALL
+  0x1faa: 2546         mov      r5, r4
+  0x1fac: 2846         mov      r0, r5
+  0x1fae: 70bd         pop      {r4, r5, r6, pc}  <-- RETURN
+  0x1fb0: e506         lsls     r5, r4, #0x1b
+  0x1fb2: 0400         movs     r4, r0
+  0x1fb4: 0a46         mov      r2, r1
+  0x1fb6: 8169         ldr      r1, [r0, #0x18]  <-- load
+  0x1fb8: 0346         mov      r3, r0
+  0x1fba: 4869         ldr      r0, [r1, #0x14]  <-- load
+  0x1fbc: 1946         mov      r1, r3
+  0x1fbe: 00f0cdb9     b.w      #0x235c
+  0x1fc2: 0a46         mov      r2, r1
+  0x1fc4: 8169         ldr      r1, [r0, #0x18]  <-- load
+  0x1fc6: 0346         mov      r3, r0
+  0x1fc8: 4869         ldr      r0, [r1, #0x14]  <-- load
+  0x1fca: 1946         mov      r1, r3
+  0x1fcc: 00f01cb9     b.w      #0x2208
+  0x1fd0: 2de9f041     push.w   {r4, r5, r6, r7, r8, lr}
+  0x1fd4: 9846         mov      r8, r3
+  0x1fd6: 154b         ldr      r3, [pc, #0x54]  <-- load
+  0x1fd8: 0446         mov      r4, r0
+  0x1fda: 0e46         mov      r6, r1
+  0x1fdc: 1546         mov      r5, r2
+  0x1fde: 1b68         ldr      r3, [r3]  <-- load
+  0x1fe0: 13f0020f     tst.w    r3, #2
+  0x1fe4: 04d0         beq      #0x1ff0  <-- branch
+  0x1fe6: 1248         ldr      r0, [pc, #0x48]  <-- load
+  0x1fe8: 4246         mov      r2, r8
+  0x1fea: 1249         ldr      r1, [pc, #0x48]  <-- load
+  0x1fec: fef720fd     bl       #0xa30  <-- CALL
+  0x1ff0: 2046         mov      r0, r4
+  0x1ff2: 4c21         movs     r1, #0x4c
+  0x1ff4: 05f0b4fe     bl       #0x7d60  <-- CALL
+  0x1ff8: 0746         mov      r7, r0
+  0x1ffa: a0b1         cbz      r0, #0x2026
+  0x1ffc: 0021         movs     r1, #0
+  0x1ffe: 4c22         movs     r2, #0x4c
+  0x2000: fef78cfc     bl       #0x91c  <-- CALL
+  0x2004: 4ff4e863     mov.w    r3, #0x740
+  0x2008: c7f80c80     str.w    r8, [r7, #0xc]
+  0x200c: 7b63         str      r3, [r7, #0x34]  <-- store
+  0x200e: 4ff47a73     mov.w    r3, #0x3e8
+  0x2012: 3e60         str      r6, [r7]  <-- store
+  0x2014: fb63         str      r3, [r7, #0x3c]  <-- store
+  0x2016: 1c23         movs     r3, #0x1c
+  0x2018: 7d60         str      r5, [r7, #4]  <-- store
+  0x201a: 3b64         str      r3, [r7, #0x40]  <-- store
+  0x201c: 103b         subs     r3, #0x10
+  0x201e: bc60         str      r4, [r7, #8]  <-- store
+  0x2020: 7b64         str      r3, [r7, #0x44]  <-- store
+  0x2022: 083b         subs     r3, #8
+  0x2024: bb64         str      r3, [r7, #0x48]  <-- store
+  0x2026: 3846         mov      r0, r7
+  0x2028: bde8f081     pop.w    {r4, r5, r6, r7, r8, pc}
+  0x202c: 248d         ldrh     r4, [r4, #0x28]  <-- load
+  0x202e: 0500         movs     r5, r0
+  0x2030: 1c08         lsrs     r4, r3, #0x20
+  0x2032: 0400         movs     r4, r0
+  0x2034: 0f08         lsrs     r7, r1, #0x20
+  0x2036: 0400         movs     r4, r0
+  0x2038: 0a1e         subs     r2, r1, #0
+  0x203a: 0346         mov      r3, r0
+  0x203c: 10b5         push     {r4, lr}
+  0x203e: c06b         ldr      r0, [r0, #0x3c]  <-- load
+  0x2040: 13dd         ble      #0x206a  <-- branch
+  0x2042: 9c6c         ldr      r4, [r3, #0x48]  <-- load
+  0x2044: 002c         cmp      r4, #0  <-- compare
+  0x2046: 10dd         ble      #0x206a  <-- branch
+  0x2048: 013a         subs     r2, #1
+  0x204a: a242         cmp      r2, r4  <-- compare
+  0x204c: 03da         bge      #0x2056  <-- branch
+  0x204e: 1b6c         ldr      r3, [r3, #0x40]  <-- load
+  0x2050: 53f82200     ldr.w    r0, [r3, r2, lsl #2]
+  0x2054: 48b9         cbnz     r0, #0x206a
+  0x2056: 054b         ldr      r3, [pc, #0x14]  <-- load
+  0x2058: 1868         ldr      r0, [r3]  <-- load
+  0x205a: 10f00100     ands     r0, r0, #1
+  0x205e: 04d0         beq      #0x206a  <-- branch
+  0x2060: 0348         ldr      r0, [pc, #0xc]  <-- load
+  0x2062: 0449         ldr      r1, [pc, #0x10]  <-- load
+  0x2064: fef7e4fc     bl       #0xa30  <-- CALL
+  0x2068: 0020         movs     r0, #0
+  0x206a: 10bd         pop      {r4, pc}  <-- RETURN
+  0x206c: 248d         ldrh     r4, [r4, #0x28]  <-- load
+  0x206e: 0500         movs     r5, r0
+  0x2070: fb08         lsrs     r3, r7, #3
+  0x2072: 0400         movs     r4, r0
+  0x2074: b908         lsrs     r1, r7, #2
+  0x2076: 0400         movs     r4, r0
+  0x2078: 38b5         push     {r3, r4, r5, lr}
+  0x207a: 0b46         mov      r3, r1
+  0x207c: f9b1         cbz      r1, #0x20be
+  0x207e: c16b         ldr      r1, [r0, #0x3c]  <-- load
+  0x2080: 8b42         cmp      r3, r1  <-- compare
+  0x2082: 1dd0         beq      #0x20c0  <-- branch
+  0x2084: 856c         ldr      r5, [r0, #0x48]  <-- load
+  0x2086: 0021         movs     r1, #0
+  0x2088: 0ce0         b        #0x20a4  <-- branch
+  0x208a: 046c         ldr      r4, [r0, #0x40]  <-- load
+  0x208c: 54f82140     ldr.w    r4, [r4, r1, lsl #2]
+  0x2090: a342         cmp      r3, r4  <-- compare
+  0x2092: 01f10104     add.w    r4, r1, #1
+  0x2096: 04d1         bne      #0x20a2  <-- branch
+  0x2098: 1369         ldr      r3, [r2, #0x10]  <-- load
+  0x209a: 9a78         ldrb     r2, [r3, #2]  <-- load
+  0x209c: 1443         orrs     r4, r2
+  0x209e: 9c70         strb     r4, [r3, #2]  <-- store
+  0x20a0: 12e0         b        #0x20c8  <-- branch
+  0x20a2: 2146         mov      r1, r4
+  0x20a4: a942         cmp      r1, r5  <-- compare
+  0x20a6: f0db         blt      #0x208a  <-- branch
+  0x20a8: 084a         ldr      r2, [pc, #0x20]  <-- load
+  0x20aa: 1268         ldr      r2, [r2]  <-- load
+  0x20ac: 12f0010f     tst.w    r2, #1
+  0x20b0: 08d0         beq      #0x20c4  <-- branch
+  0x20b2: 0749         ldr      r1, [pc, #0x1c]  <-- load
+  0x20b4: 1a46         mov      r2, r3
+  0x20b6: 0748         ldr      r0, [pc, #0x1c]  <-- load
+  0x20b8: fef7bafc     bl       #0xa30  <-- CALL
+  0x20bc: 02e0         b        #0x20c4  <-- branch
+  0x20be: 03e0         b        #0x20c8  <-- branch
+  0x20c0: 0021         movs     r1, #0
+  0x20c2: 01e0         b        #0x20c8  <-- branch
+  0x20c4: 4ff0ff31     mov.w    r1, #-1
+  0x20c8: 0846         mov      r0, r1
+  0x20ca: 38bd         pop      {r3, r4, r5, pc}  <-- RETURN
+  0x20cc: 248d         ldrh     r4, [r4, #0x28]  <-- load
+  0x20ce: 0500         movs     r5, r0
+  0x20d0: db0b         lsrs     r3, r3, #0xf
+  0x20d2: 0400         movs     r4, r0
+  0x20d4: 1409         lsrs     r4, r2, #4
+  0x20d6: 0400         movs     r4, r0
+  0x20d8: 13f0030f     tst.w    r3, #3
+  0x20dc: 2de9ff47     push.w   {r0, r1, r2, r3, r4, r5, r6, r7, r8, sb, sl, lr}
+  0x20e0: 9df83c60     ldrb.w   r6, [sp, #0x3c]
+  0x20e4: 0746         mov      r7, r0
+  0x20e6: 8846         mov      r8, r1
+  0x20e8: 1546         mov      r5, r2
+  0x20ea: 1c46         mov      r4, r3
+  0x20ec: ddf83090     ldr.w    sb, [sp, #0x30]
+  0x20f0: 03d0         beq      #0x20fa  <-- branch
+  0x20f2: 1c48         ldr      r0, [pc, #0x70]  <-- load
+  0x20f4: 5421         movs     r1, #0x54
+  0x20f6: fff777f8     bl       #0x11e8  <-- CALL
+  0x20fa: 1b4b         ldr      r3, [pc, #0x6c]  <-- load
+  0x20fc: 9a46         mov      sl, r3
+  0x20fe: 1a68         ldr      r2, [r3]  <-- load
+
+============================================================
+  init spin + handlers @ 0x0160 (208 bytes)
+============================================================
+  0x0160: 8cb0         sub      sp, #0x30
+  0x0162: 094c         ldr      r4, [pc, #0x24]  <-- load
+  0x0164: 2468         ldr      r4, [r4]  <-- load
+  0x0166: 002c         cmp      r4, #0  <-- compare
+  0x0168: fed0         beq      #0x168  <-- branch
+  0x016a: 6846         mov      r0, sp
+  0x016c: a047         blx      r4  <-- CALL
+  0x016e: 0cb0         add      sp, #0x30
+  0x0170: 7fbc         pop      {r0, r1, r2, r3, r4, r5, r6}
+  0x0172: 8046         mov      r8, r0
+  0x0174: 8946         mov      sb, r1
+  0x0176: 9246         mov      sl, r2
+  0x0178: 9b46         mov      fp, r3
+  0x017a: a446         mov      ip, r4
+  0x017c: b646         mov      lr, r6
+  0x017e: 8fb0         sub      sp, #0x3c
+  0x0180: ffbc         pop      {r0, r1, r2, r3, r4, r5, r6, r7}
+  0x0182: 08b0         add      sp, #0x20
+  0x0184: bde900c0     rfeia    sp!
+  0x0188: 2402         lsls     r4, r4, #8
+  0x018a: 0000         movs     r0, r0
+  0x018c: 0649         ldr      r1, [pc, #0x18]  <-- load
+  0x018e: 00ea0100     and.w    r0, r0, r1
+  0x0192: 0028         cmp      r0, #0  <-- compare
+  0x0194: 00d1         bne      #0x198  <-- branch
+  0x0196: 7047         bx       lr  <-- RETURN
+  0x0198: eff30081     mrs      r1, apsr
+  0x019c: 21ea0001     bic.w    r1, r1, r0
+  0x01a0: 81f30089     msr      cpsr_fc, r1
+  0x01a4: 7047         bx       lr  <-- RETURN
+  0x01a6: 0000         movs     r0, r0
+  0x01a8: c000         lsls     r0, r0, #3
+  0x01aa: 0000         movs     r0, r0
+  0x01ac: 0649         ldr      r1, [pc, #0x18]  <-- load
+  0x01ae: 00ea0100     and.w    r0, r0, r1
+  0x01b2: 0028         cmp      r0, #0  <-- compare
+  0x01b4: 00d1         bne      #0x1b8  <-- branch
+  0x01b6: 7047         bx       lr  <-- RETURN
+  0x01b8: eff30081     mrs      r1, apsr
+  0x01bc: 41ea0001     orr.w    r1, r1, r0
+  0x01c0: 81f30089     msr      cpsr_fc, r1
+  0x01c4: 7047         bx       lr  <-- RETURN
+  0x01c6: 0000         movs     r0, r0
+  0x01c8: c000         lsls     r0, r0, #3
+  0x01ca: 0000         movs     r0, r0
+  0x01cc: 19ee1c1f     mrc      p15, #0, r1, c9, c12, #0
+  0x01d0: 044a         ldr      r2, [pc, #0x10]  <-- load
+  0x01d2: 41ea0201     orr.w    r1, r1, r2
+  0x01d6: 09ee1c1f     mcr      p15, #0, r1, c9, c12, #0
+  0x01da: 0349         ldr      r1, [pc, #0xc]  <-- load
+  0x01dc: 09ee3c1f     mcr      p15, #0, r1, c9, c12, #1
+  0x01e0: 7047         bx       lr  <-- RETURN
+  0x01e2: 0000         movs     r0, r0
+  0x01e4: 0100         movs     r1, r0
+  0x01e6: 0000         movs     r0, r0
+  0x01e8: 0000         movs     r0, r0
+  0x01ea: 0080         strh     r0, [r0]  <-- store
+  0x01ec: 19ee1d0f     mrc      p15, #0, r0, c9, c13, #0
+  0x01f0: 7047         bx       lr  <-- RETURN
+  0x01f2: 15ee100f     mrc      p15, #0, r0, c5, c0, #0
+  0x01f6: 7047         bx       lr  <-- RETURN
+  0x01f8: 16ee100f     mrc      p15, #0, r0, c6, c0, #0
+  0x01fc: 7047         bx       lr  <-- RETURN
+  0x01fe: 15ee300f     mrc      p15, #0, r0, c5, c0, #1
+  0x0202: 7047         bx       lr  <-- RETURN
+  0x0204: 16ee500f     mrc      p15, #0, r0, c6, c0, #2
+  0x0208: 7047         bx       lr  <-- RETURN
+  0x020a: 0000         movs     r0, r0
+  0x020c: 024a         ldr      r2, [pc, #8]  <-- load
+  0x020e: 1168         ldr      r1, [r2]  <-- load
+  0x0210: 1060         str      r0, [r2]  <-- store
+  0x0212: 0846         mov      r0, r1
+  0x0214: 7047         bx       lr  <-- RETURN
+  0x0216: 0000         movs     r0, r0
+  0x0218: 2802         lsls     r0, r5, #8
+  0x021a: 0000         movs     r0, r0
+  0x021c: 2c0a         lsrs     r4, r5, #8
+  0x021e: 0000         movs     r0, r0
+  0x0220: 0000         movs     r0, r0
+  0x0222: 0000         movs     r0, r0
+  0x0224: 5119         adds     r1, r2, r5
+  0x0226: 0000         movs     r0, r0
+  0x0228: 0000         movs     r0, r0
+  0x022a: 0000         movs     r0, r0
+  0x022c: 0100         movs     r1, r0
+  0x022e: 0000         movs     r0, r0
+
+============================================================
+  WFI area @ 0x1C00 (64 bytes)
+============================================================
+  0x1c00: 4426         movs     r6, #0x44
+  0x1c02: d3f84436     ldr.w    r3, [r3, #0x644]
+  0x1c06: 7047         bx       lr  <-- RETURN
+  0x1c08: 9429         cmp      r1, #0x94  <-- compare
+  0x1c0a: 0600         movs     r6, r0
+  0x1c0c: 00f007b8     b.w      #0x1c1e
+  0x1c10: 8020         movs     r0, #0x80
+  0x1c12: fef7bbba     b.w      #0x18c
+  0x1c16: 8020         movs     r0, #0x80
+  0x1c18: fef7c8ba     b.w      #0x1ac
+  0x1c1c: 7047         bx       lr  <-- RETURN
+  0x1c1e: 30bf         wfi        <-- WFI (wait for interrupt)
+  0x1c20: 7047         bx       lr  <-- RETURN
+  0x1c22: 10b5         push     {r4, lr}
+  0x1c24: 0446         mov      r4, r0
+  0x1c26: 07f073fe     bl       #0x9910  <-- CALL
+  0x1c2a: 0146         mov      r1, r0
+  0x1c2c: 2046         mov      r0, r4
+  0x1c2e: bde81040     pop.w    {r4, lr}
+  0x1c32: 05f039bf     b.w      #0x7aa8
+  0x1c36: 7047         bx       lr  <-- RETURN
+  0x1c38: 08b5         push     {r3, lr}
+  0x1c3a: 0349         ldr      r1, [pc, #0xc]  <-- load
+  0x1c3c: 0348         ldr      r0, [pc, #0xc]  <-- load
+
+============================================================
+  callees (0x2100+) @ 0x2100 (1024 bytes)
+============================================================
+  0x2100: 12f0020f     tst.w    r2, #2
+  0x2104: 0bd0         beq      #0x211e  <-- branch
+  0x2106: 194b         ldr      r3, [pc, #0x64]  <-- load
+  0x2108: 194a         ldr      r2, [pc, #0x64]  <-- load
+  0x210a: 1a48         ldr      r0, [pc, #0x68]  <-- load
+  0x210c: 002e         cmp      r6, #0  <-- compare
+  0x210e: 18bf         it       ne
+  0x2110: 1a46         movne    r2, r3
+  0x2112: 1949         ldr      r1, [pc, #0x64]  <-- load
+  0x2114: 2b46         mov      r3, r5
+  0x2116: cdf80090     str.w    sb, [sp]
+  0x211a: fef789fc     bl       #0xa30  <-- CALL
+  0x211e: 3846         mov      r0, r7
+  0x2120: 4146         mov      r1, r8
+  0x2122: fff789ff     bl       #0x2038  <-- CALL
+  0x2126: 60b1         cbz      r0, #0x2142
+  0x2128: 0369         ldr      r3, [r0, #0x10]  <-- load
+  0x212a: 2946         mov      r1, r5
+  0x212c: 0d9a         ldr      r2, [sp, #0x34]  <-- load
+  0x212e: 0092         str      r2, [sp]  <-- store
+  0x2130: 0e9a         ldr      r2, [sp, #0x38]  <-- load
+  0x2132: 0192         str      r2, [sp, #4]  <-- store
+  0x2134: 2246         mov      r2, r4
+  0x2136: 0296         str      r6, [sp, #8]  <-- store
+  0x2138: 5e69         ldr      r6, [r3, #0x14]  <-- load
+  0x213a: 4b46         mov      r3, sb
+  0x213c: b047         blx      r6  <-- CALL
+  0x213e: 0446         mov      r4, r0
+  0x2140: 01e0         b        #0x2146  <-- branch
+  0x2142: 4ff0ff34     mov.w    r4, #-1
+  0x2146: daf80030     ldr.w    r3, [sl]
+  0x214a: 13f0020f     tst.w    r3, #2
+  0x214e: 05d0         beq      #0x215c  <-- branch
+  0x2150: 0a48         ldr      r0, [pc, #0x28]  <-- load
+  0x2152: 2246         mov      r2, r4
+  0x2154: 0849         ldr      r1, [pc, #0x20]  <-- load
+  0x2156: 2346         mov      r3, r4
+  0x2158: fef76afc     bl       #0xa30  <-- CALL
+  0x215c: 2046         mov      r0, r4
+  0x215e: 04b0         add      sp, #0x10
+  0x2160: bde8f087     pop.w    {r4, r5, r6, r7, r8, sb, sl, pc}
+  0x2164: 4009         lsrs     r0, r0, #5
+  0x2166: 0400         movs     r4, r0
+  0x2168: 248d         ldrh     r4, [r4, #0x28]  <-- load
+  0x216a: 0500         movs     r5, r0
+  0x216c: 1218         adds     r2, r2, r0
+  0x216e: 0400         movs     r4, r0
+  0x2170: 3a09         lsrs     r2, r7, #4
+  0x2172: 0400         movs     r4, r0
+  0x2174: 4b09         lsrs     r3, r1, #5
+  0x2176: 0400         movs     r4, r0
+  0x2178: c608         lsrs     r6, r0, #3
+  0x217a: 0400         movs     r4, r0
+  0x217c: 6a09         lsrs     r2, r5, #5
+  0x217e: 0400         movs     r4, r0
+  0x2180: f8b5         push     {r3, r4, r5, r6, r7, lr}
+  0x2182: 1c4e         ldr      r6, [pc, #0x70]  <-- load
+  0x2184: 0446         mov      r4, r0
+  0x2186: 0f46         mov      r7, r1
+  0x2188: 1546         mov      r5, r2
+  0x218a: 3368         ldr      r3, [r6]  <-- load
+  0x218c: 13f0020f     tst.w    r3, #2
+  0x2190: 04d0         beq      #0x219c  <-- branch
+  0x2192: 1948         ldr      r0, [pc, #0x64]  <-- load
+  0x2194: 1949         ldr      r1, [pc, #0x64]  <-- load
+  0x2196: a26b         ldr      r2, [r4, #0x38]  <-- load
+  0x2198: fef74afc     bl       #0xa30  <-- CALL
+  0x219c: 2946         mov      r1, r5
+  0x219e: 6068         ldr      r0, [r4, #4]  <-- load
+  0x21a0: 05f050fe     bl       #0x7e44  <-- CALL
+  0x21a4: 0546         mov      r5, r0
+  0x21a6: 18b3         cbz      r0, #0x21f0
+  0x21a8: 2046         mov      r0, r4
+  0x21aa: 3946         mov      r1, r7
+  0x21ac: 2a46         mov      r2, r5
+  0x21ae: fff763ff     bl       #0x2078  <-- CALL
+  0x21b2: 0028         cmp      r0, #0  <-- compare
+  0x21b4: 1cdb         blt      #0x21f0  <-- branch
+  0x21b6: 124b         ldr      r3, [pc, #0x48]  <-- load
+  0x21b8: 2946         mov      r1, r5
+  0x21ba: 2068         ldr      r0, [r4]  <-- load
+  0x21bc: 1b68         ldr      r3, [r3]  <-- load
+  0x21be: db68         ldr      r3, [r3, #0xc]  <-- load
+  0x21c0: 9847         blx      r3  <-- CALL
+  0x21c2: 50b1         cbz      r0, #0x21da
+  0x21c4: 6068         ldr      r0, [r4, #4]  <-- load
+  0x21c6: 2946         mov      r1, r5
+  0x21c8: e669         ldr      r6, [r4, #0x1c]  <-- load
+  0x21ca: 02f0f5fe     bl       #0x4fb8  <-- CALL
+  0x21ce: 6369         ldr      r3, [r4, #0x14]  <-- load
+  0x21d0: 0133         adds     r3, #1
+  0x21d2: 6361         str      r3, [r4, #0x14]  <-- store
+  0x21d4: 8019         adds     r0, r0, r6
+  0x21d6: e061         str      r0, [r4, #0x1c]  <-- store
+  0x21d8: 0ae0         b        #0x21f0  <-- branch
+  0x21da: e36a         ldr      r3, [r4, #0x2c]  <-- load
+  0x21dc: 0133         adds     r3, #1
+  0x21de: e362         str      r3, [r4, #0x2c]  <-- store
+  0x21e0: 3368         ldr      r3, [r6]  <-- load
+  0x21e2: 13f0010f     tst.w    r3, #1
+  0x21e6: 03d0         beq      #0x21f0  <-- branch
+  0x21e8: 0648         ldr      r0, [pc, #0x18]  <-- load
+  0x21ea: 0449         ldr      r1, [pc, #0x10]  <-- load
+  0x21ec: fef720fc     bl       #0xa30  <-- CALL
+  0x21f0: 0020         movs     r0, #0
+  0x21f2: f8bd         pop      {r3, r4, r5, r6, r7, pc}  <-- RETURN
+  0x21f4: 248d         ldrh     r4, [r4, #0x28]  <-- load
+  0x21f6: 0500         movs     r5, r0
+  0x21f8: 1c08         lsrs     r4, r3, #0x20
+  0x21fa: 0400         movs     r4, r0
+  0x21fc: ee08         lsrs     r6, r5, #3
+  0x21fe: 0400         movs     r4, r0
+  0x2200: 142a         cmp      r2, #0x14  <-- compare
+  0x2202: 0600         movs     r6, r0
+  0x2204: ca09         lsrs     r2, r1, #7
+  0x2206: 0400         movs     r4, r0
+  0x2208: 2de9f341     push.w   {r0, r1, r4, r5, r6, r7, r8, lr}
+  0x220c: 474f         ldr      r7, [pc, #0x11c]  <-- load
+  0x220e: 0446         mov      r4, r0
+  0x2210: 0e46         mov      r6, r1
+  0x2212: 1546         mov      r5, r2
+  0x2214: 3b68         ldr      r3, [r7]  <-- load
+  0x2216: 13f0020f     tst.w    r3, #2
+  0x221a: 03d0         beq      #0x2224  <-- branch
+  0x221c: 4448         ldr      r0, [pc, #0x110]  <-- load
+  0x221e: 4549         ldr      r1, [pc, #0x114]  <-- load
+  0x2220: fef706fc     bl       #0xa30  <-- CALL
+  0x2224: 06b1         cbz      r6, #0x2228
+  0x2226: 2db9         cbnz     r5, #0x2234
+  0x2228: 3b68         ldr      r3, [r7]  <-- load
+  0x222a: 13f0010f     tst.w    r3, #1
+  0x222e: 73d0         beq      #0x2318  <-- branch
+  0x2230: 4148         ldr      r0, [pc, #0x104]  <-- load
+  0x2232: 23e0         b        #0x227c  <-- branch
+  0x2234: a26b         ldr      r2, [r4, #0x38]  <-- load
+  0x2236: 52b9         cbnz     r2, #0x224e
+  0x2238: e36b         ldr      r3, [r4, #0x3c]  <-- load
+  0x223a: 43b9         cbnz     r3, #0x224e
+  0x223c: 3b68         ldr      r3, [r7]  <-- load
+  0x223e: a663         str      r6, [r4, #0x38]  <-- store
+  0x2240: 13f0020f     tst.w    r3, #2
+  0x2244: e563         str      r5, [r4, #0x3c]  <-- store
+  0x2246: 7562         str      r5, [r6, #0x24]  <-- store
+  0x2248: 6e62         str      r6, [r5, #0x24]  <-- store
+  0x224a: 3fd0         beq      #0x22cc  <-- branch
+  0x224c: 3ae0         b        #0x22c4  <-- branch
+  0x224e: b242         cmp      r2, r6  <-- compare
+  0x2250: 2cd1         bne      #0x22ac  <-- branch
+  0x2252: e36b         ldr      r3, [r4, #0x3c]  <-- load
+  0x2254: ab42         cmp      r3, r5  <-- compare
+  0x2256: 29d0         beq      #0x22ac  <-- branch
+  0x2258: a66c         ldr      r6, [r4, #0x48]  <-- load
+  0x225a: 0023         movs     r3, #0
+  0x225c: 05e0         b        #0x226a  <-- branch
+  0x225e: 216c         ldr      r1, [r4, #0x40]  <-- load
+  0x2260: 51f82310     ldr.w    r1, [r1, r3, lsl #2]
+  0x2264: a942         cmp      r1, r5  <-- compare
+  0x2266: 04d0         beq      #0x2272  <-- branch
+  0x2268: 0133         adds     r3, #1
+  0x226a: b342         cmp      r3, r6  <-- compare
+  0x226c: f7db         blt      #0x225e  <-- branch
+  0x226e: 0023         movs     r3, #0
+  0x2270: 13e0         b        #0x229a  <-- branch
+  0x2272: 3b68         ldr      r3, [r7]  <-- load
+  0x2274: 13f0010f     tst.w    r3, #1
+  0x2278: 4ed0         beq      #0x2318  <-- branch
+  0x227a: 3048         ldr      r0, [pc, #0xc0]  <-- load
+  0x227c: 2d49         ldr      r1, [pc, #0xb4]  <-- load
+  0x227e: fef7d7fb     bl       #0xa30  <-- CALL
+  0x2282: 49e0         b        #0x2318  <-- branch
+  0x2284: 216c         ldr      r1, [r4, #0x40]  <-- load
+  0x2286: 01eb8300     add.w    r0, r1, r3, lsl #2
+  0x228a: 51f82310     ldr.w    r1, [r1, r3, lsl #2]
+  0x228e: 0133         adds     r3, #1
+  0x2290: 19b9         cbnz     r1, #0x229a
+  0x2292: 0560         str      r5, [r0]  <-- store
+  0x2294: 1846         mov      r0, r3
+  0x2296: 6a62         str      r2, [r5, #0x24]  <-- store
+  0x2298: 40e0         b        #0x231c  <-- branch
+  0x229a: b342         cmp      r3, r6  <-- compare
+  0x229c: f2db         blt      #0x2284  <-- branch
+  0x229e: 3fe0         b        #0x2320  <-- branch
+  0x22a0: 2449         ldr      r1, [pc, #0x90]  <-- load
+  0x22a2: 3246         mov      r2, r6
+  0x22a4: 2648         ldr      r0, [pc, #0x98]  <-- load
+  0x22a6: fef7c3fb     bl       #0xa30  <-- CALL
+  0x22aa: 35e0         b        #0x2318  <-- branch
+  0x22ac: 3b68         ldr      r3, [r7]  <-- load
+  0x22ae: 13f0010f     tst.w    r3, #1
+  0x22b2: 31d0         beq      #0x2318  <-- branch
+  0x22b4: 1f49         ldr      r1, [pc, #0x7c]  <-- load
+  0x22b6: e36b         ldr      r3, [r4, #0x3c]  <-- load
+  0x22b8: 2248         ldr      r0, [pc, #0x88]  <-- load
+  0x22ba: 0096         str      r6, [sp]  <-- store
+  0x22bc: 0195         str      r5, [sp, #4]  <-- store
+  0x22be: fef7b7fb     bl       #0xa30  <-- CALL
+  0x22c2: 29e0         b        #0x2318  <-- branch
+  0x22c4: 2048         ldr      r0, [pc, #0x80]  <-- load
+  0x22c6: 1b49         ldr      r1, [pc, #0x6c]  <-- load
+  0x22c8: fef7b2fb     bl       #0xa30  <-- CALL
+  0x22cc: 4ff00008     mov.w    r8, #0
+  0x22d0: 6068         ldr      r0, [r4, #4]  <-- load
+  0x22d2: 2146         mov      r1, r4
+  0x22d4: 2268         ldr      r2, [r4]  <-- load
+  0x22d6: 3346         mov      r3, r6
+  0x22d8: cdf80080     str.w    r8, [sp]
+  0x22dc: fff778fe     bl       #0x1fd0  <-- CALL
+  0x22e0: e060         str      r0, [r4, #0xc]  <-- store
+  0x22e2: 28b9         cbnz     r0, #0x22f0
+  0x22e4: 3b68         ldr      r3, [r7]  <-- load
+  0x22e6: 13f0010f     tst.w    r3, #1
+  0x22ea: 15d0         beq      #0x2318  <-- branch
+  0x22ec: 1748         ldr      r0, [pc, #0x5c]  <-- load
+  0x22ee: c5e7         b        #0x227c  <-- branch
+  0x22f0: 3868         ldr      r0, [r7]  <-- load
+  0x22f2: 10f01000     ands     r0, r0, #0x10
+  0x22f6: 11d0         beq      #0x231c  <-- branch
+  0x22f8: 1549         ldr      r1, [pc, #0x54]  <-- load
+  0x22fa: 4046         mov      r0, r8
+  0x22fc: 02f0a8ff     bl       #0x5250  <-- CALL
+  0x2300: 144b         ldr      r3, [pc, #0x50]  <-- load
+  0x2302: 0c49         ldr      r1, [pc, #0x30]  <-- load
+  0x2304: 3246         mov      r2, r6
+  0x2306: 0095         str      r5, [sp]  <-- store
+  0x2308: 0028         cmp      r0, #0  <-- compare
+  0x230a: 18bf         it       ne
+  0x230c: 0346         movne    r3, r0
+  0x230e: 1248         ldr      r0, [pc, #0x48]  <-- load
+  0x2310: fef78efb     bl       #0xa30  <-- CALL
+  0x2314: 4046         mov      r0, r8
+  0x2316: 01e0         b        #0x231c  <-- branch
+  0x2318: 4ff0ff30     mov.w    r0, #-1
+  0x231c: bde8fc81     pop.w    {r2, r3, r4, r5, r6, r7, r8, pc}
+  0x2320: 3a68         ldr      r2, [r7]  <-- load
+  0x2322: 12f0010f     tst.w    r2, #1
+  0x2326: f7d0         beq      #0x2318  <-- branch
+  0x2328: bae7         b        #0x22a0  <-- branch
+  0x232a: 00bf         nop      
+  0x232c: 248d         ldrh     r4, [r4, #0x28]  <-- load
+  0x232e: 0500         movs     r5, r0
+  0x2330: 250a         lsrs     r5, r4, #8
+  0x2332: 0400         movs     r4, r0
+  0x2334: d508         lsrs     r5, r2, #3
+  0x2336: 0400         movs     r4, r0
+  0x2338: 300a         lsrs     r0, r6, #8
+  0x233a: 0400         movs     r4, r0
+  0x233c: 4c0a         lsrs     r4, r1, #9
+  0x233e: 0400         movs     r4, r0
+  0x2340: 660a         lsrs     r6, r4, #9
+  0x2342: 0400         movs     r4, r0
+  0x2344: 920a         lsrs     r2, r2, #0xa
+  0x2346: 0400         movs     r4, r0
+  0x2348: c50a         lsrs     r5, r0, #0xb
+  0x234a: 0400         movs     r4, r0
+  0x234c: de0a         lsrs     r6, r3, #0xb
+  0x234e: 0400         movs     r4, r0
+  0x2350: f70a         lsrs     r7, r6, #0xb
+  0x2352: 0400         movs     r4, r0
+  0x2354: 1c0a         lsrs     r4, r3, #8
+  0x2356: 0400         movs     r4, r0
+  0x2358: fc0a         lsrs     r4, r7, #0xb
+  0x235a: 0400         movs     r4, r0
+  0x235c: 37b5         push     {r0, r1, r2, r4, r5, lr}
+  0x235e: 0346         mov      r3, r0
+  0x2360: 01b1         cbz      r1, #0x2364
+  0x2362: 32b9         cbnz     r2, #0x2372
+  0x2364: 224b         ldr      r3, [pc, #0x88]  <-- load
+  0x2366: 1b68         ldr      r3, [r3]  <-- load
+  0x2368: 13f0010f     tst.w    r3, #1
+  0x236c: 3dd0         beq      #0x23ea  <-- branch
+  0x236e: 2148         ldr      r0, [pc, #0x84]  <-- load
+  0x2370: 0ae0         b        #0x2388  <-- branch
+  0x2372: 846b         ldr      r4, [r0, #0x38]  <-- load
+  0x2374: 64b9         cbnz     r4, #0x2390
+  0x2376: c06b         ldr      r0, [r0, #0x3c]  <-- load
+  0x2378: 0028         cmp      r0, #0  <-- compare
+  0x237a: 29d1         bne      #0x23d0  <-- branch
+  0x237c: 1c4b         ldr      r3, [pc, #0x70]  <-- load
+  0x237e: 1b68         ldr      r3, [r3]  <-- load
+  0x2380: 13f0010f     tst.w    r3, #1
+  0x2384: 31d0         beq      #0x23ea  <-- branch
+  0x2386: 1c48         ldr      r0, [pc, #0x70]  <-- load
+  0x2388: 1c49         ldr      r1, [pc, #0x70]  <-- load
+  0x238a: fef751fb     bl       #0xa30  <-- CALL
+  0x238e: 2ce0         b        #0x23ea  <-- branch
+  0x2390: 8c42         cmp      r4, r1  <-- compare
+  0x2392: 1dd1         bne      #0x23d0  <-- branch
+  0x2394: c06b         ldr      r0, [r0, #0x3c]  <-- load
+  0x2396: 9042         cmp      r0, r2  <-- compare
+  0x2398: 1ad0         beq      #0x23d0  <-- branch
+  0x239a: 9d6c         ldr      r5, [r3, #0x48]  <-- load
+  0x239c: 0020         movs     r0, #0
+  0x239e: 0be0         b        #0x23b8  <-- branch
+  0x23a0: 196c         ldr      r1, [r3, #0x40]  <-- load
+  0x23a2: 01eb8004     add.w    r4, r1, r0, lsl #2
+  0x23a6: 51f82010     ldr.w    r1, [r1, r0, lsl #2]
+  0x23aa: 0130         adds     r0, #1
+  0x23ac: 9142         cmp      r1, r2  <-- compare
+  0x23ae: 03d1         bne      #0x23b8  <-- branch
+  0x23b0: 0023         movs     r3, #0
+  0x23b2: 2360         str      r3, [r4]  <-- store
+  0x23b4: 5362         str      r3, [r2, #0x24]  <-- store
+  0x23b6: 1ae0         b        #0x23ee  <-- branch
+  0x23b8: a842         cmp      r0, r5  <-- compare
+  0x23ba: f1db         blt      #0x23a0  <-- branch
+  0x23bc: 0c4b         ldr      r3, [pc, #0x30]  <-- load
+  0x23be: 1b68         ldr      r3, [r3]  <-- load
+  0x23c0: 13f0010f     tst.w    r3, #1
+  0x23c4: 11d0         beq      #0x23ea  <-- branch
+  0x23c6: 0d49         ldr      r1, [pc, #0x34]  <-- load
+  0x23c8: 0d48         ldr      r0, [pc, #0x34]  <-- load
+  0x23ca: fef731fb     bl       #0xa30  <-- CALL
+  0x23ce: 0ce0         b        #0x23ea  <-- branch
+  0x23d0: 0748         ldr      r0, [pc, #0x1c]  <-- load
+  0x23d2: 0068         ldr      r0, [r0]  <-- load
+  0x23d4: 10f0010f     tst.w    r0, #1
+  0x23d8: 07d0         beq      #0x23ea  <-- branch
+  0x23da: 0091         str      r1, [sp]  <-- store
+  0x23dc: 0192         str      r2, [sp, #4]  <-- store
+  0x23de: 2246         mov      r2, r4
+  0x23e0: 0848         ldr      r0, [pc, #0x20]  <-- load
+  0x23e2: 0649         ldr      r1, [pc, #0x18]  <-- load
+  0x23e4: db6b         ldr      r3, [r3, #0x3c]  <-- load
+  0x23e6: fef723fb     bl       #0xa30  <-- CALL
+  0x23ea: 4ff0ff30     mov.w    r0, #-1
+  0x23ee: 3ebd         pop      {r1, r2, r3, r4, r5, pc}  <-- RETURN
+  0x23f0: 248d         ldrh     r4, [r4, #0x28]  <-- load
+  0x23f2: 0500         movs     r5, r0
+  0x23f4: 300a         lsrs     r0, r6, #8
+  0x23f6: 0400         movs     r4, r0
+  0x23f8: 1d0b         lsrs     r5, r3, #0xc
+  0x23fa: 0400         movs     r4, r0
+  0x23fc: eb0b         lsrs     r3, r5, #0xf
+  0x23fe: 0400         movs     r4, r0
+  0x2400: 340b         lsrs     r4, r6, #0xc
+  0x2402: 0400         movs     r4, r0
+  0x2404: 920a         lsrs     r2, r2, #0xa
+  0x2406: 0400         movs     r4, r0
+  0x2408: 10b5         push     {r4, lr}
+  0x240a: 61f067ff     bl       #0x642dc  <-- CALL
+  0x240e: fdf7ddfe     bl       #0x1cc  <-- CALL
+  0x2412: 61f073ff     bl       #0x642fc  <-- CALL
+  0x2416: 0446         mov      r4, r0
+  0x2418: fef728fc     bl       #0xc6c  <-- CALL
+  0x241c: 2046         mov      r0, r4
+  0x241e: bde81040     pop.w    {r4, lr}
+  0x2422: fef7d5be     b.w      #0x11d0
+  0x2426: 41ea0003     orr.w    r3, r1, r0
+  0x242a: 42ea0303     orr.w    r3, r2, r3
+  0x242e: 13f0030f     tst.w    r3, #3
+  0x2432: 30b5         push     {r4, r5, lr}
+  0x2434: 14d1         bne      #0x2460  <-- branch
+  0x2436: 0c68         ldr      r4, [r1]  <-- load
+  0x2438: 0368         ldr      r3, [r0]  <-- load
+  0x243a: 84ea0303     eor.w    r3, r4, r3
+  0x243e: 1360         str      r3, [r2]  <-- store
+  0x2440: 4c68         ldr      r4, [r1, #4]  <-- load
+  0x2442: 4368         ldr      r3, [r0, #4]  <-- load
+  0x2444: 84ea0303     eor.w    r3, r4, r3
+  0x2448: 5360         str      r3, [r2, #4]  <-- store
+  0x244a: 8c68         ldr      r4, [r1, #8]  <-- load
+  0x244c: 8368         ldr      r3, [r0, #8]  <-- load
+  0x244e: 84ea0303     eor.w    r3, r4, r3
+  0x2452: 9360         str      r3, [r2, #8]  <-- store
+  0x2454: c968         ldr      r1, [r1, #0xc]  <-- load
+  0x2456: c368         ldr      r3, [r0, #0xc]  <-- load
+  0x2458: 81ea0303     eor.w    r3, r1, r3
+  0x245c: d360         str      r3, [r2, #0xc]  <-- store
+  0x245e: 30bd         pop      {r4, r5, pc}  <-- RETURN
+  0x2460: 0023         movs     r3, #0
+  0x2462: cd5c         ldrb     r5, [r1, r3]  <-- load
+  0x2464: c45c         ldrb     r4, [r0, r3]  <-- load
+  0x2466: 85ea0404     eor.w    r4, r5, r4
+  0x246a: d454         strb     r4, [r2, r3]  <-- store
+  0x246c: 0133         adds     r3, #1
+  0x246e: 102b         cmp      r3, #0x10  <-- compare
+  0x2470: f7d1         bne      #0x2462  <-- branch
+  0x2472: 30bd         pop      {r4, r5, pc}  <-- RETURN
+  0x2474: 70b5         push     {r4, r5, r6, lr}
+  0x2476: c500         lsls     r5, r0, #3
+  0x2478: bcb0         sub      sp, #0xf0
+  0x247a: 1446         mov      r4, r2
+  0x247c: 6846         mov      r0, sp
+  0x247e: 2a46         mov      r2, r5
+  0x2480: 1e46         mov      r6, r3
+  0x2482: 06f00bfb     bl       #0x8a9c  <-- CALL
+  0x2486: 6909         lsrs     r1, r5, #5
+  0x2488: 6846         mov      r0, sp
+  0x248a: 0631         adds     r1, #6
+  0x248c: 2246         mov      r2, r4
+  0x248e: 3346         mov      r3, r6
+  0x2490: 06f01efd     bl       #0x8ed0  <-- CALL
+  0x2494: 3cb0         add      sp, #0xf0
+  0x2496: 70bd         pop      {r4, r5, r6, pc}  <-- RETURN
+  0x2498: 30b5         push     {r4, r5, lr}
+  0x249a: 85b0         sub      sp, #0x14
+  0x249c: 1446         mov      r4, r2
+  0x249e: 1d46         mov      r5, r3
+  0x24a0: 154a         ldr      r2, [pc, #0x54]  <-- load
+  0x24a2: 6b46         mov      r3, sp
+  0x24a4: fff7e6ff     bl       #0x2474  <-- CALL
+  0x24a8: 0f23         movs     r3, #0xf
+  0x24aa: 0022         movs     r2, #0
+  0x24ac: 1df80310     ldrb.w   r1, [sp, r3]
+  0x24b0: 42ea4102     orr.w    r2, r2, r1, lsl #1
+  0x24b4: e254         strb     r2, [r4, r3]  <-- store
+  0x24b6: ca09         lsrs     r2, r1, #7
+  0x24b8: 013b         subs     r3, #1
+  0x24ba: f7d2         bhs      #0x24ac  <-- branch
+  0x24bc: 9df90030     ldrsb.w  r3, [sp]
+  0x24c0: 002b         cmp      r3, #0  <-- compare
+  0x24c2: 04da         bge      #0x24ce  <-- branch
+  0x24c4: 2046         mov      r0, r4
+  0x24c6: 0d49         ldr      r1, [pc, #0x34]  <-- load
+  0x24c8: 2246         mov      r2, r4
+  0x24ca: fff7acff     bl       #0x2426  <-- CALL
+  0x24ce: 0f23         movs     r3, #0xf
+  0x24d0: 0022         movs     r2, #0
+  0x24d2: e15c         ldrb     r1, [r4, r3]  <-- load
+  0x24d4: 42ea4102     orr.w    r2, r2, r1, lsl #1
+  0x24d8: ea54         strb     r2, [r5, r3]  <-- store
+  0x24da: e25c         ldrb     r2, [r4, r3]  <-- load
+  0x24dc: d209         lsrs     r2, r2, #7
+  0x24de: 013b         subs     r3, #1
+  0x24e0: f7d2         bhs      #0x24d2  <-- branch
+  0x24e2: 94f90030     ldrsb.w  r3, [r4]
+  0x24e6: 002b         cmp      r3, #0  <-- compare
+  0x24e8: 04da         bge      #0x24f4  <-- branch
+  0x24ea: 2846         mov      r0, r5
+  0x24ec: 0349         ldr      r1, [pc, #0xc]  <-- load
+  0x24ee: 2a46         mov      r2, r5
+  0x24f0: fff799ff     bl       #0x2426  <-- CALL
+  0x24f4: 05b0         add      sp, #0x14
+  0x24f6: 30bd         pop      {r4, r5, pc}  <-- RETURN
+  0x24f8: e70c         lsrs     r7, r4, #0x13
+  0x24fa: 0400         movs     r4, r0
+  0x24fc: f70c         lsrs     r7, r6, #0x13
+  0x24fe: 0400         movs     r4, r0

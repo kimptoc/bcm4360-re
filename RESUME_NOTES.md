@@ -1,8 +1,31 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, EXECUTING test.87)
+## Current state (2026-04-16, PREPARING test.88)
 
 Git branch: main (pushed to origin)
+
+## test.87 RESULT: SURVIVED — counter timing + code dumps obtained
+
+**test.87 survived 3s cleanly. Key findings:**
+1. Counter froze between T+200ms and T+400ms (value 0x43b1) — firmware hangs within 400ms
+2. pciedngl_probe disassembled: linear function making calls to 0x67358, 0x64248, 0x63C24
+3. No polling loops in pciedngl_probe itself — hang is inside a called function
+4. TCB at 0x9d080 = 0x000A0000 (top of 640KB TCM)
+5. Code at 0x2100-0x24FF disassembled — downstream callees, no obvious polling loops either
+6. Init spin at 0x168 confirmed: `beq #0x168` (spin while *0x224 == NULL)
+7. WFI at 0x1C1E confirmed in disassembly (idle helper function)
+
+### test.88 PLAN: Dump call targets + stack area to find hang location
+
+**Goal:** Identify EXACTLY which function the firmware is stuck in by:
+1. Dumping code at the three call targets from pciedngl_probe:
+   - 0x67340-0x67500 (target 0x67358: register_bus/attach call with many args)
+   - 0x64200-0x64400 (target 0x64248: result-checked call)
+   - 0x63C00-0x63D00 (target 0x63C24: conditional second call)
+2. Scanning stack area 0x9F000-0x9FFF8 for Thumb return addresses
+3. Looking for LDR+CMP+BNE polling loops, WFI, or CPSID in the call targets
+
+**Approach:** Same as test.87 — 3s max, re-mask every 10ms, dump at T+1s, no core switch.
 
 ## test.86 RESULT: CRASHED at T+2s (ARM core switch)
 
@@ -60,18 +83,18 @@ Git branch: main (pushed to origin)
 6. Restore RP cleanly
 7. NO core switching (lethal per tests 66/76/86)
 
-## Run test.87 (after build):
+## Run test.88 (after build):
   cd /home/kimptoc/bcm4360-re/phase5/work && sudo ./test-staged-reset.sh 0
 
 ## After test — what to do:
-1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.87" | wc -l; done`
-2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.87.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.87.*'`
+1. Check which boot: `for b in -5 -4 -3 -2 -1 0; do echo "=== $b ==="; sudo journalctl -b $b -k 2>/dev/null | grep "BCM4360 test.88" | wc -l; done`
+2. Save journal: `sudo bash -c 'journalctl -b -1 -k > /home/kimptoc/bcm4360-re/phase5/logs/test.88.journal && chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.88.*'`
 3. Key things to check:
    a. Did we SURVIVE? (RP settings restored = yes)
-   b. Counter timing: which 200ms tick did it freeze?
-   c. pciedngl_probe code — look for LDR+CMP+BNE polling loops
-   d. TCB area — any values pointing into TCM (0x0000-0x9FFFF)?
-   e. If pointer-like value found, follow it to find stack frames with saved PC/LR
+   b. Code at 0x67358: look for LDR+CMP+BNE polling loops or CPSID
+   c. Code at 0x64248: same — polling loops or infinite waits
+   d. Code at 0x63C24: same
+   e. Stack scan: Thumb return addresses (0x0001xxxx-0x0006Fxxx, bit 0 set) reveal call chain
 
 ## Key confirmed findings
 - BCM4360 ARM requires BBPLL (max_res_mask raised to 0xFFFFF) ✓
@@ -116,6 +139,9 @@ Git branch: main (pushed to origin)
 - WFI theory DEAD: frozen counter = TRUE HANG, not WFI idle (WFI keeps timers running) ✗
 - PCIe2 wrapper pre-ARM: IOCTL=0x1 RESET_CTL=0x0 (safe to read/write pre-ARM) ✓
 - PCIe2 BAC pre-ARM: INTMASK=0x0, MBMASK=0x0, H2D0=0xffffffff, H2D1=0xffffffff ✓
+- Counter freezes at 0x43b1 between T+200ms and T+400ms — hang is VERY early ✓ (test.87)
+- TCM top = 0xA0000 (640KB), stack grows down from there ✓ (test.87 TCB)
+- pciedngl_probe calls into 0x67358, 0x64248, 0x63C24 — hang is inside one of these ✓ (test.87 disasm)
 
 ## Console text decoded (test.78/79/80/82/83/84 T+3s)
 Ring buffer at 0x9ccc7, write ptr 0x9ccbe (wrapped):
@@ -157,4 +183,5 @@ Firmware prints CDC protocol banner (not FullDongle MSGBUF).
 - test.84: CRASHED at ~T+30s — BARs valid, STATUS bit 11 SET; BAR hypothesis DEAD
 - test.85: CRASHED T+18-20s — STATUS/DevSta cleared, firmware STILL hung; STATUS theory DEAD
 - test.86: CRASHED T+2s — ARM core switch (select_core) crashed immediately; core switch LETHAL
-- test.87: PENDING — TCM firmware code dump + counter timing; NO core switch; 3s max loop
+- test.87: SURVIVED — counter froze T+200-400ms at 0x43b1; pciedngl_probe disassembled; code dumps obtained
+- test.88: PENDING — dump call targets (0x67358, 0x64248, 0x63C24) + stack scan; find exact hang location
