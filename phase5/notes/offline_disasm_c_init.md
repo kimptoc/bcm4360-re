@@ -122,6 +122,8 @@
 | "Freeze is between vtable store and WL print" | The WL print is gated by `tst r3,#2`. Its absence may be debug-flag, not freeze. |
 | "Pool order tells the story" | Confirmed by disassembly, but advisor was correct that this is post-hoc justification. |
 | Body size 322 bytes | Actually **578 bytes** (0x242). |
+| "fn 0x63b38 returned NULL → fall-through" | **WRONG.** fn 0x63b38 returns 0 = SUCCESS (writes struct[+0x18]), -1 = FAILURE. The cbnz at 0x64468 SKIPS the vtable store on FAILURE. Test.99 saw vtable stored → pciedngldev call SUCCEEDED. |
+| "In binary, pciedngldev[+0x18] = 0" | **WRONG context.** That field is a RUNTIME slot (set by fn 0x63b38 success path). At runtime in test.99 it should be NON-ZERO since vtable was stored. |
 
 ## Remaining freeze candidates
 
@@ -167,10 +169,8 @@ later step; observing it as 0 means that step never ran.
 0x1fcc:  b.w 0x2208                  ; <-- TAIL JUMP to fn 0x2208
 ```
 
-In binary, pciedngldev[+0x18] = 0 → so r1 = 0 → the next ldr would read
-TCM[0x14] (= the 5th word of the firmware vector table). This may be
-intentional if the field is populated by the lookup function 0x63b38, or
-may indicate a buggy uninit access.
+At runtime, pciedngldev[+0x18] should be set by fn 0x63b38's success path
+(see fn 0x63b38 disasm below). If so, fn 0x1fc2 dereferences a valid ptr.
 
 ### fn 0x2208 = dngl_binddev
 
@@ -180,31 +180,89 @@ Function does:
 - print "dngl_binddev:" debug (if flag set)
 - if `r4[+0x38]==0 && r4[+0x3c]==0`: bind: `r4[+0x38]=r6; r4[+0x3c]=r5;
   r6[+0x24]=r5; r5[+0x24]=r6` — two-way link
-- else: scan an array `r4[+0x40]` for matching entries (potential loop
-  hazard if array unterminated or counter wrong)
+- else: scan an array `r4[+0x40]` for matching entries
 
-So the dispatch chain c_init → fn 0x1fc2 → fn 0x2208 = c_init binds the
-PCI dongle device to the WL device. **This bind step is the most likely
-freeze location** — either inside dngl_binddev's array scan, or in a
-sub-call we haven't traced yet.
+NOTE: dispatch chain reachability is INFERRED, not observed. Test.99
+execution evidence stops at the vtable store at 0x6446e. Anything past
+that — including whether the wl bl 0x63b38 call even ran — is unverified.
+
+### fn 0x63b38 — register/lookup device (FULLY DECODED)
+
+```
+fn 0x63b38(r0=struct, r1=size, r2=magic) -> int (0=ok, -1=fail)
+  cmp r1, #0x700
+  push {r0,r1,r4,r5,r6,lr}
+  mov r4=r0; r6=r1; r5=r2
+  bne 0x63b5c                      ; r1 != 0x700 → alt path
+
+  ; r1 == 0x700 path (NEITHER call uses this — pcied=0x83c, wl=0x812):
+  ldr r3, [r0,#0x10]                ; r3 = struct[+0x10] (ops table ptr)
+  movs r1=0; r2=0
+  ldr r6, [r3]                      ; r6 = first fn in ops table
+  blx r6                            ; call ops[0](r0=struct, ..., r3=magic)
+  cbnz r0, 0x63b7c                  ; r0!=0 → SUCCESS path
+  subs r0,#1; b 0x63b90             ; return -1
+
+0x63b5c:                            ; r1 != 0x700 path (BOTH calls use this)
+  ldr r3, =0x6296c                  ; pool literal: global ptr
+  ldr r0, [r3]                      ; r0 = *0x6296c (some context obj)
+  bl  0x9990                        ; <-- alloc-ish; returns ptr or 0
+  mov r1, r0
+  cbz r0, 0x63b8c                   ; if alloc==0 → return -1
+  ldr r3, [r4,#0x10]                ; r3 = struct[+0x10] (ops table)
+  movs r2=0
+  ldr r6, [r3]; mov r3=r5
+  blx r6                            ; call ops[0](r0=struct, r1=alloc, r2=0, r3=magic)
+  cbz r0, 0x63b8c                   ; if r0==0 → return -1
+
+0x63b7c:                            ; SUCCESS (both branches converge)
+  ldr r3, =0x62970                  ; list-head ptr
+  str r0, [r4,#0x18]                ; struct[+0x18] = device handle (NON-ZERO)
+  movs r0, #0                       ; return value = 0
+  str r5, [r4,#0x14]                ; struct[+0x14] = magic
+  ldr r2, [r3]; str r2, [r4,#0x20]  ; struct[+0x20] = old list head
+  str r4, [r3]                      ; *0x62970 = struct (push to list)
+  b 0x63b90
+
+0x63b8c: mov.w r0, #-1
+0x63b90: pop {r2,r3,r4,r5,r6,pc}
+```
+
+Implications:
+- BOTH c_init calls (pcied size=0x83c, wl size=0x812) take the **alt path
+  → bl 0x9990** (which calls bl 0x27ec — likely malloc/alloc).
+- SUCCESS (r0=0) iff: bl 0x9990 returns non-zero AND ops[0](...) returns
+  non-zero. On success, struct[+0x18] gets the alloc result.
+- pciedngldev call returned 0 (we observed vtable store).
+- wl_struct[+0x18] @ TCM 0x58f08 = 0 in test.99. Consistent with: wl
+  call NEVER ran, OR wl call entered fn 0x63b38 but froze before the
+  str at 0x63b7e (e.g. inside bl 0x9990 / bl 0x27ec / inside ops[0]).
+- The c_init code at 0x644be `cbnz r7, 0x644ca` would assert if wl
+  failed (r7=0). No assert string seen → either (a) wl call hung before
+  returning, or (b) we never got that far. Pure failure return is unlikely.
 
 ## Open questions
 
-1. Inside fn 0x63b38 — does the first call (for "pciedngldev") actually
-   succeed and populate pciedngldev[+0x18], or does it leave field as 0?
-   (Need to trace 0x63b38 next.)
-2. Inside fn 0x2208 — does the array scan have an end condition that the
-   binary state can satisfy?
-3. *0x9d000 has no aligned literal-pool references — the writer must use
-   movw/movt or base+offset addressing. Search needs a code-pattern scan.
+1. Where is *0x9d000 = 0x43b1 written? Not by fn 0x673cc (just returns
+   constant). Not by literal-pool LDR (no aligned ref to 0x9d000).
+   Likely written via base-register addressing in some init helper that
+   ran BEFORE T+200ms. Identity of the value (WL device ID 0x43b1) is
+   suggestive but not proof of writer.
+2. fn 0x9990 → fn 0x27ec — likely a memory pool allocator. Worth disasm
+   to see if it can hang (e.g., on a counted-loop scan).
+3. Is the freeze inside fn 0x9990/0x27ec for the wl call (size=0x812
+   alloc), or further down the chain?
 
-## Working hypothesis
+## Working hypothesis (low-confidence past step 2)
 
 c_init sequence on this hardware:
-1. RTE banner ✓
-2. fn 0x63b38 lookup/register `pciedngldev` — returned NULL → fall-through
-   path executed (vtable stored at *0x62a14) ✓
-3. fn 0x673cc returned 0x43b1 (device id) ✓
-4. fn 0x63b38 lookup/register `wl` — likely also returned NULL
-5. blx via vtable +4 → fn 0x1fc2 → fn 0x2208 (dngl_binddev)
-6. **FREEZE inside dngl_binddev or its callee.**
+1. RTE banner printed ✓ (test.80 console capture)
+2. pciedngldev fn 0x63b38 returned 0 (success) → vtable stored at
+   *0x62a14 = 0x58cf0 ✓ (test.99 probe)
+3. (INFERRED past here)
+4. WL device ID 0x43b1 returned by fn 0x673cc (constant return)
+5. wl fn 0x63b38 — STATUS UNKNOWN. Either (a) freeze before reaching
+   it, (b) freeze inside it (most likely candidate: bl 0x9990 alloc), or
+   (c) successful but somehow didn't write +0x18 (unlikely per disasm).
+6. If wl path completed, dispatch chain c_init→fn 0x1fc2→fn 0x2208
+   (dngl_binddev) would run, but no evidence either way.
