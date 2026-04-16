@@ -1,16 +1,14 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16 23:35, POST test.99 — pointers frozen across T+200/400/800ms)
+## Current state (2026-04-17, POST test.99 + offline disasm — c_init() located)
 
-Git branch: main. Last pushed commit e6e1e28 (Pre-test.99: module built).
-Pending commit: test.99 result doc + journal preservation.
+Git branch: main. Last pushed commit 75b52a1 (Post-test.99 doc).
+Pending commit: offline disasm of c_init() + corrected freeze location.
 
 **TEST.99 RESULT: firmware hard-frozen, no delayed code path, D11 obj still unlinked.**
 
 Test.99 ran cleanly at 23:28:52–23:28:56 (boot -1, journal
 `phase5/logs/test.99.journal`). "RP settings restored" — no host crash.
-Host session separately restarted ~23:31 (unrelated to the module run — the
-module test itself completed cleanly).
 
 Pointer sample — **IDENTICAL across T+200/400/800ms**:
 ```
@@ -22,25 +20,46 @@ pd [0x62a14]  = 0x00058cf0    (vtable, matches test.93)
 → firmware is frozen by T+200ms with NO runtime change for the next 600ms.
 Eliminates any "delayed DPC/ISR writes" hypothesis for these globals.
 
-Console ring (256 bytes from 0x9ccc0): ChipCommon banner + "wl_probe call"
-(truncated). "pciedngl_probe called" text is NOT in this window — it's in the
-pre-wp wrap region (before 0x9ccbe) we didn't dump. A wider / relocated dump
-could capture whatever printed AFTER "pciedngl_probe called", which would
-narrow the freeze location much more than pointer sampling did.
+Console ring (256 bytes from 0x9ccc0): ChipCommon banner truncated. The
+test.80 console captured the printed sequence:
+ChipCommon → "wl_probe called" → "pciedngl_probe called" → **RTE banner**
+(`RTE (PCI-CDC) 6.30.223 (TOB) (r) on BCM4360 r3 @ 40.0/160.0/160.0MHz`)
+then KATS fill — i.e. **freeze is AFTER the RTE banner print**, not at
+"pciedngl_probe called" as earlier notes incorrectly stated.
 
-Per RESUME_NOTES rule "if console is frozen at 'pciedngl_probe called' and
-pointers unchanged → proceed to test.100 with D11 BCMA wrapper reads (Path B
-step 1)" — we have the second half (pointers unchanged) but cannot yet
-confirm the first half because our 256-byte window missed the wp region.
+### Offline disasm finding (2026-04-17, no hardware test)
 
-**Next decision (test.100) is between two cheap options:**
-- (a) Wider / relocated console dump to capture post-"pciedngl_probe called"
-  text — cheapest possible probe, reuses existing scaffolding.
-- (b) D11 core BCMA wrapper reads (IOCTL/IOST/RESET_CTL) — the originally
-  planned Path B step 1, requires chip.c bus-ops scaffolding.
+`phase5/notes/offline_disasm_c_init.md` — full breakdown.
 
-Option (a) is strictly cheaper and blast-radius-safer; defer option (b) if
-(a) surfaces a post-"pciedngl_probe called" string.
+**`c_init()` lives at TCM 0x642fc.** Its literal pool (0x64540-0x6458c)
+reveals the function's full call structure:
+
+| Step | What c_init does | Observed? |
+|------|------------------|-----------|
+| 1 | Print RTE banner (format @ 0x6bae4, version @ 0x40c2f) | ✓ test.80 |
+| 2 | Print `"c_init: add PCI device"` (@ 0x40c42) | ✗ |
+| 3 | Store `*0x62a14 = 0x58cf0` (pciedngl_probe vtable) | ✓ test.99 |
+| 4 | Print `"add WL device 0x%x"` (@ 0x40c61) | ✗ |
+| 5 | Failure paths: `binddev failed` / `device open failed` / `netdev open failed` | ✗ none |
+
+So execution definitely reaches step 3 (vtable populated). It does NOT
+reach the failure paths. Freeze is between step 3 and the WL print, inside
+either pciedngl_probe init or a subroutine called from c_init.
+
+### Next decision (test.100) — three options
+
+- (a) **Continue offline disasm** (free, no hardware test): trace c_init
+  body 0x642fc–0x6453e (~322 bytes Thumb-2) to identify the exact BL after
+  the vtable store. May pinpoint the failing subroutine without any
+  hardware cycle.
+- (b) **Wider/relocated console dump** to capture KATS region — earlier
+  thought to surface post-RTE prints, but offline disasm shows step 4
+  print only happens AFTER subroutine returns, so likely still empty.
+- (c) **D11 BCMA wrapper reads** (Path B step 1) — requires chip.c bus-ops
+  scaffolding; defer until offline disasm exhausts cheap progress.
+
+**Recommend (a) first** — it is strictly free and may eliminate (b) and
+narrow (c) to a specific D11 prereq.
 
 **TEST.98 RESULT: step1 = TCM[0x58f08] = 0x00000000 → hang is in si_attach.**
 
