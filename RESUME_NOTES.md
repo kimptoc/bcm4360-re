@@ -1,13 +1,43 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-16, ABOUT TO RUN test.90 — module built, not yet run)
+## Current state (2026-04-16, ABOUT TO RUN test.91 — module built, not yet run)
 
 Git branch: main (pushed to origin)
-Module built successfully. About to run test.90.
-Test dumps TCM[0x66E00-0x67340] at T+200ms to disassemble function 0x670d8 (deep init).
-Key question: does 0x670d8 contain a polling loop waiting for hardware?
+Module built successfully. About to run test.91.
+Test.91 dumps TCM[0x64400-0x65800] (si_attach at 0x64590) + stack [0x9F800-0xA0000] at T+200ms.
+Key question: where does 0x64590 (called from 0x670d8 at 0x67190 with r1=0x18000000) hang?
 
-## test.89 RESULT: SURVIVED — 0x43b1 question RESOLVED
+## test.90 RESULT: SURVIVED — 0x670d8 disassembled; 0x64590 is next hang candidate
+
+**test.90 ran in boot -1 (survived, TIMEOUT clean exit). Key findings:**
+
+**function 0x670d8 fully disassembled (1344 bytes, 0x66e00-0x67340):**
+- Entry: `stmdb sp!, {r0-r9, sl, lr}` (pushes 12 registers)
+- Loads 7 args (3 from regs r0/r1/r2/r3, 4 from stack [sp+48..+56])
+- memset: zeroes 860 bytes (0x35c) from r4 (the init struct)
+- Stores initial values into struct offsets
+- Calls 0x66ef4 (tiny function: returns 1 always) — never hangs
+- At 0x67156: `mov.w r9, #0x18000000` (ChipCommon base!)
+- At 0x6715c: `ldr.w r1, [r9]` = reads ChipCommon chip_id register
+- Extracts chip_id, numcores, etc. from register
+- **At 0x67190: `bl 0x64590` — FIRST DEEP CALL, likely hang point**
+  - Args: r0=struct_ptr, r1=0x18000000 (ChipCommon), r2=r7
+  - This is likely `si_attach` or `si_create` (silicon backplane init)
+- After return: checks [struct+0xd0] — if NULL, error exit
+- If non-NULL: calls 0x66fc4 (function in our dump, enumerates cores)
+  - 0x66fc4 loops through [struct+0xd0] cores calling 0x99ac, 0x9964
+  - Returns 1 (success) after loop
+
+**call chain established:**
+- pciedngl_probe → 0x67358 → 0x672e4 (wrapper) → 0x670d8 → 0x64590
+
+**0x64590 not in dump (below 0x66e00) — MUST DUMP NEXT**
+**0x66fc4 analyzed: core-enumeration loop, returns 1 on success**
+
+Disassembly: phase5/analysis/test90_disassembly.txt
+Log: phase5/logs/test.90.journal
+
+## test.90 PLAN: Disassemble 0x670d8 (deep init)
 
 **test.89 ran in boot -1. Key findings from fast-sampling:**
 1. T+0ms: ctr=0x00000000 (ARM just released)
@@ -35,6 +65,26 @@ Key question: does 0x670d8 contain a polling loop waiting for hardware?
 
 **NEXT: disassemble 0x670d8** — the only unexamined function in the call chain
 Log: phase5/logs/test.89.journal
+
+## test.91 PLAN: Dump 0x64590 (si_attach) + stack top
+
+**Goal:** Find where 0x64590 hangs (called from 0x670d8 at 0x67190 with r1=0x18000000).
+Also verify call chain via return addresses on stack.
+
+**Approach:**
+1. Keep all proven init (BBPLL, BusMaster, ASPM, masking)
+2. Release ARM
+3. At outer==1 (T+200ms): two dumps:
+   a. CODE: TCM[0x64400-0x65800] = 1280 words (covers 0x64590 with context)
+   b. STACK: TCM[0x9F800-0xA0000] = 512 words (top 2KB, grows down from 0xA0000)
+4. Total: 1792 words — fits in 200ms window
+5. 2s timeout, re-mask every 10ms
+6. NO core switching (lethal)
+
+**Expected outcomes:**
+- CODE: find 0x64590 = si_attach/si_create; look for polling loops, WFI, or more deep calls
+- STACK: find return addresses 0x67194 (after bl 0x64590) and 0x67314 (wrapper return)
+  → confirms how deep into 0x64590 the firmware got before hang
 
 ## test.90 PLAN: Disassemble 0x670d8 (deep init)
 
