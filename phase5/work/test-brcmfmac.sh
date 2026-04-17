@@ -67,6 +67,23 @@ if lsmod | grep -q bcm4360_test; then
     sleep 1
 fi
 
+# Pre-test MMIO check — MUST pass before insmod or machine will hard-crash.
+# test.116 crashed twice because BAR0 MMIO was already dead when insmod ran.
+# The SBR inside brcmf_pcie_probe cannot recover dead MMIO; the subsequent
+# ioread32(devinfo->regs) fires a PCIe Completion Timeout → MCE → hard crash.
+# resource0 I/O error here means: power cycle required (battery drain on MacBook).
+echo "Pre-test: checking BAR0 MMIO (resource0)..."
+if ! dd if=/sys/bus/pci/devices/0000:$PCI_DEV/resource0 bs=4 count=1 of=/dev/null 2>/dev/null; then
+    echo ""
+    echo "FATAL: BAR0 MMIO is dead (I/O error on resource0)."
+    echo "Do NOT run insmod — machine will hard-crash (PCIe Completion Timeout → MCE)."
+    echo "Recovery: drain battery to 0%, wait 2-3 min after shutdown, recharge, boot."
+    echo "Verify with: dd if=/sys/bus/pci/devices/0000:$PCI_DEV/resource0 bs=4 count=1 | xxd"
+    exit 1
+fi
+echo "BAR0 MMIO OK — device is responding."
+echo ""
+
 echo "Loading patched brcmfmac modules..."
 dmesg -C  # Clear kernel log
 
