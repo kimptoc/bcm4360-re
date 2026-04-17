@@ -42,15 +42,15 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.115.stage${STAGE}"
+LOG="$LOG_DIR/test.116.stage${STAGE}"
 
-echo "=== test.115: control test — no resetcore, pure d11 diagnostic --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.116: guard d11 clk_ctl_st read; safe diagnostic after crash+reboot --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: test.115 skip_arm=1 — d11 wrapper read + clk_ctl_st diagnostic only (no resetcore). Confirms d11 not in BCMA reset and clk_ctl_st readable before ARM release." | tee -a "$LOG" ;;
-    1) echo "Stage 1: test.115 skip_arm=0 — control: BBPLL bringup (test.47) + ARM release, no resetcore. Confirms BP_ON_HT=0 hang is PMU issue not resetcore artefact. Wait 35s." | tee -a "$LOG" ;;
+    0) echo "Stage 0: test.116 skip_arm=1 — d11 wrapper read + clk_ctl_st (guarded, only if IN_RESET=NO). Establishes d11 reset state after reboot. Safe even if d11 in BCMA reset." | tee -a "$LOG" ;;
+    1) echo "Stage 1: test.116 skip_arm=0 — BBPLL bringup (test.47) + ARM release, no resetcore. Does counter advance past 0x43b1? If yes, new hang site ~0x68c49 needs stack probes." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"

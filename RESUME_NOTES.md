@@ -1,6 +1,41 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, PRE test.116 — updated d11 IOCTL logging, corrected BP_ON_HT analysis)
+## Current state (2026-04-17, PRE test.116 — guarded clk_ctl_st read, crash root cause identified)
+
+### Root cause of test.115 stage0 crash (identified this session)
+
+**MAbort+ on root port secondary status is BASELINE** — present since test.100 (verified by
+comparing logs). It was NOT introduced by test.114 stage1. The crash was caused by something else.
+
+**Actual crash cause:** `brcmf_pcie_read_reg32(devinfo, 0x1e0)` in test.114b reads d11's core
+register `clk_ctl_st` unconditionally. After test.114 stage1's ARM release → firmware hang →
+machine crash → reboot, d11 was left in BCMA reset. Reading 0x1e0 (d11 core AXI slave) while
+IN_RESET=YES causes PCIe SLVERR → hard kernel crash, no logs.
+
+**Why test.114 stage0/1 didn't crash:** the wl driver had previously initialized d11 out of
+BCMA reset. After reboot, d11 starts in reset (different initial state).
+
+**Fix applied (test.116):** wrapped the 0x1e0 read in `if (!(d11_wrap_rst & 1))`. If IN_RESET=YES,
+logs a safe message and skips the core read. Wrapper reads (0x1800, 0x1408) remain unconditional —
+they are always safe regardless of reset state.
+
+**Module status:** pcie.c patched. NOT yet rebuilt. Build before testing.
+
+**Hypothesis for test.116 stage0:**
+d11 will show IN_RESET=YES (post-reboot, wl driver not active). wrap_IOCTL will show CLK=NO.
+clk_ctl_st read skipped. Stage0 confirms safe diagnostic path.
+
+**Hypothesis for test.116 stage1:**
+With BBPLL up and ARM released, FW should exit fn 0x1415c (BP_ON_HT was granted in test.114
+stage1). Counter should advance past 0x43b1. If it does, Anchor F will shift to ~0x68c49 and
+we need new stack frame probes to identify the new hang site.
+
+**Next steps:**
+1. Build: `make -C /home/kimptoc/bcm4360-re/phase5/work`
+2. Run test.116 stage0 (skip_arm=1) → confirm IN_RESET state and safe wrapper reads
+3. Run test.116 stage1 (skip_arm=0) → does counter advance past 0x43b1?
+   - YES → identify new hang site near FW 0x68c49; add stack frame probes for test.117
+   - NO  → hang persists at same site; reassess (d11 reset state may matter)
 
 ### Analysis of test.114 stage1 + test.115 crash (completed 2026-04-17)
 

@@ -2052,13 +2052,21 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				 d11_wrap_ioctl,
 				 (d11_wrap_ioctl & 1) ? "YES" : "NO");
 
-			d11_ccs = brcmf_pcie_read_reg32(devinfo, 0x1e0);
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.114b: d11 clk_ctl_st=0x%08x BP_ON_HT=%s HAVEHT=%s FORCEHT=%s\n",
-				 d11_ccs,
-				 (d11_ccs & BIT(19)) ? "YES" : "NO",
-				 (d11_ccs & BIT(17)) ? "YES" : "NO",
-				 (d11_ccs & BIT(1))  ? "YES" : "NO");
+			/* Only read core register if d11 is out of BCMA reset.
+			 * Reading 0x1e0 while IN_RESET=YES causes PCIe SLVERR → hard crash.
+			 * (This killed test.115 stage0 after reboot left d11 in reset.) */
+			if (!(d11_wrap_rst & 1)) {
+				d11_ccs = brcmf_pcie_read_reg32(devinfo, 0x1e0);
+				dev_info(&devinfo->pdev->dev,
+					 "BCM4360 test.114b: d11 clk_ctl_st=0x%08x BP_ON_HT=%s HAVEHT=%s FORCEHT=%s\n",
+					 d11_ccs,
+					 (d11_ccs & BIT(19)) ? "YES" : "NO",
+					 (d11_ccs & BIT(17)) ? "YES" : "NO",
+					 (d11_ccs & BIT(1))  ? "YES" : "NO");
+			} else {
+				dev_info(&devinfo->pdev->dev,
+					 "BCM4360 test.114b: d11 IN_RESET=YES — skipping clk_ctl_st read (unsafe)\n");
+			}
 
 			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 		}
