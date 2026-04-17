@@ -2531,47 +2531,47 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			 *   128 words × ~13ms = 1.7s; total with T+200ms = 1.9s (SAFE < 3s window)
 			 */
 			if (outer == 1) {
-				/* test.101: single-breadcrumb probe of *0x62e20 at T+200ms.
+				/* test.102: stack-locator dense-narrow sweep at T+200ms.
 				 *
-				 * test.100 proved fn 0x1624c (the PHY spin-wait) NEVER ran —
-				 * wait-struct fields were pre-init garbage, stable across
-				 * three timepoints (Case C′).  So the hang is strictly
-				 * UPSTREAM of fn 0x1624c, inside wl_probe (fn 0x67614).
+				 * test.101 returned Case 0 (*0x62e20 == 0) → hang upstream
+				 * of 0x68bbc in fn 0x68a68 (wlc_attach). Offline disasm of
+				 * the body + all 6 body-BL targets found NO discriminating
+				 * fixed-TCM breadcrumb exists in the wlc_attach→0x67358
+				 * descent (all stores r4/r3-relative into alloc'd structs).
 				 *
-				 * Offline disasm of wl_probe sub-BLs (phase5/notes/
-				 * offline_disasm_wl_subbls.md) found that fn 0x68a68 (the
-				 * only sub-BL on the path to the PHY chain) writes a
-				 * breadcrumb:
-				 *   0x68bb6  ldr r3, [pc, #200]   ; r3 = &0x00062e20
-				 *   0x68bb8  ldr r2, [r3]
-				 *   0x68bba  cbnz r2, 0x68bbe
-				 *   0x68bbc  str r4, [r3]         ; *0x62e20 = wl_ctx ptr
-				 *   0x68bcc  bl 0x1ab50           ; PHY descent (8B later)
+				 * Pivot: locate the hang by reading the stack. Each nested
+				 * `bl` in Thumb pushes LR (as part of push {...,lr}). The
+				 * frame chain is persistent in RAM while the CPU is stuck.
+				 * test.97 put live stack frames near 0x9FE40. Sweep 64B
+				 * centered there, filter for `word in [0x800..0x70000]`
+				 * with LSB set (Thumb bit) — those are LR candidates.
 				 *
-				 * Firmware image at offset 0x62e20 is 0 (verified offline).
-				 * Only two writers exist in the entire firmware:
-				 *   fn 0x68a68 @ 0x68bbc  (sets ptr, attach path)
-				 *   fn 0x681bc @ 0x681cc  (clears to 0, detach path only)
-				 * During wl_probe only the first can run.
+				 * Pre-computed LR→function table (phase5/notes/
+				 * test102_lr_table.md) maps each candidate value to a
+				 * specific BL site. Confirmation = ≥2 LRs forming a known
+				 * caller→callee chain (e.g. 0x68acf + 0x6739d).
 				 *
-				 * So: post-FW-reset, non-zero at 0x62e20 ⇔ fn 0x68a68
-				 * reached 0x68bbc, i.e. hang is at/past bl 0x1ab50 (8
-				 * bytes later). Zero ⇔ hang is in fn 0x68a68 prefix/body
-				 * or upstream in wl_probe sub-BLs.
+				 * Expected chain top-down (all odd Thumb values):
+				 *   0x67705  wl_probe after bl 0x68a68
+				 *   0x68acf  wlc_attach after bl 0x67f2c (tail→0x67358)
+				 *   0x6739d  fn 0x67358 after bl 0x670d8
+				 *   0x67195  fn 0x670d8 after bl 0x64590 (si_attach)
+				 *   0x671b5/c1/d5/f7  later fn 0x670d8 children
+				 *   0x645b3+         si_attach body children
 				 *
-				 * Net read count for test.101:
-				 *   4 pointer reads (same as test.99/100) + 1 breadcrumb
-				 *   = 5 per probe point, 1 probe point only
-				 *   = 5 reads total (test.100 had 4+9=13 reads over 3 pts).
-				 * Strictly fewer reads than test.99 → should not regress
-				 * past the ~1.9s event window.
+				 * Read count for test.102:
+				 *   2 regression (ctr, pd) + 16 stack words + 1 sanity
+				 *   = 19 reads @ 1200ms FW-wait. test.101 was 5 reads
+				 *   clean; test.100 was 13 reads at regression point.
+				 *   1.5× test.101 should stay below the threshold.
 				 *
 				 * Read-only via brcmf_pcie_read_ram32 (same safe path).
 				 */
-				u32 p_ctr, p_d11, p_ws, p_pd, bc_val;
-				int tms = outer * 200;
+				u32 p_ctr, p_pd, bc_val;
+				u32 sw[16];
+				int i, tms = outer * 200;
 
-#define T101_REMASK() do {						\
+#define T102_REMASK() do {						\
 	if (rp) {							\
 		u16 _bc, _dc, _devsta, _secsta;				\
 		u32 _rtsta;						\
@@ -2596,33 +2596,62 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	}								\
 } while (0)
 
-				/* Control pointers — regression check vs test.99. */
-				T101_REMASK();
+				/* Regression pointers — dropped d11/ws (stable in t.101). */
+				T102_REMASK();
 				p_ctr = brcmf_pcie_read_ram32(devinfo, 0x9d000);
-				T101_REMASK();
-				p_d11 = brcmf_pcie_read_ram32(devinfo, 0x58f08);
-				T101_REMASK();
-				p_ws  = brcmf_pcie_read_ram32(devinfo, 0x62ea8);
-				T101_REMASK();
+				T102_REMASK();
 				p_pd  = brcmf_pcie_read_ram32(devinfo, 0x62a14);
 
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.101 T+%04dms: ctr[0x9d000]=0x%08x "
-					  "d11[0x58f08]=0x%08x ws[0x62ea8]=0x%08x "
+					  "BCM4360 test.102 T+%04dms: ctr[0x9d000]=0x%08x "
 					  "pd[0x62a14]=0x%08x\n",
-					  tms, p_ctr, p_d11, p_ws, p_pd);
+					  tms, p_ctr, p_pd);
 
-				/* Breadcrumb: fn 0x68a68 writes wl_ctx ptr to *0x62e20
-				 * 8 bytes before bl 0x1ab50 (PHY descent).
+				/* Dense stack sweep: 16 × 4B at 0x9FE20..0x9FE5C.
+				 * Centered on test.97's 0x9FE40 frame-density locator.
 				 */
-				T101_REMASK();
+				for (i = 0; i < 16; i++) {
+					T102_REMASK();
+					sw[i] = brcmf_pcie_read_ram32(devinfo,
+								      0x9FE20 + (i * 4));
+				}
+
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.102 T+%04dms: STACK 0x9FE20..0x9FE2C "
+					  "%08x %08x %08x %08x\n",
+					  tms, sw[0], sw[1], sw[2], sw[3]);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.102 T+%04dms: STACK 0x9FE30..0x9FE3C "
+					  "%08x %08x %08x %08x\n",
+					  tms, sw[4], sw[5], sw[6], sw[7]);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.102 T+%04dms: STACK 0x9FE40..0x9FE4C "
+					  "%08x %08x %08x %08x\n",
+					  tms, sw[8], sw[9], sw[10], sw[11]);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.102 T+%04dms: STACK 0x9FE50..0x9FE5C "
+					  "%08x %08x %08x %08x\n",
+					  tms, sw[12], sw[13], sw[14], sw[15]);
+
+				/* LR-candidate flagging: odd-bit, in [0x800..0x70000]. */
+				for (i = 0; i < 16; i++) {
+					if ((sw[i] & 1) && sw[i] >= 0x800 &&
+					    sw[i] < 0x70000) {
+						dev_emerg(&devinfo->pdev->dev,
+							  "BCM4360 test.102 LR-CAND "
+							  "[0x%05x]=0x%08x\n",
+							  0x9FE20 + (i * 4), sw[i]);
+					}
+				}
+
+				/* Sanity: re-read *0x62e20 for continuity with test.101. */
+				T102_REMASK();
 				bc_val = brcmf_pcie_read_ram32(devinfo, 0x62e20);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.101 T+%04dms: BREADCRUMB *0x62e20=0x%08x %s\n",
-					  tms, bc_val,
-					  bc_val == 0 ? "ZERO -- fn 0x68a68 did NOT reach 0x68bbc" :
-							"NON-ZERO -- fn 0x68a68 reached bl 0x1ab50 area");
-#undef T101_REMASK
+					  "BCM4360 test.102 T+%04dms: SANITY *0x62e20=0x%08x "
+					  "(t.101 was 0x00000000)\n",
+					  tms, bc_val);
+#undef T102_REMASK
 			}
 
 			/* Inner: re-mask + poll sharedram AND fw_init_done every 10ms for 200ms */
