@@ -1,6 +1,51 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, POST test.106 — PROLOGUE-HANG CONFIRMED)
+## Current state (2026-04-17, PRE test.107 — module built, about to run)
+
+**Goal:** identify what core lives at backplane slot `0x18001000` (where fn
+0x1415c's first MMIO read hangs) and whether that core is MMIO-responsive
+from the host side while the ARM is stuck.
+
+**Probe design (all READ-ONLY, no backplane writes):**
+
+1. **Pre-ARM enumeration (11 slots):** loop `N = 0..10`, point BAR0 window
+   at `0x18000000 + N*0x1000`, read offset 0 + offset 0x1e0 at each. Logs
+   11 lines in stage-0 dmesg. Slot 0x18001000 is the FW-hang target.
+2. **T+200ms hang-target probe:** during the existing FW-wait outer==1
+   window, redirect BAR0 to `0x18001000`, read offset `0x1e0`, restore
+   window to CC. One additional read. Compares host-side result to
+   FW-side hang state.
+
+**Decision tree (test.107 results):**
+- Enum slot 0x18001000 off0/off1e0 = `0xffffffff` + hang-target probe =
+  `0xffffffff` → core truly dead. Root cause: missing clock/power/reset
+  release. Next test: CC-side bring-up of that core before ARM release.
+- Enum slot 0x18001000 returns a value + hang-target probe returns a
+  value → core responsive; FW-side hang is something else (poll mask
+  never set, ARM core-local clock gate not yet up when FW runs this BL).
+  Next test: examine FW's pre-1415c code to see if a clock-enable write
+  is missing.
+- Host probe itself hangs (module load never completes) → backplane is
+  globally borked. Would need SBR to recover.
+
+**Files changed:**
+- `phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c`:
+  inserted test.107 block after the pre-ARM `brcmf_pcie_select_core(CC)`
+  (before ARM release) and a hang-target probe in the existing
+  outer==1 branch.
+- `phase5/work/test-staged-reset.sh`: LOG path + header → test.107.
+
+**Build:** clean. Module at
+`phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko`.
+
+**Expected log capture:** host crashes ~30s post-exit (pattern from t.101-106).
+If stage0 log missing, recover via
+`journalctl -b -1 | grep BCM4360 > phase5/logs/test.107.stage0`
+after reboot.
+
+---
+
+## Previous state (2026-04-17, POST test.106 — PROLOGUE-HANG CONFIRMED)
 
 **HEADLINE RESULT:** fn 0x1415c hangs on its first MMIO read (ldr.w at
 0x14176). Target register = **0x180011e0** = backplane core slot #1 base

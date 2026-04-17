@@ -2274,6 +2274,51 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		}
 
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+
+		/* test.107: enumerate backplane core slots 0x18000000..0x1800A000.
+		 *
+		 * test.106 proved prologue-hang: fn 0x1415c's `ldr.w r2,[r3,#0x1e0]`
+		 * at 0x14176 stalls forever. r3 = [struct+0x88] = 0x18001000, so
+		 * target register = 0x180011e0. We need to know (a) what core lives
+		 * at slot 0x18001000 and (b) whether that core is MMIO-responsive
+		 * from the host PRE-ARM (so we can compare against the FW-side hang).
+		 *
+		 * For each slot 0x18000000 + N*0x1000 (N=0..10), point BAR0 window
+		 * there and read offset 0 + offset 0x1e0. AI-backplane metadata
+		 * (core ID, revision) lives at slot+0xFF8/+0xFFC on the wrapper, but
+		 * those may be on a separate wrapper backplane; for now just read
+		 * the canonical "first register" and the specific 0x1e0 FW hangs on.
+		 *
+		 * READ-ONLY. No writes to backplane registers. Safe pre-ARM.
+		 *
+		 * Restores BAR0 window to ChipCommon (0x18000000) at end.
+		 */
+		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+			u32 slot, off0, off1e0;
+			int n;
+
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.107: pre-ARM backplane core enumeration\n");
+			for (n = 0; n <= 10; n++) {
+				slot = 0x18000000 + (n * 0x1000);
+				pci_write_config_dword(devinfo->pdev,
+						       BRCMF_PCIE_BAR0_WINDOW,
+						       slot);
+				off0   = ioread32(devinfo->regs + 0x000);
+				off1e0 = ioread32(devinfo->regs + 0x1e0);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.107: slot[0x%08x] off0=0x%08x off1e0=0x%08x%s\n",
+					  slot, off0, off1e0,
+					  (off0 == 0xffffffff && off1e0 == 0xffffffff) ?
+					    " — DEAD (no core)" :
+					  (slot == 0x18001000) ?
+					    " ← FW hang target" : "");
+			}
+			/* Restore BAR0 window to ChipCommon for downstream code. */
+			pci_write_config_dword(devinfo->pdev,
+					       BRCMF_PCIE_BAR0_WINDOW,
+					       0x18000000);
+		}
 	}
 
 	brcmf_dbg(PCIE, "Bring ARM in running state\n");
@@ -2688,6 +2733,45 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				dev_emerg(&devinfo->pdev->dev,
 					  "BCM4360 test.106 T+%04dms: SANITY *0x62e20=0x%08x\n",
 					  tms, bc_val);
+
+				/* test.107: read the exact register FW is hung reading
+				 * (0x180011e0) via BAR0-window redirect. Compare host-side
+				 * result to FW-side state:
+				 *  - If we get a sensible value: core IS responding, FW
+				 *    is stalling for some other reason (maybe it was a
+				 *    transient hang on ARM's first access, or FW's poll
+				 *    mask never matches, or we hit it pre-clock-enable
+				 *    from ARM's side but host's BAR0 path has its own
+				 *    clock).
+				 *  - If we get 0xffffffff: core is genuinely dead. FW and
+				 *    host both see the same thing.
+				 *  - If the read HANGS the host (watchdog, or this probe
+				 *    never prints): core is completely non-responsive at
+				 *    the AXI/backplane level — both sides hang.
+				 *
+				 * NOTE: this writes BAR0 window — would disturb existing
+				 * BAR0 code. Save+restore to CC (default post-ARM). The
+				 * inner re-mask loop only touches root-port config space,
+				 * not BAR0, so changing window here is safe between probes.
+				 */
+				{
+					u32 hang_reg;
+
+					T106_REMASK();
+					pci_write_config_dword(devinfo->pdev,
+							       BRCMF_PCIE_BAR0_WINDOW,
+							       0x18001000);
+					hang_reg = ioread32(devinfo->regs + 0x1e0);
+					pci_write_config_dword(devinfo->pdev,
+							       BRCMF_PCIE_BAR0_WINDOW,
+							       0x18000000);
+					dev_emerg(&devinfo->pdev->dev,
+						  "BCM4360 test.107 T+%04dms: FW-hang-target [0x180011e0]=0x%08x %s\n",
+						  tms, hang_reg,
+						  hang_reg == 0xffffffff ?
+						    "DEAD from host side too" :
+						    "alive from host side — FW-side hang is core-local");
+				}
 			}
 
 			/* Time-evolved T3 samples at T+600ms and T+1000ms.

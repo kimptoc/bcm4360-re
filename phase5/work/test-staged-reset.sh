@@ -42,9 +42,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.106.stage${STAGE}"
+LOG="$LOG_DIR/test.107.stage${STAGE}"
 
-echo "=== test.103: targeted LR-slot reads + deep sub-frame sweep --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.107: pre-ARM core enumeration + FW-hang-target probe (0x180011e0) --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
