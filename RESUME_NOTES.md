@@ -1,54 +1,72 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, POST test.116 stage0 crash — retry after full reboot)
+## Current state (2026-04-17, POST test.116 stage0 crash x2 — MMIO DEAD, NEED POWER CYCLE)
 
-### Test.116 stage0 crash analysis
+### HARDWARE STATUS: BCM4360 MMIO NON-RESPONSIVE — POWER CYCLE REQUIRED
 
-**test.116 stage0 crashed** immediately after "SBR complete — bridge_ctrl restored". No BAR0
-probe output (test.53 probe) was logged, meaning the crash occurred **inside
-`brcmf_pcie_get_resource`** (chip_attach's prepare callback), before `ioread32(devinfo->regs)`.
+**Diagnosis (2026-04-17, post-second-crash):** BCM4360 BAR0 MMIO is completely non-responsive.
+Confirmed via direct userspace probe:
+- `setpci -s 03:00.0 COMMAND` = 0x0006: config space IS accessible (device visible)
+- `dd if=/sys/bus/pci/devices/0000:03:00.0/resource0 bs=4 count=1` → **I/O error**: MMIO DEAD
+- This was reproduced across: manual SBR via setpci, kernel device reset (`echo 1 > reset`),
+  device remove+rescan. Nothing recovers MMIO.
+- `FLReset-` in DevCap: BCM4360 has no Function Level Reset capability.
 
-**The d11 guard code was never reached.** The guard (`if (!(d11_wrap_rst & 1))`) lives in
-`brcmf_pcie_reset_device`, which runs later (chip_attach's reset callback). The test.116 crash
-tells us nothing about whether the guard works — that code path was not exercised.
+**Root cause confirmed:** The test.114 stage1 firmware execution (ARM release + ~400ms hang wait)
+left the BCM4360's PCIe endpoint or BCMA AXI fabric in a state that soft reset cannot clear.
+A system reboot does NOT cut PCIe slot power (VAUX stays on). Only a full hardware power cycle
+(complete shutdown, wait, power on) will clear this state.
 
-**Most likely cause:** The test.115 SLVERR (reading d11 AXI slave while in BCMA reset) left
-the BCM4360's PCIe core in a non-recoverable error state that the SBR (200ms) could not fix.
-A full system reboot is needed to clear this state. We now have that reboot.
+**"Reboot fixes it" hypothesis was WRONG.** test.116 stage0 was run TWICE after full reboots;
+both times it crashed hard (no kernel output, MCE-level crash). Userspace now confirms the
+device itself is not responding to MMIO at all — the crashes were always Completion Timeout → MCE.
 
-**Alternative:** If the crash recurs in the same place (silent after SBR complete), the issue
-is NOT chip state and requires finer logging inside `brcmf_pcie_get_resource` — before/after
-`pci_enable_device`, before/after `ioremap`, before `ioread32`.
+**Next step: FULL POWER CYCLE**
+`sudo shutdown -h now` → wait 30+ seconds after power LED goes off → power on.
+Do NOT just reboot (`shutdown -r`), that does not cut slot power.
 
-**Module status:** pcie.c has the d11 guard applied. Module built at 20:52:42 (before test.116
-crash). Module is current and valid — **no rebuild needed** unless pcie.c is edited.
+### What to do after power cycle
 
-**Hypothesis for test.116 stage0 retry (post full reboot):**
-A full system reboot clears the BCM4360 PCIe error state that SBR could not. The BAR0 probe
-will succeed (test.53 prints "alive"). chip_attach proceeds. test.114a wrapper reads (0x1800,
-0x1408) run safely. d11 will show IN_RESET=YES (no wl driver this boot). The guard skips the
-0x1e0 read and logs "IN_RESET=YES — skipping clk_ctl_st read". Stage0 completes without crash.
+After power cycle, before ANY test:
 
-**DIVERGENT outcome:** If crash recurs at same point → add pre/post logging to
-`brcmf_pcie_get_resource`: log before pci_enable_device, after pci_enable_device, before
-ioremap, after ioremap, before ioread32. This isolates whether the crash is at:
-  - pci_enable_device (resource conflict or AER fatal error)
-  - ioremap (mapping failure followed by NULL deref)
-  - ioread32 (Completion Timeout → MCE on root port with FatalErr+ enabled)
+1. **Verify MMIO works:** `dd if=/sys/bus/pci/devices/0000:03:00.0/resource0 bs=4 count=1 | xxd`
+   Should return 4 bytes (any value, not I/O error). If I/O error → power cycle again.
 
-**Next steps:**
-1. Run test.116 stage0 retry (module already built, PCIe state clean)
-2. If stage0 passes → run test.116 stage1 (skip_arm=0, BBPLL + ARM release)
-3. If stage0 crashes same place → add granular logging to brcmf_pcie_get_resource, rebuild
+2. **Module NOT built.** Run: `make -C /home/kimptoc/bcm4360-re/phase5/work`
+   (no .ko file survived the crash)
 
-**Root cause of test.115 stage0 crash (for reference):**
-The d11 guard (test.116 fix) was correct analysis. The crash was at `brcmf_pcie_read_reg32(devinfo,
-0x1e0)` in test.114b, which reads d11 AXI slave while d11 is in BCMA reset → SLVERR → crash.
-The fix (`if (!(d11_wrap_rst & 1))` guard) is in pcie.c but has NOT yet been tested — test.116
-stage0 crashed before reaching it. This must be verified in the retry.
+3. **Run test.116 stage0.** With MMIO restored, the d11 guard should finally be testable.
+   Hypothesis: BAR0 probe returns alive, d11 IN_RESET=YES (no wl driver), guard skips 0x1e0
+   read, stage0 completes cleanly.
 
-**MAbort+ on root port secondary status is BASELINE** (present since test.100, not introduced
-by any recent test). Current state: device MAbort-, root port secondary MAbort+ (baseline).
+4. **Only after stage0 clean:** run stage1 with skip_arm=0.
+   CRITICAL FOR STAGE1: After ARM is released and test completes, do NOT leave module loaded
+   long-term. Unload promptly to avoid another firmware-induced MMIO corruption.
+
+### Prevention for future stage1 tests
+
+The firmware, when running, writes to BCM4360 PCIe endpoint registers that corrupt MMIO
+state in a way that persists through soft reset. To prevent MMIO lock-out:
+- After stage1 ARM release + observation window, rmmod promptly (within the wait period)
+- If stage1 crashes, expect another power cycle may be needed before next run
+- Consider: after stage1, add a SBR in the test SCRIPT (before insmod) with 1000ms wait
+
+### Test.116 stage0 crash analysis (both crashes)
+
+test.116 stage0 crashed TWICE. Both crashes produced NO kernel output (hard MCE-level crash).
+The SBR in `brcmf_pcie_probe` may or may not have logged "SBR complete" — the dmesg capture
+only runs if insmod returns, but both runs had insmod hard-crash the machine. The userspace
+MMIO test confirms the crash was at `ioread32(devinfo->regs)` in brcmf_pcie_get_resource
+(test.53 BAR0 probe) — PCIe Completion Timeout → MCE. With `pci=noaer` in boot params and
+`FatalErr+` on root port, there is NO soft error recovery for this path.
+
+**The d11 guard was never reached.** Both test.116 crashes happened in get_resource (prepare
+callback), before reset_device (reset callback) where the guard lives.
+
+**Module status:** pcie.c has d11 guard. Module NOT built (.ko was cleared by crash).
+Rebuild required: `make -C /home/kimptoc/bcm4360-re/phase5/work`
+
+**MAbort+ on root port secondary status is BASELINE** (present since test.100).
 
 ### Analysis of test.114 stage1 + test.115 crash (completed 2026-04-17)
 
