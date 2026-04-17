@@ -44,24 +44,92 @@ polling, or fixed-TCM stores in their direct bodies. The hang must
 therefore be in one of their DESCENDANTS, or in fn 0x68a68's UNEXAMINED
 body 0x68aca–0x68bbc.
 
-### Next step — offline disasm BEFORE test.102
+### Offline disasm result (POST test.101, 2026-04-17)
 
-Cheap-progress ordering (no hardware test):
+`phase5/notes/offline_disasm_68a68_body.md` — full report of fn 0x68a68
+body 0x68a68..0x68bcc and all 6 body-BL targets.
 
-1. **Disasm fn 0x68a68 body region 0x68aca–0x68bbc** (~242 bytes, Thumb-2).
-   This is the region between prefix end (already clean) and the
-   breadcrumb store. If a spin loop or HW poll exists here, hang is
-   inside fn 0x68a68 itself. Identify any globals/pointers written so
-   we have candidate breadcrumbs for test.102.
+**Key finding:** fn 0x68a68's first body BL (`bl 0x67f2c` at 0x68aca) is a
+4-insn trampoline that **tail-calls 0x67358** — the SAME si_attach descent
+entered from pciedngl_probe (which succeeded). So wlc_attach's failure is
+a re-entry into 0x67358 → 0x670d8 → 0x64590 (si_attach) → core-register
+dispatches → deeper.
 
-2. **Disasm descendants of fn 0x66e64, fn 0x649a4, fn 0x6491c** (wl_probe's
-   earlier sub-BLs). These haven't been traced one level deeper. Find
-   any globals/fixed-TCM stores we could breadcrumb.
+**No discriminating fixed-TCM breadcrumb exists in this descent.** Every
+store in fn 0x68a68 body, fn 0x670d8 body, and fn 0x64590 (si_attach) is
+r4/r3-relative into freshly-alloc'd structs. The ONLY fixed-TCM write in
+the descent (fn 0x66e90: `str r0, [*0x62a88]`) is a LATCH — populated by
+pciedngl's first entry, SKIPPED by wlc_attach's second entry (list is
+already non-empty; takes the error-printf path without overwriting).
 
-3. Only AFTER offline disasm: design test.102 probes from concrete
-   breadcrumb sites (likely ONE new probe at a specific TCM address that
-   would only be non-zero if fn 0x68a68 body reached a particular
-   checkpoint).
+Advisor verdict: "Don't extend disasm further looking for a breadcrumb.
+That IS the evidence." → Pivot to **stack-walk approach** for test.102.
+
+### test.102 PLAN — stack-locator sparse sweep
+
+**Goal:** Identify the function whose `bl` is currently pending-return by
+reading the stack region and filtering for saved LR values. Each LR
+candidate maps (via pre-computed table, see below) to a specific call
+site — naming the function whose call is currently suspended.
+
+**Rationale for stack walk (not more breadcrumbs):**
+- The wlc_attach descent has no discriminating fixed-TCM stores.
+- Each nested `bl` in ARM Thumb pushes lr on the stack (part of
+  `push {..., lr}` prologues). When the CPU is stuck mid-call, its live
+  frame chain is persistent in RAM.
+- Test.97 located active stack frames "near 0x9FE40". TCM end is 0xA0000.
+- Filter: `word ∈ [0x800..0x70000]` AND LSB set (Thumb bit) → plausible LR.
+- Confirmation: ≥2 LRs forming a known caller→callee chain. A lone
+  hit is data-shaped-like-LR — not confirmed. A chain is strong.
+
+**Probe design (read-only, all via `brcmf_pcie_read_ram32`):**
+- Baseline pre-ARM: `*0x62e20` — continuity check vs test.101
+- T+200ms: 2 regression reads — ctr (0x9d000), pd (0x62a14) — dropped d11
+  and ws (test.101 showed d11=0 stable, ws=0x9d0a4 stable, not interpretation-gating)
+- T+200ms: **dense stack sweep — 16 reads × 4B stride at 0x9FE20..0x9FE60**
+  (64B region centered on test.97's 0x9FE40 frame-density locator)
+- T+200ms: 1 re-read of `*0x62e20` (sanity vs test.101)
+- Total: **19 reads** at the single T+200ms timepoint.
+
+**Budget analysis** (per advisor linear-scaling assumption — no data
+between 5 and 13 reads, and nothing above 13):
+- test.101: 5 reads @ 1200ms FW-wait → clean
+- test.100: 13 reads @ 2000ms FW-wait → ~1.9s regression
+- test.102: 19 reads @ 1200ms FW-wait → ~1.5× test.101, **well below** the
+  known regression point at 13. Staying dense+narrow buys the ability to
+  see a chained LR pair, at the cost of SP-location precision.
+
+**FW-wait:** keep at 1200ms (same as test.101 — per advisor, budget is
+probe count, not outer loop).
+
+**Pre-computed LR → function interpretation table:**
+See `phase5/notes/test102_lr_table.md` — built from existing disasm
+(test88/90/91, offline_disasm_68a68_body). Expected live chain top-down:
+1. wl_probe's `bl 0x68a68` @ 0x67700 → LR = **0x67705** (Thumb bit set)
+2. wlc_attach's `bl 0x67f2c` @ 0x68aca → LR = **0x68acf**
+3. (0x67f2c is tail-call trampoline → no frame)
+4. fn 0x67358's `bl 0x670d8` @ 0x67398 → LR = **0x6739d**
+5. fn 0x670d8's `bl 0x64590` @ 0x67190 → LR = **0x67195**, or a later
+   child call (0x671b5, 0x671c1, 0x671d5, 0x671f7)
+6. Depending on depth: LRs inside si_attach body (0x645b3, 0x645c7,
+   0x6463d, 0x64679, 0x6468f — from test91_disasm BL list)
+   All pushed-LR values are **odd** (Thumb bit set) — filter accordingly.
+
+**Confirmation criteria:**
+- **Strong:** ≥2 LRs from the table appear in the 16-word sweep.
+- **Moderate:** 1 LR from table + nearby word in a plausible range but
+  not listed (may be a deeper child not yet disassembled).
+- **Weak/null:** 0 LRs from table → sweep missed the SP region; dense
+  follow-up in test.103.
+
+**Deferred to test.103 (per budget):**
+- Full console ring dump (firmware may have printed an error before hang)
+- Dense 32-word sweep at the LR-rich 128B region identified by test.102
+
+**Crash-safety checks:**
+- All 16 sweep addresses are inside TCM (< 0xA0000).
+- No HW register reads, no core switching.
+- Masking (T101_REMASK) called before each read — same pattern as test.101.
 
 ### Pre-test.101 state (retained for context below)
 
