@@ -1,11 +1,71 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, PRE test.101 REV — breadcrumb + pre-ARM baseline)
+## Current state (2026-04-17, POST test.101 — Case 0: breadcrumb ZERO, hang UPSTREAM of 0x68bbc)
 
-Git branch: main. Last pushed commit 7d4195a (pre-test.101 module built).
-Pending commit: **test.101 REVISION** — added pre-ARM baseline read of
-`*0x62e20` per advisor refinement #1 (closes "stale TCM from prior load"
-interpretation hole). Expected pre-ARM reading: 0 (post-SBR, pre-FW-reset).
+Git branch: main. Last pushed commit fcb9558 (Pre-test.101 rev — baseline probe).
+Untracked: `phase5/logs/test.101.stage0` (needs commit).
+
+### TEST.101 RESULT — Case 0 (matrix row 1): breadcrumb ZERO
+
+Test.101 ran cleanly in boot -1 (07:42:59 → 07:43:01 clean exit). Machine
+then crashed/rebooted ~30 min later (08:13:05 boot 0) — unrelated to the
+test run itself; the test completed with "RP settings restored".
+
+Key readings:
+```
+Pre-ARM baseline: *0x62e20 = 0x00000000  ZERO (expected — no stale TCM) ✓
+T+200ms:          *0x62e20 = 0x00000000  ZERO
+```
+
+Control pointers (as test.100):
+```
+ctr[0x9d000]  = 0x000043b1
+d11[0x58f08]  = 0x00000000
+ws [0x62ea8]  = 0x0009d0a4
+pd [0x62a14]  = 0x00058cf0
+```
+Counter frozen at 0x43b1 from T+200ms onward, confirming hard freeze by
+T+12ms (per test.89 timeline) still holds.
+
+**Interpretation per test.101 matrix row 1:** baseline=0 means no stale
+TCM (interpretation is clean); T+200ms=0 means fn 0x68a68 NEVER wrote
+*0x62e20 at 0x68bbc. Therefore fn 0x68a68 did NOT reach 0x68bbc.
+
+Combined with test.100 (Case C′: fn 0x1624c never ran), the freeze is:
+- Inside fn 0x68a68 prefix/body BEFORE bl 0x1ab50 at 0x68bcc
+  (specifically the unexamined body region 0x68aca–0x68bbc), OR
+- Upstream in wl_probe (fn 0x67614), in one of the earlier sub-BLs
+  BEFORE bl 0x68a68 at 0x67700.
+
+Per the earlier subagent offline disasm (`offline_disasm_wl_subbls.md`),
+the five wl_probe sub-BLs (fn 0x66e64, fn 0x649a4, fn 0x4718, fn 0x6491c,
+plus fn 0x68a68 prefix through 0x68aca) contain NO spin loops, HW-register
+polling, or fixed-TCM stores in their direct bodies. The hang must
+therefore be in one of their DESCENDANTS, or in fn 0x68a68's UNEXAMINED
+body 0x68aca–0x68bbc.
+
+### Next step — offline disasm BEFORE test.102
+
+Cheap-progress ordering (no hardware test):
+
+1. **Disasm fn 0x68a68 body region 0x68aca–0x68bbc** (~242 bytes, Thumb-2).
+   This is the region between prefix end (already clean) and the
+   breadcrumb store. If a spin loop or HW poll exists here, hang is
+   inside fn 0x68a68 itself. Identify any globals/pointers written so
+   we have candidate breadcrumbs for test.102.
+
+2. **Disasm descendants of fn 0x66e64, fn 0x649a4, fn 0x6491c** (wl_probe's
+   earlier sub-BLs). These haven't been traced one level deeper. Find
+   any globals/fixed-TCM stores we could breadcrumb.
+
+3. Only AFTER offline disasm: design test.102 probes from concrete
+   breadcrumb sites (likely ONE new probe at a specific TCM address that
+   would only be non-zero if fn 0x68a68 body reached a particular
+   checkpoint).
+
+### Pre-test.101 state (retained for context below)
+
+---
 
 ### Advisor refinement #1 (added 2026-04-17, pre-run)
 
