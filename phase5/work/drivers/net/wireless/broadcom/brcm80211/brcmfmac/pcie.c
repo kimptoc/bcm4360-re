@@ -2031,23 +2031,26 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		/* test.114b: d11 clk_ctl_st diagnostic before ARM release.
 		 *
 		 * test.114 stage1 result: d11 NOT in BCMA reset (RESET_CTL=0 already).
-		 * FW writes FORCEHT (bit1), HAVEHT=1, but BP_ON_HT=0 at T+200ms.
-		 * PMU is not granting BP_ON_HT to d11 despite BBPLL up and HAVEHT=1.
-		 * res_state=0x7ff (only 11 PMU resources active) vs min_res=0xFFFFF —
-		 * resources 11-19 never activate; one likely gates d11 BP_ON_HT path.
+		 * clk_ctl_st=0x070b0042 at T+200ms: BP_ON_HT=YES, HAVEHT=YES, FORCEHT=YES.
+		 * FW successfully wrote FORCEHT and BP_ON_HT was granted — fn 0x1415c
+		 * likely exited. Anchor F mismatch (0x68c49 vs exp 0x68b95) suggests
+		 * hang has moved downstream to a new site near FW address 0x68c49.
 		 *
 		 * This is now a pure read-only diagnostic; no resetcore (control test).
 		 * d11 clk_ctl_st readable because d11 is already out of reset here.
 		 */
 		{
-			u32 d11_wrap_rst, d11_ccs;
+			u32 d11_wrap_rst, d11_wrap_ioctl, d11_ccs;
 
 			brcmf_pcie_select_core(devinfo, BCMA_CORE_80211);
-			d11_wrap_rst = brcmf_pcie_read_reg32(devinfo, 0x1800);
+			d11_wrap_rst   = brcmf_pcie_read_reg32(devinfo, 0x1800);
+			d11_wrap_ioctl = brcmf_pcie_read_reg32(devinfo, 0x1408);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.114b: wrap_RESET_CTL=0x%08x IN_RESET=%s\n",
+				 "BCM4360 test.114b: wrap_RESET_CTL=0x%08x IN_RESET=%s wrap_IOCTL=0x%08x CLK=%s\n",
 				 d11_wrap_rst,
-				 (d11_wrap_rst & 1) ? "YES" : "NO");
+				 (d11_wrap_rst   & 1) ? "YES" : "NO",
+				 d11_wrap_ioctl,
+				 (d11_wrap_ioctl & 1) ? "YES" : "NO");
 
 			d11_ccs = brcmf_pcie_read_reg32(devinfo, 0x1e0);
 			dev_info(&devinfo->pdev->dev,

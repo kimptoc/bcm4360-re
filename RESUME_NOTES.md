@@ -1,6 +1,48 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, PRE test.114 — d11 enable before ARM release, module built)
+## Current state (2026-04-17, PRE test.116 — updated d11 IOCTL logging, corrected BP_ON_HT analysis)
+
+### Analysis of test.114 stage1 + test.115 crash (completed 2026-04-17)
+
+**test.114 stage1 key results:**
+- d11 wrap_RESET_CTL=0x00000000 IN_RESET=NO (d11 was already out of BCMA reset)
+- test.47 BBPLL bringup succeeded: pmustatus=0x0000002e, clk_ctl_st=0x01030040 HAVEHT=YES
+- test.107 T+200ms: d11.clk_ctl_st=0x070b0042 — this means:
+  - Bit 19 (BP_ON_HT) = 0x070b0042 & 0x00080000 = 0x00080000 ≠ 0 → **BP_ON_HT=YES**
+  - Bit 17 (HAVEHT) = YES, Bit 1 (FORCEHT) = YES
+  - **CORRECTION:** earlier pice.c comment claimed BP_ON_HT=0 — this was wrong
+- FW wrote FORCEHT and BP_ON_HT was granted → fn 0x1415c (the d11 clock poll) likely EXITED
+- Anchor F at T+200ms: [0x9CF6C]=0x00068c49 (exp 0x68b95) MISMATCH
+  - Frame pointer shifted — hang has MOVED downstream to ~FW address 0x68c49
+- Counter still at 0x43b1 at T+400ms → FW blocked in si_attach nested call (different site)
+
+**test.115 stage0 crash:**
+- PCIe state showed CommClk-, MAbort+ (bad state left by test.114 stage1 ARM release)
+- Crashed during insmod (hard crash, no kernel logs)
+- Machine has since rebooted; PCIe state should be clean now
+
+**pcie.c changes made (this session):**
+- test.114b comment: corrected BP_ON_HT analysis (was wrong; BP_ON_HT IS set in test.114 stage1)
+- test.114b block: added `d11_wrap_ioctl` readback from wrapper offset 0x1408 (was missing)
+  - Now logs: `wrap_RESET_CTL=... IN_RESET=... wrap_IOCTL=... CLK=...`
+  - CLK=YES means BCMA_IOCTL_CLK (bit 0) is set → AXI slave accessible
+
+**Outstanding question:**
+- With BBPLL up and d11 out of reset, FW exits fn 0x1415c. What is the NEW hang site near 0x68c49?
+- Need to re-probe: run test.115 stage0 (clean d11 IOCTL snapshot), then stage1 to see if counter advances
+
+**Module status:** pice.c edited, NOT yet rebuilt. Run `make` in phase5/work/ before testing.
+
+**Next steps:**
+1. Build: `make -C /home/kimptoc/bcm4360-re/phase5/work`
+2. Run test.115 stage0 (skip_arm=1) → get clean d11 IOCTL value after cr4_set_passive
+3. Run test.115 stage1 (skip_arm=0, BBPLL up, no resetcore) → does counter advance past 0x43b1?
+   - YES → hang moved; need new stack frame probes for FW ~0x68c49
+   - NO  → something else blocks (check IOCTL value from stage0)
+
+---
+
+## Previous state (2026-04-17, PRE test.114 — d11 enable before ARM release, module built)
 
 ### Test.113 crash analysis (completed 2026-04-17)
 

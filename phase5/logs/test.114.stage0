@@ -1,0 +1,98 @@
+=== test.114: d11 enable before ARM release --- stage=0 ===
+Date: Fri 17 Apr 19:41:26 BST 2026
+
+Stage 0: test.114 — (a) d11 wrapper RESET_CTL before resetcore (test.114a in reset_device), (b) brcmf_chip_resetcore(d11) + wrapper verify + clk_ctl_st read (test.114b before skip_arm). skip_arm=1 first run (no ARM release). Expected: IN_RESET=YES before, IN_RESET=NO after resetcore, no crash.
+
+=== Pre-test PCIe state ===
+03:00.0 Network controller [0280]: Broadcom Inc. and subsidiaries BCM4360 802.11ac Dual Band Wireless Network Adapter [14e4:43a0] (rev 03)
+	Subsystem: Apple Inc. Device [106b:0112]
+	Control: I/O- Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+	Latency: 0, Cache Line Size: 256 bytes
+	Interrupt: pin A routed to IRQ 0
+	IOMMU group: 6
+	Region 0: Memory at b0600000 (64-bit, non-prefetchable) [size=32K]
+	Region 2: Memory at b0400000 (64-bit, non-prefetchable) [size=2M]
+	Capabilities: [48] Power Management version 3
+		Flags: PMEClk- DSI- D1+ D2+ AuxCurrent=0mA PME(D0+,D1+,D2+,D3hot+,D3cold+)
+		Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=2 PME-
+	Capabilities: [58] MSI: Enable- Count=1/1 Maskable- 64bit+
+		Address: 0000000000000000  Data: 0000
+	Capabilities: [68] Vendor Specific Information: Len=44 <?>
+	Capabilities: [ac] Express (v2) Endpoint, IntMsgNum 0
+		DevCap:	MaxPayload 256 bytes, PhantFunc 0, Latency L0s <4us, L1 unlimited
+			ExtTag- AttnBtn- AttnInd- PwrInd- RBE+ FLReset- SlotPowerLimit 10W TEE-IO-
+		DevCtl:	CorrErr- NonFatalErr- FatalErr- UnsupReq-
+			RlxdOrd+ ExtTag- PhantFunc- AuxPwr+ NoSnoop+
+			MaxPayload 128 bytes, MaxReadReq 512 bytes
+		DevSta:	CorrErr+ NonFatalErr- FatalErr- UnsupReq+ AuxPwr+ TransPend-
+		LnkCap:	Port #0, Speed 2.5GT/s, Width x1, ASPM L0s L1, Exit Latency L0s <2us, L1 <32us
+			ClockPM+ Surprise- LLActRep- BwNot- ASPMOptComp+
+		LnkCtl:	ASPM L0s L1 Enabled; RCB 64 bytes, LnkDisable- CommClk+
+			ExtSynch- ClockPM+ AutWidDis- BWInt- AutBWInt- FltModeDis-
+		LnkSta:	Speed 2.5GT/s, Width x1
+			TrErr- Train- SlotClk+ DLActive- BWMgmt- ABWMgmt-
+		DevCap2: Completion Timeout: Range ABCD, TimeoutDis+ NROPrPrP- LTR+
+			 10BitTagComp- 10BitTagReq- OBFF Via WAKE#, ExtFmt- EETLPPrefix-
+
+=== Pre-test root port (00:1c.2) state ===
+00:1c.2 PCI bridge [0604]: Intel Corporation 8 Series PCI Express Root Port 3 [8086:9c14] (rev e4) (prog-if 00 [Normal decode])
+	Subsystem: Intel Corporation Device [8086:7270]
+	Control: I/O+ Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx+
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+	Latency: 0, Cache Line Size: 256 bytes
+	Interrupt: pin C routed to IRQ 44
+	IOMMU group: 6
+	Bus: primary=00, secondary=03, subordinate=03, sec-latency=0
+	I/O behind bridge: [disabled] [16-bit]
+	Memory behind bridge: b0400000-b06fffff [size=3M] [32-bit]
+	Prefetchable memory behind bridge: [disabled] [64-bit]
+	Secondary status: 66MHz- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- <SERR- <PERR-
+	BridgeCtl: Parity- SERR+ NoISA- VGA- VGA16- MAbort- >Reset- FastB2B-
+		PriDiscTmr- SecDiscTmr- DiscTmrStat- DiscTmrSERREn-
+	Capabilities: [40] Express (v2) Root Port (Slot+), IntMsgNum 0
+		DevCap:	MaxPayload 128 bytes, PhantFunc 0
+			ExtTag- RBE+ TEE-IO-
+		DevCtl:	CorrErr- NonFatalErr+ FatalErr+ UnsupReq+
+			RlxdOrd- ExtTag- PhantFunc- AuxPwr- NoSnoop-
+			MaxPayload 128 bytes, MaxReadReq 128 bytes
+
+=== Flushing to disk ===
+Flush complete.
+
+=== Loading brcmfmac (bcm4360_reset_stage=0, bcm4360_skip_arm=1) --- test.114 ===
+insmod returned rc=0 (expected: non-zero; skip_arm aborts probe cleanly)
+
+=== dmesg capture (kernel ring buffer) ===
+[ 1856.462885] brcmfmac: loading out-of-tree module taints kernel.
+[ 1856.470316] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+[ 1856.682975] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+[ 1856.683367] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcadbc1400000
+[ 1856.683412] brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+[ 1856.684263] brcmfmac 0000:03:00.0: BCM4360 EFI state: clk_ctl_st=0x00010040 min_res=0x0000013b max_res=0x0000013f res_state=0x0000013b
+[ 1856.684276] brcmfmac 0000:03:00.0: BCM4360 EFI PMU: pmustatus=0x0000002a pmucontrol=0x01770181
+[ 1856.684283] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[0]=0x00000000
+[ 1856.684290] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[1]=0x00000000
+[ 1856.684296] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[2]=0x00000c31
+[ 1856.684302] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[3]=0x00133333
+[ 1856.684308] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[4]=0x06060c03
+[ 1856.684314] brcmfmac 0000:03:00.0: BCM4360 pllcontrol[5]=0x00000606
+[ 1856.684316] brcmfmac 0000:03:00.0: BCM4360 test.40: allowing watchdog reset (IOMMU group 8 is crash-protective)
+[ 1856.684319] brcmfmac 0000:03:00.0: BCM4360 test.111: core list via brcmf_chip_get_core (no MMIO)
+[ 1856.684406] brcmfmac 0000:03:00.0: BCM4360 test.111: id=0x800 CHIPCOMMON   base=0x18000000 rev=43
+[ 1856.684492] brcmfmac 0000:03:00.0: BCM4360 test.111: id=0x80e INTERNAL_MEM NOT PRESENT
+[ 1856.687708] brcmfmac 0000:03:00.0: BCM4360 test.111: id=0x812 80211        base=0x18001000 rev=42  <<< FW HANG TARGET
+[ 1856.690688] brcmfmac 0000:03:00.0: BCM4360 test.111: id=0x827 PMU          NOT PRESENT
+[ 1856.692451] brcmfmac 0000:03:00.0: BCM4360 test.111: id=0x82a ARM_CM3      NOT PRESENT
+[ 1856.694045] brcmfmac 0000:03:00.0: BCM4360 test.111: id=0x83c PCIE2        base=0x18003000 rev=1
+[ 1856.695662] brcmfmac 0000:03:00.0: BCM4360 test.111: id=0x83e ARM_CR4      base=0x18002000 rev=2
+[ 1856.697271] brcmfmac 0000:03:00.0: BCM4360 test.111: id=0x840 GCI          NOT PRESENT
+[ 1856.698871] brcmfmac 0000:03:00.0: BCM4360 test.111: id=0xfff DEFAULT      NOT PRESENT
+[ 1856.700629] brcmfmac 0000:03:00.0: BCM4360 test.111: core enum complete
+[ 1856.703064] brcmfmac 0000:03:00.0: BCM4360 test.112: pre-force CC.clk_ctl_st=0x00010040 (HAVEALP=1 HAVEHT=0 BP_ON_HT=0)
+[ 1856.705309] brcmfmac 0000:03:00.0: BCM4360 test.112: wrote CCS_FORCEHT (bit 1) to CC.clk_ctl_st, polling for CCS_BP_ON_HT...
+[ 1856.718696] brcmfmac 0000:03:00.0: BCM4360 test.112: after 100×100us: clk_ctl_st=0x00050042 pmustatus=0x0000002a res_state=0x0000013b -- HT TIMEOUT (still no HAVEHT)
+[ 1856.718805] brcmfmac 0000:03:00.0: BCM4360 test.114a: d11 wrap_RESET_CTL=0x00000000 IN_RESET=NO wrap_IOCTL=0x00000001
+[ 1856.827045] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+=== Capture complete ===
+Cleaning up brcmfmac...
