@@ -1,9 +1,100 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, POST test.101 — Case 0: breadcrumb ZERO, hang UPSTREAM of 0x68bbc)
+## Current state (2026-04-17, POST test.102 — stack sweep NULL, premise corrected, planning test.103)
 
-Git branch: main. Last pushed commit fcb9558 (Pre-test.101 rev — baseline probe).
-Untracked: `phase5/logs/test.101.stage0` (needs commit).
+Git branch: main. Last pushed commit 714c24f (Offline disasm: firmware stack located).
+All test.102 work committed & pushed. Session resumed after unrelated host crash.
+
+### TEST.102 RESULT — Case WEAK/NULL: 0 plausible LRs, premise was wrong
+
+Test.102 ran cleanly (09:53:23 → 09:53:25 exit, RP restored). The
+unrelated host crash came ~30min after the test completed.
+
+**Readings at T+200ms:**
+- Regression (vs test.101): `ctr[0x9d000]=0x43b1`, `pd[0x62a14]=0x58cf0` — matches
+- Sanity: `*0x62e20=0x00000000` — matches test.101 (no progress past 0x68bbc still)
+- Dense stack sweep at 0x9FE20..0x9FE5C (16 words × 4B):
+```
+0x9FE20: 1d9522f9 e6f20132 0bb91c6f 563dc9f8
+0x9FE30: eb60c52c 1da991aa 21323bfa f3f5d5f6
+0x9FE40: f992d3bc cfc5e975 f784a2ae 6ca7e38c
+0x9FE50: 808b62f8 54b85687 55320d7b 98c8c797
+```
+All 16 words fail the LR filter (`∈[0x800..0x70000] AND LSB set`) — every
+value > 0x70000 as 32-bit. **No match to any LR in the pre-computed table.**
+
+### The premise was wrong — 0x9FE20 is not stack
+
+Investigation after the null result: RESUME_NOTES (and test.102 plan)
+claimed "test.97 located active stack frames near 0x9FE40". This was a
+misread. Test.97's actual probe was at **0x9CE00..0x9CE1C**, not 0x9FE40,
+and the values it captured were:
+```
+0x9CE08..0x9CE1C:  "1258" "88.0" "00 \n" "RTE " "(PCI" "-CDC"  (ASCII)
+```
+That's the RTE banner string IN THE CONSOLE RING (ptr = 0x9CC5C per test.96
+baseline). Test.97 wasn't reading a stack — it was reading `printf` output.
+The 0x9FE40 target has no provenance at all. Test.102 probed uninitialized
+memory well above the actual stack.
+
+### Offline disasm (POST test.102) — real SP location found
+
+`phase5/notes/offline_disasm_fw_stack_setup.md` — full report.
+
+Subagent disasm of firmware boot at offset 0..0x400 identified the actual
+SP setup at firmware offset 0x2FC: `mov sp, r5`, r5 = 0xA0000 - 0x2F60 =
+**0x9D0A0**. This is the SYS-mode stack pointer, used for everything
+(hndrte RTOS pattern — all exception vectors redirect to SYS stack via
+srsdb, no separate per-mode stacks).
+
+**Firmware stack: [0x9A144 .. 0x9D0A0), grows DOWN, 0x2F5C bytes.**
+
+- Entirely inside TCM → still readable via `brcmf_pcie_read_ram32`.
+- Corroborating evidence (all from prior probes):
+  - `ws[0x62ea8] = 0x9D0A4` = SP_init + 4 (static struct just above top)
+  - `ramsize = 0xA0000` matches the r7 literal used in the size constant
+  - Console ring at 0x9CCC0 is just BELOW stack bottom — classic hndrte
+    layout (stack at top, printf ring beneath, BSS below)
+
+### Premise for test.103 (advisor-validated)
+
+Two LR-table issues to resolve BEFORE next test:
+
+1. **Sweep location** — target the top of the stack (0x9D0A0 down) for
+   shallow frames, OR target ~0x9CFD0 (approx 200 bytes down) for the
+   deep descent frames listed in `test102_lr_table.md`. Advisor's
+   preferred order: extend the LR table to the SHALLOW frames FIRST (no
+   hardware cost), so a top-64-bytes sweep becomes directly interpretable.
+
+2. **LR-table gap** — existing table covers deep descent
+   (wl_probe → 0x68a68 → 0x67358 → 0x670d8 → si_attach children). The
+   SHALLOW path (boot → main → c_init → fn 0x63b38 → wl_probe's caller)
+   has NO entries yet. A subagent run is currently populating
+   `phase5/notes/test103_lr_table_shallow.md` (disasm of c_init body,
+   fn 0x63b38 body, and boot init from 0x2FC forward).
+
+### test.103 PLAN — NOT YET DESIGNED (awaiting shallow LR table)
+
+Once the shallow LR table lands, design probes. Candidate approach:
+
+- **Sparse survey mode**: 16 reads × 16-byte stride covering ~240 bytes,
+  from 0x9D0A0 top-down. Finds SP-transition + ~1-2 LR hits. If any LR
+  matches shallow table → confirms frame layout; test.104 dense-sweeps
+  the discovered zone. Lower info per test, but safer under premise-
+  uncertainty.
+- **Targeted top-dense mode**: 16 reads × 4-byte stride at 0x9D060..0x9D09C.
+  Interprets directly against shallow LR table. Higher info IF shallow
+  frame layout matches predicted 20-byte-per-frame pattern.
+
+**Budget:** hold at ≤19 reads (test.102 was known-safe at 19 @ 1200ms
+FW-wait; test.100 died at 13 @ 2000ms). Do NOT push past 19 until the
+1.9s regression from test.100 is understood.
+
+**Pre-test.102 state retained below for full context.**
+
+---
+
+## Previous state: POST test.101 — Case 0: breadcrumb ZERO, hang UPSTREAM of 0x68bbc
 
 ### TEST.101 RESULT — Case 0 (matrix row 1): breadcrumb ZERO
 
