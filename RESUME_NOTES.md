@@ -1,6 +1,74 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, POST test.102 — stack sweep NULL, premise corrected, planning test.103)
+## Current state (2026-04-17, POST test.103 — frames A-E CONFIRMED, hang localized to fn 0x6820c)
+
+Git branch: main. Host crashed ~30s after test.103 clean exit (same pattern as
+test.101/102 — unrelated post-exit crash, test itself completed). Probe output
+was captured via `journalctl -b -1` and appended to `phase5/logs/test.103.stage0`.
+
+### TEST.103 RESULT — shallow chain confirmed, deeper hypothesis FALSIFIED
+
+Module loaded 10:32:22, ran full probe, exited cleanly after 2s FW-silent
+timeout (`brcmfmac ... TIMEOUT — FW silent for 2s — clean exit`). Host reset
+followed ~30s later (not in journal; survived 2s of FW silence).
+
+**Regression reads (stable vs t.101/102):**
+- `ctr[0x9d000] = 0x000043b1` ✓
+- `pd[0x62a14]  = 0x00058cf0` ✓
+- counter frozen at 0x43b1 through T+1000ms → hang still present
+- sanity `*0x62e20 = 0x00000000` ✓ (no progress past 0x68bbc, as expected)
+
+**LR-slot reads (A..G) vs predicted:**
+
+| Slot | Addr    | Read       | Expected    | Match | Meaning |
+|------|---------|------------|-------------|-------|---------|
+| A    | 0x9D09C | 0x00000320 | 0x320 EVEN  | ✓     | main frame (boot anchor) |
+| B    | 0x9D094 | 0x00002417 | 0x2417      | ✓     | main → c_init |
+| C    | 0x9D02C | 0x000644ab | 0x644ab     | ✓     | c_init → fn 0x63b38 |
+| D    | 0x9D014 | 0x00063b7b | 0x63b7b     | ✓     | fn 0x63b38 → wl_probe |
+| E    | 0x9CFCC | 0x00067705 | 0x67705     | ✓     | wl_probe → fn 0x68a68 |
+| F    | 0x9CF6C | 0x00068b95 | 0x68acf     | ✗     | **NOT 0x67358 descent — deeper in fn 0x68a68 body** |
+| G    | 0x9CF3C | 0x00092440 | 0x6739d     | ✗     | out-of-code-range; frame position was wrong |
+
+**Calibrations (should NOT be LR-shaped by strict Thumb-odd filter):**
+- `[0x9D028] = 0x00058cc4` — EVEN, so fails Thumb filter → not LR (likely saved r6 pointer into .rodata). Log text "offset error" is misleading; strict filter says fine.
+- `[0x9CFC8] = 0x000043b1` — odd, in range, but equals the counter value at T+200ms → coincidence, not an LR.
+
+**Deep sweep 0x9CF0C↓:** `00000004 000000c4 00093610 00000000 0009238c 00000000 00000004` — no code-range LRs; frame position was wrong (predicted for 0x67358, but actual descent uses different prolog sizes).
+
+### NEW HYPOTHESIS — hang is in fn 0x6820c, not 0x67358
+
+**Previous hypothesis RETRACTED:** "hang in wlc_attach's `bl 0x67f2c` → 0x67358 → 0x670d8 si_attach descent" is **falsified**. For LR F to be 0x68b95, fn 0x68a68 must have RETURNED FROM all four earlier body-BLs successfully:
+- `bl 0x67f2c` @ 0x68aca (tail-call to 0x67358) → returned
+- `bl 0x5250` @ 0x68b02 (nvram_get) → returned
+- `bl 0x50e8` @ 0x68b0c (strtoul) → returned
+- `bl 0x67cbc` @ 0x68b42 (struct setup) → returned
+
+**LR math:** `bl 0x6820c` at 0x68b90 is a 4-byte BL → return addr = 0x68b94; Thumb bit set → saved LR = **0x68b95**. Matches F exactly.
+
+**Current hang localization:** CPU is executing somewhere inside fn 0x6820c
+(called from 0x68b90 in fn 0x68a68). Per `offline_disasm_68a68_body.md`,
+fn 0x6820c "calls 0x68cd2, 0x142e0, fn 0x191dc, 0x9990, 0x9964 — not yet
+fully traced" with MEDIUM hang capacity. This was previously ranked LOW
+priority; now promoted to PRIMARY target.
+
+### Next steps (test.104)
+
+1. **Offline disasm fn 0x6820c** (subagent, no HW cost): prolog → frame size,
+   BL list → LR-candidate table for the current frame's sub-BLs.
+2. **Test.104 probe plan:**
+   - 2 regression reads (ctr, pd) — continuity
+   - 5 anchor reads A..E — cheap confirmation stack didn't shift
+   - **Dense sweep 0x9CF68..0x9CF40** (10 words unprobed between F and mispositioned G) — catch fn 0x6820c's saved-LR if its sub-BL is pending
+   - Informed-by-disasm: targeted read at predicted fn 0x6820c sub-frame LR slot
+   - 1 sanity `*0x62e20`
+   - Total ~20 reads, same order as test.103 — known-safe budget.
+
+### Pre-test.103 state retained below for context.
+
+---
+
+## Previous state (2026-04-17, POST test.102 — stack sweep NULL, premise corrected, planning test.103)
 
 Git branch: main. Last pushed commit 714c24f (Offline disasm: firmware stack located).
 All test.102 work committed & pushed. Session resumed after unrelated host crash.
