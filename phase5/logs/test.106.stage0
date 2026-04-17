@@ -1,0 +1,130 @@
+=== test.103: targeted LR-slot reads + deep sub-frame sweep --- stage=0 ===
+Date: Fri 17 Apr 17:45:52 BST 2026
+
+Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled + IRQ handler before ARM; pci_set_master before ARM; 1.2s masking+FW wait; TEST.103 PROBES: 2 regression {0x9d000,0x62a14} + 7 LR slots A-G {0x9D09C 0x9D094 0x9D02C 0x9D014 0x9CFCC 0x9CF6C 0x9CF3C} + 2 calibration {0x9D028 0x9CFC8} + 7-word deep sweep 0x9CF0C↓ + 1 sanity *0x62e20 at T+200ms; free_irq+disable_msi+RP restore
+
+=== Pre-test PCIe state ===
+03:00.0 Network controller [0280]: Broadcom Inc. and subsidiaries BCM4360 802.11ac Dual Band Wireless Network Adapter [14e4:43a0] (rev 03)
+	Subsystem: Apple Inc. Device [106b:0112]
+	Control: I/O- Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+	Latency: 0, Cache Line Size: 256 bytes
+	Interrupt: pin A routed to IRQ 0
+	IOMMU group: 6
+	Region 0: Memory at b0600000 (64-bit, non-prefetchable) [size=32K]
+	Region 2: Memory at b0400000 (64-bit, non-prefetchable) [size=2M]
+	Capabilities: [48] Power Management version 3
+		Flags: PMEClk- DSI- D1+ D2+ AuxCurrent=0mA PME(D0+,D1+,D2+,D3hot+,D3cold+)
+		Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=2 PME-
+	Capabilities: [58] MSI: Enable- Count=1/1 Maskable- 64bit+
+		Address: 0000000000000000  Data: 0000
+	Capabilities: [68] Vendor Specific Information: Len=44 <?>
+	Capabilities: [ac] Express (v2) Endpoint, IntMsgNum 0
+		DevCap:	MaxPayload 256 bytes, PhantFunc 0, Latency L0s <4us, L1 unlimited
+			ExtTag- AttnBtn- AttnInd- PwrInd- RBE+ FLReset- SlotPowerLimit 10W TEE-IO-
+		DevCtl:	CorrErr- NonFatalErr- FatalErr- UnsupReq-
+			RlxdOrd+ ExtTag- PhantFunc- AuxPwr+ NoSnoop+
+			MaxPayload 128 bytes, MaxReadReq 512 bytes
+		DevSta:	CorrErr+ NonFatalErr- FatalErr- UnsupReq+ AuxPwr+ TransPend-
+		LnkCap:	Port #0, Speed 2.5GT/s, Width x1, ASPM L0s L1, Exit Latency L0s <2us, L1 <32us
+			ClockPM+ Surprise- LLActRep- BwNot- ASPMOptComp+
+		LnkCtl:	ASPM L0s L1 Enabled; RCB 64 bytes, LnkDisable- CommClk+
+			ExtSynch- ClockPM+ AutWidDis- BWInt- AutBWInt- FltModeDis-
+		LnkSta:	Speed 2.5GT/s, Width x1
+			TrErr- Train- SlotClk+ DLActive- BWMgmt- ABWMgmt-
+		DevCap2: Completion Timeout: Range ABCD, TimeoutDis+ NROPrPrP- LTR+
+			 10BitTagComp- 10BitTagReq- OBFF Via WAKE#, ExtFmt- EETLPPrefix-
+
+=== Pre-test root port (00:1c.2) state ===
+00:1c.2 PCI bridge [0604]: Intel Corporation 8 Series PCI Express Root Port 3 [8086:9c14] (rev e4) (prog-if 00 [Normal decode])
+	Subsystem: Intel Corporation Device [8086:7270]
+	Control: I/O+ Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx+
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+	Latency: 0, Cache Line Size: 256 bytes
+	Interrupt: pin C routed to IRQ 44
+	IOMMU group: 6
+	Bus: primary=00, secondary=03, subordinate=03, sec-latency=0
+	I/O behind bridge: [disabled] [16-bit]
+	Memory behind bridge: b0400000-b06fffff [size=3M] [32-bit]
+	Prefetchable memory behind bridge: [disabled] [64-bit]
+	Secondary status: 66MHz- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- <SERR- <PERR-
+	BridgeCtl: Parity- SERR+ NoISA- VGA- VGA16- MAbort- >Reset- FastB2B-
+		PriDiscTmr- SecDiscTmr- DiscTmrStat- DiscTmrSERREn-
+	Capabilities: [40] Express (v2) Root Port (Slot+), IntMsgNum 0
+		DevCap:	MaxPayload 128 bytes, PhantFunc 0
+			ExtTag- RBE+ TEE-IO-
+		DevCtl:	CorrErr- NonFatalErr+ FatalErr+ UnsupReq+
+			RlxdOrd- ExtTag- PhantFunc- AuxPwr- NoSnoop-
+			MaxPayload 128 bytes, MaxReadReq 128 bytes
+
+=== Flushing to disk ===
+Flush complete.
+
+=== Loading brcmfmac (bcm4360_reset_stage=0) --- test.103 ===
+Apr 17 17:45:52 nixos kernel: brcmfmac: loading out-of-tree module taints kernel.
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcffcc1600000
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 EFI state: clk_ctl_st=0x00010040 min_res=0x0000013b max_res=0x0000013f res_state=0x0000013b
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 EFI PMU: pmustatus=0x0000002a pmucontrol=0x01770181
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[0]=0x00000000
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[1]=0x00000000
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[2]=0x00000c31
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[3]=0x00133333
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[4]=0x06060c03
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[5]=0x00000606
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.40: allowing watchdog reset (IOMMU group 8 is crash-protective)
+Apr 17 17:45:52 nixos kernel: brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.Apple Inc.-MacBookPro11,1.bin failed with error -2
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffcffcc1600000
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: NVRAM loaded, len=228, writing to TCM 0x9ff1c
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: NVRAM marker at ramsize-4 = 0xffc70038 (NVRAM length token, not zeroed)
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pre-ARM: clk_ctl_st=0x00050040 res_state=0x0000013b HT=NO
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.101 pre-ARM baseline: *0x62e20=0x00000000 ZERO (expected)
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.47 pre-BBPLL: clk_ctl_st=0x00010040 min_res=0x0000013b max_res=0x0000013f res_state=0x0000013b pmustatus=0x0000002a HT=NO
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.47: raising max_res_mask+min_res_mask to 0xFFFFF
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.47 BBPLL: pmustatus=0x0000002e clk_ctl_st=0x01030040 HAVEHT=YES (retries=1)
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.47: BBPLL up — proceeding to ARM release (B. injected via activate)
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.65: BusMaster enabled; CMD was=0x0006 now=0x0006
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: PCIe2 core id=0x83c rev=1
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: EP LINK_STATUS_CTRL=0x10110143 ASPM_bits=0x3
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: ASPM disabled (was 0x3) before ARM
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: PCIe2 pre-ARM: INTMASK=0x0 MBINT=0x0 MBMASK=0x0 H2D0=0xffffffff H2D1=0xffffffff IOCTL=0x1 RESET=0x0
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: SET INTMASK=0x00FF0300 MBMASK=0x00FF0300 + cleared H2D0/H2D1 + unknown regs 0x100-0x108, 0x1E0
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: post-write readback: INTMASK=0x00000300 MBMASK=0x00000300 0x100=0x00000000 0x1E0=0x00030000
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: dev-side config: CMD_STA=0x08100006 BAR0=0xb0600004 BAR1=0x00000000 BAR2=0xb0400004
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: dev-side config: BAR2_CONFIG(0x4E0)=0x00000016 BAR3_CONFIG(0x4F4)=0x00000000
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: STATUS clear: before=0x08100006 after=0x00100006
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: cap walk: ptr=0x48 id=0x01 next=0x58
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: cap walk: ptr=0x58 id=0x05 next=0x68
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: cap walk: ptr=0x68 id=0x09 next=0xac
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: cap walk: ptr=0xac id=0x10 next=0x00
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: PCIe cap@0xac: DevCtl+Sta=0x00132c10 LnkCtl+Sta=0x10110140
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: DevSta clear: before=0x00132c10 after=0x00102c10
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: PM_CSR(0x4C)=0x00004008
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.65 activate: rstvec=0xb80ef000 to TCM[0]; CMD=0x0006 (BusMaster preserved)
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.47 ARM-release: IOCTL=0x00000001 RESET_CTL=0x00000000 ARM_CLKST=0x070b0040
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: RP=0000:00:1c.2 masked CMD BC DevCtl AER; RootCtl=0x0000 ext_cap0=0x20000000 nvram_token=0xffc70038 EP_CMD=0x0006
+Apr 17 17:45:52 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: TCM baseline: sharedram[0x9FFFC]=0xffc70038 magic[0x9D0A4]=0x555c2631 fw_init[0x9F0CC]=0x870ca017 console_ptr[0x9cc5c]=0x5354414b
+Apr 17 17:45:53 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: ARM released. t+0 baseline: ctr=0x00058c8c shared=0xffc70038 cons=0x5354414b
+Apr 17 17:45:53 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.101: starting FW wait + masking loop (1.2s max, re-mask every 10ms)
+Apr 17 17:45:53 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96 T+0200ms: counter=0x000043b1 RUNNING
+Apr 17 17:45:53 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.106 T+0200ms: ctr[0x9d000]=0x000043b1 pd[0x62a14]=0x00058cf0
+Apr 17 17:45:53 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.106 ANCH E[0x9CFCC]=0x00067705 F[0x9CF6C]=0x00068b95 (exp 0x67705 0x68b95) MATCH E=1 F=1
+Apr 17 17:45:53 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.106 T1[0x9CED4]=0x00068321 MATCH — fn 0x1415c still active (exp 0x68321 = fn 0x1415c saved LR)
+Apr 17 17:45:53 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.106 T3@0200ms[0x9CEC4]=0x00091cc4 NOT LR-shaped → fn 0x1415c hasn't called any sub-BL yet (prologue-hang)
+Apr 17 17:45:53 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.106 STRUCT_PTR[0x9CEC8]=0x00091cc4 TCM-shaped (valid struct ptr)
+Apr 17 17:45:53 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.106 MMIO_BASE[struct+0x88]=0x18001000 (target reg = 0x180011e0)
+Apr 17 17:45:53 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.106 SWEEP 0x9CEC0↓: 00000000 00068d2f 00091cc4
+Apr 17 17:45:53 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.106 T+0200ms: SANITY *0x62e20=0x00000000
+Apr 17 17:45:53 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96 T+0400ms: counter=0x000043b1 FROZEN
+Apr 17 17:45:53 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96 T+0600ms: counter=0x000043b1 FROZEN
+Apr 17 17:45:53 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.106 T3@0600ms[0x9CEC4]=0x00091cc4 NOT LR-shaped → fn 0x1415c still pre-BL (prologue-hang)
+Apr 17 17:45:53 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96 T+0800ms: counter=0x000043b1 FROZEN
+Apr 17 17:45:54 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96 T+1000ms: counter=0x000043b1 FROZEN
+Apr 17 17:45:54 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.106 T3@1000ms[0x9CEC4]=0x00091cc4 NOT LR-shaped → fn 0x1415c still pre-BL (prologue-hang)
+Apr 17 17:45:54 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: TIMEOUT — FW silent for 2s — clean exit
+Apr 17 17:45:54 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.96: RP settings restored
