@@ -42,14 +42,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.107.stage${STAGE}"
+LOG="$LOG_DIR/test.108.stage${STAGE}"
 
-echo "=== test.107: pre-ARM core enumeration + FW-hang-target probe (0x180011e0) --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.108: safer pre-ARM core enumeration (slot+0 only) + in-script journal capture --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled + IRQ handler before ARM; pci_set_master before ARM; 1.2s masking+FW wait; TEST.103 PROBES: 2 regression {0x9d000,0x62a14} + 7 LR slots A-G {0x9D09C 0x9D094 0x9D02C 0x9D014 0x9CFCC 0x9CF6C 0x9CF3C} + 2 calibration {0x9D028 0x9CFC8} + 7-word deep sweep 0x9CF0C↓ + 1 sanity *0x62e20 at T+200ms; free_irq+disable_msi+RP restore" | tee -a "$LOG" ;;
+    0) echo "Stage 0: test.108 — pre-ARM reads slot+0 only for 11 slots (no 0x1e0 read pre-ARM, which likely crashed t.107); test.107 FW-wait probe at 0x180011e0 preserved under MAbort masking; post-insmod journal capture ensures log survives later host crash" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -104,11 +104,22 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.103 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.108 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
 modprobe brcmutil 2>/dev/null || true
 modprobe cfg80211 2>/dev/null || true
 insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
-insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko"
+insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko" 2>/dev/null || true
+
+# test.108: capture dmesg from CURRENT boot immediately after insmod so data
+# survives the expected later host crash (~30s post-exit pattern from t.101-107).
+echo "" | tee -a "$LOG"
+echo "=== Post-insmod journal capture (boot 0) ===" | tee -a "$LOG"
+sync
+sleep 2
+journalctl -b 0 --no-pager 2>/dev/null | grep -iE "BCM4360|brcmfmac" | tee -a "$LOG"
+sync
+echo "=== Capture complete ===" | tee -a "$LOG"
+sync

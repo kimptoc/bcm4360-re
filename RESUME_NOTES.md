@@ -1,6 +1,48 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, POST test.107 — CRASHED EARLY, zero enum data)
+## Current state (2026-04-17, PRE test.108 — module built, about to run)
+
+**Goal:** same as test.107 — identify what core lives at slot 0x18001000
+and whether it's MMIO-responsive host-side while ARM is stuck. This time
+with a probe that (a) won't crash the host bus pre-ARM, and (b) captures
+its own log before any later crash can wipe it.
+
+**Changes vs test.107:**
+1. **Pre-ARM enum reads slot+0 only.** Dropped the slot+0x1e0 read —
+   for slot 0x18001000 that targets 0x180011e0, the exact register FW
+   hangs on. Host read of a hung backplane reg can stall root-port
+   completions and kill the box before dev_emerg flushes. Presence probe
+   via slot+0 is enough to answer "is a core there".
+2. **FW-wait probe of 0x180011e0 preserved** inside the outer==1 branch
+   with T106_REMASK (MAbort masking active). If this probe hangs, we
+   survive thanks to re-mask.
+3. **test-staged-reset.sh captures `journalctl -b 0 | grep BCM4360`
+   into the stage0 log immediately after insmod.** Survives the later
+   ~30s crash pattern. Adds `sleep 2 + sync` around the capture.
+
+**Expected output per slot (from EROM knowledge):**
+Slot numbers vs core types are unknown pre-run — the whole point of the
+enum. Reading slot+0 on a dead slot returns 0xffffffff (master-abort).
+On a live core it typically returns some structured ID/config word.
+
+**Files changed:**
+- `phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c`:
+  pre-ARM enum no longer reads 0x1e0; renamed test.107→test.108 header
+  and slot lines; FW-wait 0x180011e0 probe unchanged (keeps test.107 tag).
+- `phase5/work/test-staged-reset.sh`: LOG path → test.108; added
+  post-insmod journal capture block with sync + sleep + tee.
+
+**Build:** clean. Module at
+`phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko`.
+
+**Expected log capture:** stage0 log should contain full dmesg in-line
+(new capture block). If box crashes before sync, recover via
+`journalctl -b -1 | grep -iE "BCM4360|brcmfmac" > phase5/logs/test.108.journal`
+after reboot.
+
+---
+
+## Previous state (2026-04-17, POST test.107 — CRASHED EARLY, zero enum data)
 
 **Outcome:** host crashed during or shortly after the pre-ARM test.107
 block. Recovered journal (`phase5/logs/test.107.journal`) captured only 4

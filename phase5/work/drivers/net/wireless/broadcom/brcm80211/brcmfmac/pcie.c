@@ -2275,42 +2275,49 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 
-		/* test.107: enumerate backplane core slots 0x18000000..0x1800A000.
+		/* test.108: enumerate backplane core slots 0x18000000..0x1800A000.
 		 *
-		 * test.106 proved prologue-hang: fn 0x1415c's `ldr.w r2,[r3,#0x1e0]`
-		 * at 0x14176 stalls forever. r3 = [struct+0x88] = 0x18001000, so
-		 * target register = 0x180011e0. We need to know (a) what core lives
-		 * at slot 0x18001000 and (b) whether that core is MMIO-responsive
-		 * from the host PRE-ARM (so we can compare against the FW-side hang).
+		 * test.107 RESULT (2026-04-17): kernel produced only the test.53
+		 * SBR + BAR0-alive lines before host crashed. No test.107 output
+		 * at all. Two possible causes:
+		 *  (a) the pre-ARM `ioread32(regs + 0x1e0)` at slot 0x18001000
+		 *      — which resolves to 0x180011e0, the exact register FW hangs
+		 *      on — hung the host bus, killing the box before dev_emerg
+		 *      could flush;
+		 *  (b) the script exits straight after insmod with no in-script
+		 *      journal capture; the later-box-crash (~30s pattern) then
+		 *      wiped data that was already in the kernel ringbuffer.
 		 *
-		 * For each slot 0x18000000 + N*0x1000 (N=0..10), point BAR0 window
-		 * there and read offset 0 + offset 0x1e0. AI-backplane metadata
-		 * (core ID, revision) lives at slot+0xFF8/+0xFFC on the wrapper, but
-		 * those may be on a separate wrapper backplane; for now just read
-		 * the canonical "first register" and the specific 0x1e0 FW hangs on.
+		 * Both fixes applied:
+		 *  - test.108 reads slot+0 ONLY pre-ARM (presence probe only; no
+		 *    touch of potentially-hung offset 0x1e0 for arbitrary slots).
+		 *  - test-staged-reset.sh now captures `journalctl -b 0 | grep
+		 *    BCM4360` into the stage0 log after insmod, so data survives
+		 *    a later host crash.
+		 *
+		 * The risky 0x180011e0 read is preserved in the FW-wait outer==1
+		 * branch (below), where MAbort masking is active and the probe
+		 * is re-mask'd before the read.
 		 *
 		 * READ-ONLY. No writes to backplane registers. Safe pre-ARM.
-		 *
 		 * Restores BAR0 window to ChipCommon (0x18000000) at end.
 		 */
 		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-			u32 slot, off0, off1e0;
+			u32 slot, off0;
 			int n;
 
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.107: pre-ARM backplane core enumeration\n");
+				  "BCM4360 test.108: pre-ARM backplane core enumeration (slot+0 only)\n");
 			for (n = 0; n <= 10; n++) {
 				slot = 0x18000000 + (n * 0x1000);
 				pci_write_config_dword(devinfo->pdev,
 						       BRCMF_PCIE_BAR0_WINDOW,
 						       slot);
-				off0   = ioread32(devinfo->regs + 0x000);
-				off1e0 = ioread32(devinfo->regs + 0x1e0);
+				off0 = ioread32(devinfo->regs + 0x000);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.107: slot[0x%08x] off0=0x%08x off1e0=0x%08x%s\n",
-					  slot, off0, off1e0,
-					  (off0 == 0xffffffff && off1e0 == 0xffffffff) ?
-					    " — DEAD (no core)" :
+					  "BCM4360 test.108: slot[0x%08x] off0=0x%08x%s\n",
+					  slot, off0,
+					  off0 == 0xffffffff ? " — DEAD (no core)" :
 					  (slot == 0x18001000) ?
 					    " ← FW hang target" : "");
 			}
