@@ -1,26 +1,34 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.102: stack-locator dense-narrow sweep (LR chain fingerprint)
+# Phase 5.2 test.103: targeted LR-slot reads + deep sub-frame sweep
 #
-# test.101 RESULT (Case 0): *0x62e20 == 0 → fn 0x68a68 (wlc_attach) hung
-#   UPSTREAM of 0x68bbc. Offline disasm of body + 6 body-BL targets found
-#   no discriminating fixed-TCM breadcrumb exists in wlc_attach descent
-#   (all stores r4/r3-relative into alloc'd structs). The first body BL
-#   (bl 0x67f2c @ 0x68aca) is a 4-insn tail-call trampoline to 0x67358 —
-#   the same si_attach descent already entered once from pciedngl_probe.
+# test.102 RESULT: 16-word sweep 0x9FE20..0x9FE5C returned all high-entropy
+#   words (>0x70000), NO plausible LRs. Post-analysis: test.97's "frames
+#   near 0x9FE40" was actually RTE banner ASCII in the console ring, not
+#   live stack. True stack located via offline reset-path disasm:
+#   SP_init = 0x9D0A0, stack = [0x9A144..0x9D0A0) growing down.
 #
-# test.102 PLAN: pivot to stack walk. ARM Thumb `bl` pushes LR on stack
-#   via `push {..., lr}` prologues. While CPU is stuck mid-call, the
-#   live frame chain persists in RAM. test.97 located active frames
-#   near 0x9FE40. Sweep 64B there, filter for odd-bit words in
-#   [0x800..0x70000] → LR candidates. Each maps (via phase5/notes/
-#   test102_lr_table.md) to a specific BL site.
-#   Confirmation criteria:
-#     ≥2 table-LRs chained (e.g. 0x68acf + 0x6739d) → STRONG
-#     1 table-LR                                    → MODERATE
-#     0 table-LRs                                   → relocate sweep in test.103
+# test.103 PLAN: read seven predicted LR-slot addresses directly (A..G
+#   for frames main → c_init → fn 0x63b38 → wl_probe → wlc_attach →
+#   fn 0x67358 → fn 0x670d8) and compare against expected values from
+#   phase5/notes/test103_lr_table_shallow.md. Plus a 7-word deep sweep
+#   below fn 0x670d8's frame to catch the saved LR of the currently-hung
+#   sub-call (identifies which 0x670d8 body BL is stuck). Plus 2
+#   calibration reads at between-LR slots (should NOT be LR-shaped;
+#   if they are, frame-size prediction is off by 4B).
 #
-# Probe count: 19 reads @ 1200ms FW-wait (2 regression + 16 stack + 1 sanity).
-# 1.5× test.101's clean 5-read baseline, well below test.100's 13-read regression.
+# Frame A's LR is EVEN (0x320) — literal load `mov lr, r0` in boot path,
+#   not bl/blx, so Thumb bit NOT set. Match exactly; odd-bit filter
+#   would reject it. Frames B..G are from bl/blx and satisfy odd-bit.
+#
+# Pre-registered failure signatures (see RESUME_NOTES.md):
+#   ≥5/7 match + sweep hit    → Success, identifies hang sub-BL
+#   calibration slot IS LR    → Offset drift, re-disasm that prologue
+#   A/B match, C+ miss        → Hang pre-fn 0x63b38 OR prologue wrong
+#   all miss                  → SP_init wrong OR stack trashed
+#
+# Probe count: 19 reads @ 1200ms FW-wait
+#   (2 regression + 7 LR + 2 cal + 7 sweep + 1 sanity). Same budget
+#   as test.102 (known safe).
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -34,14 +42,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.102.stage${STAGE}"
+LOG="$LOG_DIR/test.103.stage${STAGE}"
 
-echo "=== test.102: stack-locator dense-narrow sweep --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.103: targeted LR-slot reads + deep sub-frame sweep --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled + IRQ handler before ARM; pci_set_master before ARM; 1.2s masking+FW wait; TEST.102 PROBES: 2 regression {0x9d000,0x62a14} + 16 dense stack words 0x9FE20..0x9FE5C stride 4B + 1 sanity *0x62e20 at T+200ms; free_irq+disable_msi+RP restore" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled + IRQ handler before ARM; pci_set_master before ARM; 1.2s masking+FW wait; TEST.103 PROBES: 2 regression {0x9d000,0x62a14} + 7 LR slots A-G {0x9D09C 0x9D094 0x9D02C 0x9D014 0x9CFCC 0x9CF6C 0x9CF3C} + 2 calibration {0x9D028 0x9CFC8} + 7-word deep sweep 0x9CF0C↓ + 1 sanity *0x62e20 at T+200ms; free_irq+disable_msi+RP restore" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -96,7 +104,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.102 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.103 ===" | tee -a "$LOG"
 sync
 
 dmesg -C

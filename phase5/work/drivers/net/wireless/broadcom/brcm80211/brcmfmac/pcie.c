@@ -2531,47 +2531,55 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			 *   128 words × ~13ms = 1.7s; total with T+200ms = 1.9s (SAFE < 3s window)
 			 */
 			if (outer == 1) {
-				/* test.102: stack-locator dense-narrow sweep at T+200ms.
+				/* test.103: targeted LR-slot reads + deep sub-frame sweep.
 				 *
-				 * test.101 returned Case 0 (*0x62e20 == 0) → hang upstream
-				 * of 0x68bbc in fn 0x68a68 (wlc_attach). Offline disasm of
-				 * the body + all 6 body-BL targets found NO discriminating
-				 * fixed-TCM breadcrumb exists in the wlc_attach→0x67358
-				 * descent (all stores r4/r3-relative into alloc'd structs).
+				 * test.102 swept 0x9FE20..0x9FE5C based on a stale premise
+				 * (test.97's "stack near 0x9FE40" was actually RTE banner
+				 * ASCII in the console ring, not stack frames). Offline
+				 * disasm of the firmware reset path located the true stack:
+				 * SP_init = 0x9D0A0, stack = [0x9A144..0x9D0A0) growing
+				 * down. See phase5/notes/offline_disasm_fw_stack_setup.md.
 				 *
-				 * Pivot: locate the hang by reading the stack. Each nested
-				 * `bl` in Thumb pushes LR (as part of push {...,lr}). The
-				 * frame chain is persistent in RAM while the CPU is stuck.
-				 * test.97 put live stack frames near 0x9FE40. Sweep 64B
-				 * centered there, filter for `word in [0x800..0x70000]`
-				 * with LSB set (Thumb bit) — those are LR candidates.
+				 * Shallow LR table (phase5/notes/test103_lr_table_shallow.md)
+				 * predicts the saved-LR address + value for each frame in
+				 * the chain (main → c_init → fn 0x63b38 → wl_probe →
+				 * wlc_attach → fn 0x67358 → fn 0x670d8), with per-frame
+				 * sizes derived from each function's prologue push.
 				 *
-				 * Pre-computed LR→function table (phase5/notes/
-				 * test102_lr_table.md) maps each candidate value to a
-				 * specific BL site. Confirmation = ≥2 LRs forming a known
-				 * caller→callee chain (e.g. 0x68acf + 0x6739d).
+				 * Predicted layout at hang time (fn 0x670d8 active):
+				 *   A main       @ 0x9D09C = 0x00000320 (EVEN — literal)
+				 *   B c_init     @ 0x9D094 = 0x00002417
+				 *   C fn 0x63b38 @ 0x9D02C = 0x000644ab
+				 *   D wl_probe   @ 0x9D014 = 0x00063b7b
+				 *   E wlc_attach @ 0x9CFCC = 0x00067705
+				 *   F fn 0x67358 @ 0x9CF6C = 0x00068acf
+				 *   G fn 0x670d8 @ 0x9CF3C = 0x0006739d
 				 *
-				 * Expected chain top-down (all odd Thumb values):
-				 *   0x67705  wl_probe after bl 0x68a68
-				 *   0x68acf  wlc_attach after bl 0x67f2c (tail→0x67358)
-				 *   0x6739d  fn 0x67358 after bl 0x670d8
-				 *   0x67195  fn 0x670d8 after bl 0x64590 (si_attach)
-				 *   0x671b5/c1/d5/f7  later fn 0x670d8 children
-				 *   0x645b3+         si_attach body children
+				 * Frame A's LR is EVEN (0x320) because boot code loads
+				 * it via literal `mov lr, r0` — Thumb bit NOT set. Match
+				 * exactly; odd-bit filter would reject it. Frames B..G
+				 * come from bl/blx and satisfy the odd-bit rule.
 				 *
-				 * Read count for test.102:
-				 *   2 regression (ctr, pd) + 16 stack words + 1 sanity
-				 *   = 19 reads @ 1200ms FW-wait. test.101 was 5 reads
-				 *   clean; test.100 was 13 reads at regression point.
-				 *   1.5× test.101 should stay below the threshold.
+				 * Deep sweep (0x9CF0C down, 7 words) covers the frame
+				 * BELOW fn 0x670d8 — the currently-running sub-call's
+				 * frame. Its saved LR identifies which 0x670d8 body BL
+				 * is hung (0x67195/si_attach, 0x671b5/core-enum,
+				 * 0x671c1/list-reg, 0x671d5, 0x671f7 per test102_lr_table).
 				 *
-				 * Read-only via brcmf_pcie_read_ram32 (same safe path).
+				 * Calibration reads at 0x9D028 (between C and D — saved
+				 * r6 in frame C) and 0x9CFC8 (between E and F — saved
+				 * r8 in frame E): should NOT be LR-shaped. If they are,
+				 * frame-size prediction is off by 4B.
+				 *
+				 * Read count: 2 regression + 7 LR + 2 cal + 7 sweep + 1
+				 * sanity = 19 reads @ 1200ms FW-wait — same budget as
+				 * test.102 (known safe).
 				 */
 				u32 p_ctr, p_pd, bc_val;
-				u32 sw[16];
+				u32 lr[7], cal[2], sw[7];
 				int i, tms = outer * 200;
 
-#define T102_REMASK() do {						\
+#define T103_REMASK() do {						\
 	if (rp) {							\
 		u16 _bc, _dc, _devsta, _secsta;				\
 		u32 _rtsta;						\
@@ -2596,62 +2604,88 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	}								\
 } while (0)
 
-				/* Regression pointers — dropped d11/ws (stable in t.101). */
-				T102_REMASK();
+				/* Regression pointers — stable across t.100/101/102. */
+				T103_REMASK();
 				p_ctr = brcmf_pcie_read_ram32(devinfo, 0x9d000);
-				T102_REMASK();
+				T103_REMASK();
 				p_pd  = brcmf_pcie_read_ram32(devinfo, 0x62a14);
 
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.102 T+%04dms: ctr[0x9d000]=0x%08x "
+					  "BCM4360 test.103 T+%04dms: ctr[0x9d000]=0x%08x "
 					  "pd[0x62a14]=0x%08x\n",
 					  tms, p_ctr, p_pd);
 
-				/* Dense stack sweep: 16 × 4B at 0x9FE20..0x9FE5C.
-				 * Centered on test.97's 0x9FE40 frame-density locator.
-				 */
-				for (i = 0; i < 16; i++) {
-					T102_REMASK();
+				/* 7 targeted LR-slot reads A..G (predicted chain). */
+				T103_REMASK();
+				lr[0] = brcmf_pcie_read_ram32(devinfo, 0x9D09C); /* A main */
+				T103_REMASK();
+				lr[1] = brcmf_pcie_read_ram32(devinfo, 0x9D094); /* B c_init */
+				T103_REMASK();
+				lr[2] = brcmf_pcie_read_ram32(devinfo, 0x9D02C); /* C fn 0x63b38 */
+				T103_REMASK();
+				lr[3] = brcmf_pcie_read_ram32(devinfo, 0x9D014); /* D wl_probe */
+				T103_REMASK();
+				lr[4] = brcmf_pcie_read_ram32(devinfo, 0x9CFCC); /* E wlc_attach */
+				T103_REMASK();
+				lr[5] = brcmf_pcie_read_ram32(devinfo, 0x9CF6C); /* F fn 0x67358 */
+				T103_REMASK();
+				lr[6] = brcmf_pcie_read_ram32(devinfo, 0x9CF3C); /* G fn 0x670d8 */
+
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.103 LR A[0x9D09C]=0x%08x "
+					  "B[0x9D094]=0x%08x C[0x9D02C]=0x%08x D[0x9D014]=0x%08x\n",
+					  lr[0], lr[1], lr[2], lr[3]);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.103 LR E[0x9CFCC]=0x%08x "
+					  "F[0x9CF6C]=0x%08x G[0x9CF3C]=0x%08x\n",
+					  lr[4], lr[5], lr[6]);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.103 MATCH A=%d B=%d C=%d D=%d E=%d F=%d G=%d "
+					  "(exp 0x320 0x2417 0x644ab 0x63b7b 0x67705 0x68acf 0x6739d)\n",
+					  lr[0] == 0x320, lr[1] == 0x2417, lr[2] == 0x644ab,
+					  lr[3] == 0x63b7b, lr[4] == 0x67705, lr[5] == 0x68acf,
+					  lr[6] == 0x6739d);
+
+				/* 2 calibration reads — neither should be LR-shaped. */
+				T103_REMASK();
+				cal[0] = brcmf_pcie_read_ram32(devinfo, 0x9D028);
+				T103_REMASK();
+				cal[1] = brcmf_pcie_read_ram32(devinfo, 0x9CFC8);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.103 CAL [0x9D028]=0x%08x [0x9CFC8]=0x%08x "
+					  "(LR-shaped here => frame-size offset error)\n",
+					  cal[0], cal[1]);
+
+				/* 7-word deep sweep 0x9CF0C↓ covers sub-0x670d8 frame. */
+				for (i = 0; i < 7; i++) {
+					T103_REMASK();
 					sw[i] = brcmf_pcie_read_ram32(devinfo,
-								      0x9FE20 + (i * 4));
+								      0x9CF0C - (i * 4));
 				}
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.103 SWEEP 0x9CF0C↓: "
+					  "%08x %08x %08x %08x %08x %08x %08x\n",
+					  sw[0], sw[1], sw[2], sw[3], sw[4], sw[5], sw[6]);
 
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.102 T+%04dms: STACK 0x9FE20..0x9FE2C "
-					  "%08x %08x %08x %08x\n",
-					  tms, sw[0], sw[1], sw[2], sw[3]);
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.102 T+%04dms: STACK 0x9FE30..0x9FE3C "
-					  "%08x %08x %08x %08x\n",
-					  tms, sw[4], sw[5], sw[6], sw[7]);
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.102 T+%04dms: STACK 0x9FE40..0x9FE4C "
-					  "%08x %08x %08x %08x\n",
-					  tms, sw[8], sw[9], sw[10], sw[11]);
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.102 T+%04dms: STACK 0x9FE50..0x9FE5C "
-					  "%08x %08x %08x %08x\n",
-					  tms, sw[12], sw[13], sw[14], sw[15]);
-
-				/* LR-candidate flagging: odd-bit, in [0x800..0x70000]. */
-				for (i = 0; i < 16; i++) {
+				/* Flag LR candidates in sweep: odd-bit, [0x800..0x70000]. */
+				for (i = 0; i < 7; i++) {
 					if ((sw[i] & 1) && sw[i] >= 0x800 &&
 					    sw[i] < 0x70000) {
 						dev_emerg(&devinfo->pdev->dev,
-							  "BCM4360 test.102 LR-CAND "
+							  "BCM4360 test.103 SWEEP LR-CAND "
 							  "[0x%05x]=0x%08x\n",
-							  0x9FE20 + (i * 4), sw[i]);
+							  0x9CF0C - (i * 4), sw[i]);
 					}
 				}
 
-				/* Sanity: re-read *0x62e20 for continuity with test.101. */
-				T102_REMASK();
+				/* Sanity: re-read *0x62e20 (continuity with t.101/102). */
+				T103_REMASK();
 				bc_val = brcmf_pcie_read_ram32(devinfo, 0x62e20);
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.102 T+%04dms: SANITY *0x62e20=0x%08x "
-					  "(t.101 was 0x00000000)\n",
+					  "BCM4360 test.103 T+%04dms: SANITY *0x62e20=0x%08x "
+					  "(t.101/102 both 0x00000000)\n",
 					  tms, bc_val);
-#undef T102_REMASK
+#undef T103_REMASK
 			}
 
 			/* Inner: re-mask + poll sharedram AND fw_init_done every 10ms for 200ms */
