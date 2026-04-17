@@ -73,22 +73,79 @@ Two LR-table issues to resolve BEFORE next test:
    `phase5/notes/test103_lr_table_shallow.md` (disasm of c_init body,
    fn 0x63b38 body, and boot init from 0x2FC forward).
 
-### test.103 PLAN — NOT YET DESIGNED (awaiting shallow LR table)
+### test.103 PLAN — targeted LR-slot reads + deep sub-frame sweep
 
-Once the shallow LR table lands, design probes. Candidate approach:
+**Goal:** confirm the predicted frame chain (A..G) AND read the saved LR
+of the 0x670d8 sub-BL that is currently hung — the one new piece of
+information we need to isolate the hang site.
 
-- **Sparse survey mode**: 16 reads × 16-byte stride covering ~240 bytes,
-  from 0x9D0A0 top-down. Finds SP-transition + ~1-2 LR hits. If any LR
-  matches shallow table → confirms frame layout; test.104 dense-sweeps
-  the discovered zone. Lower info per test, but safer under premise-
-  uncertainty.
-- **Targeted top-dense mode**: 16 reads × 4-byte stride at 0x9D060..0x9D09C.
-  Interprets directly against shallow LR table. Higher info IF shallow
-  frame layout matches predicted 20-byte-per-frame pattern.
+**Predicted stack layout** (from `test103_lr_table_shallow.md`):
 
-**Budget:** hold at ≤19 reads (test.102 was known-safe at 19 @ 1200ms
-FW-wait; test.100 died at 13 @ 2000ms). Do NOT push past 19 until the
-1.9s regression from test.100 is understood.
+| Frame | Addr    | Expected LR value | What it confirms |
+|-------|---------|-------------------|------------------|
+| A main       | 0x9D09C | 0x00000320 | outermost (boot tail) — **EVEN, exact-match only** (literal `mov lr, r0`, not bl/blx — Thumb bit NOT set) |
+| B c_init     | 0x9D094 | 0x00002417 | main → c_init active |
+| C fn 0x63b38 | 0x9D02C | 0x000644ab | c_init's wl bl active |
+| D wl_probe   | 0x9D014 | 0x00063b7b | fn 0x63b38 → wl_probe active |
+| E wlc_attach | 0x9CFCC | 0x00067705 | wl_probe → fn 0x68a68 active |
+| F fn 0x67358 | 0x9CF6C | 0x00068acf | wlc_attach descent active |
+| G fn 0x670d8 | 0x9CF3C | 0x0006739d | deep init active |
+| sub LR (hung)| ~0x9CF0C or lower | one of {0x67195 / 0x671b5 / 0x671c1 / 0x671d5 / 0x671f7} | identifies WHICH 0x670d8 BL is stuck |
+
+**Probe design (19 reads total, T+200ms only):**
+
+- **7 targeted LR-slot reads** (A..G): read each predicted-LR address,
+  check against expected value. Each is a single word, direct hit.
+- **2 calibration reads** (advisor-recommended): read "between-LR" slots
+  0x9D028 (frame C mid — saved r6) and 0x9CFC8 (frame E mid — saved r8).
+  Both should NOT be LR-shaped. If either IS LR-shaped, that's unambiguous
+  evidence of a 4-byte offset error in the corresponding frame-size
+  prediction (cheap diagnostic).
+- **7 deep sweep words** at 0x9CF0C..0x9CEF0 (4B stride): catches the
+  saved LR of whatever 0x670d8 sub-call is currently running. Expected
+  to find ONE of the five candidate LRs listed above.
+- **2 regression reads**: ctr[0x9d000] (expect 0x43b1), pd[0x62a14]
+  (expect 0x58cf0) — continuity with test.101/102.
+- **1 sanity**: *0x62e20 (expect 0 — confirms breadcrumb still not written).
+
+**Pre-registered failure signatures (set before run so we can't
+post-hoc rationalize):**
+
+1. **Success**: ≥5 of 7 LR-slot reads match predicted values AND deep
+   sweep contains ≥1 LR from the 0x670d8-sub candidates. → test.104
+   is "pin down which sub-BL via disasm of that sub's body for
+   breadcrumb candidates or deeper stack walk".
+2. **Offset drift**: calibration read (0x9D028 or 0x9CFC8) IS LR-shaped,
+   AND the aligned target is NOT. → frame-size prediction is off by 4B
+   starting at that frame. Re-disasm that function's prologue offline.
+   DO NOT trust deeper reads.
+3. **Shallow only**: A/B match (0x9D09C=0x320 **EVEN**, 0x9D094=0x2417) but C+
+   don't. → hang happened before reaching fn 0x63b38, OR fn 0x63b38's
+   prologue is different. Either way, outer chain anchor confirms the
+   model; localize the divergence.
+4. **All miss**: no predicted LR at any target address AND no LR-shaped
+   words in deep sweep. → SP_init is wrong (stack is elsewhere), OR
+   stack was trashed by an early fault. test.104 = sparse survey across
+   whole [0x9A000..0x9D100) range to locate it.
+
+**Budget:** 19 reads — exactly at test.102's known-safe count.
+FW-wait stays at 1200ms. No new regression risk.
+
+**Implementation notes:**
+- Replace test.102's 16-word sweep block with the 19-read block above.
+- Each read via existing `brcmf_pcie_read_ram32` path.
+- Masking (T101_REMASK) called before each read — same as test.101/102.
+- Log lines: group A-G in one table-like print, calibrations in another,
+  deep sweep in a third.
+- **LR-filter caveat:** Frame A (0x9D09C) is a permanent static anchor
+  of value **0x320 (EVEN)** because the boot code loaded LR via literal
+  `mov lr, r0` (not a bl/blx, so Thumb bit is not set). Do NOT apply
+  an odd-bit filter to the 0x9D09C slot — match it exactly against
+  0x320. Frames B..G are all from bl/blx, so odd-bit holds for them.
+
+### After running test.103
+- Apply failure signature matrix above.
+- Stage1 = none (this is a pure read-only probe; no second stage needed).
 
 **Pre-test.102 state retained below for full context.**
 
