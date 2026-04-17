@@ -1871,6 +1871,22 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			 READCC32(devinfo, res_state),
 			 (READCC32(devinfo, clk_ctl_st) & 0x20000) ? "YES" : "NO");
 
+		/* test.101 baseline: read *0x62e20 before ARM release.
+		 * FW image at offset 0x62e20 is 0, so a pre-ARM non-zero
+		 * here would indicate stale TCM state from a prior load
+		 * in the same boot, not a fresh FW write. Must be ZERO
+		 * for the post-FW breadcrumb probe to be unambiguous.
+		 */
+		{
+			u32 baseline = brcmf_pcie_read_ram32(devinfo, 0x62e20);
+
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.101 pre-ARM baseline: *0x62e20=0x%08x %s\n",
+				  baseline,
+				  baseline == 0 ? "ZERO (expected)" :
+						  "NON-ZERO -- stale TCM, breadcrumb reading is unreliable");
+		}
+
 		if (bcm4360_skip_arm) {
 			dev_info(&devinfo->pdev->dev,
 				 "BCM4360 test.12: skipping ARM release (bcm4360_skip_arm=1)\n");

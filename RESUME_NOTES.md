@@ -1,10 +1,26 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, PRE test.101 — breadcrumb at *0x62e20 identified)
+## Current state (2026-04-17, PRE test.101 REV — breadcrumb + pre-ARM baseline)
 
-Git branch: main. Last pushed commit 15e4056 (Post-test.100 analysis).
-Pending commit: offline disasm of wl_probe's 5 sub-BLs + fn 0x68a68 prefix
-(phase5/notes/offline_disasm_wl_subbls.md), test.101 plan below.
+Git branch: main. Last pushed commit 7d4195a (pre-test.101 module built).
+Pending commit: **test.101 REVISION** — added pre-ARM baseline read of
+`*0x62e20` per advisor refinement #1 (closes "stale TCM from prior load"
+interpretation hole). Expected pre-ARM reading: 0 (post-SBR, pre-FW-reset).
+
+### Advisor refinement #1 (added 2026-04-17, pre-run)
+
+Per advisor, the pre-ARM baseline read was the missing piece from the
+earlier test-plan review — without it, a non-zero post-FW breadcrumb
+could reflect residual TCM state from a prior in-same-boot modprobe,
+not a fresh FW write. Code change: 3-line probe in pcie.c inside the
+existing pre-ARM logging block (before ARM release, zero masking-loop
+impact). Emits `dev_emerg "BCM4360 test.101 pre-ARM baseline: *0x62e20=...
+ZERO (expected) / NON-ZERO (stale TCM, breadcrumb reading is unreliable)"`.
+
+Matrix interpretation rule: if baseline != 0, the T+200ms breadcrumb
+reading is UNRELIABLE and the run should be re-done after fresh power
+cycle. If baseline == 0 and T+200 == 0 → Case U1 (hang before 0x68bbc).
+If baseline == 0 and T+200 != 0 → Case D (hang at/past bl 0x1ab50).
 
 ### Offline disasm result (subagent, 2026-04-17)
 
