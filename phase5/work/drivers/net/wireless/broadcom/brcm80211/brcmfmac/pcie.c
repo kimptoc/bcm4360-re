@@ -2028,68 +2028,34 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 * function), so code here never ran even with skip_arm=1.
 		 */
 
-		/* test.114b: Enable d11 MAC before ARM release.
+		/* test.114b: d11 clk_ctl_st diagnostic before ARM release.
 		 *
-		 * Root cause of FW hang (fn 0x1415c, test.106): brcmf_chip_cr4_set_passive
-		 * calls coredisable (not resetcore) on d11, leaving it in BCMA reset.
-		 * FW polls d11.clk_ctl_st (0x180011e0) for BP_ON_HT — but d11's AXI
-		 * slave is non-responsive while in reset → data abort → FW hang.
+		 * test.114 stage1 result: d11 NOT in BCMA reset (RESET_CTL=0 already).
+		 * FW writes FORCEHT (bit1), HAVEHT=1, but BP_ON_HT=0 at T+200ms.
+		 * PMU is not granting BP_ON_HT to d11 despite BBPLL up and HAVEHT=1.
+		 * res_state=0x7ff (only 11 PMU resources active) vs min_res=0xFFFFF —
+		 * resources 11-19 never activate; one likely gates d11 BP_ON_HT path.
 		 *
-		 * Fix: call brcmf_chip_resetcore(d11) here to clear d11 BCMA reset
-		 * before ARM is released. Runs with both skip_arm=1 (diagnostic) and
-		 * skip_arm=0 (full run with BBPLL up via test.47 below).
-		 *
-		 * IOCTL bits: PHYRESET=0x0008, PHYCLOCKEN=0x0004 (from chip.c D11 defs)
-		 * Wrapper RESET_CTL (BAR0+0x1800) = d11_wrapbase+0x800: always safe.
-		 * Core clk_ctl_st (BAR0+0x1e0) only safe AFTER reset bit clears.
-		 *
-		 * Note: with skip_arm=1, BBPLL is not up yet — BP_ON_HT may be 0.
-		 * With skip_arm=0 + test.47 BBPLL bringup (below), BP_ON_HT should
-		 * be set by the time FW runs its clk_ctl_st polling loop.
+		 * This is now a pure read-only diagnostic; no resetcore (control test).
+		 * d11 clk_ctl_st readable because d11 is already out of reset here.
 		 */
 		{
-			struct brcmf_core *d11core;
-			u32 d11_wrap_rst_before, d11_wrap_rst_after, d11_ccs;
+			u32 d11_wrap_rst, d11_ccs;
 
-			d11core = brcmf_chip_get_d11core(devinfo->ci, 0);
-			if (!d11core) {
-				dev_err(&devinfo->pdev->dev,
-					"BCM4360 test.114b: d11 core not found — aborting\n");
-				return -ENODEV;
-			}
-
-			/* Wrapper RESET_CTL before resetcore (always safe) */
 			brcmf_pcie_select_core(devinfo, BCMA_CORE_80211);
-			d11_wrap_rst_before = brcmf_pcie_read_reg32(devinfo, 0x1800);
+			d11_wrap_rst = brcmf_pcie_read_reg32(devinfo, 0x1800);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.114b: pre-resetcore wrap_RESET_CTL=0x%08x IN_RESET=%s\n",
-				 d11_wrap_rst_before,
-				 (d11_wrap_rst_before & 1) ? "YES" : "NO");
+				 "BCM4360 test.114b: wrap_RESET_CTL=0x%08x IN_RESET=%s\n",
+				 d11_wrap_rst,
+				 (d11_wrap_rst & 1) ? "YES" : "NO");
 
-			/* Take d11 out of BCMA reset (same args as cm3_set_passive resetcore) */
-			brcmf_chip_resetcore(d11core, 0x000c, 0x0004, 0x0004);
-
-			/* Re-select d11: resetcore changed BAR0_WINDOW via bus ops */
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_80211);
-			d11_wrap_rst_after = brcmf_pcie_read_reg32(devinfo, 0x1800);
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.114b: post-resetcore wrap_RESET_CTL=0x%08x IN_RESET=%s\n",
-				 d11_wrap_rst_after,
-				 (d11_wrap_rst_after & 1) ? "YES" : "NO");
-
-			if (d11_wrap_rst_after & 1) {
-				dev_err(&devinfo->pdev->dev,
-					"BCM4360 test.114b: d11 STILL IN RESET after resetcore — aborting\n");
-				return -ENODEV;
-			}
-
-			/* Safe to read d11 core clk_ctl_st now (core out of reset) */
 			d11_ccs = brcmf_pcie_read_reg32(devinfo, 0x1e0);
 			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 test.114b: d11 clk_ctl_st=0x%08x BP_ON_HT=%s HAVEHT=%s\n",
+				 "BCM4360 test.114b: d11 clk_ctl_st=0x%08x BP_ON_HT=%s HAVEHT=%s FORCEHT=%s\n",
 				 d11_ccs,
 				 (d11_ccs & BIT(19)) ? "YES" : "NO",
-				 (d11_ccs & BIT(17)) ? "YES" : "NO");
+				 (d11_ccs & BIT(17)) ? "YES" : "NO",
+				 (d11_ccs & BIT(1))  ? "YES" : "NO");
 
 			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 		}

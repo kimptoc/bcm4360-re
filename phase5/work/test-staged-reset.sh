@@ -42,15 +42,15 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.114.stage${STAGE}"
+LOG="$LOG_DIR/test.115.stage${STAGE}"
 
-echo "=== test.114: d11 enable before ARM release --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.115: control test — no resetcore, pure d11 diagnostic --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: test.114 skip_arm=1 — d11 wrapper reads + resetcore diagnostic, no ARM release. Expected: no crash, RESET_CTL=0 (d11 not in BCMA reset), d11 clk_ctl_st accessible." | tee -a "$LOG" ;;
-    1) echo "Stage 1: test.114 skip_arm=0 — full run: test.47 BBPLL bringup + d11 resetcore + ARM release. FW should see BP_ON_HT and write sharedram ready signature. Wait 35s for FW init." | tee -a "$LOG" ;;
+    0) echo "Stage 0: test.115 skip_arm=1 — d11 wrapper read + clk_ctl_st diagnostic only (no resetcore). Confirms d11 not in BCMA reset and clk_ctl_st readable before ARM release." | tee -a "$LOG" ;;
+    1) echo "Stage 1: test.115 skip_arm=0 — control: BBPLL bringup (test.47) + ARM release, no resetcore. Confirms BP_ON_HT=0 hang is PMU issue not resetcore artefact. Wait 35s." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -112,7 +112,7 @@ else
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.114 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.115 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
