@@ -1,6 +1,6 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, POST test.116 stage0 crash x2 — MMIO DEAD, NEED POWER CYCLE)
+## Current state (2026-04-17, POST test.116 stage0 crash x2 — MMIO DEAD, DRAINING BATTERY FOR RECOVERY)
 
 ### HARDWARE STATUS: BCM4360 MMIO NON-RESPONSIVE — POWER CYCLE REQUIRED
 
@@ -21,9 +21,23 @@ A system reboot does NOT cut PCIe slot power (VAUX stays on). Only a full hardwa
 both times it crashed hard (no kernel output, MCE-level crash). Userspace now confirms the
 device itself is not responding to MMIO at all — the crashes were always Completion Timeout → MCE.
 
-**Next step: FULL POWER CYCLE**
-`sudo shutdown -h now` → wait 30+ seconds after power LED goes off → power on.
-Do NOT just reboot (`shutdown -r`), that does not cut slot power.
+**Next step: FULL POWER CYCLE — MacBook-specific recovery procedure**
+
+This machine is a pre-2018 MacBook with non-removable battery. Standard shutdown does NOT
+cut PCIe slot power (VAUX stays on via battery). Attempted recovery methods, in order tried:
+
+1. `shutdown -h now` + wait — FAILED (battery keeps VAUX alive)
+2. Unplug mains — IRRELEVANT (laptop on battery anyway)
+3. SMC reset (Shift+Ctrl+Option+Power, 10s) — FAILED (state too deep in BCM4360 hardware)
+4. Boot macOS to let Apple kext reinitialize card — NOT POSSIBLE (no macOS partition)
+
+**Only remaining option: drain battery to 0%**
+Run `stress-ng --cpu 0 --vm 2 --vm-bytes 80%` with no charger until machine shuts off from
+empty battery. Wait 2-3 minutes. Plug in charger. Power on. Test MMIO.
+
+After recovery, verify BEFORE any test:
+`dd if=/sys/bus/pci/devices/0000:03:00.0/resource0 bs=4 count=1 | xxd`
+Must return 4 bytes (no I/O error). If still dead → something is wrong at the PCIe root port level.
 
 ### What to do after power cycle
 
@@ -43,13 +57,22 @@ After power cycle, before ANY test:
    CRITICAL FOR STAGE1: After ARM is released and test completes, do NOT leave module loaded
    long-term. Unload promptly to avoid another firmware-induced MMIO corruption.
 
-### Prevention for future stage1 tests
+### Prevention for future stage1 tests — CRITICAL on MacBook
 
-The firmware, when running, writes to BCM4360 PCIe endpoint registers that corrupt MMIO
-state in a way that persists through soft reset. To prevent MMIO lock-out:
-- After stage1 ARM release + observation window, rmmod promptly (within the wait period)
-- If stage1 crashes, expect another power cycle may be needed before next run
-- Consider: after stage1, add a SBR in the test SCRIPT (before insmod) with 1000ms wait
+**On this MacBook, MMIO corruption = hours of recovery time** (battery drain is the only fix).
+The cost of another stage1 crash is very high. Before running stage1 again:
+
+1. **Understand why stage0 crashes at BAR0 probe** — the d11 guard was never reached because
+   both test.116 runs crashed in `brcmf_pcie_get_resource` (BAR0 ioread32) before reset_device.
+   This suggests the MMIO was already dead BEFORE insmod — the pre-test MMIO check is mandatory.
+
+2. **Add userspace MMIO check to test script** — script should abort if resource0 returns I/O
+   error before attempting insmod.
+
+3. **After any stage1 ARM release:** rmmod within the observation window. Do NOT leave loaded.
+   If stage1 crashes: expect battery-drain recovery required before next run.
+
+4. **Consider a SBR in the test script** before insmod (1000ms wait) to clear CommClk- state.
 
 ### Test.116 stage0 crash analysis (both crashes)
 
