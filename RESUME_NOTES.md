@@ -1,6 +1,66 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, POST test.108 — CRASHED AGAIN, plan pivots to skip_arm + dmesg)
+## Current state (2026-04-17, PRE test.109 — module built, about to run)
+
+**Goal:** capture the pre-ARM backplane core enumeration (11 slots from
+0x18000000 to 0x1800A000) without crashing the host. Identifies what
+core lives at slot 0x18001000 (FW-hang target per test.106).
+
+**Why this run differs from test.107/108 (both lost all enum output):**
+1. **Enum block moved** from pcie.c:~2305 (after skip_arm check) to
+   pcie.c:~1889 (BEFORE skip_arm check). Now reachable in both paths.
+2. **bcm4360_skip_arm=1** passed to insmod. Probe does test.101 baseline
+   + the new enum + a 64B TCM dump, then returns -ENODEV cleanly.
+   **No ARM release → no FW hang → no PCIe wedge → no crash.**
+3. **dmesg -k --nopager** replaces journalctl in the capture step. Reads
+   /dev/kmsg directly, no journald batching.
+4. **No sleep in capture** — skip_arm=1 means no crash race; we can take
+   as long as we want. dmesg runs synchronously post-insmod.
+5. **rmmod after capture** so next run is repeatable.
+
+**Files changed (post test.108):**
+- `phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c`:
+  - NEW test.109 enum block at ~line 1889 (after test.101 baseline,
+    before `if (bcm4360_skip_arm)`). All logs are dev_emerg.
+  - OLD test.108 enum block at ~line 2305 replaced with a short
+    breadcrumb comment pointing to the new location.
+- `phase5/work/test-staged-reset.sh`:
+  - LOG → test.109.stageN, headers updated.
+  - insmod invocation adds `bcm4360_skip_arm=1`.
+  - insmod wrapped in set+e/set-e (expected non-zero rc from skip_arm).
+  - Post-insmod capture uses `dmesg -k --nopager | grep BCM4360`
+    instead of `sleep 2 + journalctl | grep`.
+  - rmmod at end for repeatability.
+
+**Build:** clean. Module at
+`phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko`.
+
+**Expected output:** `phase5/logs/test.109.stage0` contains:
+- Pre-test PCIe state (lspci)
+- Loading banner
+- insmod rc=non-zero message
+- BCM4360 kernel lines up through test.109 slot enum (11 lines)
+- "Cleaning up brcmfmac..." from rmmod
+
+**Decision tree:**
+- All 11 slot reads logged → core map obtained; identify slot 0x18001000
+  ID and cross-reference to EROM/datasheet.
+- Script prints the loading banner but NO BCM4360 enum lines AND box
+  crashes → slot+0 reads themselves are unsafe pre-ARM (previously
+  unsuspected). Next step: try an even earlier probe with fewer reads.
+- Script runs to completion but slot 0x18001000 off0=0xffffffff → slot is
+  DEAD pre-ARM (no core present or unpowered). Implication: FW accesses
+  a non-existent core → hang. Next step: try to identify the core via
+  EROM walk or find evidence FW expects a different slot.
+- Script runs but slot 0x18001000 off0=live non-ff value → core exists,
+  is responsive to host-side MMIO. FW hang is specifically on 0x1e0
+  register read. Next step: compare with neighbour cores' 0x1e0 value.
+
+**Workflow:** this run touches HW — commit + push before insmod.
+
+---
+
+## Previous state (2026-04-17, POST test.108 — CRASHED AGAIN, plan pivots to skip_arm + dmesg)
 
 **Outcome:** journal recovery from boot -1 shows only 27 BCM4360 lines,
 last is `test.101 pre-ARM baseline: *0x62e20=0x00000000 ZERO (expected)`.

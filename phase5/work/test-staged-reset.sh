@@ -42,14 +42,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.108.stage${STAGE}"
+LOG="$LOG_DIR/test.109.stage${STAGE}"
 
-echo "=== test.108: safer pre-ARM core enumeration (slot+0 only) + in-script journal capture --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.109: backplane core enum with skip_arm=1 (no crash, dmesg capture) --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: test.108 — pre-ARM reads slot+0 only for 11 slots (no 0x1e0 read pre-ARM, which likely crashed t.107); test.107 FW-wait probe at 0x180011e0 preserved under MAbort masking; post-insmod journal capture ensures log survives later host crash" | tee -a "$LOG" ;;
+    0) echo "Stage 0: test.109 — enum block moved to pre-skip_arm site so skip_arm=1 reaches it; skip_arm=1 avoids ARM release => no FW hang => no root-port wedge => no crash => dmesg has unlimited time" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -102,24 +102,35 @@ echo "=== Flushing to disk ===" | tee -a "$LOG"
 sync
 echo "Flush complete." | tee -a "$LOG"
 
-# Load module with staged reset
+# Load module with staged reset + skip_arm=1
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.108 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=1) --- test.109 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
 modprobe brcmutil 2>/dev/null || true
 modprobe cfg80211 2>/dev/null || true
-insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE"
-insmod "$FMAC_DIR/wcc/brcmfmac-wcc.ko" 2>/dev/null || true
+# test.109: bcm4360_skip_arm=1 prevents ARM release so FW never runs =>
+#   box does not crash => enum output is safely in kernel ringbuffer.
+# insmod will return -ENODEV (clean abort) because the probe bails out
+#   after the TCM dump in the skip_arm branch. That's expected.
+set +e
+insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE" bcm4360_skip_arm=1
+INSMOD_RC=$?
+set -e
+echo "insmod returned rc=$INSMOD_RC (expected: non-zero; skip_arm aborts probe cleanly)" | tee -a "$LOG"
 
-# test.108: capture dmesg from CURRENT boot immediately after insmod so data
-# survives the expected later host crash (~30s post-exit pattern from t.101-107).
+# Capture dmesg directly from /dev/kmsg — no journald batching, no sleep
+# needed since no crash is expected.
 echo "" | tee -a "$LOG"
-echo "=== Post-insmod journal capture (boot 0) ===" | tee -a "$LOG"
-sync
-sleep 2
-journalctl -b 0 --no-pager 2>/dev/null | grep -iE "BCM4360|brcmfmac" | tee -a "$LOG"
+echo "=== dmesg capture (kernel ring buffer) ===" | tee -a "$LOG"
+dmesg -k --nopager 2>&1 | grep -iE "BCM4360|brcmfmac" | tee -a "$LOG"
 sync
 echo "=== Capture complete ===" | tee -a "$LOG"
 sync
+
+# Remove the aborted-probe module cleanly so next test is repeatable
+if lsmod | grep -q brcmfmac; then
+    echo "Cleaning up brcmfmac..." | tee -a "$LOG"
+    rmmod brcmfmac 2>/dev/null || true
+fi

@@ -1887,6 +1887,48 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						  "NON-ZERO -- stale TCM, breadcrumb reading is unreliable");
 		}
 
+		/* test.109: enumerate backplane core slots 0x18000000..0x1800A000.
+		 *
+		 * Moved here (was test.108 at post-test.47 site, never reached
+		 * because box crashed before enum logged). Placed BEFORE the
+		 * bcm4360_skip_arm branch so enum runs in both paths — in
+		 * particular skip_arm=1 avoids ARM release entirely, so no FW
+		 * hang, no root-port wedge, and dmesg capture has unlimited time.
+		 *
+		 * Slot 0x18001000 is the FW-hang target (test.106). Reading
+		 * slot+0 is a presence probe — 0xffffffff means dead slot
+		 * (master abort), anything else is a live core with an ID word.
+		 *
+		 * READ-ONLY. No backplane writes. Restores BAR0 window to
+		 * ChipCommon at end. dev_emerg so every line flushes immediately.
+		 */
+		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+			u32 slot, off0;
+			int n;
+
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.109: pre-ARM backplane core enumeration (slot+0 only, 11 slots)\n");
+			for (n = 0; n <= 10; n++) {
+				slot = 0x18000000 + (n * 0x1000);
+				pci_write_config_dword(devinfo->pdev,
+						       BRCMF_PCIE_BAR0_WINDOW,
+						       slot);
+				off0 = ioread32(devinfo->regs + 0x000);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.109: slot[0x%08x] off0=0x%08x%s\n",
+					  slot, off0,
+					  off0 == 0xffffffff ? " -- DEAD (no core)" :
+					  (slot == 0x18001000) ?
+					    " <- FW hang target" : "");
+			}
+			/* Restore BAR0 window to ChipCommon for downstream code. */
+			pci_write_config_dword(devinfo->pdev,
+					       BRCMF_PCIE_BAR0_WINDOW,
+					       0x18000000);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.109: enum complete, BAR0 restored to ChipCommon\n");
+		}
+
 		if (bcm4360_skip_arm) {
 			dev_info(&devinfo->pdev->dev,
 				 "BCM4360 test.12: skipping ARM release (bcm4360_skip_arm=1)\n");
@@ -2275,57 +2317,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 
-		/* test.108: enumerate backplane core slots 0x18000000..0x1800A000.
-		 *
-		 * test.107 RESULT (2026-04-17): kernel produced only the test.53
-		 * SBR + BAR0-alive lines before host crashed. No test.107 output
-		 * at all. Two possible causes:
-		 *  (a) the pre-ARM `ioread32(regs + 0x1e0)` at slot 0x18001000
-		 *      — which resolves to 0x180011e0, the exact register FW hangs
-		 *      on — hung the host bus, killing the box before dev_emerg
-		 *      could flush;
-		 *  (b) the script exits straight after insmod with no in-script
-		 *      journal capture; the later-box-crash (~30s pattern) then
-		 *      wiped data that was already in the kernel ringbuffer.
-		 *
-		 * Both fixes applied:
-		 *  - test.108 reads slot+0 ONLY pre-ARM (presence probe only; no
-		 *    touch of potentially-hung offset 0x1e0 for arbitrary slots).
-		 *  - test-staged-reset.sh now captures `journalctl -b 0 | grep
-		 *    BCM4360` into the stage0 log after insmod, so data survives
-		 *    a later host crash.
-		 *
-		 * The risky 0x180011e0 read is preserved in the FW-wait outer==1
-		 * branch (below), where MAbort masking is active and the probe
-		 * is re-mask'd before the read.
-		 *
-		 * READ-ONLY. No writes to backplane registers. Safe pre-ARM.
-		 * Restores BAR0 window to ChipCommon (0x18000000) at end.
+		/* test.109: enum block moved earlier in the function (see just after
+		 * test.101 pre-ARM baseline). This post-test.96 site is no longer
+		 * used — enum runs before the skip_arm branch so it's reachable
+		 * in both skip_arm=1 and skip_arm=0 paths.
 		 */
-		if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-			u32 slot, off0;
-			int n;
-
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.108: pre-ARM backplane core enumeration (slot+0 only)\n");
-			for (n = 0; n <= 10; n++) {
-				slot = 0x18000000 + (n * 0x1000);
-				pci_write_config_dword(devinfo->pdev,
-						       BRCMF_PCIE_BAR0_WINDOW,
-						       slot);
-				off0 = ioread32(devinfo->regs + 0x000);
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.108: slot[0x%08x] off0=0x%08x%s\n",
-					  slot, off0,
-					  off0 == 0xffffffff ? " — DEAD (no core)" :
-					  (slot == 0x18001000) ?
-					    " ← FW hang target" : "");
-			}
-			/* Restore BAR0 window to ChipCommon for downstream code. */
-			pci_write_config_dword(devinfo->pdev,
-					       BRCMF_PCIE_BAR0_WINDOW,
-					       0x18000000);
-		}
 	}
 
 	brcmf_dbg(PCIE, "Bring ARM in running state\n");
