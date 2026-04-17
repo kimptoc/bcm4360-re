@@ -1,6 +1,59 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, PRE test.111 — module built, about to run)
+## Current state (2026-04-17, POST test.111 — FW HANG TARGET IDENTIFIED)
+
+**BREAKTHROUGH: `0x18001000` = `BCMA_CORE_80211` (d11 MAC core), rev 42.**
+
+Full BCM4360 backplane core map (from driver's own enumeration,
+`phase5/logs/test.111.stage0`):
+
+| id    | name       | base        | rev |
+|-------|------------|-------------|-----|
+| 0x800 | CHIPCOMMON | 0x18000000  | 43  |
+| 0x812 | 80211      | 0x18001000  | 42  | ← **FW HANG TARGET** |
+| 0x83e | ARM_CR4    | 0x18002000  | 2   |
+| 0x83c | PCIE2      | 0x18003000  | 1   |
+
+Missing (not present): INTERNAL_MEM, PMU, ARM_CM3, GCI, DEFAULT.
+
+**Interpretation:** the FW's `fn 0x1415c` (per test.106) reads register
+`0x180011e0` — that's the d11 MAC core at offset `0x1e0`. The
+80211/d11 core has a register bank starting at its base; `0x1e0` is a
+well-known register range in brcm80211 — typically
+`D11_MACCONTROL`/`MACCONTROL1`/`MACINTSTATUS` depending on rev. Need to
+cross-reference with brcmsmac or brcm80211 headers for rev-42 d11.
+
+**Run behaviour:** insmod rc=0 (not -ENODEV). skip_arm branch lives
+inside `brcmf_pcie_download_fw_nvram`, but probe's firmware files are
+missing (Apple-branded `.bin`, `clm_blob`, `txcap_blob` all load with
+`-ENOENT`), so `copy_mem_todev` never runs and the probe returns a
+clean 0 from the fw-request callback path. Host did NOT crash. dmesg
+captured everything cleanly.
+
+**Next direction — resolve what d11 register 0x1e0 is:**
+1. Grep brcmsmac + brcm80211 sources for d11 MAC register headers
+   (`d11.h`, `d11ucode.h`, etc.) and find the name/semantics of offset
+   0x1e0.
+2. Likely candidates on rev-42 d11: MACINTSTATUS (status poll),
+   MACCONTROL (MAC enable latch), PHY_VERSION, PMU/clock status mirror.
+3. The FW read at 0x1e0 is a spin loop (test.106 established a poll
+   loop at fn 0x1415c). So it's waiting for a bit to set — likely a
+   PHY or MAC-ready indication that never asserts because BBPLL/HT
+   clock is off (PMU/pllcontrol evidence from test.40/109).
+
+**Secondary line:** BBPLL/HT initialization — even if we identify
+register 0x1e0 semantics, the root cause is probably still
+"BBPLL isn't running so d11 can't produce the status bit FW is waiting
+for." The d11 core requires HT clock. Test.40 already established
+`HAVEALP=1 HAVEHT=0` after watchdog. We'd need to either (a) bring up
+BBPLL before ARM release, or (b) patch FW to skip this specific poll.
+
+**Workflow:** next step is offline research (grep d11 headers) — no HW
+touch, no insmod.
+
+---
+
+## Previous state (2026-04-17, PRE test.111 — module built, about to run)
 
 **Goal (unchanged):** identify the core at backplane slot 0x18001000 (the
 FW-hang target from test.106: FW reads *0x180011e0 and never returns).
