@@ -38,36 +38,56 @@ test.105 T+0200ms: SANITY *0x62e20=0x00000000
   is currently running sits above 0x9CEC4).
 - Sanity *0x62e20 still 0x00000000 — FW never wrote that word.
 
-### Next steps (test.106)
+### Refined hypothesis (advisor insight, 2026-04-17)
 
-Need to identify WHERE in fn 0x1415c's body (past the BL to fn 0x1adc) the
-hang occurs. Two sub-tasks:
+**The absence of any LR-shaped value at [0x9CEC4] across t.101–105 is the signal,
+not noise.** If fn 0x1415c had ever called any of its sub-BLs (0x1adc ×3 or
+0x11e8) and returned, [0x9CEC4] would hold an LR-shaped value (0x14187,
+0x1418f, or 0x141b7) as stale pop-didn't-clear. It doesn't — 0x91cc4 is
+pre-fn-0x1415c stack garbage, meaning **fn 0x1415c has not called any sub-BL
+yet**.
 
-1. **Offline disasm of fn 0x1415c, post-fn-0x1adc section** (subagent, no HW cost):
-   - Confirm body SP = 0x9CEC8 (for an active sub-BL, saved LR would be at
-     [0x9CEC8 - 4] = 0x9CEC4 — but T3 there was STALE, so either fn 0x1415c
-     itself is hung without a sub-BL active (e.g., in-body poll/loop/svc),
-     OR the active sub-BL doesn't push LR (rare for compiled thumb).
-   - Enumerate BLs in fn 0x1415c after the BL→0x1adc site.
-   - Look for in-body poll loops / SVCs / volatile busy-waits (fn 0x1415c
-     is described as "HW init, unknown target").
+Combined with T1 [0x9CED4]=0x68321 (fn 0x1415c still the active frame of
+fn 0x6820c), the hang is in fn 0x1415c's prologue, BEFORE 0x14182 (first BL
+to 0x1adc).
 
-2. **Test.106 probe plan:**
-   - 2 regression (ctr, pd) + 2 anchors (E, F) + 1 stable T1 — keep chain.
-   - Read `*0x9CEC8` (fn 0x1415c body-SP top word) — if it's live data it's
-     a callee-saved reg spill; otherwise zero/junk.
-   - Read `*(PC-ish slot)` — hardest part without a PC indicator; instead
-     probe the sp-relative locals of fn 0x1415c: sweep 0x9CED0 → 0x9CEC8
-     to catch any LR-candidate corresponding to a post-0x1adc BL site.
-   - Alternatively: write a "heartbeat" (hand-compiled thumb stub injected
-     into a scratch location) is out-of-scope for a read-only probe. Skip.
-   - Optional: read state around known PMU/CC regs the FW might be polling
-     at this point (e.g., pmustatus re-read from FW's POV via 0x180000xx
-     shadow if accessible).
-   - Keep total reads ≤ 13 (t.104 budget).
+**Prime candidate: ldr.w at 0x14176** — `ldr.w r2, [r3, #0x1e0]` — the first
+MMIO touch of the status register `[r3+0x1e0]` (same register the later poll
+would read). If this register's bus access stalls, CPU is frozen on this load.
+(Write-back at 0x1417e is also possible if the read completes but the store
+stalls.)
 
-3. **Workflow rule:** commit + push RESUME_NOTES before running test.106
-   (host will likely crash 30s post-exit; pre-commit preserves plan/state).
+### Test.106 plan — discriminate prologue-hang vs poll-hang
+
+**Primary discriminator: time-evolve T3.** Sample [0x9CEC4] at 3 time points
+across the FW-wait (e.g. T+200ms, T+600ms, T+1000ms). If fn 0x1415c were
+actually in the poll loop, we'd *occasionally* catch fn 0x1adc active and see
+0x1418f (stochastic over many iterations × many time-samples). If T3 stays
+0x91cc4 across all samples, prologue-hang is confirmed.
+
+**Probe reads (≤ 14 total):**
+1. Regression: ctr[0x9d000], pd[0x62a14] — continuity
+2. Anchors: E[0x9CFCC] (exp 0x67705), F[0x9CF6C] (exp 0x68b95),
+   T1[0x9CED4] (exp 0x68321) — chain stability
+3. T3 × 3 times: [0x9CEC4] at T+200ms, T+600ms, T+1000ms — key discriminator
+4. Struct pointer: [0x9CEC8] (saved r4 = r0 on entry = struct pointer). This
+   tells us which HW block fn 0x1415c is touching.
+5. Sweep 0x9CEC0 ↓ 0x9CEB8 — pre-call stack garbage context (not written
+   by fn 0x1415c if hypothesis holds)
+6. Sanity *0x62e20
+
+**Pre-test disasm tasks (subagent, no HW cost):**
+- **fn 0x6820c around 0x6831c:** find instructions that set r0 before
+  `bl #0x1415c`. Tells us the expected struct pointer value → we can
+  compute the actual MMIO register address [r0+0x88]+0x1e0 being hit.
+- **fn 0x15940 prologue:** verify push count. If fn 0x15940 pushes exactly
+  3 regs (rare), its body SP would land ABOVE 0x9CED4 and T1 would not be
+  overwritten by a call to fn 0x15940 — in which case T1 stable doesn't
+  prove fn 0x1415c is still active. (Expected: push includes LR + ≥2 regs
+  so body SP ≤ 0x9CECC, T1 anchor is live.)
+
+**Workflow rule:** commit + push RESUME_NOTES before editing pcie.c or
+running test.106 (host crashes ~30s post-exit; pre-commit preserves state).
 
 ---
 
