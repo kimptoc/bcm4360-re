@@ -1,8 +1,59 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, POST test.111 — FW HANG TARGET IDENTIFIED)
+## Current state (2026-04-17, POST test.111 + offline research — HANG REG IDENTIFIED)
 
-**BREAKTHROUGH: `0x18001000` = `BCMA_CORE_80211` (d11 MAC core), rev 42.**
+**COMPLETE CHAIN OF EVIDENCE:**
+- test.106: FW's fn 0x1415c hangs polling MMIO at `0x180011e0`.
+- test.111: `0x18001000` = `BCMA_CORE_80211` (d11 MAC core), rev 42.
+- brcmsmac/d11.h:168 `u32 clk_ctl_st; /* 0x1e0 */` — offset 0x1e0 in the
+  d11 MAC core is the **per-core clock control/status register**.
+- brcmsmac/aiutils.h:55-66:
+  - `CCS_FORCEHT     = 0x00000002` (WRITE: force HT clock request)
+  - `CCS_BP_ON_HT    = 0x00080000` (RO:    backplane running on HT clock)
+
+**The hang, fully explained:** FW writes `CCS_FORCEHT` to d11's
+clk_ctl_st, then spin-polls waiting for `CCS_BP_ON_HT`. On BCM4360 the
+BBPLL is off post-EFI (test.40: HAVEHT=0, HAVEALP=1), and `brcm80211`'s
+bcma backend has no PMU resource config for chip `0x43A0` ("PMU resource
+config unknown or not needed for 0x43A0"). Result: HT clock never comes
+up → `CCS_BP_ON_HT` never sets → FW poll runs forever at fn 0x1415c.
+
+**Core map (for reference):**
+
+| id    | name       | base        | rev |
+|-------|------------|-------------|-----|
+| 0x800 | CHIPCOMMON | 0x18000000  | 43  |
+| 0x812 | 80211      | 0x18001000  | 42  | ← hang is at +0x1e0 = clk_ctl_st |
+| 0x83e | ARM_CR4    | 0x18002000  | 2   |
+| 0x83c | PCIE2      | 0x18003000  | 1   |
+
+**This closes Phase 5.** Root cause of FW hang is definitively isolated
+to "BBPLL/HT clock absent when FW runs."
+
+**Phase 6 direction — bring up BBPLL/HT before releasing ARM:**
+Options, roughly easiest → hardest:
+1. **Host-side force HT via ChipCommon.clk_ctl_st:** write `CCS_FORCEHT`
+   (bit 1) to CC before ARM release, wait for `CCS_BP_ON_HT` (bit 19).
+   This is what brcmsmac does on similar chips (see main.c:1230-1240).
+2. **Host-side PMU resource/pllcontrol programming:** program pllcontrol[0..5]
+   and min/max_res_mask to match known-good EFI state, trigger BBPLL
+   start. Requires pllcontrol register-map for BCM4360 rev-3.
+3. **FW patching:** skip the poll loop at fn 0x1415c (hardest; still
+   doesn't fix the underlying clock problem).
+
+**Recommended next test: test.112 — host writes CCS_FORCEHT to CC and
+polls CCS_BP_ON_HT.** Read-only pollers (a few reads on CC), no new
+state mutation past the single force write. Observe whether BBPLL comes
+up with the simple force-write alone.
+
+**Workflow:** test.112 touches HW (a single CC write + polls) — RESUME
+plan + commit + push before insmod.
+
+---
+
+## Test.111 raw result (2026-04-17 18:47, POST — FW HANG TARGET IDENTIFIED)
+
+**`0x18001000` = `BCMA_CORE_80211` (d11 MAC core), rev 42.**
 
 Full BCM4360 backplane core map (from driver's own enumeration,
 `phase5/logs/test.111.stage0`):
