@@ -71,11 +71,32 @@ PCI config space confirms: Vendor `14e4`, Device `43a0`, Subsystem `106b:0112`.
 
 ## Legal Notes
 
-This project uses clean-room reverse engineering techniques for interoperability purposes, which is protected under:
+This project uses clean-room reverse engineering techniques for interoperability
+purposes, which is protected under:
 - EU Directive 2009/24/EC (Article 6 — decompilation for interoperability)
 - US Copyright Act (17 USC 1201 — reverse engineering exception for interoperability)
 
-No Broadcom proprietary source code is used. Firmware binaries extracted from the `wl` driver are Broadcom's property and are not redistributed — users must extract their own copy.
+**Core principle:** All reverse engineering activity is framed as understanding
+behavior to enable interoperability — not reproducing or redistributing
+proprietary code.
+
+**What this project does:**
+- Documents observed firmware behavior: register access patterns, state
+  transitions, call chains, timing
+- Implements driver logic from documented behavior and open interfaces
+- Uses hardware traces and register dumps as the primary source of truth
+
+**What this project does not do:**
+- Publish large disassembly blocks or reconstruct full functions verbatim
+- Redistribute firmware blobs (users must obtain firmware from their own `wl`
+  driver installation)
+- Copy proprietary logic directly from disassembly into driver code
+
+**Methodology:** observe behavior → document in plain language → implement
+clean code from that documentation. The disassembly is a diagnostic tool, not
+a blueprint.
+
+No Broadcom proprietary source code is used or reproduced.
 
 ## License
 

@@ -14,6 +14,11 @@ compare against the existing `brcmfmac` codebase.
 > (what was tried, what log was captured, what it proved) lives in
 > `phase5/notes/phase5_progress.md`, commit messages, and `phase5/logs/`.
 
+> **Legal constraint:** All reverse engineering follows clean-room methodology
+> — observe behavior, document in plain language, implement from that
+> documentation. Do not copy disassembly structure directly into driver code.
+> See README.md and CLAUDE.md for full guidelines (ref: issue #12).
+
 ## Current Status (2026-04-16)
 
 **Active phase:** Phase 5 — firmware boot forensics on a live `brcmfmac` harness.
