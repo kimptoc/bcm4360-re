@@ -1,6 +1,27 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, POST test.104 — HANG LOCALIZED to fn 0x1415c)
+## Current state (2026-04-17, PRE test.105 — module built, about to run)
+
+Git branch: main. Module built clean (only a pre-existing unused-function
+warning). About to run test.105. Recovery: `journalctl -b -1` after any
+host reboot — test prints to dmesg, log captured to `phase5/logs/test.105`.
+
+**TEST.105 PLAN** (verified against raw firmware bytes, see pcie.c @ if (outer==1) block):
+- Disasm source: `phase5/notes/offline_disasm_1415c.md` + prologue of fn 0x1adc
+  manually verified (0xb538 = push {r3,r4,r5,lr}).
+- Frame math: fn 0x1415c body_SP=0x9CEC8, fn 0x1adc body_SP=0x9CEB8, saved LR
+  of fn 0x1adc at 0x9CEC4.
+- **Key reading: T3 [0x9CEC4]** decides the hang state:
+  - `0x1418f` → parked in fn 0x1adc from the bit-17 POLL LOOP (most likely)
+  - `0x14187` → parked in fn 0x1adc from the pre-loop `delay(0x40)` call
+  - `0x141b7` → poll TIMED OUT → hung inside fn 0x11e8 (assert/svc)
+  - not LR-shaped → fn 0x1adc already returned, hang elsewhere in fn 0x1415c body
+- 12 reads total (well under the safe 19-budget), 1200ms FW-wait, T104_REMASK
+  equivalent macro throughout.
+
+---
+
+## Previous state (2026-04-17, POST test.104 — HANG LOCALIZED to fn 0x1415c)
 
 Git branch: main. Host had a hard crash after test.104 ran (at 11:49); the
 probe output was captured via `journalctl -b -1` and saved to
