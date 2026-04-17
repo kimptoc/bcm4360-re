@@ -1,20 +1,27 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.100: PHY wait-struct field probe (PHY-wait fingerprint check)
+# Phase 5.2 test.101: single-breadcrumb probe of *0x62e20 (upstream-hang fingerprint)
 #
-# test.99 RESULT: pointer sample IDENTICAL across T+200/400/800ms:
-#   ctr=0x43b1 d11=0 ws=0x9d0a4 pd=0x58cf0 — firmware frozen by T+200ms.
-#   Console ring matched test.80 decode (ChipCommon banner, no post-RTE text).
-#   Offline disasm Round 3+4: anchored "wl_probe called" to fn 0x67614;
-#   BFS-proved unique path to the test.96 PHY spin-loop goes
-#   wl_probe → 0x68a68 → 0x1ab50 → 0x16476 → 0x162fc → 0x1624c.
+# test.100 RESULT (Case C'): wait-struct fields = pre-init garbage,
+#   byte-stable across T+200/400/800ms → fn 0x1624c NEVER ran. Hang is
+#   strictly UPSTREAM of the PHY spin-loop, inside wl_probe.
 #
-# test.100 PLAN: read wait-struct fields f20/f24/f28 at TCM[*0x62ea8 +
-#   0x14/+0x18/+0x1c] at T+200/400/800ms, plus the test.99 control pointer
-#   set. Map to matrix:
-#     f24=1,f20=1,f28=0 → spin-loop is live freeze (case A)
-#     f24=1,f20=0,f28=0 → entered, cancelled exit (case B)
-#     f28!=0            → spin completed, hang downstream
-#     f24=0             → 0x1624c never entered, upstream hang (case C)
+# test.100 also regressed at ~1.9s (machine crashed between T+1800 and
+# T+2000ms) — ~30–90ms of extra read_ram32 latency nudged the masking
+# loop past a PCIe periodic event. test.101 reduces probe count AND
+# shortens FW-wait cap 2000→1200ms to widen the safety margin.
+#
+# test.101 PLAN: single read of TCM[0x62e20] at T+200ms (+ 4 pointer
+#   controls). fn 0x68a68 writes wl_ctx ptr to 0x62e20 at PC 0x68bbc,
+#   8 bytes before bl 0x1ab50 (PHY descent). Image at 0x62e20 = 0;
+#   only attach-path writer is fn 0x68a68@0x68bbc (fn 0x681bc@0x681cc
+#   is detach-path, does not run during probe).
+#   Matrix:
+#     *0x62e20 == 0      → fn 0x68a68 hung before 0x68bbc
+#                         (Case U1: in its prefix, or in wl_probe's
+#                          other 5 sub-BLs before bl 0x68a68)
+#     *0x62e20 != 0      → fn 0x68a68 reached 0x68bbc, hang is in
+#                         bl 0x1ab50 or one of its pre-spin sub-BLs
+#                         (fn 0x16476 / fn 0x162fc body; not 0x1624c)
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -28,14 +35,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.100.stage${STAGE}"
+LOG="$LOG_DIR/test.101.stage${STAGE}"
 
-echo "=== test.100: PHY wait-struct field probe --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.101: single breadcrumb *0x62e20 --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled + IRQ handler before ARM; pci_set_master before ARM; 2s masking+FW wait; TEST.100 PROBES: control pointers {0x9d000,0x58f08,0x62ea8,0x62a14} + wait-struct fields TCM[ws+0x14/0x18/0x1c] at T+200/400/800ms; free_irq+disable_msi+RP restore" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled + IRQ handler before ARM; pci_set_master before ARM; 1.2s masking+FW wait (shortened from 2s); TEST.101 PROBES: control pointers {0x9d000,0x58f08,0x62ea8,0x62a14} + breadcrumb TCM[0x62e20] at T+200ms only; free_irq+disable_msi+RP restore" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -90,7 +97,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.100 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.101 ===" | tee -a "$LOG"
 sync
 
 dmesg -C

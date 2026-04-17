@@ -71,6 +71,27 @@ against whatever periodic event killed test.100 at ~1.9s.
 - If machine crashes anyway, that's still informative — different cadence
   than test.100 would pinpoint what the ~1.9s event is.
 
+### Hardening checks completed before build
+
+**Firmware image at offset 0x62e20**: 0x00000000 (surrounding .bss-like
+region also zero). So post-FW non-zero at 0x62e20 unambiguously means
+FW wrote it.
+
+**All writers of 0x62e20 in the firmware** (grepped literal 0x00062e20,
+3 aligned hits in pools at 0x149b0 / 0x68208 / 0x68c80):
+1. `fn 0x68a68 @ 0x68bbc` — `str r4, [r3]` sets wl_ctx ptr (attach path,
+   on wl_probe lineage). **This is the breadcrumb.**
+2. `fn 0x681bc @ 0x681cc` — `str r2, [r3]` where r2=0, conditional clear.
+   Prologue at 0x681bc; only runs on detach/cleanup (guarded by `arg ==
+   *0x62e20`). **Does NOT run during wl_probe.**
+3. `fn at 0x14948 uses literal at 0x149b0` — READ-ONLY
+   (`ldr r3,[pc,#88]; ldr r3,[r3,#0]; cbz r3,err; ldr r3,[r3,#12]`).
+   Diagnostic/logging helper. **Not a writer.**
+
+→ During wl_probe attach, only writer of 0x62e20 is fn 0x68a68 @ 0x68bbc.
+Breadcrumb semantics are preserved: non-zero at T+200ms ⇒ that single
+instruction ran.
+
 ### Files to modify before run
 - `phase5/work/drivers/.../pcie.c` — replace test.100 probe block with
   test.101: single read of TCM[0x62e20] at T+200ms. Drop duplicate
