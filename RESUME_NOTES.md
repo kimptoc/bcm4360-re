@@ -2052,3 +2052,167 @@ Expected output (stage 0 log):
 
 Success criteria: ≥11 enum lines present in dmesg ring buffer.
 Failure mode: if system crashes at enum, BAR0 writes are dangerous pre-probe.
+
+## POST-test.110 (2026-04-17) — HARD CRASH, pivot from raw BAR0 sweep
+
+### Result: kernel panic / full host crash, zero log lines persisted
+Log `phase5/logs/test.110.stage0` captured only pre-test lspci state; nothing
+from the driver's probe path reached disk. Enum block in `brcmf_pcie_reset_device`
+that performed an 11-slot raw BAR0 window sweep (`pci_write_config_dword` on
+BRCMF_PCIE_BAR0_WINDOW for each slot base, then ioread32 at window+0) was the
+trigger — one of those writes wedged the bus so hard the whole machine died
+instantly, no journald flush, no kmsg tail.
+
+### Root cause
+Raw BAR0 window writes in a tight loop, before any of the driver's usual
+serialization (spinlocks, msleep barriers) hit unmapped / uninitialized /
+powered-down backplane ranges. Even touching unassigned wrappers on BCMA
+SOCI_SB can trigger a bus hang that SERR's the root port. We already saw
+related fragility in tests 66/76/86 (post-ARM select_core = lethal); a
+pre-ARM raw sweep of slot bases is the same class of hazard with more reads.
+
+### Pivot (test.111)
+By the time `brcmf_pcie_reset_device` runs, `brcmf_chip_recognition` has
+already populated `ci->cores` (chip.c:1043-1049). We can walk that list
+instead of touching MMIO — `brcmf_chip_get_core(ci, coreid)` returns the
+registered core struct with id/base/rev. Zero new MMIO, zero hang risk.
+
+## POST-test.111 (2026-04-17) — FW HANG TARGET IDENTIFIED
+
+### Result: clean enum, FW hang target = d11 MAC @ 0x18001000
+Log `phase5/logs/test.111.stage0` shows:
+```
+BCM4360 test.111: id=0x800 CHIPCOMMON   base=0x18000000 rev=43
+BCM4360 test.111: id=0x812 80211        base=0x18001000 rev=42  <<< FW HANG TARGET
+BCM4360 test.111: id=0x83C PCIE2        base=0x18003000 rev=1
+BCM4360 test.111: id=0x83E ARM_CR4      base=0x18002000 rev=2
+(INTERNAL_MEM, PMU, ARM_CM3, GCI, DEFAULT all NOT PRESENT)
+```
+Combined with test.106 evidence (fn 0x1415c spin-polls `*0x180011e0` in FW),
+the hang is FW polling d11 MAC core's **clk_ctl_st register** (d11+0x1e0) for
+CCS_BP_ON_HT (bit 19) which never sets because HT clock / BBPLL is off.
+
+### Register semantics (from include/chipcommon.h and brcmsmac/aiutils.h)
+- offset 0x1e0 = `clk_ctl_st`
+- bit 1  = CCS_FORCEHT (driver/FW requests HT clock)
+- bit 17 = CCS_HAVEHT (HT clock available)
+- bit 18 = CCS_BP_ON_ALP (backplane running on ALP)
+- bit 19 = CCS_BP_ON_HT (backplane running on HT) ← FW polls this
+
+Same register layout exists on every core's wrapper; ChipCommon and d11 both
+expose clk_ctl_st at +0x1e0. FW's choice to poll d11's copy (not CC's) means
+the FW sees its core's clock view, not the chip-global view. But PMU grants
+affect the whole backplane.
+
+## Phase 5 CLOSED (2026-04-17)
+
+Chain of evidence now complete:
+1. test.87-96:  FW hangs inside pciedngl_probe → si_attach → ... → fn 0x1624c
+2. test.106:    offline disasm — fn 0x1415c spin-polls `*0x180011e0`
+3. test.111:    0x18001000 = d11 MAC core (BCMA_CORE_80211 id=0x812, rev=42)
+4. d11+0x1e0 = d11.clk_ctl_st; FW waits for CCS_BP_ON_HT
+5. test.40 EFI dump: clk_ctl_st=0x00010040 → HAVEALP=1, HAVEHT=0, BP_ON_HT=0
+
+EFI left BCM4360 on ALP clock (32MHz). FW needs HT clock (PLL lock) for d11
+PHY. Phase 6 goal: make HT clock come up before FW starts. This is a PMU /
+BBPLL bring-up problem, not a driver reset or FW-loader problem.
+
+## POST-test.112 (2026-04-17) — CC FORCEHT set BP_ON_ALP, not HT
+
+### Result: FORCEHT persisted on CC, but PMU did not grant HT
+Log `phase5/logs/test.112.stage0` (line 92-94):
+```
+pre-force CC.clk_ctl_st=0x00010040 (HAVEALP=1 HAVEHT=0 BP_ON_HT=0)
+wrote CCS_FORCEHT (bit 1) to CC.clk_ctl_st, polling for CCS_BP_ON_HT...
+after 100×100us: clk_ctl_st=0x00050042 pmustatus=0x0000002a res_state=0x0000013b -- HT TIMEOUT
+```
+Delta: 0x00010040 → 0x00050042.
+- bit 1 (CCS_FORCEHT) now set (written by us): good
+- bit 18 (CCS_BP_ON_ALP) appeared: ALP still granted
+- bit 17 (CCS_HAVEHT), bit 19 (CCS_BP_ON_HT): still 0
+- pmustatus=0x2a, res_state=0x13b: UNCHANGED from EFI baseline
+
+Reading: PMU accepted that CC wants ALP and left it there. PMU did not
+interpret CC FORCEHT as a request for HT/BBPLL.
+
+### Three candidate blockers (advisor-identified)
+1. **Wrong core** — FW polls d11.clk_ctl_st, so CC FORCEHT may not
+   propagate to d11. Test next: write FORCEHT to d11.clk_ctl_st directly.
+2. **Resource mask ceiling** — max_res_mask=0x13f, min_res=0x13b,
+   res_state=0x13b. Max-res only adds bit 2 (0x4), and nobody requests
+   it. Likely not the blocker (min_res is), but max_res shotgun rules
+   it in/out cheaply.
+3. **pllcontrol unset** — pllcontrol[0]=0, pllcontrol[1]=0. EFI left
+   BBPLL frequency config blank. No amount of FORCEHT will lock a PLL
+   with no divider config.
+
+Advisor reviewed pre-commit: test (c) (max_res shotgun) is almost certainly
+going to fail — res_state=0x13b = min_res, and widening max_res doesn't
+force a request. If steps (b) and (c) both fail, test.114 should widen
+**min_res_mask** (e.g. set bit 2 or discover HT-related bits), not jump
+straight to pllcontrol programming.
+
+## PRE-test.113 (2026-04-17) — d11 FORCEHT + max_res discriminator
+
+### Code change (pcie.c, brcmf_pcie_reset_device BCM4360 branch)
+ADD new test.113 block AFTER the existing test.112 CC FORCEHT block:
+
+Step (a): `brcmf_pcie_select_core(BCMA_CORE_80211)`, read `regs+0x1e0`
+          → baseline d11.clk_ctl_st
+
+Step (b): `brcmf_pcie_write_reg32(regs+0x1e0, baseline | 0x2)` — FORCEHT
+          poll d11.clk_ctl_st for bit 19 (BP_ON_HT), 100×100us = 10ms
+          switch to CC, read pmustatus/res_state/pllcontrol[0..5]
+          → if HT up: theory 1 wins (d11 is right core)
+
+Step (c): (if step b failed) save max_res, write max_res=0xFFFFFFFF
+          poll CC.clk_ctl_st for bit 19, 100×100us = 10ms
+          re-read pmustatus/res_state/pllcontrol[0..5]
+          → if HT up: theory 2 wins (max_res was blocking)
+
+Step (d): restore max_res_mask to saved value (do not leave wide open)
+
+Safety:
+- brcmf_pcie_select_core() is the same path driver uses elsewhere; NOT
+  the raw BAR0 sweep that crashed test.110
+- skip_arm=1 retained — FW not running, no write/read race at 0x180011e0
+- Existing test.112 block LEFT IN PLACE — CC FORCEHT already showed no
+  effect on PMU, so leaving it set doesn't interfere with d11 writes
+
+### Expected outcomes
+- Most likely: step (b) fails (d11 is just another wrapper, PMU indifferent)
+  → step (c) runs → also fails (min_res not max_res is the ceiling)
+  → test.114 = widen min_res_mask or program pllcontrol[0]/[1]
+- Small chance: step (b) succeeds → "PMU needed FORCEHT from the core
+  that will consume HT (d11)" → driver fix = add d11 FORCEHT to reset path
+- Small chance: step (c) succeeds → max_res really was the ceiling →
+  driver fix = widen max_res_mask before ARM release
+
+pllcontrol re-reads (added per advisor): after each poll loop, re-read
+pllcontrol[0..5]. If any transition from 0 to non-zero between baseline and
+step (b)/(c), PMU did touch PLL config. If all stay at [0, 0, 0xc31,
+0x133333, 0x06060c03, 0x000606] throughout, theory 3 (PLL programming
+genuinely missing) is strongly confirmed.
+
+### Run
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+### Success criteria
+- No crash
+- Log contains test.113 step-a baseline line
+- Log contains test.113 step-b result (HT UP or rejected)
+- If step (c) ran, log contains step-c result + step-d restore line
+- Clean "test.113: complete" line
+- Module cleanly removed (`rmmod brcmfmac` succeeds)
+
+### Failure signatures
+- Host crash during step (a) read at d11+0x1e0  → d11 wrapper is already
+  hung or powered down; cannot force HT from that core. Implies max_res
+  or pllcontrol as only remaining path.
+- Host crash during step (c) max_res write        → writing 0xFFFFFFFF to
+  max_res_mask while FORCEHT is active destabilizes PMU. Back off to
+  specific bit probes instead of shotgun.
+- Log stops mid-probe                              → a specific read/write
+  hangs the bus; narrow down which step; retry with fewer probes.

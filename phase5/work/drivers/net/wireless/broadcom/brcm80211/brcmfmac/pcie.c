@@ -864,6 +864,137 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 				  (ccs_after & 0x00020000) ? "HAVEHT set (no BP_ON_HT)" :
 				  "HT TIMEOUT (still no HAVEHT)");
 		}
+
+		/* test.113: d11-core FORCEHT + max_res shotgun discriminator.
+		 *
+		 * test.112 wrote FORCEHT to CC.clk_ctl_st and got BP_ON_ALP
+		 * (bit 18 set) but NO BP_ON_HT (bit 19); pmustatus/res_state
+		 * UNCHANGED. PMU granted ALP to CC, did not grant HT/BBPLL.
+		 *
+		 * Three candidate blockers:
+		 *   (1) FW polls d11.clk_ctl_st — CC FORCEHT may not propagate
+		 *   (2) res_state=0x13b matches min_res exactly; max_res=0x13f
+		 *       only adds bit 2 but nobody requests it. max_res widen
+		 *       likely not the blocker (min_res is).
+		 *   (3) pllcontrol[0]=pllcontrol[1]=0 — BBPLL frequency config
+		 *       genuinely missing, PLL cannot lock regardless of req.
+		 *
+		 * This probe discriminates (1) first, then (2) as shotgun:
+		 *   (a) Select d11 core, read d11.clk_ctl_st (offset 0x1e0)
+		 *   (b) Write FORCEHT (bit 1) to d11.clk_ctl_st, poll 10ms
+		 *       for CCS_BP_ON_HT; then switch to CC, re-read
+		 *       pmustatus/res_state/pllcontrol[0..5].
+		 *       → HT up  → theory (1) wins: d11 was right core
+		 *       → HT off → fall through to step (c)
+		 *   (c) On CC, save max_res, write max_res=0xFFFFFFFF, poll
+		 *       CC.clk_ctl_st 10ms for HT; re-read pmustatus/res_state
+		 *       /pllcontrol[0..5]; restore max_res to saved value.
+		 *       → HT up  → theory (2) wins: max_res was blocking
+		 *       → HT off → likely theory (3): pllcontrol needs program
+		 *
+		 * Safety: brcmf_pcie_select_core(BCMA_CORE_80211) uses the
+		 * same BAR0 path the driver's own reset code uses elsewhere
+		 * (not the raw sweep that crashed test.110). skip_arm=1 means
+		 * FW is NOT polling d11+0x1e0 — no write/read race.
+		 *
+		 * pllcontrol re-reads: advisor requested these to detect
+		 * whether FORCEHT caused PMU to touch the PLL config (e.g.
+		 * 0 → non-zero on pllcontrol[0]/[1]). Static pllcontrol
+		 * across all steps confirms theory (3).
+		 */
+		{
+			u32 d11_ccs_before, d11_ccs_after;
+			u32 cc_ccs_after, max_res_save;
+			u32 pmu_after, res_after;
+			int iter, ht_up = 0, k;
+
+			/* Step (a): baseline d11.clk_ctl_st */
+			brcmf_pcie_select_core(devinfo, BCMA_CORE_80211);
+			d11_ccs_before = brcmf_pcie_read_reg32(devinfo, 0x1e0);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.113: baseline d11.clk_ctl_st=0x%08x (HAVEALP=%s HAVEHT=%s BP_ON_HT=%s)\n",
+				  d11_ccs_before,
+				  (d11_ccs_before & 0x00010000) ? "1" : "0",
+				  (d11_ccs_before & 0x00020000) ? "1" : "0",
+				  (d11_ccs_before & 0x00080000) ? "1" : "0");
+
+			/* Step (b): write FORCEHT to d11, poll 10ms */
+			brcmf_pcie_write_reg32(devinfo, 0x1e0,
+					       d11_ccs_before | 0x2);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.113 step-b: wrote CCS_FORCEHT to d11.clk_ctl_st, polling BP_ON_HT...\n");
+			d11_ccs_after = 0;
+			for (iter = 0; iter < 100; iter++) {
+				udelay(100);
+				d11_ccs_after = brcmf_pcie_read_reg32(devinfo,
+								      0x1e0);
+				if (d11_ccs_after & 0x00080000) {
+					ht_up = 1;
+					break;
+				}
+			}
+			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+			pmu_after = READCC32(devinfo, pmustatus);
+			res_after = READCC32(devinfo, res_state);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.113 step-b: after %d×100us d11.clk_ctl_st=0x%08x pmustatus=0x%08x res_state=0x%08x -- %s\n",
+				  iter, d11_ccs_after, pmu_after, res_after,
+				  ht_up ?
+				    "HT UP via d11 FORCEHT (THEORY 1 WINS)" :
+				    "no HT via d11 FORCEHT (theory 1 rejected)");
+			for (k = 0; k < 6; k++) {
+				WRITECC32(devinfo, pllcontrol_addr, k);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.113 step-b pllcontrol[%u]=0x%08x\n",
+					  k,
+					  READCC32(devinfo, pllcontrol_data));
+			}
+
+			if (!ht_up) {
+				/* Step (c): max_res_mask shotgun on CC */
+				max_res_save = READCC32(devinfo, max_res_mask);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.113 step-c: shotgun — max_res_mask 0x%08x -> 0xFFFFFFFF\n",
+					  max_res_save);
+				WRITECC32(devinfo, max_res_mask, 0xFFFFFFFF);
+				cc_ccs_after = 0;
+				for (iter = 0; iter < 100; iter++) {
+					udelay(100);
+					cc_ccs_after = READCC32(devinfo,
+								clk_ctl_st);
+					if (cc_ccs_after & 0x00080000) {
+						ht_up = 1;
+						break;
+					}
+				}
+				pmu_after = READCC32(devinfo, pmustatus);
+				res_after = READCC32(devinfo, res_state);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.113 step-c: after %d×100us CC.clk_ctl_st=0x%08x pmustatus=0x%08x res_state=0x%08x -- %s\n",
+					  iter, cc_ccs_after, pmu_after,
+					  res_after,
+					  ht_up ?
+					    "HT UP via max_res shotgun (THEORY 2 WINS)" :
+					    "no HT with max_res=0xFFFFFFFF (theory 3: pllcontrol unset)");
+				for (k = 0; k < 6; k++) {
+					WRITECC32(devinfo,
+						  pllcontrol_addr, k);
+					dev_emerg(&devinfo->pdev->dev,
+						  "BCM4360 test.113 step-c pllcontrol[%u]=0x%08x\n",
+						  k,
+						  READCC32(devinfo,
+							   pllcontrol_data));
+				}
+				/* Step (d): restore max_res_mask */
+				WRITECC32(devinfo, max_res_mask,
+					  max_res_save);
+				dev_emerg(&devinfo->pdev->dev,
+					  "BCM4360 test.113 step-d: restored max_res_mask=0x%08x\n",
+					  max_res_save);
+			}
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.113: complete\n");
+		}
 		/* fall through to standard reset code */
 	}
 
