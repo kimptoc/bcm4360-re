@@ -1,6 +1,51 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, PRE test.106 — module built, about to run)
+## Current state (2026-04-17, POST test.106 — PROLOGUE-HANG CONFIRMED)
+
+**HEADLINE RESULT:** fn 0x1415c hangs on its first MMIO read (ldr.w at
+0x14176). Target register = **0x180011e0** = backplane core slot #1 base
+0x18001000 + offset 0x1e0. No sub-BL ever executes.
+
+**Evidence (test.106, all 3 time samples identical):**
+- T3@0200ms/0600ms/1000ms [0x9CEC4] = **0x00091cc4** (NOT LR-shaped)
+- T1[0x9CED4] = 0x00068321 (fn 0x1415c saved LR — frame live)
+- STRUCT_PTR[0x9CEC8] = 0x00091cc4 (TCM-shaped, valid struct ptr)
+- MMIO_BASE[struct+0x88] = **0x18001000** (read BEFORE the hang)
+- Anchors E/F stable at 0x67705 / 0x68b95
+- Counter frozen at 0x43b1 throughout the 1.2s wait
+- *0x62e20 = 0 (FW never wrote it — consistent with early hang)
+
+**Interpretation:** the MMIO_BASE read (at offset 0x88 of struct) completed
+successfully, so the struct is reachable. The HANG is on the *next* MMIO —
+the ldr.w at 0x14176 reading `[r3, #0x1e0]` where r3=0x18001000. The ARM
+stalls indefinitely because core 0x18001000 is either: (a) held in reset,
+(b) not clocked, (c) not powered, or (d) not present on this chip variant
+and no bus-error acceptor exists.
+
+**Next phase — identify the core at 0x18001000 (NO HW COST):**
+1. **EROM walk (disasm, subagent):** traverse EROM starting at some
+   known-good core to enumerate cores + their backplane addresses on
+   BCM4360. Need to find which core ID is at slot 0x18001000.
+2. **Cross-ref with test.96 log:** "PCIe2 core id=0x83c rev=1" — we don't
+   yet know its wrapper vs regset addresses. Possible that 0x18001000 is
+   the PCIe2 core *from the ARM side* (different address than PCIe2 host-
+   side BAR). Verify from disasm of `si_setcore` / EROM walker.
+3. **FW disasm at fn 0x6820c's r0 setup:** the struct at 0x91cc4 with +0x88
+   pointing to a core base looks like a `si_info` or core-handle structure.
+   Find where it's populated — that will tell us the expected core type.
+
+**Planned HW test (post-disasm):** if we identify the core, try (a)
+holding it in reset via CC→resetcore before ARM release, or (b) forcing
+its clock gate on, or (c) setting up a "fake" presence bit in SROM/OTP to
+make FW skip the init path.
+
+**Workflow rule:** commit + push RESUME_NOTES before editing pcie.c or
+running any new test (host crashes ~30s post-exit; pre-commit preserves
+state).
+
+---
+
+## Previous state (2026-04-17, PRE test.106 — test executed successfully)
 
 **Goal:** discriminate **prologue-hang at fn 0x1415c's ldr.w 0x14176**
 (first MMIO touch of `[[r0+0x88]+0x1e0]`) vs **poll-hang inside fn 0x1adc**
