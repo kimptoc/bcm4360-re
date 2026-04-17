@@ -1,8 +1,74 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, PRE test.104 — module built, awaiting run)
+## Current state (2026-04-17, POST test.104 — HANG LOCALIZED to fn 0x1415c)
 
-Git branch: main. Pre-test state committed & pushed. About to run test.104.
+Git branch: main. Host had a hard crash after test.104 ran (at 11:49); the
+probe output was captured via `journalctl -b -1` and saved to
+`phase5/logs/test.104.stage0`. Test.104 ran **twice** (boots -1 and -2), both
+identical — result is deterministic.
+
+### TEST.104 RESULT — CASE 1 (known-safe): T1 LR-shaped, maps to `bl 0x1415c`
+
+**Raw output (identical both runs):**
+```
+test.104 T+0200ms: ctr[0x9d000]=0x000043b1 pd[0x62a14]=0x00058cf0
+test.104 ANCH E[0x9CFCC]=0x00067705 F[0x9CF6C]=0x00068b95 (MATCH E=1 F=1)
+test.104 T1[0x9CED4]=0x00068321 — LR-shaped → different sub-BL of fn 0x6820c
+test.104 T2[0x9CEBC]=0x00068d2f — MATCH fn 0x68cd2 sub-BL candidate (STALE, see below)
+test.104 SWEEP 0x9CEB8↓: 00091cc4 00092440 00093610 00000000 0009cf44 00012c69
+test.104 SWEEP LR-CAND [0x9cea4]=0x00012c69
+test.104 T+0200ms: SANITY *0x62e20=0x00000000
+```
+
+**Interpretation:**
+- Regression + anchors E/F stable (= same hang site as t.101/102/103).
+- **T1=0x68321 maps to BL row 14 in `offline_disasm_6820c.md`: `bl 0x1415c at
+  0x6831c` → LR=0x68321.** CPU is inside fn 0x1415c, the 14th sub-BL of
+  fn 0x6820c's body (not fn 0x68cd2 — that returned successfully).
+- T2=0x68d2f at 0x9CEBC is **stale** — fn 0x68cd2 (at 0x68258) ran, pushed
+  this LR on its descent, then returned. Its stack area is below fn 0x6820c's
+  current body SP (0x9CED8) and 0x9CEBC holds unreclaimed data.
+- Sweep values (0x91cc4, 0x92440, 0x93610, 0, 0x9cf44, 0x12c69) are mostly
+  out-of-code-range; 0x12c69 is in range and odd but unmatched against any
+  known BL target — likely fn 0x1415c's own saved LR at an inner sub-BL.
+
+**Falsified hypotheses (from 6820c disasm executive summary):**
+- ★ fn 0x68cd2 is NOT the hang site (ruled out by T1 value)
+- ★ fn 0x67f44 at 0x68308 is also past (LR would be 0x6830d, not 0x68321)
+
+**New primary target: fn 0x1415c** — described in disasm as "HW init (unknown
+target)". Not yet traced. Needs offline disasm to understand what it does
+and to find breadcrumb / frame-size info for test.105.
+
+### Next steps (test.105)
+
+1. **Offline disasm fn 0x1415c** (subagent, no HW cost):
+   - prologue → frame size
+   - BL list → LR-candidate table for its sub-BLs
+   - any polling loops / fixed-TCM writes
+2. **Test.105 probe plan:**
+   - 2 regression reads (ctr, pd) — continuity
+   - 2 anchor reads (E, F) — chain stable
+   - 1 read @ 0x9CED4 (T1 anchor, confirm still 0x68321)
+   - Saved-LR slot of fn 0x1415c's current sub-BL (computed from its
+     frame size; likely 0x9CED0 - frame_size)
+   - Short sweep below that slot for deeper frames
+   - 1 sanity `*0x62e20`
+3. **Note:** the saved-LR slot for fn 0x1415c's current sub-BL = 0x9CED0
+   (fn 0x1415c's body SP) - 4. Requires fn 0x1415c's prologue push count to
+   compute exactly. Placeholder until disasm: probe 0x9CED0..0x9CEB8 densely.
+
+### POST-EXIT CRASH PATTERN (observed in t.101/102/103/104)
+
+Each test exits cleanly after its FW-silent timeout (2s). Approximately 30s
+later, the host crashes / reboots. This is **unrelated to the probe itself**
+— test completes and logs are written before the crash. Recovery:
+`journalctl -b -1` on next boot gives full dmesg from the previous session.
+Workflow rule: commit + push before running.
+
+---
+
+## Previous state (2026-04-17, PRE test.104 — module built)
 
 ### TEST.104 PLAN — zoom in on fn 0x6820c sub-frame
 
