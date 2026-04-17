@@ -1,42 +1,56 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, PRE test.112 — force HT via CC.clk_ctl_st, module built)
+## Current state (2026-04-17, PRE test.114 — d11 enable before ARM release, module built)
 
-**Goal:** answer "does writing `CCS_FORCEHT` (bit 1) to CC.clk_ctl_st bring
-up the BBPLL on BCM4360?" If yes → Phase 6 proceeds by wiring this
-pre-ARM-release into the driver. If no → need PMU resource config.
+### Test.113 crash analysis (completed 2026-04-17)
 
-**Code change (pcie.c in `brcmf_pcie_reset_device` BCM4360 branch):**
-- ADDED test.112 block after test.111 enum:
-  - select CHIPCOMMON core
-  - read CC.clk_ctl_st (pre-force)
-  - WRITE `ccs | 0x2` to CC.clk_ctl_st (CCS_FORCEHT)
-  - poll CC.clk_ctl_st up to 100 × 100us (10ms) for CCS_BP_ON_HT (bit 19)
-  - log clk_ctl_st + pmustatus + res_state
-- All logs `dev_emerg` (guaranteed flush).
-- The write/poll happens BEFORE the existing watchdog reset, so chip is
-  in the same EFI-left state as test.40/109/111 saw (HAVEALP=1, HAVEHT=0).
+test.113 was designed to read d11.clk_ctl_st and write FORCEHT to it.
+It crashed immediately with **zero journal output** — a hard machine crash
+from accessing d11 core registers while d11 was in BCMA reset.
 
-**Build:** clean, `brcmfmac.ko` rebuilt.
+**Root cause of test.113 crash:**
+`brcmf_chip_set_passive` runs BEFORE `ops->reset` (in chip.c:1040-1048).
+`brcmf_chip_cr4_set_passive` calls `brcmf_chip_coredisable` on d11 (not
+`resetcore`), leaving d11 in BCMA reset. Then ops->reset runs test.113.
+`brcmf_pcie_select_core(BCMA_CORE_80211)` + `read_reg32(0x1e0)` accesses
+d11's core AXI slave while it's non-responsive → PCIe SLVERR → crash.
 
-**Test script:** `test-staged-reset.sh` — LOG → `test.112.stageN`, banner
-updated. `bcm4360_reset_stage=0 bcm4360_skip_arm=1` unchanged.
+**Root cause of FW hang (still the same):**
+`brcmf_chip_cr4_set_passive` also leaves d11 in BCMA reset at ARM release.
+FW polls d11.clk_ctl_st (0x180011e0) for BP_ON_HT → AXI SLVERR → data
+abort → FW hang. This is the hang at fn 0x1415c seen in test.106.
 
-**Expected stage0 log:**
-- Pre-force line: `pre-force CC.clk_ctl_st=0x00010040 (HAVEALP=1 HAVEHT=0 BP_ON_HT=0)`
-- Wrote CCS_FORCEHT line
-- Post-force line: one of
-  - `... clk_ctl_st=0x...?80000 ... HT CLOCK UP`  (success — Phase 6 easy path)
-  - `... HAVEHT set (no BP_ON_HT)` (partial — PLL locked but backplane
-    not switched; likely needs extra resource config)
-  - `... HT TIMEOUT (still no HAVEHT)` (hardest path — PMU resources
-    block HT entirely; need pllcontrol programming)
+**Fix (test.114):**
+- test.114a (`brcmf_pcie_reset_device`): replaced unsafe core register read
+  with wrapper-only read (BAR0+0x1800 = d11_wrapbase+BCMA_RESET_CTL, always
+  safe regardless of BCMA reset state).
+- test.114b (`brcmf_pcie_load_firmware`, before skip_arm check):
+  call `brcmf_chip_resetcore(d11core, 0x000c, 0x0004, 0x0004)` to take d11
+  out of BCMA reset. Verify via wrapper RESET_CTL before/after. Read
+  d11.clk_ctl_st safely after reset cleared.
+  Runs with BOTH skip_arm=1 (diagnostic) and skip_arm=0 (full ARM release).
 
-**Risk:** low. Single 32-bit write to a documented clock-request bit;
-brcmsmac does the same on peers. Even if it fails to bring up HT, the
-skip_arm=1 branch later returns without running ARM/FW → no crash path.
+**Expected results:**
+- test.114a: `wrap_RESET_CTL=0x00000001 IN_RESET=YES` (d11 in reset during ops->reset) ✓
+- test.114b pre: `wrap_RESET_CTL=0x00000001 IN_RESET=YES` (still in reset before resetcore)
+- test.114b post: `wrap_RESET_CTL=0x00000000 IN_RESET=NO` (reset cleared) ← key discriminator
+- test.114b d11 clk_ctl_st: with skip_arm=1, BBPLL not up → BP_ON_HT may be NO
+  With skip_arm=0 + test.47 BBPLL bringup, expect BP_ON_HT=YES
 
-**Workflow:** this run touches HW — commit + push before insmod.
+**Plan:**
+1. Run with skip_arm=1 first → confirm no crash, verify wrapper reads
+2. If clean: run with skip_arm=0 → test.47 brings BBPLL up, d11 out of
+   reset, ARM released → FW should see BP_ON_HT and proceed past fn 0x1415c
+
+**Build:** clean, `brcmfmac.ko` rebuilt (commit 63ee5fc).
+
+**Test script:** `test-staged-reset.sh` — update LOG_NAME to `test.114`.
+
+**Risk:** medium. `brcmf_chip_resetcore` on d11 is the same operation
+`brcmf_chip_cm3_set_passive` does for other chips. Safe with skip_arm=1
+(ARM never released). Wrapper register reads are always safe.
+
+**Workflow:** commit + push before insmod (already done).
 
 ---
 

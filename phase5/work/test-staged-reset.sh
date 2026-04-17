@@ -42,14 +42,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.113.stage${STAGE}"
+LOG="$LOG_DIR/test.114.stage${STAGE}"
 
-echo "=== test.113: d11 FORCEHT + max_res shotgun discriminator --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.114: d11 enable before ARM release --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: test.113 — (a) baseline d11.clk_ctl_st, (b) FORCEHT to d11 + poll BP_ON_HT 10ms + pllcontrol re-read, (c) if no HT: max_res_mask=0xFFFFFFFF shotgun + poll CC 10ms + pllcontrol re-read, (d) restore max_res. Discriminates theory 1 (wrong core), theory 2 (max_res ceiling), theory 3 (pllcontrol unset). skip_arm=1." | tee -a "$LOG" ;;
+    0) echo "Stage 0: test.114 — (a) d11 wrapper RESET_CTL before resetcore (test.114a in reset_device), (b) brcmf_chip_resetcore(d11) + wrapper verify + clk_ctl_st read (test.114b before skip_arm). skip_arm=1 first run (no ARM release). Expected: IN_RESET=YES before, IN_RESET=NO after resetcore, no crash." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -104,7 +104,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset + skip_arm=1
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=1) --- test.113 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=1) --- test.114 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
