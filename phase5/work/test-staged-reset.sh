@@ -1,27 +1,26 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.101: single-breadcrumb probe of *0x62e20 (upstream-hang fingerprint)
+# Phase 5.2 test.102: stack-locator dense-narrow sweep (LR chain fingerprint)
 #
-# test.100 RESULT (Case C'): wait-struct fields = pre-init garbage,
-#   byte-stable across T+200/400/800ms → fn 0x1624c NEVER ran. Hang is
-#   strictly UPSTREAM of the PHY spin-loop, inside wl_probe.
+# test.101 RESULT (Case 0): *0x62e20 == 0 → fn 0x68a68 (wlc_attach) hung
+#   UPSTREAM of 0x68bbc. Offline disasm of body + 6 body-BL targets found
+#   no discriminating fixed-TCM breadcrumb exists in wlc_attach descent
+#   (all stores r4/r3-relative into alloc'd structs). The first body BL
+#   (bl 0x67f2c @ 0x68aca) is a 4-insn tail-call trampoline to 0x67358 —
+#   the same si_attach descent already entered once from pciedngl_probe.
 #
-# test.100 also regressed at ~1.9s (machine crashed between T+1800 and
-# T+2000ms) — ~30–90ms of extra read_ram32 latency nudged the masking
-# loop past a PCIe periodic event. test.101 reduces probe count AND
-# shortens FW-wait cap 2000→1200ms to widen the safety margin.
+# test.102 PLAN: pivot to stack walk. ARM Thumb `bl` pushes LR on stack
+#   via `push {..., lr}` prologues. While CPU is stuck mid-call, the
+#   live frame chain persists in RAM. test.97 located active frames
+#   near 0x9FE40. Sweep 64B there, filter for odd-bit words in
+#   [0x800..0x70000] → LR candidates. Each maps (via phase5/notes/
+#   test102_lr_table.md) to a specific BL site.
+#   Confirmation criteria:
+#     ≥2 table-LRs chained (e.g. 0x68acf + 0x6739d) → STRONG
+#     1 table-LR                                    → MODERATE
+#     0 table-LRs                                   → relocate sweep in test.103
 #
-# test.101 PLAN: single read of TCM[0x62e20] at T+200ms (+ 4 pointer
-#   controls). fn 0x68a68 writes wl_ctx ptr to 0x62e20 at PC 0x68bbc,
-#   8 bytes before bl 0x1ab50 (PHY descent). Image at 0x62e20 = 0;
-#   only attach-path writer is fn 0x68a68@0x68bbc (fn 0x681bc@0x681cc
-#   is detach-path, does not run during probe).
-#   Matrix:
-#     *0x62e20 == 0      → fn 0x68a68 hung before 0x68bbc
-#                         (Case U1: in its prefix, or in wl_probe's
-#                          other 5 sub-BLs before bl 0x68a68)
-#     *0x62e20 != 0      → fn 0x68a68 reached 0x68bbc, hang is in
-#                         bl 0x1ab50 or one of its pre-spin sub-BLs
-#                         (fn 0x16476 / fn 0x162fc body; not 0x1624c)
+# Probe count: 19 reads @ 1200ms FW-wait (2 regression + 16 stack + 1 sanity).
+# 1.5× test.101's clean 5-read baseline, well below test.100's 13-read regression.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
 # Default stage is 0
@@ -35,14 +34,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.101.stage${STAGE}"
+LOG="$LOG_DIR/test.102.stage${STAGE}"
 
-echo "=== test.101: single breadcrumb *0x62e20 --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.102: stack-locator dense-narrow sweep --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled + IRQ handler before ARM; pci_set_master before ARM; 1.2s masking+FW wait (shortened from 2s); TEST.101 PROBES: control pointers {0x9d000,0x58f08,0x62ea8,0x62a14} + breadcrumb TCM[0x62e20] at T+200ms only; free_irq+disable_msi+RP restore" | tee -a "$LOG" ;;
+    0) echo "Stage 0: SBR; NVRAM; NVRAM token kept; ASPM disabled before ARM; named reg clears + 0x100-0x108/0x1E0; MSI enabled + IRQ handler before ARM; pci_set_master before ARM; 1.2s masking+FW wait; TEST.102 PROBES: 2 regression {0x9d000,0x62a14} + 16 dense stack words 0x9FE20..0x9FE5C stride 4B + 1 sanity *0x62e20 at T+200ms; free_irq+disable_msi+RP restore" | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -97,7 +96,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.101 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE) --- test.102 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
