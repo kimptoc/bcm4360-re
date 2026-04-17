@@ -1,11 +1,85 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, PRE test.100 — wl_probe identified, PHY-wait chain isolated)
+## Current state (2026-04-17, POST test.100 — fn 0x1624c CONFIRMED never ran, hang upstream in wl_probe)
 
-Git branch: main. Last pushed commit e6e1e28 (Pre-test.99 module built).
-Pending commit: offline disasm Round 3+4 (wl_probe = fn 0x67614, freeze chain
-via fn 0x68a68 → fn 0x1ab50 → fn 0x16476 → fn 0x162fc → fn 0x1624c) and
-test.100 build (wait-struct field probe).
+Git branch: main. Last pushed commit 876f8f6 (Pre-test.100 advisor refinements).
+Pending commit: test.100 stage0 log + test.100 journal + this analysis.
+
+### TEST.100 RESULT — Case C′ (matrix row 5): wait-struct = pre-init garbage, stable
+
+test.100 ran in boot -1 (23:31:37 → 00:46:48). Probes at T+200/400/800ms
+captured identical values (stability check PASSED). Firmware hard-frozen
+at T+12ms per test.89 timeline; nothing on-chip changed across 600ms.
+
+Control pointers (identical across T+200/400/800ms):
+```
+ctr[0x9d000]  = 0x000043b1    (static constant from fn 0x673cc)
+d11[0x58f08]  = 0x00000000    (D11 obj never linked)
+ws [0x62ea8]  = 0x0009d0a4    (wait-struct pointer — static, from BSS)
+pd [0x62a14]  = 0x00058cf0    (pciedngl vtable, matches test.93/99)
+```
+
+Wait-struct field reads at ws=0x9d0a4 (identical across T+200/400/800ms):
+```
+f20 [ws+0x14] = 0x66918f11
+f24 [ws+0x18] = 0x5bebcbeb
+f28 [ws+0x1c] = 0x84f54b2a
+```
+
+**None of these are {0,1}** — they are arbitrary 32-bit values. Per the
+test.100 matrix (row 5): `f24 ∉ {0,1}` → **Case C′: struct never touched,
+pre-init garbage**. fn 0x1624c's setup code (`r3->field24=1;
+r3->field28=0`) never ran, therefore fn 0x1624c itself never ran.
+
+**Conclusion:** the freeze is strictly upstream of fn 0x1624c — inside
+wl_probe (fn 0x67614), before it reaches the D11 PHY wait chain. The
+bl-graph says exactly one path from wl_probe reaches fn 0x1624c; that path
+is fn 0x67700→0x68a68→…→0x1624c. The hang must be in either the body of
+fn 0x68a68 before its call to fn 0x1ab50, or in one of the 6 other sub-BLs
+wl_probe invokes BEFORE bl 0x68a68 (at offsets 0x67700 and earlier).
+
+This corroborates test.97's hint (same "garbage" reading) and definitively
+rules out the PHY-completion-wait hypothesis as the LIVE freeze site.
+
+### Test.100 ALSO produced a new regression
+
+The run died between T+1800ms and T+2000ms (journal ends at T+1800ms
+FROZEN, no TIMEOUT / RP-restore lines, machine powercycled). test.99 used
+the same FW-wait loop and exited cleanly at T+2000ms. The delta is 3 extra
+`read_ram32` calls at each of T+200/400/800ms (≈30–90ms total extra time
+in the masking loop). That evidently nudged past a re-mask window and a
+periodic PCIe event slipped through.
+
+**Implication for test.101:** the masking loop must be re-audited or the
+FW-wait shortened (e.g. 1000ms) before adding any more probes. Do NOT
+stack further reads on top of the current loop without budget work.
+
+### Next step — offline-only progress before test.101
+
+Per advisor review, the cheap-progress ordering is:
+
+1. **Firmware-binary sanity check** (30 seconds, offline): dump firmware
+   image bytes at offset 0x9d0b8, 0x9d0bc, 0x9d0c0. If they match the read
+   values 0x66918f11 / 0x5bebcbeb / 0x84f54b2a → "Case C′ = firmware image
+   static data" confirmed. If they don't match → new puzzle (uninit RAM?
+   wrong address translation?).
+
+2. **Offline disasm of wl_probe's 6 untraced sub-BLs**. wl_probe has 7
+   sub-BLs; only bl 0x68a68 at 0x67700 (→ PHY chain) is currently mapped.
+   The other 6 are unknown. Find each, note its reads/writes (globals or
+   fields of wl_struct). The hang is in one of them (or in fn 0x68a68's
+   body before bl 0x1ab50). This narrows test.101 to concrete breadcrumbs
+   instead of the hypothetical wl_struct[+0x90] placeholder.
+
+3. **Masking-loop audit**: ensure re-mask fires every iteration when probe
+   block inflates the body; consider dropping FW-wait from 2000ms to
+   1000ms for test.101 to widen margin.
+
+4. Only THEN design test.101 probes from concrete breadcrumb sites.
+
+---
+
+## Pre-test.100 state (retained for context below)
 
 ### Offline disasm — wl_probe and freeze chain (no hardware test)
 
