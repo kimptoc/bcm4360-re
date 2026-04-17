@@ -1,6 +1,48 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, PRE test.108 — module built, about to run)
+## Current state (2026-04-17, POST test.108 — CRASHED AGAIN, plan pivots to skip_arm + dmesg)
+
+**Outcome:** journal recovery from boot -1 shows only 27 BCM4360 lines,
+last is `test.101 pre-ARM baseline: *0x62e20=0x00000000 ZERO (expected)`.
+**NO test.108 enum output.** Stage0 script log got to header
+`=== Post-insmod journal capture (boot 0) ===` then stopped — crash hit
+during the `sleep 2 + journalctl | tee` capture window, wiping the
+kernel ringbuffer before it reached persistent storage.
+
+**Root cause (confirmed):** insmod with bcm4360_reset_stage=0 and no
+skip_arm does a full ARM release → FW hangs on 0x180011e0 → PCIe root
+port wedges → box hard-locks within ~1-2s of insmod returning.
+Script-side `sleep 2 + journalctl | tee` loses the race.
+
+**Pivot: new approach for test.109.** Stop depending on post-insmod
+journal recovery. Instead:
+1. **Skip ARM release via `bcm4360_skip_arm=1`.** The existing branch
+   at pcie.c:1890-1919 returns -ENODEV cleanly without releasing ARM,
+   so there's no FW hang, no root-port wedge, no crash. This path was
+   last exercised in test.16 (commit d595029, 2026-04-14) — rot risk
+   minimal (trivial reads + return -ENODEV).
+2. **Move test.108 enum block from its current site (line 2305, AFTER
+   the skip_arm branch, thus unreachable when skip_arm=1) to right
+   after test.101 baseline (~line 1889).** This puts enum in the path
+   for BOTH skip_arm=1 AND skip_arm=0.
+3. **Replace journalctl capture with `dmesg -k --nopager`** in
+   test-staged-reset.sh. dmesg reads /dev/kmsg directly — no journald
+   batching, faster. With skip_arm=1 we also have unlimited time since
+   no crash expected.
+
+**Risk analysis:**
+- If slot+0 reads on a dead slot DO crash the box (not just slot+0x1e0),
+  we'll learn that with skip_arm=1 = no ARM release path → crash source
+  is narrowed to the specific slot read.
+- skip_arm branch does a TCM dump (64B) then returns. Should be safe.
+
+**Next file edits planned:**
+- `pcie.c`: move test.108 enum block (2278-2328) to line ~1889, renumber to test.109
+- `test-staged-reset.sh`: LOG → test.109, pass `bcm4360_skip_arm=1`, switch capture to dmesg
+
+---
+
+## Previous state (2026-04-17, PRE test.108 — module built, about to run)
 
 **Goal:** same as test.107 — identify what core lives at slot 0x18001000
 and whether it's MMIO-responsive host-side while ARM is stuck. This time

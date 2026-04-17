@@ -1,0 +1,27 @@
+Apr 17 18:06:27 nixos sudo[8893]:  kimptoc : PWD=/home/kimptoc/bcm4360-re ; USER=root ; COMMAND=/run/current-system/sw/bin/tee /home/kimptoc/bcm4360-re/phase5/logs/test.107.journal
+Apr 17 18:06:27 nixos sudo[8891]:  kimptoc : PWD=/home/kimptoc/bcm4360-re ; USER=root ; COMMAND=/run/current-system/sw/bin/journalctl -b -1
+Apr 17 18:06:27 nixos sudo[8898]:  kimptoc : PWD=/home/kimptoc/bcm4360-re ; USER=root ; COMMAND=/run/current-system/sw/bin/chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.107.journal
+Apr 17 18:10:50 nixos sudo[15369]:  kimptoc : PWD=/home/kimptoc/bcm4360-re/phase5/work ; USER=root ; COMMAND=./test-staged-reset.sh
+Apr 17 18:10:50 nixos kernel: brcmfmac: loading out-of-tree module taints kernel.
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffd1b441400000
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 EFI state: clk_ctl_st=0x00010040 min_res=0x0000013b max_res=0x0000013f res_state=0x0000013b
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 EFI PMU: pmustatus=0x0000002a pmucontrol=0x01770181
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[0]=0x00000000
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[1]=0x00000000
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[2]=0x00000c31
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[3]=0x00133333
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[4]=0x06060c03
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pllcontrol[5]=0x00000606
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.40: allowing watchdog reset (IOMMU group 8 is crash-protective)
+Apr 17 18:10:50 nixos kernel: brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.Apple Inc.-MacBookPro11,1.bin failed with error -2
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffd1b441400000
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: NVRAM loaded, len=228, writing to TCM 0x9ff1c
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: NVRAM marker at ramsize-4 = 0xffc70038 (NVRAM length token, not zeroed)
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 pre-ARM: clk_ctl_st=0x00010040 res_state=0x0000013b HT=NO
+Apr 17 18:10:50 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.101 pre-ARM baseline: *0x62e20=0x00000000 ZERO (expected)
