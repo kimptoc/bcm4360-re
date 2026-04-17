@@ -1,9 +1,87 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, POST test.100 — fn 0x1624c CONFIRMED never ran, hang upstream in wl_probe)
+## Current state (2026-04-17, PRE test.101 — breadcrumb at *0x62e20 identified)
 
-Git branch: main. Last pushed commit 876f8f6 (Pre-test.100 advisor refinements).
-Pending commit: test.100 stage0 log + test.100 journal + this analysis.
+Git branch: main. Last pushed commit 15e4056 (Post-test.100 analysis).
+Pending commit: offline disasm of wl_probe's 5 sub-BLs + fn 0x68a68 prefix
+(phase5/notes/offline_disasm_wl_subbls.md), test.101 plan below.
+
+### Offline disasm result (subagent, 2026-04-17)
+
+`phase5/notes/offline_disasm_wl_subbls.md` — full report.
+
+Disassembled wl_probe's 5 untraced sub-BLs (fn 0x66e64, fn 0x649a4,
+fn 0x4718, fn 0x6491c) and fn 0x68a68's prefix. **None contain spin loops,
+HW-register polling, or fixed-TCM stores** — every memory write is
+r4-relative into the freshly-malloc'd wl_ctx. fn 0x4718 is a 3-instruction
+leaf. Therefore the hang is NOT internally in any of those five.
+
+**Most-likely hang site:** fn 0x68a68 (wlc_attach) BODY between its prefix
+end at 0x68aca and `bl 0x1ab50` at 0x68bcc — an unexamined region (test.100
+only excluded fn 0x1624c, a deeper descendant).
+
+**Hot breadcrumb identified: `*0x62e20`.** Spot-verified:
+```
+0x68bb6: ldr  r3, [pc, #200]   ; literal at 0x68c80 = 0x00062e20 ✓
+0x68bb8: ldr  r2, [r3]
+0x68bba: cbnz r2, 0x68bbe       ; skip if already set
+0x68bbc: str  r4, [r3]           ; *0x62e20 = wl_ctx ptr
+0x68bcc: bl   0x1ab50            ; PHY descent (8 bytes later)
+```
+`*0x62e20` is zero in the firmware image. After firmware reset:
+- **non-zero** → fn 0x68a68 advanced to within 8 bytes of bl 0x1ab50;
+  hang is inside bl 0x1ab50 (or the 2-insn gap before it). test.100
+  already excluded fn 0x1624c, so the hang would be in fn 0x1ab50 BEFORE
+  it reaches fn 0x16476.
+- **zero** → fn 0x68a68 did not reach 0x68bbc. Hang is in one of its
+  earlier BLs (0x68a68 prefix/body), or in wl_probe BEFORE bl 0x68a68 at
+  0x67700 — i.e. in fn 0x66e64 / fn 0x649a4 / fn 0x4718 / fn 0x6491c's
+  DESCENDANTS (since their direct bodies are bounded).
+
+### test.101 PLAN — minimal single breadcrumb probe
+
+**Goal:** narrow hang to "past 0x68bbc" vs "before 0x68bbc" with MINIMUM
+loop-overhead impact. Test.100 added 9 extra `read_ram32` calls and
+regressed (boot ended between T+1800ms and T+2000ms).
+
+**Probe changes from test.99 baseline:**
+- REMOVE test.100's triple-timepoint 3-field wait-struct reads (already
+  answered — Case C′ confirmed, struct never touched).
+- REMOVE test.100's T+400ms+T+800ms duplicate pointer probes (test.99
+  already proved pointers are byte-identical across those windows).
+- ADD one new read: `TCM[0x62e20]` at T+200ms only.
+
+Net: test.101 probe count = test.99 - 2 + 1 = **fewer reads than
+test.99**. Should not regress on the masking-loop budget.
+
+**Also:** shorten FW-wait from 2000ms to 1200ms to widen safety margin
+against whatever periodic event killed test.100 at ~1.9s.
+
+**Matrix (after reading *0x62e20):**
+
+| *0x62e20 | Conclusion | Next action |
+|----------|------------|-------------|
+| 0          | fn 0x68a68 did NOT reach 0x68bbc. Hang is in 0x68a68 prefix/body before the breadcrumb, or upstream in wl_probe sub-BL descendants. | test.102: probe wl_ctx fields (needs wl_ctx ptr discovery first) OR disasm fn 0x68a68 prefix + descendants of fn 0x6491c. |
+| non-zero, value plausible as heap ptr (TCM range 0x0..0xA0000, typically 0x9xxxx) | fn 0x68a68 reached 0x68bbc. Hang is inside the window `bl 0x1ab50 → bl 0x16476 → b.w 0x162fc → bl 0x1624c` but NOT inside fn 0x1624c itself (test.100 excluded that). So hang is in the body of fn 0x1ab50, fn 0x16476, or fn 0x162fc pre-spin. | test.102: disasm those three fn bodies pre-bl; probe their breadcrumbs. |
+| non-zero, value implausible (random)    | Either TCM read failed or breadcrumb theory is wrong. | Re-check read path; verify literal pool claim with second tool. |
+
+**Pre-flight reminders:**
+- Probe is read-only via `brcmf_pcie_read_ram32` (same safe path as test.99/100).
+- FW-wait shortened to 1200ms. No other change to cleanup order.
+- If machine crashes anyway, that's still informative — different cadence
+  than test.100 would pinpoint what the ~1.9s event is.
+
+### Files to modify before run
+- `phase5/work/drivers/.../pcie.c` — replace test.100 probe block with
+  test.101: single read of TCM[0x62e20] at T+200ms. Drop duplicate
+  pointer reads at T+400/800ms. Change FW-wait cap from 2000ms to 1200ms.
+- `phase5/work/test-staged-reset.sh` — relabel test.100 → test.101,
+  LOG filename accordingly.
+
+### After running test.101
+- Apply matrix, choose test.102.
+- Most-likely outcome (per subagent analysis) is *0x62e20 non-zero →
+  hang is in fn 0x1ab50 pre-bl body.
 
 ### TEST.100 RESULT — Case C′ (matrix row 5): wait-struct = pre-init garbage, stable
 
