@@ -29,8 +29,16 @@ test.104 T+0200ms: SANITY *0x62e20=0x00000000
   this LR on its descent, then returned. Its stack area is below fn 0x6820c's
   current body SP (0x9CED8) and 0x9CEBC holds unreclaimed data.
 - Sweep values (0x91cc4, 0x92440, 0x93610, 0, 0x9cf44, 0x12c69) are mostly
-  out-of-code-range; 0x12c69 is in range and odd but unmatched against any
-  known BL target — likely fn 0x1415c's own saved LR at an inner sub-BL.
+  out-of-code-range; 0x12c69 is in range and odd (points ~0x12c68 in code),
+  but sits OUTSIDE fn 0x1415c's body (0x1415c..). It's either a deeper-frame
+  saved LR (fn 0x1415c → X → something-at-0x12c68), or stale. Do NOT anchor
+  test.105 on 0x12c69 — treat as informational only.
+
+**Free frame-size bound from T2 staleness:** 0x68d2f surviving at 0x9CEBC
+means fn 0x1415c's live frame does NOT extend down past 0x9CEC0. So:
+- fn 0x1415c body SP ≥ 0x9CEC0 ⇒ push_bytes + sub_sp ≤ 24 B
+- LR-slot at [0x9CED0] (top of push block); pushed regs ≤ 6
+If disasm reports a larger frame, something is inconsistent — verify.
 
 **Falsified hypotheses (from 6820c disasm executive summary):**
 - ★ fn 0x68cd2 is NOT the hang site (ruled out by T1 value)
