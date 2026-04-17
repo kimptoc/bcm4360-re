@@ -1,6 +1,38 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, PRE test.107 — module built, about to run)
+## Current state (2026-04-17, POST test.107 — CRASHED EARLY, zero enum data)
+
+**Outcome:** host crashed during or shortly after the pre-ARM test.107
+block. Recovered journal (`phase5/logs/test.107.journal`) captured only 4
+BCM4360 kernel lines:
+- SBR via bridge 0000:00:1c.2
+- SBR complete — bridge_ctrl restored
+- BAR0/BAR2/tcm debug line
+- test.53 BAR0 probe alive = 0x15034360
+
+**NO test.107 enumeration output** (no "slot[0x...]" lines). **NO test.96
+pre-ARM baseline** either — the crash beat the next batch of dev_info
+calls to console. Session closed 17:59:45 (same second as the load).
+
+**Hypothesis:** the pre-ARM enumeration loop reads `ioread32(regs + 0x1e0)`
+for every slot. For slot 0x18001000 that targets `0x180011e0` — the exact
+register the FW hangs on (test.106). Host-side read of an unresponsive
+backplane register likely triggered a PCIe completion timeout that hung
+the root port / bridge, killing the box before the next dev_emerg flushed.
+
+**Next step (test.108): safer probe.**
+- Pre-ARM enum reads **slot+0 only** (canonical first register; safe, just
+  a presence probe). Skip slot+0x1e0 entirely pre-ARM.
+- Defer the `0x180011e0` read to the existing FW-wait `outer==1` branch,
+  where MAbort masking + re-mask every 10ms is already active (that's the
+  regime the other test.106/107 probes survived in).
+- If a pre-ARM read of slot+0 also crashes the box, we'll know that one
+  read ≠ one write matters and we need a completely different strategy
+  (e.g., use the EROM walk in si_attach to read core IDs indirectly).
+
+---
+
+## Previous state (2026-04-17, PRE test.107 — module built, about to run)
 
 **Goal:** identify what core lives at backplane slot `0x18001000` (where fn
 0x1415c's first MMIO read hangs) and whether that core is MMIO-responsive
@@ -15,18 +47,6 @@ from the host side while the ARM is stuck.
    window, redirect BAR0 to `0x18001000`, read offset `0x1e0`, restore
    window to CC. One additional read. Compares host-side result to
    FW-side hang state.
-
-**Decision tree (test.107 results):**
-- Enum slot 0x18001000 off0/off1e0 = `0xffffffff` + hang-target probe =
-  `0xffffffff` → core truly dead. Root cause: missing clock/power/reset
-  release. Next test: CC-side bring-up of that core before ARM release.
-- Enum slot 0x18001000 returns a value + hang-target probe returns a
-  value → core responsive; FW-side hang is something else (poll mask
-  never set, ARM core-local clock gate not yet up when FW runs this BL).
-  Next test: examine FW's pre-1415c code to see if a clock-enable write
-  is missing.
-- Host probe itself hangs (module load never completes) → backplane is
-  globally borked. Would need SBR to recover.
 
 **Files changed:**
 - `phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c`:

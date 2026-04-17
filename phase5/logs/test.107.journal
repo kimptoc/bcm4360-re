@@ -1,0 +1,11 @@
+Apr 17 17:48:25 nixos sudo[3667]:  kimptoc : PWD=/home/kimptoc/bcm4360-re ; USER=root ; COMMAND=/run/current-system/sw/bin/journalctl -b -1
+Apr 17 17:48:46 nixos sudo[4158]:  kimptoc : PWD=/home/kimptoc/bcm4360-re ; USER=root ; COMMAND=/run/current-system/sw/bin/journalctl -b -1
+Apr 17 17:49:00 nixos sudo[4492]:  kimptoc : PWD=/home/kimptoc/bcm4360-re ; USER=root ; COMMAND=/run/current-system/sw/bin/tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.106.stage0
+Apr 17 17:49:00 nixos sudo[4490]:  kimptoc : PWD=/home/kimptoc/bcm4360-re ; USER=root ; COMMAND=/run/current-system/sw/bin/journalctl -b -1
+Apr 17 17:49:00 nixos sudo[4497]:  kimptoc : PWD=/home/kimptoc/bcm4360-re ; USER=root ; COMMAND=/run/current-system/sw/bin/chown kimptoc:users /home/kimptoc/bcm4360-re/phase5/logs/test.106.stage0
+Apr 17 17:59:45 nixos sudo[19724]:  kimptoc : PWD=/home/kimptoc/bcm4360-re/phase5/work ; USER=root ; COMMAND=./test-staged-reset.sh
+Apr 17 17:59:45 nixos kernel: brcmfmac: loading out-of-tree module taints kernel.
+Apr 17 17:59:45 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+Apr 17 17:59:45 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+Apr 17 17:59:45 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffd04941600000
+Apr 17 17:59:45 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
