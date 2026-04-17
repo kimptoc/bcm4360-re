@@ -49,8 +49,9 @@ echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: test.114 — (a) d11 wrapper RESET_CTL before resetcore (test.114a in reset_device), (b) brcmf_chip_resetcore(d11) + wrapper verify + clk_ctl_st read (test.114b before skip_arm). skip_arm=1 first run (no ARM release). Expected: IN_RESET=YES before, IN_RESET=NO after resetcore, no crash." | tee -a "$LOG" ;;
-    *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
+    0) echo "Stage 0: test.114 skip_arm=1 — d11 wrapper reads + resetcore diagnostic, no ARM release. Expected: no crash, RESET_CTL=0 (d11 not in BCMA reset), d11 clk_ctl_st accessible." | tee -a "$LOG" ;;
+    1) echo "Stage 1: test.114 skip_arm=0 — full run: test.47 BBPLL bringup + d11 resetcore + ARM release. FW should see BP_ON_HT and write sharedram ready signature. Wait 35s for FW init." | tee -a "$LOG" ;;
+    *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
 
@@ -102,26 +103,30 @@ echo "=== Flushing to disk ===" | tee -a "$LOG"
 sync
 echo "Flush complete." | tee -a "$LOG"
 
-# Load module with staged reset + skip_arm=1
+if [ "$STAGE" -eq 0 ]; then
+    SKIP_ARM=1
+    WAIT_SECS=2
+else
+    SKIP_ARM=0
+    WAIT_SECS=35
+fi
+
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=1) --- test.114 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.114 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
 modprobe brcmutil 2>/dev/null || true
 modprobe cfg80211 2>/dev/null || true
-# test.109: bcm4360_skip_arm=1 prevents ARM release so FW never runs =>
-#   box does not crash => enum output is safely in kernel ringbuffer.
-# insmod will return -ENODEV (clean abort) because the probe bails out
-#   after the TCM dump in the skip_arm branch. That's expected.
 set +e
-insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE" bcm4360_skip_arm=1
+insmod "$FMAC_DIR/brcmfmac.ko" bcm4360_reset_stage="$STAGE" bcm4360_skip_arm=$SKIP_ARM
 INSMOD_RC=$?
 set -e
-echo "insmod returned rc=$INSMOD_RC (expected: non-zero; skip_arm aborts probe cleanly)" | tee -a "$LOG"
+echo "insmod returned rc=$INSMOD_RC" | tee -a "$LOG"
 
-# Capture dmesg directly from /dev/kmsg — no journald batching, no sleep
-# needed since no crash is expected.
+echo "Waiting ${WAIT_SECS}s for firmware init..." | tee -a "$LOG"
+sleep "$WAIT_SECS"
+
 echo "" | tee -a "$LOG"
 echo "=== dmesg capture (kernel ring buffer) ===" | tee -a "$LOG"
 dmesg -k --nopager 2>&1 | grep -iE "BCM4360|brcmfmac" | tee -a "$LOG"
@@ -129,8 +134,9 @@ sync
 echo "=== Capture complete ===" | tee -a "$LOG"
 sync
 
-# Remove the aborted-probe module cleanly so next test is repeatable
+# Remove module cleanly
 if lsmod | grep -q brcmfmac; then
     echo "Cleaning up brcmfmac..." | tee -a "$LOG"
+    rmmod brcmfmac-wcc 2>/dev/null || true
     rmmod brcmfmac 2>/dev/null || true
 fi
