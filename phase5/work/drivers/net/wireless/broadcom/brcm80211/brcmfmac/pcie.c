@@ -759,45 +759,58 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 		dev_info(&devinfo->pdev->dev,
 			 "BCM4360 test.40: allowing watchdog reset (IOMMU group 8 is crash-protective)\n");
 
-		/* test.110: enumerate backplane core slots 0x18000000..0x1800A000.
+		/* test.111: read already-enumerated core list via public chip API.
 		 *
-		 * Moved here from brcmf_pcie_download_fw_nvram. Previous site was
-		 * unreachable: probe thread wedged in brcmf_pcie_copy_mem_todev
-		 * (442KB via iowrite32), so enum code after FW download never ran
-		 * even with bcm4360_skip_arm=1. This site (inside
-		 * brcmf_pcie_reset_device, during chip_attach) runs BEFORE FW
-		 * download, proven by test.109 which logged EFI/PMU/pllcontrol
-		 * lines from this same block.
+		 * test.110 (raw BAR0 11-slot sweep) crashed the host so hard that
+		 * zero kernel lines persisted — the BAR0 remap loop during
+		 * buscore_reset is unsafe. Pivot: by the time ops->reset runs
+		 * (chip.c:1043-1049), brcmf_chip_recognition has already populated
+		 * ci->cores. brcmf_chip_get_core(ci, id) returns the registered
+		 * core with its id/base/rev. NO MMIO, NO hang risk.
 		 *
-		 * READ-ONLY. Slot 0x18001000 is the FW-hang target (test.106).
-		 * off0 == 0xffffffff means dead slot, else it's an alive core ID.
-		 * dev_emerg flushes every line. Restores BAR0 to ChipCommon at end
-		 * (the downstream reset code expects CC selected).
+		 * Goal: find which core lives at base 0x18001000 (FW-hang target
+		 * from test.106 — FW reads *0x180011e0 and never returns).
+		 * Hypothesis: BCMA_CORE_80211 (d11 MAC) per chip.c:1022 SOCI_SB.
 		 */
 		{
-			u32 slot, off0;
-			int n;
+			static const struct {
+				u16 id;
+				const char *name;
+			} core_ids[] = {
+				{ 0x800, "CHIPCOMMON" },
+				{ 0x80E, "INTERNAL_MEM" },
+				{ 0x812, "80211" },
+				{ 0x827, "PMU" },
+				{ 0x82A, "ARM_CM3" },
+				{ 0x83C, "PCIE2" },
+				{ 0x83E, "ARM_CR4" },
+				{ 0x840, "GCI" },
+				{ 0xFFF, "DEFAULT" },
+			};
+			struct brcmf_core *c;
+			int k;
 
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.110: backplane core enumeration (slot+0 only, 11 slots)\n");
-			for (n = 0; n <= 10; n++) {
-				slot = 0x18000000 + (n * 0x1000);
-				pci_write_config_dword(devinfo->pdev,
-						       BRCMF_PCIE_BAR0_WINDOW,
-						       slot);
-				off0 = ioread32(devinfo->regs + 0x000);
+				  "BCM4360 test.111: core list via brcmf_chip_get_core (no MMIO)\n");
+			for (k = 0; k < (int)ARRAY_SIZE(core_ids); k++) {
+				c = brcmf_chip_get_core(devinfo->ci,
+							core_ids[k].id);
+				if (!c) {
+					dev_emerg(&devinfo->pdev->dev,
+						  "BCM4360 test.111: id=0x%03x %-12s NOT PRESENT\n",
+						  core_ids[k].id,
+						  core_ids[k].name);
+					continue;
+				}
 				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.110: slot[0x%08x] off0=0x%08x%s\n",
-					  slot, off0,
-					  off0 == 0xffffffff ? " -- DEAD (no core)" :
-					  (slot == 0x18001000) ?
-					    " <- FW hang target" : "");
+					  "BCM4360 test.111: id=0x%03x %-12s base=0x%08x rev=%u%s\n",
+					  c->id, core_ids[k].name, c->base,
+					  c->rev,
+					  c->base == 0x18001000 ?
+					    "  <<< FW HANG TARGET" : "");
 			}
-			pci_write_config_dword(devinfo->pdev,
-					       BRCMF_PCIE_BAR0_WINDOW,
-					       0x18000000);
 			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.110: enum complete, BAR0 restored to ChipCommon\n");
+				  "BCM4360 test.111: core enum complete\n");
 		}
 		/* fall through to standard reset code */
 	}

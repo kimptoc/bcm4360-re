@@ -1,6 +1,6 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, POST test.110 CRASHED → PRE test.111)
+## Current state (2026-04-17, PRE test.111 — module built, about to run)
 
 **Goal (unchanged):** identify the core at backplane slot 0x18001000 (the
 FW-hang target from test.106: FW reads *0x180011e0 and never returns).
@@ -45,6 +45,27 @@ at copy_mem_todev like test.109 (still have enum data in journal).
 based on chip.c:1022 which registers BCMA_CORE_80211 at 0x18001000 under
 the SOCI_SB branch. If BCM4360 is SOCI_AI (EROM scan), actual layout comes
 from EROM and could differ — we'll see in the log.
+
+**Build status:** clean. `brcmfmac.ko` rebuilt at
+`phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/`. Only
+pre-existing `brcmf_pcie_write_ram32 unused` warning (unrelated).
+
+**Test script:** `phase5/work/test-staged-reset.sh` updated:
+- LOG → `test.111.stage${STAGE}`
+- banners/stage header reworded for test.111
+- insmod args unchanged (`bcm4360_reset_stage=0 bcm4360_skip_arm=1`)
+
+**Expected stage0 log:**
+- Pre-test PCIe/root-port state (lspci)
+- Loading banner
+- insmod rc (likely 0 now — with cores populated skip_arm branch returns
+  after TCM dump, but behaviour depends on exact path)
+- dmesg BCM4360 lines including: EFI/PMU/pllcontrol + NEW 9 "test.111:
+  id=0x... name=... base=0x... rev=..." lines + "core enum complete"
+- Cleaning up brcmfmac
+
+**Success criterion:** identify which core (if any) has `base=0x18001000`
+— this is the FW-hang target from test.106. Hypothesis: BCMA_CORE_80211.
 
 **Workflow:** this run touches HW — commit + push before insmod.
 
