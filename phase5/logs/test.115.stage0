@@ -1,5 +1,5 @@
 === test.115: control test — no resetcore, pure d11 diagnostic --- stage=0 ===
-Date: Fri 17 Apr 20:02:16 BST 2026
+Date: Fri 17 Apr 20:29:52 BST 2026
 
 Stage 0: test.115 skip_arm=1 — d11 wrapper read + clk_ctl_st diagnostic only (no resetcore). Confirms d11 not in BCMA reset and clk_ctl_st readable before ARM release.
 
@@ -8,7 +8,7 @@ Stage 0: test.115 skip_arm=1 — d11 wrapper read + clk_ctl_st diagnostic only (
 	Subsystem: Apple Inc. Device [106b:0112]
 	Control: I/O- Mem- BusMaster- SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
 	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
-	Interrupt: pin A routed to IRQ 18
+	Interrupt: pin A routed to IRQ 0
 	IOMMU group: 6
 	Region 0: Memory at b0600000 (64-bit, non-prefetchable) [disabled] [size=32K]
 	Region 2: Memory at b0400000 (64-bit, non-prefetchable) [disabled] [size=2M]

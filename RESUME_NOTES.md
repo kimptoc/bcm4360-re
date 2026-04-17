@@ -1,41 +1,54 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, PRE test.116 — guarded clk_ctl_st read, crash root cause identified)
+## Current state (2026-04-17, POST test.116 stage0 crash — retry after full reboot)
 
-### Root cause of test.115 stage0 crash (identified this session)
+### Test.116 stage0 crash analysis
 
-**MAbort+ on root port secondary status is BASELINE** — present since test.100 (verified by
-comparing logs). It was NOT introduced by test.114 stage1. The crash was caused by something else.
+**test.116 stage0 crashed** immediately after "SBR complete — bridge_ctrl restored". No BAR0
+probe output (test.53 probe) was logged, meaning the crash occurred **inside
+`brcmf_pcie_get_resource`** (chip_attach's prepare callback), before `ioread32(devinfo->regs)`.
 
-**Actual crash cause:** `brcmf_pcie_read_reg32(devinfo, 0x1e0)` in test.114b reads d11's core
-register `clk_ctl_st` unconditionally. After test.114 stage1's ARM release → firmware hang →
-machine crash → reboot, d11 was left in BCMA reset. Reading 0x1e0 (d11 core AXI slave) while
-IN_RESET=YES causes PCIe SLVERR → hard kernel crash, no logs.
+**The d11 guard code was never reached.** The guard (`if (!(d11_wrap_rst & 1))`) lives in
+`brcmf_pcie_reset_device`, which runs later (chip_attach's reset callback). The test.116 crash
+tells us nothing about whether the guard works — that code path was not exercised.
 
-**Why test.114 stage0/1 didn't crash:** the wl driver had previously initialized d11 out of
-BCMA reset. After reboot, d11 starts in reset (different initial state).
+**Most likely cause:** The test.115 SLVERR (reading d11 AXI slave while in BCMA reset) left
+the BCM4360's PCIe core in a non-recoverable error state that the SBR (200ms) could not fix.
+A full system reboot is needed to clear this state. We now have that reboot.
 
-**Fix applied (test.116):** wrapped the 0x1e0 read in `if (!(d11_wrap_rst & 1))`. If IN_RESET=YES,
-logs a safe message and skips the core read. Wrapper reads (0x1800, 0x1408) remain unconditional —
-they are always safe regardless of reset state.
+**Alternative:** If the crash recurs in the same place (silent after SBR complete), the issue
+is NOT chip state and requires finer logging inside `brcmf_pcie_get_resource` — before/after
+`pci_enable_device`, before/after `ioremap`, before `ioread32`.
 
-**Module status:** pcie.c patched. NOT yet rebuilt. Build before testing.
+**Module status:** pcie.c has the d11 guard applied. Module built at 20:52:42 (before test.116
+crash). Module is current and valid — **no rebuild needed** unless pcie.c is edited.
 
-**Hypothesis for test.116 stage0:**
-d11 will show IN_RESET=YES (post-reboot, wl driver not active). wrap_IOCTL will show CLK=NO.
-clk_ctl_st read skipped. Stage0 confirms safe diagnostic path.
+**Hypothesis for test.116 stage0 retry (post full reboot):**
+A full system reboot clears the BCM4360 PCIe error state that SBR could not. The BAR0 probe
+will succeed (test.53 prints "alive"). chip_attach proceeds. test.114a wrapper reads (0x1800,
+0x1408) run safely. d11 will show IN_RESET=YES (no wl driver this boot). The guard skips the
+0x1e0 read and logs "IN_RESET=YES — skipping clk_ctl_st read". Stage0 completes without crash.
 
-**Hypothesis for test.116 stage1:**
-With BBPLL up and ARM released, FW should exit fn 0x1415c (BP_ON_HT was granted in test.114
-stage1). Counter should advance past 0x43b1. If it does, Anchor F will shift to ~0x68c49 and
-we need new stack frame probes to identify the new hang site.
+**DIVERGENT outcome:** If crash recurs at same point → add pre/post logging to
+`brcmf_pcie_get_resource`: log before pci_enable_device, after pci_enable_device, before
+ioremap, after ioremap, before ioread32. This isolates whether the crash is at:
+  - pci_enable_device (resource conflict or AER fatal error)
+  - ioremap (mapping failure followed by NULL deref)
+  - ioread32 (Completion Timeout → MCE on root port with FatalErr+ enabled)
 
 **Next steps:**
-1. Build: `make -C /home/kimptoc/bcm4360-re/phase5/work`
-2. Run test.116 stage0 (skip_arm=1) → confirm IN_RESET state and safe wrapper reads
-3. Run test.116 stage1 (skip_arm=0) → does counter advance past 0x43b1?
-   - YES → identify new hang site near FW 0x68c49; add stack frame probes for test.117
-   - NO  → hang persists at same site; reassess (d11 reset state may matter)
+1. Run test.116 stage0 retry (module already built, PCIe state clean)
+2. If stage0 passes → run test.116 stage1 (skip_arm=0, BBPLL + ARM release)
+3. If stage0 crashes same place → add granular logging to brcmf_pcie_get_resource, rebuild
+
+**Root cause of test.115 stage0 crash (for reference):**
+The d11 guard (test.116 fix) was correct analysis. The crash was at `brcmf_pcie_read_reg32(devinfo,
+0x1e0)` in test.114b, which reads d11 AXI slave while d11 is in BCMA reset → SLVERR → crash.
+The fix (`if (!(d11_wrap_rst & 1))` guard) is in pcie.c but has NOT yet been tested — test.116
+stage0 crashed before reaching it. This must be verified in the retry.
+
+**MAbort+ on root port secondary status is BASELINE** (present since test.100, not introduced
+by any recent test). Current state: device MAbort-, root port secondary MAbort+ (baseline).
 
 ### Analysis of test.114 stage1 + test.115 crash (completed 2026-04-17)
 
