@@ -42,14 +42,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.109.stage${STAGE}"
+LOG="$LOG_DIR/test.110.stage${STAGE}"
 
-echo "=== test.109: backplane core enum with skip_arm=1 (no crash, dmesg capture) --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.110: backplane core enum moved INTO reset_device (pre-FW-download) --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: test.109 — enum block moved to pre-skip_arm site so skip_arm=1 reaches it; skip_arm=1 avoids ARM release => no FW hang => no root-port wedge => no crash => dmesg has unlimited time" | tee -a "$LOG" ;;
+    0) echo "Stage 0: test.110 — enum block relocated to brcmf_pcie_reset_device (chip_attach phase, before FW download). test.109 proved reset_device site executes. skip_arm=1 retained as safety in case old path is hit. Expect 11 enum lines + EFI/PMU/pllcontrol lines, no crash." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -104,7 +104,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset + skip_arm=1
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=1) --- test.109 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=1) --- test.110 ===" | tee -a "$LOG"
 sync
 
 dmesg -C

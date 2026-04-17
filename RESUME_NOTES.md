@@ -1785,3 +1785,55 @@ Firmware prints CDC protocol banner (not FullDongle MSGBUF).
 - test.95: SURVIVED — 0x840-0xB40 = C runtime (strcmp, strtol, memset, memcpy, printf); 0x848 = strcmp NOT hang
 - test.96: CRASHED after 6 words — pivoted to firmware binary analysis; fn 0x1624c confirmed as hang location
 - test.97: CRASHED (machine crash) — wait struct fields = garbage → fn 0x1624c never ran; hang is earlier; corrected: fn 0x16476 → fn 0x162fc (not fn 0x1624c directly)
+
+## POST-test.109 (2026-04-17) — probe wedges BEFORE enum block executes
+
+### Result: skip_arm=1, reached "rambase=0x0 ramsize=0xa0000 ... fw_size=442233" then STOP
+Log `phase5/logs/test.109.stage0` shows driver path through `brcmf_pcie_reset_device`
+(EFI state, PMU, pllcontrol[0..5], test.40 watchdog msg all present — lines 72-80
+of log) and `brcmf_fw_alloc_request` + firmware file resolution (line 81-85),
+but NOTHING after the `rambase=` debug line. System crashed after "Capture
+complete" — no test.101 pre-ARM baseline, no test.109 enum lines, no skip_arm
+message, no "Cleaning up brcmfmac".
+
+### Root cause (advisor-confirmed)
+Probe thread wedges in `brcmf_pcie_copy_mem_todev` at pcie.c line ~1803, which
+writes the 442KB firmware via ~110K iowrite32 calls. ONE posted write that never
+completes wedges the probe thread indefinitely.
+
+All downstream code in `brcmf_pcie_download_fw_nvram` is unreachable, including:
+- "NVRAM loaded" log (test.108 reached this; test.109 did not)
+- test.101 pre-ARM baseline (dev_emerg at line 1883)
+- test.109 enum block (lines 1890-1929)
+- bcm4360_skip_arm branch (line 1932)
+
+Verified NOT a dmesg-timing artifact by comparison with `journalctl -b -1` which
+also stops at same point.
+
+### test.110 plan — move enum to brcmf_pcie_reset_device (pre-FW-download site)
+Reset_device already ran successfully in test.109 (EFI/PMU/pllcontrol lines
+captured in log). Inserting the 11-slot enum there after the "test.40: allowing
+watchdog reset" log line runs the enum BEFORE copy_mem_todev, so the wedge
+cannot block it.
+
+Code change (pcie.c):
+- ADD: 11-slot enum block inside reset_device's BCM4360 branch, after
+  "test.40: allowing watchdog reset" dev_info, before fall-through
+- REMOVE: old enum block in download_fw_nvram (unreachable)
+- bcm4360_skip_arm=1 retained as safety (unrelated path, avoids ARM release)
+
+Build verified (pcie.c compiles, brcmfmac.ko linked). Ready to run.
+
+### Test run
+`sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+
+Expected output (stage 0 log):
+- EFI state / PMU / pllcontrol lines (same as test.109)
+- NEW: "BCM4360 test.110: backplane core enumeration (slot+0 only, 11 slots)"
+- NEW: 11 lines "BCM4360 test.110: slot[0xNNNNNNNN] off0=0x........"
+- NEW: "BCM4360 test.110: enum complete, BAR0 restored"
+- Then probe continues into FW download → wedges at copy_mem_todev (expected)
+- System should NOT crash; dmesg capture should include all enum lines
+
+Success criteria: ≥11 enum lines present in dmesg ring buffer.
+Failure mode: if system crashes at enum, BAR0 writes are dangerous pre-probe.
