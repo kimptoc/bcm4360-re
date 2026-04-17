@@ -1,6 +1,46 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, POST test.111 + offline research — HANG REG IDENTIFIED)
+## Current state (2026-04-17, PRE test.112 — force HT via CC.clk_ctl_st, module built)
+
+**Goal:** answer "does writing `CCS_FORCEHT` (bit 1) to CC.clk_ctl_st bring
+up the BBPLL on BCM4360?" If yes → Phase 6 proceeds by wiring this
+pre-ARM-release into the driver. If no → need PMU resource config.
+
+**Code change (pcie.c in `brcmf_pcie_reset_device` BCM4360 branch):**
+- ADDED test.112 block after test.111 enum:
+  - select CHIPCOMMON core
+  - read CC.clk_ctl_st (pre-force)
+  - WRITE `ccs | 0x2` to CC.clk_ctl_st (CCS_FORCEHT)
+  - poll CC.clk_ctl_st up to 100 × 100us (10ms) for CCS_BP_ON_HT (bit 19)
+  - log clk_ctl_st + pmustatus + res_state
+- All logs `dev_emerg` (guaranteed flush).
+- The write/poll happens BEFORE the existing watchdog reset, so chip is
+  in the same EFI-left state as test.40/109/111 saw (HAVEALP=1, HAVEHT=0).
+
+**Build:** clean, `brcmfmac.ko` rebuilt.
+
+**Test script:** `test-staged-reset.sh` — LOG → `test.112.stageN`, banner
+updated. `bcm4360_reset_stage=0 bcm4360_skip_arm=1` unchanged.
+
+**Expected stage0 log:**
+- Pre-force line: `pre-force CC.clk_ctl_st=0x00010040 (HAVEALP=1 HAVEHT=0 BP_ON_HT=0)`
+- Wrote CCS_FORCEHT line
+- Post-force line: one of
+  - `... clk_ctl_st=0x...?80000 ... HT CLOCK UP`  (success — Phase 6 easy path)
+  - `... HAVEHT set (no BP_ON_HT)` (partial — PLL locked but backplane
+    not switched; likely needs extra resource config)
+  - `... HT TIMEOUT (still no HAVEHT)` (hardest path — PMU resources
+    block HT entirely; need pllcontrol programming)
+
+**Risk:** low. Single 32-bit write to a documented clock-request bit;
+brcmsmac does the same on peers. Even if it fails to bring up HT, the
+skip_arm=1 branch later returns without running ARM/FW → no crash path.
+
+**Workflow:** this run touches HW — commit + push before insmod.
+
+---
+
+## Previous state (2026-04-17, POST test.111 + offline research — HANG REG IDENTIFIED)
 
 **COMPLETE CHAIN OF EVIDENCE:**
 - test.106: FW's fn 0x1415c hangs polling MMIO at `0x180011e0`.

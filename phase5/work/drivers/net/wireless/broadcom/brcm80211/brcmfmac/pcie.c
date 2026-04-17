@@ -812,6 +812,58 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 			dev_emerg(&devinfo->pdev->dev,
 				  "BCM4360 test.111: core enum complete\n");
 		}
+
+		/* test.112: force HT clock via ChipCommon.clk_ctl_st.
+		 *
+		 * Phase 5 closure: FW hangs in fn 0x1415c spin-polling d11's
+		 * clk_ctl_st (d11+0x1e0) waiting for CCS_BP_ON_HT (bit 19).
+		 * BBPLL is off post-EFI (test.40 showed HAVEHT=0), so HT clock
+		 * never comes up on its own.
+		 *
+		 * Simplest fix first: request HT via CCS_FORCEHT (bit 1) on
+		 * CC.clk_ctl_st and poll for CCS_BP_ON_HT (bit 19). brcmsmac
+		 * does this on similar chips (main.c:1230-1240). If it works
+		 * standalone, FW will then see HT on d11.clk_ctl_st too.
+		 *
+		 * Poll budget: 100 × 100us = 10ms (PLL lock is typically
+		 * sub-millisecond on these PHYs). Log before/after plus
+		 * pmustatus + res_state. skip_arm=1 keeps this test isolated
+		 * (no ARM release, no FW run).
+		 */
+		{
+			u32 ccs_before, ccs_after, pmu_after, res_after;
+			int iter;
+
+			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+			ccs_before = READCC32(devinfo, clk_ctl_st);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.112: pre-force CC.clk_ctl_st=0x%08x (HAVEALP=%s HAVEHT=%s BP_ON_HT=%s)\n",
+				  ccs_before,
+				  (ccs_before & 0x00010000) ? "1" : "0",
+				  (ccs_before & 0x00020000) ? "1" : "0",
+				  (ccs_before & 0x00080000) ? "1" : "0");
+
+			WRITECC32(devinfo, clk_ctl_st, ccs_before | 0x2);
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.112: wrote CCS_FORCEHT (bit 1) to CC.clk_ctl_st, polling for CCS_BP_ON_HT...\n");
+
+			ccs_after = 0;
+			for (iter = 0; iter < 100; iter++) {
+				udelay(100);
+				ccs_after = READCC32(devinfo, clk_ctl_st);
+				if (ccs_after & 0x00080000)
+					break;
+			}
+			pmu_after = READCC32(devinfo, pmustatus);
+			res_after = READCC32(devinfo, res_state);
+
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.112: after %d×100us: clk_ctl_st=0x%08x pmustatus=0x%08x res_state=0x%08x -- %s\n",
+				  iter, ccs_after, pmu_after, res_after,
+				  (ccs_after & 0x00080000) ? "HT CLOCK UP" :
+				  (ccs_after & 0x00020000) ? "HAVEHT set (no BP_ON_HT)" :
+				  "HT TIMEOUT (still no HAVEHT)");
+		}
 		/* fall through to standard reset code */
 	}
 

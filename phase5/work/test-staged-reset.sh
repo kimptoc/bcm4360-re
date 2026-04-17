@@ -42,14 +42,14 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.111.stage${STAGE}"
+LOG="$LOG_DIR/test.112.stage${STAGE}"
 
-echo "=== test.111: core list via brcmf_chip_get_core (no MMIO) --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.112: force HT clock via CC.clk_ctl_st (Phase 6 kickoff) --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: test.111 — replaced test.110 BAR0 11-slot sweep (which hard-crashed, no logs) with brcmf_chip_get_core() lookups for 9 known core IDs. Zero new MMIO. Expect core list in dmesg + existing EFI/PMU/pllcontrol lines, no crash." | tee -a "$LOG" ;;
+    0) echo "Stage 0: test.112 — write CCS_FORCEHT (bit 1) to ChipCommon.clk_ctl_st, poll CCS_BP_ON_HT (bit 19) up to 10ms, log pmustatus/res_state. Tests whether simple force-HT brings up BBPLL without extra PMU config. skip_arm=1 keeps it isolated." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0)" | tee -a "$LOG"; exit 1 ;;
 esac
 echo "" | tee -a "$LOG"
@@ -104,7 +104,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 # Load module with staged reset + skip_arm=1
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=1) --- test.111 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=1) --- test.112 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
