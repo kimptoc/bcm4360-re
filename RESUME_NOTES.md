@@ -1,10 +1,77 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, PRE test.105 — module built, about to run)
+## Current state (2026-04-17, POST test.105 — fn 0x1adc already returned; hang is past it in fn 0x1415c)
 
-Git branch: main. Module built clean (only a pre-existing unused-function
-warning). About to run test.105. Recovery: `journalctl -b -1` after any
-host reboot — test prints to dmesg, log captured to `phase5/logs/test.105`.
+Git branch: main. **Session recovery note:** prior session crashed during/after
+test.105 run (16:14); .git had 15+ empty objects (refs/heads/main included).
+Working tree was intact. Recovered by re-cloning from origin (which matched
+the pre-crash HEAD 0ffaaf3). Broken .git preserved as `.git.broken/`. Working
+tree backup at `/tmp/bcm4360-salvage/`. Git fully healthy now.
+
+Test.105 captured from `journalctl -b -1` → `phase5/logs/test.105.stage0`
+(63 lines, complete through 2s FW-silent timeout exit). Host crashed ~30s
+after test clean exit, same post-exit pattern as t.101-104.
+
+### TEST.105 RESULT — fn 0x1adc already returned
+
+Raw probe output:
+```
+test.105 T+0200ms: ctr[0x9d000]=0x000043b1 pd[0x62a14]=0x00058cf0
+test.105 ANCH  E[0x9CFCC]=0x00067705 F[0x9CF6C]=0x00068b95 (MATCH E=1 F=1)
+test.105 T1[0x9CED4]=0x00068321 MATCH stable (fn 0x1415c saved LR)
+test.105 T3[0x9CEC4]=0x00091cc4 NOT LR-shaped → fn 0x1adc already returned
+test.105 SWEEP 0x9CEC0↓: 00000000 00068d2f 00091cc4 00092440
+test.105 SWEEP LR-CAND [0x9cebc]=0x00068d2f
+test.105 T+0200ms: SANITY *0x62e20=0x00000000
+```
+
+**Interpretation (per PLAN decision table):**
+- Regression + anchors E/F stable — same hang site as t.101/102/103/104.
+- T1 stable at 0x68321 — fn 0x1415c confirmed active (body SP still 0x9CED8).
+- T3=0x91cc4 is **NOT LR-shaped** (not Thumb-odd, not in code range).
+  Per plan, this rules out: bit-17 poll loop (0x1418f), pre-loop delay
+  (0x14187), and poll-timeout/assert (0x141b7).
+- **Decision: fn 0x1adc has already returned. Hang is elsewhere in fn 0x1415c's
+  body, AFTER the BL to fn 0x1adc.**
+- 0x91cc4 at 0x9CEC4 is stale (appears again at 0x9CEB8, and 0x68d2f at
+  0x9CEBC is the same t.104-era fn 0x68cd2 leftover — body SP of whatever
+  is currently running sits above 0x9CEC4).
+- Sanity *0x62e20 still 0x00000000 — FW never wrote that word.
+
+### Next steps (test.106)
+
+Need to identify WHERE in fn 0x1415c's body (past the BL to fn 0x1adc) the
+hang occurs. Two sub-tasks:
+
+1. **Offline disasm of fn 0x1415c, post-fn-0x1adc section** (subagent, no HW cost):
+   - Confirm body SP = 0x9CEC8 (for an active sub-BL, saved LR would be at
+     [0x9CEC8 - 4] = 0x9CEC4 — but T3 there was STALE, so either fn 0x1415c
+     itself is hung without a sub-BL active (e.g., in-body poll/loop/svc),
+     OR the active sub-BL doesn't push LR (rare for compiled thumb).
+   - Enumerate BLs in fn 0x1415c after the BL→0x1adc site.
+   - Look for in-body poll loops / SVCs / volatile busy-waits (fn 0x1415c
+     is described as "HW init, unknown target").
+
+2. **Test.106 probe plan:**
+   - 2 regression (ctr, pd) + 2 anchors (E, F) + 1 stable T1 — keep chain.
+   - Read `*0x9CEC8` (fn 0x1415c body-SP top word) — if it's live data it's
+     a callee-saved reg spill; otherwise zero/junk.
+   - Read `*(PC-ish slot)` — hardest part without a PC indicator; instead
+     probe the sp-relative locals of fn 0x1415c: sweep 0x9CED0 → 0x9CEC8
+     to catch any LR-candidate corresponding to a post-0x1adc BL site.
+   - Alternatively: write a "heartbeat" (hand-compiled thumb stub injected
+     into a scratch location) is out-of-scope for a read-only probe. Skip.
+   - Optional: read state around known PMU/CC regs the FW might be polling
+     at this point (e.g., pmustatus re-read from FW's POV via 0x180000xx
+     shadow if accessible).
+   - Keep total reads ≤ 13 (t.104 budget).
+
+3. **Workflow rule:** commit + push RESUME_NOTES before running test.106
+   (host will likely crash 30s post-exit; pre-commit preserves plan/state).
+
+---
+
+## Previous state (2026-04-17, PRE test.105 — module built, about to run)
 
 **TEST.105 PLAN** (verified against raw firmware bytes, see pcie.c @ if (outer==1) block):
 - Disasm source: `phase5/notes/offline_disasm_1415c.md` + prologue of fn 0x1adc
@@ -18,6 +85,7 @@ host reboot — test prints to dmesg, log captured to `phase5/logs/test.105`.
   - not LR-shaped → fn 0x1adc already returned, hang elsewhere in fn 0x1415c body
 - 12 reads total (well under the safe 19-budget), 1200ms FW-wait, T104_REMASK
   equivalent macro throughout.
+- **RESULT: T3 = 0x91cc4, NOT LR-shaped → fn 0x1adc returned. See POST section above.**
 
 ---
 
