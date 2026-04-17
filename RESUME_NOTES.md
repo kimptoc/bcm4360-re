@@ -1,6 +1,56 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, PRE test.109 — module built, about to run)
+## Current state (2026-04-17, POST test.110 CRASHED → PRE test.111)
+
+**Goal (unchanged):** identify the core at backplane slot 0x18001000 (the
+FW-hang target from test.106: FW reads *0x180011e0 and never returns).
+
+**test.110 outcome: BOX CRASHED HARD, ZERO KERNEL LOGS PERSISTED.**
+- `phase5/logs/test.110.stage0` stops at the `=== Loading brcmfmac ===`
+  header — no `insmod returned` line, no dmesg capture → insmod itself
+  never returned, the script was never resumed.
+- `journalctl -b -1 -k | grep BCM4360` → empty. Boot -1 (18:21:57 →
+  18:34:49) persisted nothing for brcmfmac. Faster crash than test.109
+  which at least got EFI/PMU/pllcontrol lines through to the journal.
+- System rebooted into boot 0 at 18:35:22 cleanly.
+- `.git.broken/` is a stale .git backup from 2026-04-17 16:14 (Pre-test.105
+  COMMIT_EDITMSG inside); unrelated to test.110. Leave it alone for now.
+
+**Diagnosis (advisor-informed):** the 11-slot BAR0-remap loop added to
+`brcmf_pcie_reset_device` (pcie.c:762-801) either crashed synchronously on
+entry, or triggered a PCIe completer error so severe journald could not
+flush. Root cause is raw BAR0 sweeping during buscore_reset — unsafe.
+
+**Pivot for test.111: use the driver's already-enumerated cores list.**
+`brcmf_chip_recognition()` runs BEFORE `ops->reset` (see chip.c:1043-1049),
+so by the time `brcmf_pcie_reset_device` executes via callsite 3244, the
+chip's core list is fully populated. Public API
+`brcmf_chip_get_core(ci, coreid)` returns each core with its `id`, `base`,
+`rev` — NO MMIO, NO hang risk. This is exactly the data we need.
+
+**Code change plan (pcie.c):**
+- REPLACE the BAR0 11-slot sweep block (762-801) with a lookup over known
+  core IDs: CHIPCOMMON, PCIE2, 80211, ARM_CR4, ARM_CM3, PMU, GCI, SOCRAM,
+  DEFAULT (plus any others we know about). For each, `dev_emerg` log
+  `id=0x%03x base=0x%08x rev=%u` OR `not present`.
+- FLAG any core whose `base == 0x18001000` (FW-hang target).
+- Keep `dev_emerg` (guaranteed flush, highest priority).
+- `bcm4360_skip_arm=1` retained as safety (avoids FW hang after enum).
+
+**Expected outcome:** probe prints the core list via dev_emerg, then
+either skip_arm returns cleanly (clean log), or probe continues and wedges
+at copy_mem_todev like test.109 (still have enum data in journal).
+
+**Hypothesis:** slot 0x18001000 is likely `BCMA_CORE_80211` (d11 MAC),
+based on chip.c:1022 which registers BCMA_CORE_80211 at 0x18001000 under
+the SOCI_SB branch. If BCM4360 is SOCI_AI (EROM scan), actual layout comes
+from EROM and could differ — we'll see in the log.
+
+**Workflow:** this run touches HW — commit + push before insmod.
+
+---
+
+## Previous state (2026-04-17, PRE test.109 — module built, about to run)
 
 **Goal:** capture the pre-ARM backplane core enumeration (11 slots from
 0x18000000 to 0x1800A000) without crashing the host. Identifies what
