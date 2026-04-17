@@ -1,6 +1,56 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, POST test.105 — fn 0x1adc already returned; hang is past it in fn 0x1415c)
+## Current state (2026-04-17, PRE test.106 — module built, about to run)
+
+**Goal:** discriminate **prologue-hang at fn 0x1415c's ldr.w 0x14176**
+(first MMIO touch of `[[r0+0x88]+0x1e0]`) vs **poll-hang inside fn 0x1adc**
+(called from fn 0x1415c's bit-17 poll loop).
+
+**Discriminator:** sample T3 [0x9CEC4] at 3 time points (T+200ms, T+600ms,
+T+1000ms). If any sample catches fn 0x1adc active, we'll see LR=0x1418f or
+0x14187. If T3 stays non-LR-shaped across all 3 samples, prologue-hang is
+confirmed.
+
+**Disasm findings (subagent, 2026-04-17):**
+- `phase5/notes/offline_disasm_6820c_r0_setup.md`: fn 0x6820c never spills
+  r0 — struct pointer is held live in its callee-saved r4. When fn 0x1415c's
+  prologue `push {r4,r5,r6,lr}` runs, it saves caller-r4 at its body_SP.
+  So **[0x9CEC8] IS the struct pointer**. [struct+0x88] is the MMIO base.
+- `phase5/notes/offline_disasm_15940_prologue.md`: fn 0x15940 pushes
+  {r4..r8,lr} (N=6), body_SP=0x9CEC0, saved-LR slot=0x9CED4. If it were
+  active, [0x9CED4]=0x6832b, not 0x68321. **T1=0x68321 still proves fn
+  0x1415c is active.**
+
+**Probe reads (14 total):**
+- T+200ms (outer==1, 12 reads): ctr[0x9d000], pd[0x62a14], anc_E[0x9CFCC],
+  anc_F[0x9CF6C], T1[0x9CED4], T3@200[0x9CEC4], struct_ptr[0x9CEC8],
+  mmio_base[struct+0x88] (conditional on TCM-shaped struct_ptr), sweep
+  [0x9CEC0]/[0x9CEBC]/[0x9CEB8], sanity *0x62e20
+- T+600ms (outer==3, 1 read): T3@600[0x9CEC4]
+- T+1000ms (outer==5, 1 read): T3@1000[0x9CEC4]
+
+**Build:** clean. Module at
+`phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko`.
+
+**Test script:** `phase5/work/test-brcmfmac.sh` (requires sudo).
+
+**Expected log capture:** host crashes ~30s post-exit (pattern from t.101-105).
+If stage0 log missing, recover via `journalctl -b -1 | grep BCM4360 >
+phase5/logs/test.106.stage0` after reboot.
+
+**Decision tree for test.106 results:**
+- All 3 T3 samples non-LR-shaped → **prologue-hang CONFIRMED**; next test:
+  inject a new probe before fn 0x1415c is reached (earlier callsite) OR
+  look at the struct pointer value to identify the HW block. If MMIO base
+  is a known PHY/PMU core register range, we can try holding that core in
+  reset before ARM release.
+- Any T3 sample == 0x1418f or 0x14187 → **poll-hang CONFIRMED** (fn 0x1adc
+  delay inside poll loop or pre-loop). Next test: intercept at the poll
+  itself, look at counter r6 saved at [0x9CED0] for progress.
+- T1 changed → frame shifted, different analysis needed (unlikely given 5
+  consecutive tests with T1 stable).
+
+## Historical state (2026-04-17, POST test.105 — initial interpretation, now superseded)
 
 Git branch: main. **Session recovery note:** prior session crashed during/after
 test.105 run (16:14); .git had 15+ empty objects (refs/heads/main included).
