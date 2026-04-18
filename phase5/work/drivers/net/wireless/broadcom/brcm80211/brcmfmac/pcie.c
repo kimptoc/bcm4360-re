@@ -3877,18 +3877,30 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.120: pcie_bus_dev allocated\n");
 
-	devinfo->settings = brcmf_get_module_param(&devinfo->pdev->dev,
-						   BRCMF_BUSTYPE_PCIE,
-						   devinfo->ci->chip,
-						   devinfo->ci->chiprev);
+	/* For BCM4360, bypass full module param/ACPI/OF/DMI probe for now (test.123) */
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
+		devinfo->settings = kzalloc(sizeof(*devinfo->settings), GFP_KERNEL);
+	} else {
+		devinfo->settings = brcmf_get_module_param(&devinfo->pdev->dev,
+							   BRCMF_BUSTYPE_PCIE,
+							   devinfo->ci->chip,
+							   devinfo->ci->chiprev);
+	}
 	if (!devinfo->settings) {
 		ret = -ENOMEM;
 		goto fail;
 	}
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
 		dev_emerg(&pdev->dev,
+			  "BCM4360 test.123: module params bypassed (dummy)\n");
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
 			  "BCM4360 test.120: module params loaded\n");
 
+	/* test.123: add boundary marker before bus allocation */
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.123: before bus kzalloc\n");
 	bus = kzalloc(sizeof(*bus), GFP_KERNEL);
 	if (!bus) {
 		ret = -ENOMEM;

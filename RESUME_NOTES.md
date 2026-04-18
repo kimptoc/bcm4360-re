@@ -1,27 +1,42 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, PRE test.122 stage0 — bypass BCM4360 reset_device)
+## Current state (2026-04-18, POST test.122 stage0 crash — after module params, before bus alloc)
 
-### CODE STATE: BCM4360 RESET_DEVICE BODY BYPASSED
+### HARDWARE STATUS: STAGE0 CRASHED BETWEEN MODULE PARAMS AND BUS ALLOCATION
 
-`test.121` crashed in `brcmf_pcie_reset_device()` after the entry marker and before the PCIE2-selected marker. That run never reached the fixed-RAM path.
+`test.122.stage0` was run with `bcm4360_skip_arm=1`; ARM was not released.
 
-**Code changes for test.122:**
-- For BCM4360, `brcmf_pcie_reset_device()` now logs
-  `BCM4360 test.122: reset_device bypassed; probe-start SBR already completed`
-  and returns immediately.
-- This skips PCIE2 core select, ASPM config toggles, ChipCommon watchdog, and PCIE2 config replay for BCM4360.
-- The `test.121` fixed RAM-info bypass remains in place.
-- Staged script now writes `phase5/logs/test.122.stage0`.
+**Persisted script log:** `phase5/logs/test.122.stage0`
+- Pre-test BAR0 guard saw fast UR/I/O error (~7ms) and proceeded.
+- Root port bus numbering was sane before test (`secondary=03, subordinate=03`).
+- Script reached `insmod`, then the host crashed before `insmod returned`.
 
-**Hypothesis (test.122 stage0):**
-- If the early reset-device PCIE2 select/ASPM step caused the crash, journal should continue from the `test.122` bypass marker into fixed RAM info, chip attach return, and the existing `test.120` probe-setup markers.
-- If it still crashes immediately after the bypass marker, the failure is asynchronous fallout from probe-start SBR/reset timing rather than the reset-device body itself.
-- If it reaches firmware download, keep `bcm4360_skip_arm=1` and stop before ARM release; stage1 remains forbidden.
+**Previous boot journal markers:**
+- SBR worked; BAR0 probe returned `0x15034360 — alive`.
+- `test.122: reset_device bypassed` (reset_device early-return working)
+- `test.121: post-reset passive skipped; using fixed RAM info next`
+- `test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0`
+- `test.119: brcmf_chip_attach returned successfully`
+- `test.120: before PCIE2 core/reginfo setup`
+- `test.120: reginfo selected (pcie2 rev=1)`
+- `test.120: pcie_bus_dev allocated`
+- `test.120: module params loaded` ← LAST MARKER
+- No `test.120: bus allocated` marker.
 
-**Pre-run requirement:** force runtime PM `on` for `00:1c.2` and `03:00.0` if either is suspended, then verify root port bus is `secondary=03, subordinate=03`.
+**Interpretation:**
+Crash boundary is now between `devinfo->settings = brcmf_get_module_param(...)` and `bus = kzalloc(sizeof(*bus))` at pcie.c:3892. The `kzalloc` itself is unlikely to crash; suspect:
+- async fallout from `brcmf_get_module_param` (platform data, DMI, OF, ACPI probing) that triggered delayed work or corrupted state,
+- or pre-existing heap corruption that triggers on the next allocation attempt.
 
-**Build:** clean via kernel build tree. Expected warning remains: `brcmf_pcie_write_ram32` is defined but unused. BTF skipped because `vmlinux` is unavailable.
+**Next code change (test.123):**
+- Add a marker immediately before the bus `kzalloc` to confirm the exact boundary.
+- Optionally BYPASS `brcmf_get_module_param` for BCM4360 (assign a dummy struct) to test whether module-param probe path is implicated. If bypass allows progress, investigate `brcmf_dmi_probe`, `brcmf_of_probe`, `brcmf_acpi_probe` inside `brcmf_get_module_param`.
+- Keep all existing bypasses (reset_device, RAM info, post-reset passive).
+- Keep `bcm4360_skip_arm=1`; stage1 forbidden.
+
+**Build:** clean via kernel build tree.
+
+**Pre-run:** Verify PM on and root port bus numbering as before.
 
 ---
 
