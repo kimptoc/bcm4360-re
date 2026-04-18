@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.126.stage${STAGE}"
+LOG="$LOG_DIR/test.127.stage${STAGE}"
 
-echo "=== test.126: skip BCM4360 PCIE2 mailbox clear in buscore_reset — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.127: add early probe markers to isolate BCM4360 crash boundary — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -111,7 +111,7 @@ else
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.126 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.127 ===" | tee -a "$LOG"
 sync
 
 dmesg -C

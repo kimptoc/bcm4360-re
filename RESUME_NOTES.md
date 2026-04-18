@@ -57,27 +57,43 @@ sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 
 ---
 
-## TEST.127 RUN — 2026-04-19 00:14 (session restart after crash)
+## TEST.127 EXECUTION — 2026-04-19 (session 2, after crash recovery)
 
-**Current state:**
+**PRE-TEST STATE (verified):**
 - test.126 crashed during insmod before any markers printed
 - test.127 code compiled at 00:07 (pcie.c markers added, brcmfmac.ko built)
 - Module built: Apr 19 00:07
-- PCIe state clean: MAbort-, CommClk+
+- PCIe state verified clean: MAbort-, CommClk+
+- test-staged-reset.sh updated with test.127 labels
 - Hardware ready to test
 
-**Plan:**
+**PLAN:**
 Run `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0` to execute test.127 stage0.
 
-**Expected markers in dmesg:**
-1. `BCM4360 test.127: probe entry (vendor=..., device=...)`  — proves probe called
-2. `BCM4360 test.127: devinfo allocated, before pdev assign`  — kzalloc succeeded
-3. `BCM4360 test.127: devinfo->pdev assigned, before SBR`    — pdev assignment succeeded
+**HYPOTHESIS:**
+test.126 crashed during insmod before ANY markers were printed. Crash occurs before `buscore_reset`.
+test.127 adds pr_emerg markers at:
+1. Probe entry (after device match)
+2. After devinfo kzalloc
+3. After pdev assignment
 
-**Outcomes:**
-- All 3 markers → crash is in SBR code (next: isolate SBR with sub-markers)
-- Stops at marker 2 → crash in `pdev = pdev->bus->self` or `pci_save_state()`
-- Stops at marker 1 or no markers → crash before probe entry (module-level issue)
+If these markers print, we know probe is being called and can identify exactly where the crash occurs.
+If no markers print, crash is either in module initialization or in probe before first statement.
+
+**EXPECTED OUTCOMES:**
+- All 3 markers print → crash is in SBR code or after pdev assignment (next test: isolate SBR)
+- Markers stop at marker 2 → crash in `pdev = pdev->bus->self` or nearby assignment
+- Stops at marker 1 or no markers → crash in very early probe or module-level code
+
+**SUCCESS CRITERIA:**
+- Hardware survives insmod without hard crash
+- At least marker 1 (probe entry) is visible in dmesg
+- Log clearly identifies the crash boundary
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
 
 ---
 
