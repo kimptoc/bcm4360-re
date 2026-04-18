@@ -1,6 +1,48 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, POST test.124 stage0 crash — before chip_attach completes)
+## Current state (2026-04-19, PRE test.126 stage0 — skip BCM4360 PCIE2 mailbox clear)
+
+### CODE STATE: PCIE2 MAILBOX CLEAR BYPASSED FOR BCM4360
+
+**test.125 stage0 result — crash at PCIE2 mailbox write:**
+
+Journal markers from boot -1:
+- `test.125: buscore_reset entry, ci assigned`
+- `test.122: reset_device bypassed`
+- `test.125: after reset_device return`
+- `test.125: PCIE2 core found rev=1`
+- `test.125: before PCIE2 reg read (reg=0x48)`
+- `test.125: after PCIE2 reg read val=0x00000000`
+- **NO** `test.125: before PCIE2 reg write` — crash occurred at/after the write
+
+**Interpretation:**
+PCIE2 mailbox read (reg=0x48) succeeded and returned 0x00000000 (mailbox already clear).
+The write back to that register (`brcmf_pcie_write_reg32(devinfo, reg, val)`) crashed the machine —
+MCE/completion timeout from writing to the PCIE2 core before it is ready.
+
+Since val=0x00000000 (mailbox was already clear), the write is both unnecessary and lethal for BCM4360.
+
+**Code changes for test.126 (pcie.c):**
+- In `brcmf_pcie_buscore_reset`: after the reset_device bypass marker, add an early return for BCM4360
+  before the PCIE2 core lookup and mailbox clear. Log `test.126: skipping PCIE2 mailbox clear; returning 0`.
+- All other bypasses remain: reset_device body, RAM info fixed, module-params dummy, OTP bypass.
+- Test script updated to log `test.126.stage0`.
+
+**Hypothesis (test.126 stage0):**
+- buscore_reset returns 0 cleanly for BCM4360.
+- chip_attach continues: `after reset, before get_raminfo` (chip.c marker), then `get_raminfo returning 0`.
+- `brcmf_chip_attach returned successfully` (test.119 marker).
+- Probe continues past chip_attach. Next crash point unknown; may be in OTP or probe setup.
+- If chip_attach marker is reached and crash happens later, we will continue narrowing.
+
+**PCIe state (post-crash):** MAbort-, CommClk+, LnkSta 2.5GT/s x1 — clean.
+**Build:** clean, only expected `brcmf_pcie_write_ram32` unused warning.
+
+---
+
+## Previous state (2026-04-18, POST test.125 stage0 crash — PCIE2 mailbox write)
+
+### HARDWARE STATUS: STAGE0 CRASHED DURING CHIP_ATTACH, BEFORE RETURN
 
 ### HARDWARE STATUS: STAGE0 CRASHED DURING CHIP_ATTACH, BEFORE RETURN
 

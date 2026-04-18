@@ -3239,6 +3239,16 @@ static int brcmf_pcie_buscore_reset(void *ctx, struct brcmf_chip *chip)
 		dev_emerg(&devinfo->pdev->dev,
 			  "BCM4360 test.125: after reset_device return\n");
 
+	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
+		/* test.126: skip PCIE2 mailbox clear for BCM4360 — the SBR already reset
+		 * the device, the mailbox is clear (val=0x00000000 confirmed in test.125),
+		 * and the write to reg=0x48 caused an MCE/completion-timeout crash.
+		 */
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.126: skipping PCIE2 mailbox clear; returning 0\n");
+		return 0;
+	}
+
 	/* reginfo is not ready yet */
 	core = brcmf_chip_get_core(chip, BCMA_CORE_PCIE2);
 	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID)
