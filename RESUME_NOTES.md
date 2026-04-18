@@ -30,6 +30,16 @@ Add pr_emerg markers at:
 3. After devinfo->pdev assign — `test.127: devinfo->pdev assigned, before SBR`
 4. Keep test.126: early return to skip PCIE2 mailbox clear
 
+**Hypothesis (test.127 stage0):**
+test.126 crashed during insmod before ANY test markers printed. Crash is likely:
+- In probe before first dev_emerg (line 3871 with SBR logging)
+- Or possibly in module load/device binding before probe is even called
+
+test.127 adds pr_emerg (printk) markers at the very start of probe to determine
+if probe is called and how far we get. Expected result: markers will show exactly
+where the crash occurs (likely at a kzalloc, pci_match_id, or pci_save_state call
+that's racing with hardware still in recovery).
+
 **Run:**
 ```
 sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
@@ -37,13 +47,13 @@ sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 
 **Success criteria:**
 - No crash
-- Log contains test.127 probe entry marker
-- Log shows how far into probe we get before crash
-- Identifies exact crash boundary for next iteration
+- Log contains test.127 probe entry marker (proves probe is called)
+- Log shows all three test.127 markers (entry, devinfo allocated, devinfo->pdev assigned)
+- If all three markers printed: crash is in SBR code, next test will isolate that
 
 **Failure signatures:**
-- No test.127 markers: probe not called or crashes before first dev_emerg
-- Markers stop at specific point: identifies crash boundary
+- No test.127 markers: probe not called or crashes before first pr_emerg
+- Markers stop at specific point: identifies exact crash boundary
 
 ---
 
