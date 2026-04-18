@@ -718,9 +718,11 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 
 	bcm4360 = devinfo->ci->chip == BRCM_CC_4360_CHIP_ID;
 
-	if (bcm4360)
+	if (bcm4360) {
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.118: reset_device entering minimal reset path\n");
+			  "BCM4360 test.122: reset_device bypassed; probe-start SBR already completed\n");
+		return;
+	}
 
 	/* Disable ASPM */
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);

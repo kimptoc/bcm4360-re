@@ -1,6 +1,31 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, POST test.121 stage0 crash — early reset_device)
+## Current state (2026-04-18, PRE test.122 stage0 — bypass BCM4360 reset_device)
+
+### CODE STATE: BCM4360 RESET_DEVICE BODY BYPASSED
+
+`test.121` crashed in `brcmf_pcie_reset_device()` after the entry marker and before the PCIE2-selected marker. That run never reached the fixed-RAM path.
+
+**Code changes for test.122:**
+- For BCM4360, `brcmf_pcie_reset_device()` now logs
+  `BCM4360 test.122: reset_device bypassed; probe-start SBR already completed`
+  and returns immediately.
+- This skips PCIE2 core select, ASPM config toggles, ChipCommon watchdog, and PCIE2 config replay for BCM4360.
+- The `test.121` fixed RAM-info bypass remains in place.
+- Staged script now writes `phase5/logs/test.122.stage0`.
+
+**Hypothesis (test.122 stage0):**
+- If the early reset-device PCIE2 select/ASPM step caused the crash, journal should continue from the `test.122` bypass marker into fixed RAM info, chip attach return, and the existing `test.120` probe-setup markers.
+- If it still crashes immediately after the bypass marker, the failure is asynchronous fallout from probe-start SBR/reset timing rather than the reset-device body itself.
+- If it reaches firmware download, keep `bcm4360_skip_arm=1` and stop before ARM release; stage1 remains forbidden.
+
+**Pre-run requirement:** force runtime PM `on` for `00:1c.2` and `03:00.0` if either is suspended, then verify root port bus is `secondary=03, subordinate=03`.
+
+**Build:** clean via kernel build tree. Expected warning remains: `brcmf_pcie_write_ram32` is defined but unused. BTF skipped because `vmlinux` is unavailable.
+
+---
+
+## Previous state (2026-04-18, POST test.121 stage0 crash — early reset_device)
 
 ### HARDWARE STATUS: STAGE0 CRASHED INSIDE RESET_DEVICE BEFORE PCIE2 MARKER
 
