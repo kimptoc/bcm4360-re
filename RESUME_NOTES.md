@@ -2980,3 +2980,85 @@ sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 
 ### Git status
 M phase5/logs/test.126.stage0 (from prior test, now clean)
+
+---
+
+## SYSTEMATIC DEBUGGING — Session 2026-04-19 (after crash recovery)
+
+### Evidence Summary
+**Pattern:**
+- test.109-114: Various diagnostic tests, test.114 completed stage0/stage1
+- test.115+: ALL crash during insmod, before any probe markers  
+- test.126/127: Still crashing at identical boundary (insmod → crash, no output)
+
+**File sizes (bytes):** 
+- Working tests (109, 111, 112, 114): >5000 bytes
+- Crashing tests (115-127): ~3650 bytes (just preamble, nothing after "=== Loading brcmfmac...")
+
+### Root Cause Investigation (Phase 1)
+
+**Fact 1: Crash is in module load, not probe**
+- insmod call in test script crashes system
+- Probe markers at line 3836+ never execute
+- No dmesg output captured (script didn't reach capture point)
+- System appears to hard panic during insmod
+
+**Fact 2: crash is not from unsafe d11.clk_ctl_st reads**
+- unguarded ioread32(devinfo->regs + 0x1e0) at line 2752 is AFTER ARM release
+- stage 0 has bcm4360_skip_arm=1, returns at line 1946 before ARM release
+- Therefore test.67-107 code never executes in stage 0
+- The crash is happening MUCH earlier than that code
+
+**Fact 3: Stage 0 should be minimal and safe**
+- SBR at probe entry (line 3879-3896)
+- chip_attach via brcmf_chip_attach (line 3898)
+- module param setup (line 3933-3949)
+- SKIP_ARM=1 return at 1946
+
+**Fact 4: Test.109 baseline was safe**
+- test.109 committed "enum moved before skip_arm; skip_arm=1 to avoid crash"
+- Commit e590e51 shows test.109 was the baseline for stage 0 safety
+- test.115 onward ALL crash
+
+### Search for Regression Between test.114 and test.115
+
+Looking at commit history:
+- test.114d (e731310): "skip watchdog write, add 3a discriminator marker"
+- Post-test.114d crash message: "chip_attach MMIO dead, power cycle required"
+- test.115 (2f3c12a): "remove resetcore from test.114b"
+- But test.114b was stage1 (ARM released), test.115 stage0
+
+### HYPOTHESIS: Module Binary Corruption or Build Issue
+
+Since test.109 was safe and test.115+ ALL crash at identical point (before probe), possibility:
+1. **Kernel module ABI mismatch** — kbuild/kernel changed, module can't load
+2. **Linking failure** — module binary is corrupted or circular dependency
+3. **Hardware state** — PCIe/IOMMU permanently corrupted from test.114d crash
+
+### Next Steps (Phase 1 → Phase 2)
+1. **Verify module binary is valid**
+   - Check module dependencies: `modinfo ./brcmfmac.ko | grep depends`
+   - Try loading on clean kernel boot
+   - Compare binary size/symbols with test.109 baseline build
+
+2. **Check for kernel/module ABI changes**
+   - `uname -r` kernel version
+   - Compare module compilation flags
+   - Try rebuild with test.109 exact code: `git show e590e51:drivers/.../pcie.c > /tmp/pcie109.c`
+
+3. **Establish Hardware Clean State**
+   - Full power cycle (battery drain) if MMIO is corrupted
+   - Current MMIO test: UR/I/O error in 6ms (fast, expected) ✓
+
+### Immediate Action: Revert to test.109 Build
+
+Safest fast path to understand crash:
+```bash
+git stash
+git checkout e590e51
+make -C phase5/work
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+If test.109 commit works → regression introduced test.110-114
+If test.109 also crashes → hardware corruption from earlier crash
