@@ -57,6 +57,30 @@ sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 
 ---
 
+## TEST.127 RUN — 2026-04-19 00:14 (session restart after crash)
+
+**Current state:**
+- test.126 crashed during insmod before any markers printed
+- test.127 code compiled at 00:07 (pcie.c markers added, brcmfmac.ko built)
+- Module built: Apr 19 00:07
+- PCIe state clean: MAbort-, CommClk+
+- Hardware ready to test
+
+**Plan:**
+Run `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0` to execute test.127 stage0.
+
+**Expected markers in dmesg:**
+1. `BCM4360 test.127: probe entry (vendor=..., device=...)`  — proves probe called
+2. `BCM4360 test.127: devinfo allocated, before pdev assign`  — kzalloc succeeded
+3. `BCM4360 test.127: devinfo->pdev assigned, before SBR`    — pdev assignment succeeded
+
+**Outcomes:**
+- All 3 markers → crash is in SBR code (next: isolate SBR with sub-markers)
+- Stops at marker 2 → crash in `pdev = pdev->bus->self` or `pci_save_state()`
+- Stops at marker 1 or no markers → crash before probe entry (module-level issue)
+
+---
+
 ## Previous state (2026-04-19, POST test.126 stage0 crash — PCIE2 mailbox skipped, still crashed)
 
 ### CODE STATE: PCIE2 MAILBOX CLEAR BYPASSED FOR BCM4360
