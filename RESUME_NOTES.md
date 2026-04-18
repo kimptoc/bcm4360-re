@@ -2936,3 +2936,31 @@ test.127 adds pr_emerg markers at:
 ### Running test.127 stage0
 Command: `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
 
+
+---
+
+## TEST.127 EXECUTION PLAN (2026-04-19 session restart)
+
+### State
+- Module rebuilt Apr 19 00:07
+- PCIe state clean
+- test.126 crashed during insmod before any markers
+
+### Hypothesis
+Crash occurs before brcmf_pcie_probe starts or very early in probe entry,
+before the first test marker at line ~3871.
+
+### Markers added (pcie.c)
+1. pr_emerg: Start of brcmf_pcie_probe (device ID check)
+2. pr_emerg: After devinfo kzalloc
+3. pr_emerg: After devinfo->pdev assignment
+
+Expected: markers will show exactly where crash occurs.
+
+### Test command
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+### Git status
+M phase5/logs/test.126.stage0 (from prior test, now clean)
