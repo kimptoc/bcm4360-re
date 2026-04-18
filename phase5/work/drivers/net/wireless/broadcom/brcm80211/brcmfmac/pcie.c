@@ -3947,7 +3947,14 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.120: before OTP read\n");
-	ret = brcmf_pcie_read_otp(devinfo);
+	/* test.124: bypass OTP read for BCM4360 — known to have OTP */
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.124: OTP read bypassed — OTP not needed\n");
+		ret = 0;
+	} else {
+		ret = brcmf_pcie_read_otp(devinfo);
+	}
 	if (ret) {
 		brcmf_err(bus, "failed to parse OTP\n");
 		goto fail_brcmf;
