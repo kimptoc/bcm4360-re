@@ -1,6 +1,30 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, POST test.114d crash — BAR0 MMIO dead, power cycle needed)
+## Current state (2026-04-18, PRE test.117 stage0 — battery-drain recovery, BAR0 UR)
+
+### HARDWARE STATUS: CONFIG/LINK RECOVERED; BAR0 MMIO FAST I/O ERROR (UR), NOT CTO
+
+Battery-drain recovery completed. Post-boot checks:
+- PCI config space responds: BCM4360 `14e4:43a0`, COMMAND=0x0006.
+- Root port 00:1c.2 is clean: no MAbort, link up, CommClk+.
+- Userspace BAR0 read returns I/O error quickly (~6ms), not a slow Completion Timeout.
+- Interpretation: adapter is in the recoverable UR/alive state; probe-time SBR should reset it before chip_attach.
+
+**Harness fix before test:**
+- `phase5/work/test-staged-reset.sh` now has the BAR0 timing guard from `test-brcmfmac.sh`.
+- Stage0 uses `bcm4360_skip_arm=1`; ARM must not be released in this first recovery test.
+
+**Hypothesis (test.117 stage0):**
+- Pre-test BAR0 guard reports UR/I/O error under 40ms and allows the run.
+- Probe-time SBR restores BAR0 MMIO; `test.53` BAR0 probe reports `0x15034360 — alive`.
+- chip_attach completes, reset_device reaches `test.114c.1` through `.5`, watchdog is skipped for BCM4360, firmware download completes, skip_arm branch aborts cleanly, and module unload succeeds.
+
+**Run:**
+`sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+
+---
+
+## Previous state (2026-04-18, POST test.114d crash — BAR0 MMIO dead, power cycle needed)
 
 ### HARDWARE STATUS: BAR0 MMIO DEAD — config space accessible, MMIO I/O error
 

@@ -1,37 +1,12 @@
 #!/usr/bin/env bash
-# Phase 5.2 test.103: targeted LR-slot reads + deep sub-frame sweep
+# BCM4360 staged brcmfmac test harness.
 #
-# test.102 RESULT: 16-word sweep 0x9FE20..0x9FE5C returned all high-entropy
-#   words (>0x70000), NO plausible LRs. Post-analysis: test.97's "frames
-#   near 0x9FE40" was actually RTE banner ASCII in the console ring, not
-#   live stack. True stack located via offline reset-path disasm:
-#   SP_init = 0x9D0A0, stack = [0x9A144..0x9D0A0) growing down.
-#
-# test.103 PLAN: read seven predicted LR-slot addresses directly (A..G
-#   for frames main → c_init → fn 0x63b38 → wl_probe → wlc_attach →
-#   fn 0x67358 → fn 0x670d8) and compare against expected values from
-#   phase5/notes/test103_lr_table_shallow.md. Plus a 7-word deep sweep
-#   below fn 0x670d8's frame to catch the saved LR of the currently-hung
-#   sub-call (identifies which 0x670d8 body BL is stuck). Plus 2
-#   calibration reads at between-LR slots (should NOT be LR-shaped;
-#   if they are, frame-size prediction is off by 4B).
-#
-# Frame A's LR is EVEN (0x320) — literal load `mov lr, r0` in boot path,
-#   not bl/blx, so Thumb bit NOT set. Match exactly; odd-bit filter
-#   would reject it. Frames B..G are from bl/blx and satisfy odd-bit.
-#
-# Pre-registered failure signatures (see RESUME_NOTES.md):
-#   ≥5/7 match + sweep hit    → Success, identifies hang sub-BL
-#   calibration slot IS LR    → Offset drift, re-disasm that prologue
-#   A/B match, C+ miss        → Hang pre-fn 0x63b38 OR prologue wrong
-#   all miss                  → SP_init wrong OR stack trashed
-#
-# Probe count: 19 reads @ 1200ms FW-wait
-#   (2 regression + 7 LR + 2 cal + 7 sweep + 1 sanity). Same budget
-#   as test.102 (known safe).
+# Stage 0 keeps ARM halted (bcm4360_skip_arm=1) and is the only safe first
+# test after recovery. Stage 1 releases ARM and should only be run after a
+# clean stage 0.
 #
 # Usage: sudo ./test-staged-reset.sh [stage]
-# Default stage is 0
+# Default stage is 0.
 set -e
 
 STAGE="${1:-0}"
@@ -42,17 +17,41 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.116.stage${STAGE}"
+LOG="$LOG_DIR/test.117.stage${STAGE}"
 
-echo "=== test.116: guard d11 clk_ctl_st read; safe diagnostic after crash+reboot --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.117: guarded staged reset after battery-drain recovery --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: test.116 skip_arm=1 — d11 wrapper read + clk_ctl_st (guarded, only if IN_RESET=NO). Establishes d11 reset state after reboot. Safe even if d11 in BCMA reset." | tee -a "$LOG" ;;
-    1) echo "Stage 1: test.116 skip_arm=0 — BBPLL bringup (test.47) + ARM release, no resetcore. Does counter advance past 0x43b1? If yes, new hang site ~0x68c49 needs stack probes." | tee -a "$LOG" ;;
+    0) echo "Stage 0: skip_arm=1 — SBR + chip_attach + reset path + firmware download, but no ARM release." | tee -a "$LOG" ;;
+    1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
+echo "" | tee -a "$LOG"
+
+# Pre-test MMIO check — distinguish Completion Timeout (CTO) from
+# Unsupported Request (UR). CTO means the endpoint is not completing MMIO
+# transactions and insmod can hard-crash the host. UR is fast and recoverable:
+# the probe-time SBR path is expected to reset the endpoint before chip_attach.
+echo "=== Pre-test BAR0 MMIO guard ===" | tee -a "$LOG"
+T_START=$(date +%s%3N)
+set +e
+dd if="/sys/bus/pci/devices/$PCI_SLOT/resource0" bs=4 count=1 of=/dev/null 2>/dev/null
+DD_EXIT=$?
+set -e
+T_END=$(date +%s%3N)
+T_MS=$((T_END - T_START))
+
+if [ "$DD_EXIT" -eq 0 ]; then
+    echo "BAR0 MMIO OK (${T_MS}ms) — device responding normally." | tee -a "$LOG"
+elif [ "$T_MS" -lt 40 ]; then
+    echo "BAR0 MMIO UR/I/O error (${T_MS}ms) — device alive; SBR in probe should fix. Proceeding." | tee -a "$LOG"
+else
+    echo "FATAL: BAR0 MMIO Completion Timeout (${T_MS}ms) — aborting before insmod." | tee -a "$LOG"
+    echo "Recovery: full battery-drain power cycle before retry." | tee -a "$LOG"
+    exit 1
+fi
 echo "" | tee -a "$LOG"
 
 # Check modules exist
@@ -112,7 +111,7 @@ else
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.116 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.117 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
