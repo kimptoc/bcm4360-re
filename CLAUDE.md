@@ -16,6 +16,7 @@ Before any test that touches hardware or loads kernel modules:
 3. **State your hypothesis** — write one sentence in RESUME_NOTES.md: what you expect
    to see and why. Makes results unambiguous.
 4. **Write plan to RESUME_NOTES.md, commit, and push** — assume the machine may crash
+5. **do a file system sync to ensure changes are persisted** git has been corrupted a few times
 
 ## Post-test (after every test, crash or success)
 

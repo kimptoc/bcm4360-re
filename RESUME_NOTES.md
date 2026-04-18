@@ -1,30 +1,36 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, PRE test.114d — skip watchdog for BCM4360)
+## Current state (2026-04-18, POST test.114d crash — BAR0 MMIO dead, power cycle needed)
 
-### HARDWARE STATUS: PCIe clean — MAbort-, CommClk+, LnkSta 2.5GT/s x1
+### HARDWARE STATUS: BAR0 MMIO DEAD — config space accessible, MMIO I/O error
 
-**POST test.114c result (2026-04-18):**
-- Last marker printed: test.114c.3 ("pre-watchdog, ASPM disabled, lsc=0x10110143")
-- Markers NOT printed: test.114c.4 and test.114c.5
-- Conclusion: crash is at or immediately after `WRITECC32(watchdog, 4)` — the watchdog write itself kills the PCIe link
-- Log saved: phase5/logs/test.114c.stage0
+**POST test.114d result (2026-04-18):**
+- Last marker printed: test.53 "BAR0 probe = 0x15034360 — alive"
+- No test.114c.X markers printed — crash during chip_attach MMIO (before brcmf_pcie_reset_device)
+- BAR0 MMIO now dead (dd resource0 → I/O error). Config space accessible (COMMAND=0x0006)
+- Log saved: phase5/logs/test.114d.stage0
 
-**PRE test.114d plan (2026-04-18):**
-- Added discriminator marker test.114c.3a (between select_core(CC) and WRITECC32)
-- Added watchdog skip for BCM4360 (`if (devinfo->ci->chip != BRCM_CC_4360_CHIP_ID)`)
-- Module NOT yet rebuilt — run `make -C /home/kimptoc/bcm4360-re/phase5/work` before test
+**Root cause analysis:**
+- test.114c's watchdog write (`WRITECC32(watchdog, 4)`) crashed the PCIe link → MCE → reboot
+- Machine rebooted but NOT a power cycle (battery keeps VAUX alive)
+- BCM4360 was left in partial watchdog-reset state: ChipCommon accessible, other BCMA cores broken
+- test.114d: SBR at probe start ran, BAR0 probe @ ChipCommon = 0x15034360 (alive), but
+  chip_attach scans ALL BCMA core wrappers via MMIO → hit broken core → CTO → MCE → crash
+- SBR is insufficient to recover from a watchdog-mid-reset state. Full power cycle required.
 
-**Hypothesis (test.114d):**
-- Markers .3, .3a, .4 all print (select_core(CC) safe, watchdog skipped, probe continues)
-- Stage0 completes without crash (no ARM release with skip_arm=1)
-- If .3a does NOT print: select_core(CC) itself crashes (unlikely — PCI config write only)
+**HARDWARE STATUS: POWER CYCLE REQUIRED (battery drain)**
 
-**Plan:**
-1. Build: `make -C /home/kimptoc/bcm4360-re/phase5/work`
-2. Run `sudo ./test-brcmfmac.sh` (stage0, skip_arm=1)
-3. Capture `journalctl -k -b -1` → phase5/logs/test.114d.stage0
-4. If clean: run stage1 (skip_arm=0) to test BBPLL bringup and FW progress past ~0x68c49
+**Next steps after power cycle:**
+1. Module already built with test.114d changes (watchdog skip for BCM4360, marker 3a)
+2. No rebuild needed after power cycle — just run test
+3. Run `sudo ./test-brcmfmac.sh` (stage0, skip_arm=1)
+4. Expect: test.114c.1 through test.114c.5 all print, no crash (watchdog skipped for BCM4360)
+5. If stage0 clean: run stage1 (skip_arm=0) for BBPLL + ARM release test
+
+**Hypothesis (test.114d after power cycle):**
+- With fresh power-on reset state, chip_attach MMIO will succeed (all cores accessible)
+- Markers .3, .3a, .4, .5 all print (ASPM disabled, CC selected, watchdog SKIPPED, PCIE2 reselected)
+- Stage0 completes without crash
 
 ---
 
