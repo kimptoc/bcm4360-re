@@ -72,21 +72,25 @@ fi
 # UR:  device responds "no" in ~50µs → clean I/O error, no crash. SBR in probe fixes it.
 # Timing threshold: <5ms = UR (safe), >5ms = CTO (unsafe, power cycle required).
 echo "Pre-test: checking BAR0 MMIO (resource0)..."
+# Timing distinguishes CTO from UR:
+# UR (device alive, rejects immediately): PCIe transaction ~65µs + ~20ms bash overhead = ~21ms total
+# CTO (device dead, no response): 50ms PCIe timeout + ~20ms bash overhead = ~70ms total
+# Threshold 40ms reliably separates the two.
 T_START=$(date +%s%3N)
+set +e
 dd if=/sys/bus/pci/devices/0000:$PCI_DEV/resource0 bs=4 count=1 of=/dev/null 2>/dev/null
 DD_EXIT=$?
+set -e
 T_END=$(date +%s%3N)
 T_MS=$((T_END - T_START))
 
 if [ $DD_EXIT -eq 0 ]; then
     echo "BAR0 MMIO OK — device responding normally."
-elif [ $T_MS -lt 5 ]; then
-    echo "BAR0 MMIO: Unsupported Request response (${T_MS}ms) — device alive, SBR in probe should fix."
-    echo "Proceeding with insmod."
+elif [ $T_MS -lt 40 ]; then
+    echo "BAR0 MMIO: Unsupported Request (${T_MS}ms) — device alive, SBR in probe should fix. Proceeding."
 else
     echo ""
-    echo "FATAL: BAR0 MMIO Completion Timeout (${T_MS}ms) — device not responding."
-    echo "Do NOT run insmod — machine will hard-crash (PCIe Completion Timeout → MCE)."
+    echo "FATAL: BAR0 MMIO Completion Timeout (${T_MS}ms) — device dead, insmod will hard-crash."
     echo "Recovery (MacBook): drain battery to 0%, wait after shutdown, recharge, boot."
     exit 1
 fi
