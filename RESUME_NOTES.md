@@ -1,6 +1,53 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.126 stage0 — skip BCM4360 PCIE2 mailbox clear)
+## Current state (2026-04-19, PRE test.127 stage0 — add early probe markers)
+
+### CODE STATE: EARLY PROBE MARKERS ADDED FOR BCM4360
+
+**test.126 stage0 result — crash with PCIE2 mailbox clear skipped:**
+
+Test log (`phase5/logs/test.126.stage0`) cuts off during insmod, before any markers printed.
+Unlike test.125 which printed buscore_reset entry, test.126 didn't print ANY test markers.
+
+**Analysis:**
+- test.125: crashed at PCIE2 mailbox write (got to buscore_reset)
+- test.126: skipped PCIE2 mailbox write, but still crashed before buscore_reset
+  
+**Hypothesis:**
+Crash is happening BEFORE buscore_reset, likely:
+1. In brcmf_chip_attach (called before buscore_reset)
+2. Or even earlier in probe before chip_attach (in SBR, devinfo allocation, etc.)
+
+The test.126.stage0 log cuts off during "Loading brcmfmac ..." with no marker output.
+This suggests either:
+- Probe is never called (module load error)
+- Probe crashes very early (before first dev_emerg statement at line 3871)
+
+**Code changes for test.127 (pcie.c):**
+Add pr_emerg markers at:
+1. Very start of brcmf_pcie_probe (after device ID check) — `test.127: probe entry`
+2. After devinfo kzalloc — `test.127: devinfo allocated`
+3. After devinfo->pdev assign — `test.127: devinfo->pdev assigned, before SBR`
+4. Keep test.126: early return to skip PCIE2 mailbox clear
+
+**Run:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+**Success criteria:**
+- No crash
+- Log contains test.127 probe entry marker
+- Log shows how far into probe we get before crash
+- Identifies exact crash boundary for next iteration
+
+**Failure signatures:**
+- No test.127 markers: probe not called or crashes before first dev_emerg
+- Markers stop at specific point: identifies crash boundary
+
+---
+
+## Previous state (2026-04-19, POST test.126 stage0 crash — PCIE2 mailbox skipped, still crashed)
 
 ### CODE STATE: PCIE2 MAILBOX CLEAR BYPASSED FOR BCM4360
 

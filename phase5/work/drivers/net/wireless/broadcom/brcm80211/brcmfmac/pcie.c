@@ -3833,6 +3833,12 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		}
 	}
 
+	/* test.127: add very early marker in probe entry to confirm probe is called */
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
+		pr_emerg("BCM4360 test.127: probe entry (vendor=%x device=%x)\n",
+			 pdev->vendor, pdev->device);
+	}
+
 	brcmf_dbg(PCIE, "Enter %x:%x\n", pdev->vendor, pdev->device);
 
 	ret = -ENOMEM;
@@ -3840,8 +3846,16 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (devinfo == NULL)
 		return ret;
 
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
+		pr_emerg("BCM4360 test.127: devinfo allocated, before pdev assign\n");
+	}
+
 	devinfo->pdev = pdev;
 	pcie_bus_dev = NULL;
+
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
+		pr_emerg("BCM4360 test.127: devinfo->pdev assigned, before SBR\n");
+	}
 
 	/* test.53: secondary bus reset via upstream bridge, before chip_attach.
 	 * test.52 RESULT: INSTANT CRASH during chip enumeration BAR0 MMIO reads.
