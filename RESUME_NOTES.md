@@ -1,6 +1,32 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, POST test.119 stage0 crash — after chip_attach returns)
+## Current state (2026-04-18, PRE test.120 stage0 — instrument post-chip-attach probe setup)
+
+### CODE STATE: POST-CHIP-ATTACH PROBE SETUP MARKERS ADDED
+
+`test.119` proved `brcmf_chip_attach()` returns successfully. Crash is now later in `brcmf_pcie_probe()` before firmware request/download.
+
+**Code changes for test.120:**
+- Added markers around PCIE2 core lookup/reginfo selection.
+- Added markers around `pcie_bus_dev`, `bus`, and `msgbuf` allocation.
+- Added marker after bus wiring / `dev_set_drvdata`.
+- Added markers before/after `brcmf_alloc`.
+- Added markers before/after OTP read.
+- Added markers before/after firmware request preparation and firmware async request.
+- Staged script now writes `phase5/logs/test.120.stage0`.
+
+**Hypothesis (test.120 stage0):**
+- If probe setup is safe, markers should reach `before brcmf_fw_get_firmwares` or `brcmf_fw_get_firmwares returned async/success`, then firmware request path should start.
+- If a specific non-MMIO setup step unexpectedly crashes, the last marker identifies it.
+- If firmware request starts but later crashes before callback, the boundary has moved into firmware loading/callback setup.
+
+**Pre-run requirement:** force runtime PM `on` for `00:1c.2` and `03:00.0` if either is suspended, then verify root port bus is `secondary=03, subordinate=03`.
+
+**Build:** clean via kernel build tree. Only warning: existing unused `brcmf_pcie_write_ram32`.
+
+---
+
+## Previous state (2026-04-18, POST test.119 stage0 crash — after chip_attach returns)
 
 ### HARDWARE STATUS: STAGE0 CRASHED AFTER CHIP_ATTACH RETURNED
 

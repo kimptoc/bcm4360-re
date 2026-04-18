@@ -3853,17 +3853,27 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.119: brcmf_chip_attach returned successfully\n");
 
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.120: before PCIE2 core/reginfo setup\n");
 	core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_PCIE2);
 	if (core->rev >= 64)
 		devinfo->reginfo = &brcmf_reginfo_64;
 	else
 		devinfo->reginfo = &brcmf_reginfo_default;
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.120: reginfo selected (pcie2 rev=%u)\n",
+			  core->rev);
 
 	pcie_bus_dev = kzalloc(sizeof(*pcie_bus_dev), GFP_KERNEL);
 	if (pcie_bus_dev == NULL) {
 		ret = -ENOMEM;
 		goto fail;
 	}
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.120: pcie_bus_dev allocated\n");
 
 	devinfo->settings = brcmf_get_module_param(&devinfo->pdev->dev,
 						   BRCMF_BUSTYPE_PCIE,
@@ -3873,18 +3883,27 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		ret = -ENOMEM;
 		goto fail;
 	}
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.120: module params loaded\n");
 
 	bus = kzalloc(sizeof(*bus), GFP_KERNEL);
 	if (!bus) {
 		ret = -ENOMEM;
 		goto fail;
 	}
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.120: bus allocated\n");
 	bus->msgbuf = kzalloc(sizeof(*bus->msgbuf), GFP_KERNEL);
 	if (!bus->msgbuf) {
 		ret = -ENOMEM;
 		kfree(bus);
 		goto fail;
 	}
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.120: msgbuf allocated\n");
 
 	/* hook it all together. */
 	pcie_bus_dev->devinfo = devinfo;
@@ -3897,33 +3916,60 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	bus->chip = devinfo->coreid;
 	bus->wowl_supported = pci_pme_capable(pdev, PCI_D3hot);
 	dev_set_drvdata(&pdev->dev, bus);
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.120: bus wired and drvdata set\n");
 
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.120: before brcmf_alloc\n");
 	ret = brcmf_alloc(&devinfo->pdev->dev, devinfo->settings);
 	if (ret)
 		goto fail_bus;
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.120: brcmf_alloc complete\n");
 
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.120: before OTP read\n");
 	ret = brcmf_pcie_read_otp(devinfo);
 	if (ret) {
 		brcmf_err(bus, "failed to parse OTP\n");
 		goto fail_brcmf;
 	}
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.120: OTP read complete\n");
 
 #ifdef DEBUG
 	/* Set up the fwcon timer */
 	timer_setup(&devinfo->timer, brcmf_pcie_fwcon, 0);
 #endif
 
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.120: before prepare_fw_request\n");
 	fwreq = brcmf_pcie_prepare_fw_request(devinfo);
 	if (!fwreq) {
 		ret = -ENOMEM;
 		goto fail_brcmf;
 	}
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.120: firmware request prepared\n");
 
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.120: before brcmf_fw_get_firmwares\n");
 	ret = brcmf_fw_get_firmwares(bus->dev, fwreq, brcmf_pcie_setup);
 	if (ret < 0) {
 		kfree(fwreq);
 		goto fail_brcmf;
 	}
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.120: brcmf_fw_get_firmwares returned async/success\n");
 	return 0;
 
 fail_brcmf:
