@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.124.stage${STAGE}"
+LOG="$LOG_DIR/test.125.stage${STAGE}"
 
-echo "=== test.124: bypass OTP read — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.125: add markers in buscore_reset + chip_attach — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 

@@ -3231,18 +3231,45 @@ static int brcmf_pcie_buscore_reset(void *ctx, struct brcmf_chip *chip)
 	u32 val, reg;
 
 	devinfo->ci = chip;
+	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.125: buscore_reset entry, ci assigned\n");
 	brcmf_pcie_reset_device(devinfo);
+	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.125: after reset_device return\n");
 
 	/* reginfo is not ready yet */
 	core = brcmf_chip_get_core(chip, BCMA_CORE_PCIE2);
+	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.125: PCIE2 core %s rev=%u\n",
+			  core ? "found" : "NULL", core ? core->rev : 0);
+	if (!core) {
+		/* Should not happen; but avoid crash */
+		return -ENODEV;
+	}
 	if (core->rev >= 64)
 		reg = BRCMF_PCIE_64_PCIE2REG_MAILBOXINT;
 	else
 		reg = BRCMF_PCIE_PCIE2REG_MAILBOXINT;
 
+	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.125: before PCIE2 reg read (reg=0x%x)\n", reg);
 	val = brcmf_pcie_read_reg32(devinfo, reg);
-	if (val != 0xffffffff)
+	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.125: after PCIE2 reg read val=0x%08x\n", val);
+	if (val != 0xffffffff) {
+		if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.125: before PCIE2 reg write\n");
 		brcmf_pcie_write_reg32(devinfo, reg, val);
+		if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+			dev_emerg(&devinfo->pdev->dev,
+				  "BCM4360 test.125: after PCIE2 reg write\n");
+	}
 
 	return 0;
 }

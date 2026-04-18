@@ -1,42 +1,44 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, POST test.122 stage0 crash — after module params, before bus alloc)
+## Current state (2026-04-18, POST test.124 stage0 crash — before chip_attach completes)
 
-### HARDWARE STATUS: STAGE0 CRASHED BETWEEN MODULE PARAMS AND BUS ALLOCATION
+### HARDWARE STATUS: STAGE0 CRASHED DURING CHIP_ATTACH, BEFORE RETURN
 
-`test.122.stage0` was run with `bcm4360_skip_arm=1`; ARM was not released.
+`test.124.stage0` was run with `bcm4360_skip_arm=1`; ARM was not released.
 
-**Persisted script log:** `phase5/logs/test.122.stage0`
-- Pre-test BAR0 guard saw fast UR/I/O error (~7ms) and proceeded.
-- Root port bus numbering was sane before test (`secondary=03, subordinate=03`).
-- Script reached `insmod`, then the host crashed before `insmod returned`.
+**Persisted script log:** `phase5/logs/test.124.stage0`
+- Pre-test BAR0 guard saw fast UR/I/O error (~8ms) and proceeded.
+- Root port bus numbering was sane (`secondary=03, subordinate=03`).
+- Script reached `insmod`, then host crashed before `insmod returned`.
 
-**Previous boot journal markers:**
-- SBR worked; BAR0 probe returned `0x15034360 — alive`.
-- `test.122: reset_device bypassed` (reset_device early-return working)
-- `test.121: post-reset passive skipped; using fixed RAM info next`
-- `test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0`
-- `test.119: brcmf_chip_attach returned successfully`
-- `test.120: before PCIE2 core/reginfo setup`
-- `test.120: reginfo selected (pcie2 rev=1)`
-- `test.120: pcie_bus_dev allocated`
-- `test.120: module params loaded` ← LAST MARKER
-- No `test.120: bus allocated` marker.
+**Kernel journal markers (boot -1):**
+- SBR worked; BAR0 probe `0x15034360 — alive`.
+- `test.122: reset_device bypassed` ← LAST MARKER
+- **No test.121** (post-reset passive skipped)
+- **No test.119** (chip_attach returned)
+- **No test.120/123/124** markers after that.
 
 **Interpretation:**
-Crash boundary is now between `devinfo->settings = brcmf_get_module_param(...)` and `bus = kzalloc(sizeof(*bus))` at pcie.c:3892. The `kzalloc` itself is unlikely to crash; suspect:
-- async fallout from `brcmf_get_module_param` (platform data, DMI, OF, ACPI probing) that triggered delayed work or corrupted state,
-- or pre-existing heap corruption that triggers on the next allocation attempt.
+Crash occurs after `reset_device` returns but before `brcmf_chip_attach` returns. This is within `brcmf_pcie_buscore_reset` (after reset call) or the subsequent `brcmf_chip_get_raminfo` call. `test.123` (identical code through this point) succeeded and reached "before OTP read". The regression indicates hardware state variance between runs, not code change.
 
-**Next code change (test.123):**
-- Add a marker immediately before the bus `kzalloc` to confirm the exact boundary.
-- Optionally BYPASS `brcmf_get_module_param` for BCM4360 (assign a dummy struct) to test whether module-param probe path is implicated. If bypass allows progress, investigate `brcmf_dmi_probe`, `brcmf_of_probe`, `brcmf_acpi_probe` inside `brcmf_get_module_param`.
-- Keep all existing bypasses (reset_device, RAM info, post-reset passive).
+**Candidate failure point:** `brcmf_pcie_buscore_reset`'s first post-reset MMIO:
+```c
+val = brcmf_pcie_read_reg32(devinfo, reg);  // PCIE2 mailbox read
+```
+This is the first BAR0 access after reset. If the device is not yet ready, a completion timeout → MCE could occur.
+
+**Next code change (test.125):**
+Add boundary markers to pinpoint crash site:
+- In `brcmf_pcie_buscore_reset`: log at entry, after setting `devinfo->ci`, after `reset_device` returns, before PCIE2 reg read, after read, before write, after write.
+- In `brcmf_chip_attach` (chip.c): log immediately after `ci->ops->reset` returns, before `brcmf_chip_get_raminfo` call, and before return.
+- Keep all existing bypasses (reset_device body, RAM info, module-params dummy, OTP bypass).
 - Keep `bcm4360_skip_arm=1`; stage1 forbidden.
+
+**Hypothesis:** If crash is in PCIE2 mailbox MMIO, we'll see markers up to "after reset_device" but not "before PCIE2 reg read". In that case, we may need to skip that PCIE2 access for BCM4360 or delay until link stabilizes.
 
 **Build:** clean via kernel build tree.
 
-**Pre-run:** Verify PM on and root port bus numbering as before.
+**Pre-run:** Force runtime PM on for bridge (00:1c.2) and endpoint (03:00.0), verify root port bus numbering.
 
 ---
 
