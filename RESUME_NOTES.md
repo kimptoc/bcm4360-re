@@ -1,6 +1,28 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, POST recovery crash — brcmf_pcie_reset_device watchdog crash)
+## Current state (2026-04-18, PRE test.114c bisection run — finding exact crash site in reset_device)
+
+### HARDWARE STATUS: PCIe clean — MAbort-, CommClk+, LnkSta 2.5GT/s x1
+
+**Pre-test check (2026-04-18, session restart after crash):**
+- PCIe state: MAbort-, CommClk+, LnkSta Speed 2.5GT/s Width x1 — CLEAN, no dirty state
+- Module: BUILT (brcmfmac.ko, 14MB, 2026-04-18 11:12)
+- Bisection markers: test.114c.1 through test.114c.5 added to pcie.c
+
+**Hypothesis:** The crash after test.114a is caused by `WRITECC32(watchdog, 4)` at L910 firing
+and killing the PCIe link, then `select_core(PCIE2)` at L914 doing MMIO over dead link → CTO → MCE.
+The last printed marker will be test.114c.3 (pre-watchdog) if the watchdog write itself crashes,
+or test.114c.4 (post-sleep) if the link doesn't recover in the 100ms sleep.
+
+**Plan:**
+1. Run `sudo ./test-brcmfmac.sh` (stage0, skip_arm=1)
+2. Capture dmesg — look for last test.114c.N marker
+3. Interpret result per next-steps logic in prior session notes
+4. Machine may crash — if it does, check MAbort/CommClk, SBR if needed, then re-evaluate
+
+---
+
+## Previous state (2026-04-18, POST recovery crash — brcmf_pcie_reset_device watchdog crash)
 
 ### HARDWARE STATUS: BCM4360 MMIO UR (alive, recoverable) — SBR should fix for next test
 
