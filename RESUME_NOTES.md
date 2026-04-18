@@ -1,8 +1,51 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-17, POST test.116 stage0 crash x2 — MMIO DEAD, DRAINING BATTERY FOR RECOVERY)
+## Current state (2026-04-18, POST recovery crash — brcmf_pcie_reset_device watchdog crash)
 
-### HARDWARE STATUS: BCM4360 MMIO NON-RESPONSIVE — POWER CYCLE REQUIRED
+### HARDWARE STATUS: BCM4360 MMIO UR (alive, recoverable) — SBR should fix for next test
+
+**Test run (2026-04-18, ~10:43):** After battery-drain recovery, device was alive. Ran test
+with SBR-in-probe + BAR0 abort guard. Device got further than ever (chip_attach succeeded,
+core enumeration complete) but crashed silently after test.114a log line.
+
+**Observations vs hypothesis:**
+- BAR0 probe AFTER SBR = 0x15034360 — ALIVE. SBR worked correctly.
+- BAR0 abort guard did NOT fire (correct — BAR0 was alive, guard only fires on 0xffffffff).
+  User framing "guard should have fired" was mistaken — guard worked as designed.
+- HT TIMEOUT at test.112: FORCEHT written, 100×100µs poll, clk_ctl_st=0x00050042, never got HAVEHT.
+- test.114a: d11 wrap_RESET_CTL=0x00000000 IN_RESET=NO wrap_IOCTL=0x00000001
+  UNEXPECTED: set_passive should leave d11 IN reset. IN_RESET=NO means d11 already out of reset
+  before our test.114a ran (either SBR didn't reset BCMA state, or set_passive didn't coredisable).
+- Crash: silent MCE-level, after test.114a log, NO further kernel output.
+- Current MMIO: I/O error in ~0.5ms (UR = fast, Unsupported Request). Device alive, SBR will fix.
+
+**Crash location: somewhere in brcmf_pcie_reset_device after test.114a block (lines 895–932).**
+Candidates (in order executed after test.114a):
+  - L895: select_core(CHIPCOMMON) — BAR0 write, right after test.114a log
+  - L901: select_core(PCIE2) — BAR0 write
+  - L909: select_core(CHIPCOMMON) — BAR0 write
+  - L910: WRITECC32(watchdog, 4) — resets chip in ~200ns
+  - L914: select_core(PCIE2) — first BAR0 write after watchdog fires
+  - L918+: more MMIO if PCIE2 rev <= 13
+Best guess: watchdog=4 kills PCIe link, then L914 select_core(PCIE2) fires → CTO → MCE.
+NOT CONFIRMED — bisection markers added to next build.
+
+**Log saved:** phase5/logs/test_20260418_watchdog_crash.log
+
+**Next test hypothesis:** Markers will tell us the exact crash site. Last marker printed = instruction before crash.
+
+**Next steps:**
+1. Build: `make -C /home/kimptoc/bcm4360-re/phase5/work` (bisection markers added to pcie.c)
+2. Run test script — look for last test.114c.N marker in dmesg
+3. If last marker is test.114c.3 (pre-watchdog): watchdog write itself crashes → skip watchdog for BCM4360
+4. If last marker is test.114c.4 (post-watchdog-sleep): link didn't recover in 100ms → extend sleep
+5. If last marker is test.114c.1 or .2: crash is at CC or PCIE2 select_core BEFORE watchdog
+
+---
+
+## Previous state (2026-04-17, POST test.116 stage0 crash x2 — MMIO DEAD, DRAINING BATTERY FOR RECOVERY)
+
+### HARDWARE STATUS (RESOLVED): BCM4360 MMIO NON-RESPONSIVE — POWER CYCLE REQUIRED
 
 **Diagnosis (2026-04-17, post-second-crash):** BCM4360 BAR0 MMIO is completely non-responsive.
 Confirmed via direct userspace probe:

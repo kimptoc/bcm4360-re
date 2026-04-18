@@ -892,26 +892,34 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 				  d11_wrap_rst,
 				  (d11_wrap_rst & 1) ? "YES" : "NO",
 				  d11_wrap_ioctl);
+			dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114a.1: pre-CC-reselect (returning from d11 window)\n");
 			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 		}
 		/* fall through to standard reset code */
 	}
 
+	/* test.114c bisection markers — find exact crash site after test.114a */
+	dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114c.1: pre-CC-select (before ASPM disable)\n");
+
 	/* Disable ASPM */
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
+	dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114c.2: post-PCIE2-select, pre-ASPM-read\n");
 	pci_read_config_dword(devinfo->pdev, BRCMF_PCIE_REG_LINK_STATUS_CTRL,
 			      &lsc);
 	val = lsc & (~BRCMF_PCIE_LINK_STATUS_CTRL_ASPM_ENAB);
 	pci_write_config_dword(devinfo->pdev, BRCMF_PCIE_REG_LINK_STATUS_CTRL,
 			       val);
 
+	dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114c.3: pre-watchdog (ASPM disabled, lsc=0x%08x)\n", lsc);
 	/* Watchdog reset */
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 	WRITECC32(devinfo, watchdog, 4);
 	msleep(100);
 
+	dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114c.4: post-watchdog-sleep (100ms elapsed)\n");
 	/* Restore ASPM */
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
+	dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114c.5: post-PCIE2-select-2 (after watchdog)\n");
 	pci_write_config_dword(devinfo->pdev, BRCMF_PCIE_REG_LINK_STATUS_CTRL,
 			       lsc);
 
@@ -3319,6 +3327,15 @@ static int brcmf_pcie_get_resource(struct brcmf_pciedev_info *devinfo)
 			  "BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x%08x%s\n",
 			  probe_val,
 			  probe_val == 0xffffffff ? " — DEAD (no MMIO response)" : " — alive");
+		/* Abort before chip_attach enumeration — proceeding with a dead device
+		 * causes brcmf_chip_attach to do hundreds of ioread32 calls that trigger
+		 * PCIe Completion Timeout → MCE → hard crash with no kernel output.
+		 */
+		if (probe_val == 0xffffffff) {
+			dev_emerg(&pdev->dev,
+				  "BCM4360 test.53: ABORT — BAR0 dead after SBR, skipping chip_attach\n");
+			return -ENODEV;
+		}
 	}
 
 	return 0;
