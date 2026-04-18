@@ -911,12 +911,16 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 			       val);
 
 	dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114c.3: pre-watchdog (ASPM disabled, lsc=0x%08x)\n", lsc);
-	/* Watchdog reset */
+	/* Watchdog reset — BCM4360 skips this: SBR at probe-start already reset the chip,
+	 * and test.114c confirmed the watchdog write crashes the PCIe link on BCM4360. */
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-	WRITECC32(devinfo, watchdog, 4);
-	msleep(100);
+	dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114c.3a: post-CC-select, pre-watchdog-write\n");
+	if (devinfo->ci->chip != BRCM_CC_4360_CHIP_ID) {
+		WRITECC32(devinfo, watchdog, 4);
+		msleep(100);
+	}
 
-	dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114c.4: post-watchdog-sleep (100ms elapsed)\n");
+	dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114c.4: post-watchdog-step (skipped for BCM4360)\n");
 	/* Restore ASPM */
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
 	dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114c.5: post-PCIE2-select-2 (after watchdog)\n");

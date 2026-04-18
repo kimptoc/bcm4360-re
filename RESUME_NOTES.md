@@ -1,24 +1,30 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, PRE test.114c bisection run — finding exact crash site in reset_device)
+## Current state (2026-04-18, PRE test.114d — skip watchdog for BCM4360)
 
 ### HARDWARE STATUS: PCIe clean — MAbort-, CommClk+, LnkSta 2.5GT/s x1
 
-**Pre-test check (2026-04-18, session restart after crash):**
-- PCIe state: MAbort-, CommClk+, LnkSta Speed 2.5GT/s Width x1 — CLEAN, no dirty state
-- Module: BUILT (brcmfmac.ko, 14MB, 2026-04-18 11:12)
-- Bisection markers: test.114c.1 through test.114c.5 added to pcie.c
+**POST test.114c result (2026-04-18):**
+- Last marker printed: test.114c.3 ("pre-watchdog, ASPM disabled, lsc=0x10110143")
+- Markers NOT printed: test.114c.4 and test.114c.5
+- Conclusion: crash is at or immediately after `WRITECC32(watchdog, 4)` — the watchdog write itself kills the PCIe link
+- Log saved: phase5/logs/test.114c.stage0
 
-**Hypothesis:** The crash after test.114a is caused by `WRITECC32(watchdog, 4)` at L910 firing
-and killing the PCIe link, then `select_core(PCIE2)` at L914 doing MMIO over dead link → CTO → MCE.
-The last printed marker will be test.114c.3 (pre-watchdog) if the watchdog write itself crashes,
-or test.114c.4 (post-sleep) if the link doesn't recover in the 100ms sleep.
+**PRE test.114d plan (2026-04-18):**
+- Added discriminator marker test.114c.3a (between select_core(CC) and WRITECC32)
+- Added watchdog skip for BCM4360 (`if (devinfo->ci->chip != BRCM_CC_4360_CHIP_ID)`)
+- Module NOT yet rebuilt — run `make -C /home/kimptoc/bcm4360-re/phase5/work` before test
+
+**Hypothesis (test.114d):**
+- Markers .3, .3a, .4 all print (select_core(CC) safe, watchdog skipped, probe continues)
+- Stage0 completes without crash (no ARM release with skip_arm=1)
+- If .3a does NOT print: select_core(CC) itself crashes (unlikely — PCI config write only)
 
 **Plan:**
-1. Run `sudo ./test-brcmfmac.sh` (stage0, skip_arm=1)
-2. Capture dmesg — look for last test.114c.N marker
-3. Interpret result per next-steps logic in prior session notes
-4. Machine may crash — if it does, check MAbort/CommClk, SBR if needed, then re-evaluate
+1. Build: `make -C /home/kimptoc/bcm4360-re/phase5/work`
+2. Run `sudo ./test-brcmfmac.sh` (stage0, skip_arm=1)
+3. Capture `journalctl -k -b -1` → phase5/logs/test.114d.stage0
+4. If clean: run stage1 (skip_arm=0) to test BBPLL bringup and FW progress past ~0x68c49
 
 ---
 
