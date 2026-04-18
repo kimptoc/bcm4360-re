@@ -1,6 +1,33 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, POST test.117 stage0 crash — reset_device diagnostic crash)
+## Current state (2026-04-18, PRE test.118 stage0 — minimal reset_device path)
+
+### CODE STATE: OLD RESET-TIME DIAGNOSTICS REMOVED/GATED
+
+`brcmf_pcie_reset_device()` has been simplified for BCM4360:
+- Removed completed `test.111` core-list diagnostic from the reset path.
+- Removed `test.112` ChipCommon FORCEHT write/poll from the reset path.
+- Removed `test.114a` D11 wrapper read from the reset path.
+- BCM4360 no longer selects ChipCommon solely to skip the watchdog write.
+- New `test.118` markers bracket the remaining path: enter reset, PCIE2/ASPM, watchdog skipped, ASPM restore, PCIE2 cfg replay, reset complete.
+
+**Hypothesis (test.118 stage0):**
+- Pre-test BAR0 guard should see fast UR or normal MMIO and allow the run.
+- SBR should restore BAR0; `test.53` should report `0x15034360 — alive`.
+- The new `test.118` reset markers should reach `reset_device complete`.
+- Firmware download should run and the `bcm4360_skip_arm=1` branch should return cleanly without ARM release.
+- Module unload should complete.
+
+**Run after build/commit/push:**
+`sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+
+**Build:** clean via kernel build tree:
+`make -C /nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules`
+Only warning: existing unused `brcmf_pcie_write_ram32`.
+
+---
+
+## Previous state (2026-04-18, POST test.117 stage0 crash — reset_device diagnostic crash)
 
 ### HARDWARE STATUS: STAGE0 CRASHED; CURRENT BAR0 FAST I/O ERROR, ROOT PORT MAbort+
 

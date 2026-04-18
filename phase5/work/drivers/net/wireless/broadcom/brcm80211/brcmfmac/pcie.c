@@ -711,224 +711,50 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 	u32 i;
 	u32 val;
 	u32 lsc;
+	bool bcm4360;
 
 	if (!devinfo->ci)
 		return;
 
-	/* BCM4360: test.40 — read pllcontrol registers before watchdog reset.
-	 *
-	 * test.39 results: watchdog survived on IOMMU group 8. After watchdog,
-	 * clk_ctl_st=0x50040: HAVEALP (bit 16) set, BP_ON_ALP (bit 18) set,
-	 * HAVEHT (bit 17) NOT set. pmustatus=0x2a: HAVEALP (bit 3) set,
-	 * HAVEHT (bit 2) NOT set. BBPLL is off and never comes up.
-	 * bcma.ko has "PMU resource config unknown or not needed for 0x43A0".
-	 *
-	 * New hypothesis: ARM might be executing on ALP clock (37 MHz) but
-	 * firmware immediately waits for HAVEHT (BBPLL) and loops forever.
-	 * OR: the ARM's bus to TCM requires HT clock, so ARM can't fetch
-	 * instructions without BBPLL.
-	 *
-	 * test.40 diagnostic: read pllcontrol[0..5] to see if EFI has programmed
-	 * the BCM4360 PLL dividers. Read ARM wrapper registers after release.
-	 * Read pmustatus periodically during the 5s wait to detect if BBPLL
-	 * starts up (ARM requests it via FORCEHT in ARM's clk_ctl_st).
-	 */
-	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-		u32 i;
+	bcm4360 = devinfo->ci->chip == BRCM_CC_4360_CHIP_ID;
 
-		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 EFI state: clk_ctl_st=0x%08x min_res=0x%08x max_res=0x%08x res_state=0x%08x\n",
-			 READCC32(devinfo, clk_ctl_st),
-			 READCC32(devinfo, min_res_mask),
-			 READCC32(devinfo, max_res_mask),
-			 READCC32(devinfo, res_state));
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 EFI PMU: pmustatus=0x%08x pmucontrol=0x%08x\n",
-			 READCC32(devinfo, pmustatus),
-			 READCC32(devinfo, pmucontrol));
-
-		/* Read pllcontrol registers 0..5 (PLL frequency table) */
-		for (i = 0; i < 6; i++) {
-			WRITECC32(devinfo, pllcontrol_addr, i);
-			dev_info(&devinfo->pdev->dev,
-				 "BCM4360 pllcontrol[%u]=0x%08x\n",
-				 i, READCC32(devinfo, pllcontrol_data));
-		}
-
-		dev_info(&devinfo->pdev->dev,
-			 "BCM4360 test.40: allowing watchdog reset (IOMMU group 8 is crash-protective)\n");
-
-		/* test.111: read already-enumerated core list via public chip API.
-		 *
-		 * test.110 (raw BAR0 11-slot sweep) crashed the host so hard that
-		 * zero kernel lines persisted — the BAR0 remap loop during
-		 * buscore_reset is unsafe. Pivot: by the time ops->reset runs
-		 * (chip.c:1043-1049), brcmf_chip_recognition has already populated
-		 * ci->cores. brcmf_chip_get_core(ci, id) returns the registered
-		 * core with its id/base/rev. NO MMIO, NO hang risk.
-		 *
-		 * Goal: find which core lives at base 0x18001000 (FW-hang target
-		 * from test.106 — FW reads *0x180011e0 and never returns).
-		 * Hypothesis: BCMA_CORE_80211 (d11 MAC) per chip.c:1022 SOCI_SB.
-		 */
-		{
-			static const struct {
-				u16 id;
-				const char *name;
-			} core_ids[] = {
-				{ 0x800, "CHIPCOMMON" },
-				{ 0x80E, "INTERNAL_MEM" },
-				{ 0x812, "80211" },
-				{ 0x827, "PMU" },
-				{ 0x82A, "ARM_CM3" },
-				{ 0x83C, "PCIE2" },
-				{ 0x83E, "ARM_CR4" },
-				{ 0x840, "GCI" },
-				{ 0xFFF, "DEFAULT" },
-			};
-			struct brcmf_core *c;
-			int k;
-
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.111: core list via brcmf_chip_get_core (no MMIO)\n");
-			for (k = 0; k < (int)ARRAY_SIZE(core_ids); k++) {
-				c = brcmf_chip_get_core(devinfo->ci,
-							core_ids[k].id);
-				if (!c) {
-					dev_emerg(&devinfo->pdev->dev,
-						  "BCM4360 test.111: id=0x%03x %-12s NOT PRESENT\n",
-						  core_ids[k].id,
-						  core_ids[k].name);
-					continue;
-				}
-				dev_emerg(&devinfo->pdev->dev,
-					  "BCM4360 test.111: id=0x%03x %-12s base=0x%08x rev=%u%s\n",
-					  c->id, core_ids[k].name, c->base,
-					  c->rev,
-					  c->base == 0x18001000 ?
-					    "  <<< FW HANG TARGET" : "");
-			}
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.111: core enum complete\n");
-		}
-
-		/* test.112: force HT clock via ChipCommon.clk_ctl_st.
-		 *
-		 * Phase 5 closure: FW hangs in fn 0x1415c spin-polling d11's
-		 * clk_ctl_st (d11+0x1e0) waiting for CCS_BP_ON_HT (bit 19).
-		 * BBPLL is off post-EFI (test.40 showed HAVEHT=0), so HT clock
-		 * never comes up on its own.
-		 *
-		 * Simplest fix first: request HT via CCS_FORCEHT (bit 1) on
-		 * CC.clk_ctl_st and poll for CCS_BP_ON_HT (bit 19). brcmsmac
-		 * does this on similar chips (main.c:1230-1240). If it works
-		 * standalone, FW will then see HT on d11.clk_ctl_st too.
-		 *
-		 * Poll budget: 100 × 100us = 10ms (PLL lock is typically
-		 * sub-millisecond on these PHYs). Log before/after plus
-		 * pmustatus + res_state. skip_arm=1 keeps this test isolated
-		 * (no ARM release, no FW run).
-		 */
-		{
-			u32 ccs_before, ccs_after, pmu_after, res_after;
-			int iter;
-
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-			ccs_before = READCC32(devinfo, clk_ctl_st);
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.112: pre-force CC.clk_ctl_st=0x%08x (HAVEALP=%s HAVEHT=%s BP_ON_HT=%s)\n",
-				  ccs_before,
-				  (ccs_before & 0x00010000) ? "1" : "0",
-				  (ccs_before & 0x00020000) ? "1" : "0",
-				  (ccs_before & 0x00080000) ? "1" : "0");
-
-			WRITECC32(devinfo, clk_ctl_st, ccs_before | 0x2);
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.112: wrote CCS_FORCEHT (bit 1) to CC.clk_ctl_st, polling for CCS_BP_ON_HT...\n");
-
-			ccs_after = 0;
-			for (iter = 0; iter < 100; iter++) {
-				udelay(100);
-				ccs_after = READCC32(devinfo, clk_ctl_st);
-				if (ccs_after & 0x00080000)
-					break;
-			}
-			pmu_after = READCC32(devinfo, pmustatus);
-			res_after = READCC32(devinfo, res_state);
-
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.112: after %d×100us: clk_ctl_st=0x%08x pmustatus=0x%08x res_state=0x%08x -- %s\n",
-				  iter, ccs_after, pmu_after, res_after,
-				  (ccs_after & 0x00080000) ? "HT CLOCK UP" :
-				  (ccs_after & 0x00020000) ? "HAVEHT set (no BP_ON_HT)" :
-				  "HT TIMEOUT (still no HAVEHT)");
-		}
-
-		/* test.114a: d11 wrapper state — safe diagnostic during reset.
-		 *
-		 * test.113 crashed: it read d11 core register (BAR0+0x1e0 =
-		 * d11.clk_ctl_st) while d11 was in BCMA reset. brcmf_chip_set_passive
-		 * runs BEFORE ops->reset, so d11 is already in reset here.
-		 * Accessing a BCMA core's AXI slave while in reset → PCIe SLVERR
-		 * → machine crash with no journal output.
-		 *
-		 * Wrapper registers (BAR0+0x1000..0x1FFF after select_core) map to
-		 * d11_wrapbase and are always accessible regardless of reset state.
-		 * BAR0+0x1800 = d11_wrapbase+BCMA_RESET_CTL (bit 0 = in reset)
-		 * BAR0+0x1408 = d11_wrapbase+BCMA_IOCTL
-		 *
-		 * The actual d11 enable (resetcore) happens in the firmware download
-		 * path before ARM release (test.114b in brcmf_pcie_load_firmware).
-		 */
-		{
-			u32 d11_wrap_rst, d11_wrap_ioctl;
-
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_80211);
-			d11_wrap_rst   = brcmf_pcie_read_reg32(devinfo, 0x1800);
-			d11_wrap_ioctl = brcmf_pcie_read_reg32(devinfo, 0x1408);
-			dev_emerg(&devinfo->pdev->dev,
-				  "BCM4360 test.114a: d11 wrap_RESET_CTL=0x%08x IN_RESET=%s wrap_IOCTL=0x%08x\n",
-				  d11_wrap_rst,
-				  (d11_wrap_rst & 1) ? "YES" : "NO",
-				  d11_wrap_ioctl);
-			dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114a.1: pre-CC-reselect (returning from d11 window)\n");
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-		}
-		/* fall through to standard reset code */
-	}
-
-	/* test.114c bisection markers — find exact crash site after test.114a */
-	dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114c.1: pre-CC-select (before ASPM disable)\n");
+	if (bcm4360)
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.118: reset_device entering minimal reset path\n");
 
 	/* Disable ASPM */
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
-	dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114c.2: post-PCIE2-select, pre-ASPM-read\n");
 	pci_read_config_dword(devinfo->pdev, BRCMF_PCIE_REG_LINK_STATUS_CTRL,
 			      &lsc);
 	val = lsc & (~BRCMF_PCIE_LINK_STATUS_CTRL_ASPM_ENAB);
 	pci_write_config_dword(devinfo->pdev, BRCMF_PCIE_REG_LINK_STATUS_CTRL,
 			       val);
+	if (bcm4360)
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.118: PCIE2 selected, ASPM disabled (lsc=0x%08x)\n",
+			  lsc);
 
-	dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114c.3: pre-watchdog (ASPM disabled, lsc=0x%08x)\n", lsc);
 	/* Watchdog reset — BCM4360 skips this: SBR at probe-start already reset the chip,
 	 * and test.114c confirmed the watchdog write crashes the PCIe link on BCM4360. */
-	brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-	dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114c.3a: post-CC-select, pre-watchdog-write\n");
-	if (devinfo->ci->chip != BRCM_CC_4360_CHIP_ID) {
+	if (!bcm4360) {
+		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
 		WRITECC32(devinfo, watchdog, 4);
 		msleep(100);
+	} else {
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.118: ChipCommon watchdog skipped\n");
 	}
 
-	dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114c.4: post-watchdog-step (skipped for BCM4360)\n");
 	/* Restore ASPM */
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
-	dev_emerg(&devinfo->pdev->dev, "BCM4360 test.114c.5: post-PCIE2-select-2 (after watchdog)\n");
 	pci_write_config_dword(devinfo->pdev, BRCMF_PCIE_REG_LINK_STATUS_CTRL,
 			       lsc);
+	if (bcm4360)
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.118: ASPM restored, entering PCIE2 cfg replay\n");
 
 	core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_PCIE2);
-	if (core->rev <= 13) {
+	if (core && core->rev <= 13) {
 		for (i = 0; i < ARRAY_SIZE(cfg_offset); i++) {
 			brcmf_pcie_write_reg32(devinfo,
 					       BRCMF_PCIE_PCIE2REG_CONFIGADDR,
@@ -942,6 +768,9 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 					       val);
 		}
 	}
+	if (bcm4360)
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.118: reset_device complete\n");
 }
 
 

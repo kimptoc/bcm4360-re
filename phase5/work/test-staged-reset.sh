@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.117.stage${STAGE}"
+LOG="$LOG_DIR/test.118.stage${STAGE}"
 
-echo "=== test.117: guarded staged reset after battery-drain recovery --- stage=$STAGE ===" | tee "$LOG"
+echo "=== test.118: minimal reset_device stage test --- stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -111,7 +111,7 @@ else
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.117 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.118 ===" | tee -a "$LOG"
 sync
 
 dmesg -C
