@@ -1,6 +1,41 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, PRE test.121 stage0 — fixed BCM4360 RAM info)
+## Current state (2026-04-18, POST test.121 stage0 crash — early reset_device)
+
+### HARDWARE STATUS: STAGE0 CRASHED INSIDE RESET_DEVICE BEFORE PCIE2 MARKER
+
+`test.121.stage0` was run with `bcm4360_skip_arm=1`; ARM was not released.
+
+**Persisted script log:** `phase5/logs/test.121.stage0`
+- Pre-test BAR0 guard saw fast UR/I/O error (~6ms) and proceeded.
+- Root port bus numbering was sane before test (`secondary=03, subordinate=03`).
+- Script reached `insmod`, then the host crashed before `insmod returned`.
+
+**Previous boot journal markers:**
+- SBR worked; BAR0 probe returned `0x15034360 — alive`.
+- Last persisted BCM4360 marker: `test.118: reset_device entering minimal reset path`.
+- No `test.118: PCIE2 selected, ASPM disabled` marker persisted.
+- No `test.121` fixed-RAM marker persisted.
+
+**Post-crash hardware state:**
+- PCI config still responds: BCM4360 `14e4:43a0`, COMMAND=0x0006.
+- Root port bus numbering is sane after forcing runtime PM `on`.
+- BAR0 direct read still fails fast (~7ms), not a slow completion timeout.
+
+**Interpretation:**
+- `test.121` did not test the fixed-RAM path; it crashed earlier.
+- The crash boundary is now inside `brcmf_pcie_reset_device()` after the entry marker and before the PCIE2-selected marker.
+- The suspect operation is the first reset-device PCIE2 core select and/or immediate ASPM config read/write.
+- Probe-start SBR already reset the endpoint and made BAR0 alive, so the in-driver reset-device body is now a liability for BCM4360.
+
+**Next code change:**
+- Add `test.122`: for BCM4360, return early from `brcmf_pcie_reset_device()` after SBR/chip attach setup, skipping PCIE2 core select, ASPM toggles, watchdog, and PCIE2 config replay.
+- Keep `test.121` fixed RAM info in place.
+- Keep `bcm4360_skip_arm=1`; stage1 remains forbidden.
+
+---
+
+## Previous state (2026-04-18, PRE test.121 stage0 — fixed BCM4360 RAM info)
 
 ### CODE STATE: BCM4360 RAM-SIZING MMIO BYPASSED
 
