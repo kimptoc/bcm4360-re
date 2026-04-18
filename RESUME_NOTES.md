@@ -1,6 +1,48 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, PRE test.118 stage0 — minimal reset_device path)
+## Current state (2026-04-18, POST test.118 stage0 crash — after reset_device complete)
+
+### HARDWARE STATUS: STAGE0 CRASHED AFTER MINIMAL RESET_DEVICE COMPLETED
+
+`test.118.stage0` was run with `bcm4360_skip_arm=1`; ARM was not released.
+
+**Persisted script log:** `phase5/logs/test.118.stage0`
+- Pre-test BAR0 guard saw fast UR/I/O error (~5ms) and proceeded.
+- Endpoint COMMAND was already `0x0000`; BARs disabled before test.
+- Root port had `MAbort+` before test.
+- Script reached `insmod`, then the host crashed before `insmod returned`.
+
+**Previous boot journal markers:**
+- SBR worked: `test.53: SBR complete`
+- BAR0 came alive after SBR: `test.53: BAR0 probe ... = 0x15034360 — alive`
+- `test.118: reset_device entering minimal reset path`
+- `test.118: PCIE2 selected, ASPM disabled`
+- `test.118: ChipCommon watchdog skipped`
+- `test.118: ASPM restored, entering PCIE2 cfg replay`
+- `test.118: reset_device complete`
+- No later brcmfmac/BCM4360 markers persisted.
+
+**Current post-crash checks:**
+- PCI config space still responds: BCM4360 `14e4:43a0`
+- Endpoint COMMAND is `0x0000`; BARs disabled
+- Root port config is damaged: bus shows `primary=00, secondary=ff, subordinate=fe`
+- BAR0 userspace read still fails quickly (~7ms), not a slow CTO
+
+**Interpretation:**
+- The old reset-time diagnostics were not the final crash source.
+- The minimal `brcmf_pcie_reset_device()` path now completes.
+- The next code executed inside `brcmf_chip_recognition()` is the second `brcmf_chip_set_passive(&ci->pub)` immediately after `ci->ops->reset(...)`.
+- Suspect: the second passive pass touches or disables a core that is unsafe after BCM4360 SBR/reset_device, causing the hard crash before `brcmf_chip_attach()` returns.
+
+**Next code change before any more hardware tests:**
+- Add `test.119` markers in `chip.c` around the post-reset passive step.
+- For BCM4360, skip the second `brcmf_chip_set_passive()` after `ops->reset` and proceed to RAM info, because the initial passive call already ran before reset and the bus reset path completed.
+- Add a `test.119` marker after `brcmf_chip_attach()` returns in `pcie.c` so the next test distinguishes chip-attach completion from later probe/setup work.
+- Do not run stage1.
+
+---
+
+## Previous state (2026-04-18, PRE test.118 stage0 — minimal reset_device path)
 
 ### CODE STATE: OLD RESET-TIME DIAGNOSTICS REMOVED/GATED
 
