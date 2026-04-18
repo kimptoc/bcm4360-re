@@ -2910,3 +2910,29 @@ sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
   specific bit probes instead of shotgun.
 - Log stops mid-probe                              → a specific read/write
   hangs the bus; narrow down which step; retry with fewer probes.
+
+---
+
+## TEST.127 EXECUTION — 2026-04-19 (session restart, after crash recovery)
+
+### Pre-test state
+- Module rebuilt: Apr 19 00:07 (test.127 pcie.c markers in place)
+- Build status: clean, no rebuild markers needed
+- PCIe state: clean (MAbort-, CommClk+)
+- test.126 crashed during insmod before any markers printed
+
+### Hypothesis (test.127 stage0)
+test.126 crashed during insmod before ANY test markers printed. Crash is likely:
+- Before brcmf_pcie_probe is called (module load error)
+- Or in probe entry before first pr_emerg marker (line ~3871)
+
+test.127 adds pr_emerg markers at:
+1. Start of brcmf_pcie_probe (after device ID check)
+2. After devinfo kzalloc
+3. After devinfo->pdev assignment
+
+**Expected outcome:** markers will show exactly where the crash occurs.
+
+### Running test.127 stage0
+Command: `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+
