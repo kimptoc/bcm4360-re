@@ -1,6 +1,34 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, POST test.120 stage0 crash — before RAM-info marker)
+## Current state (2026-04-18, PRE test.121 stage0 — fixed BCM4360 RAM info)
+
+### CODE STATE: BCM4360 RAM-SIZING MMIO BYPASSED
+
+`test.120` crashed after the post-reset passive skip and before any post-chip-attach probe setup markers. The next likely unsafe path is RAM sizing after reset.
+
+**Code changes for test.121:**
+- `brcmf_chip_get_raminfo()` now special-cases BCM4360 and uses the known RAM map directly:
+  `rambase=0`, `ramsize=0xa0000`, `srsize=0`.
+- This bypass applies to both the chip-recognition call and the later firmware-callback call.
+- The post-reset passive skip marker was updated to `test.121`.
+- Staged script now writes `phase5/logs/test.121.stage0`.
+
+**Hypothesis (test.121 stage0):**
+- If RAM-sizing MMIO caused the crash, journal should show:
+  `test.121: post-reset passive skipped; using fixed RAM info next`,
+  `test.121: using fixed RAM info ...`,
+  `test.119: brcmf_chip_attach returned successfully`,
+  and then the existing `test.120` post-chip-attach setup markers.
+- If it still crashes before the fixed-RAM marker, the fault is asynchronous immediately after `reset_device`.
+- If it reaches firmware download, keep `bcm4360_skip_arm=1` and stop at the safe no-ARM path; stage1 remains forbidden.
+
+**Pre-run requirement:** force runtime PM `on` for `00:1c.2` and `03:00.0` if either is suspended, then verify root port bus is `secondary=03, subordinate=03`.
+
+**Build:** clean via kernel build tree. Only note: BTF skipped because `vmlinux` is unavailable.
+
+---
+
+## Previous state (2026-04-18, POST test.120 stage0 crash — before RAM-info marker)
 
 ### HARDWARE STATUS: STAGE0 CRASHED IMMEDIATELY AFTER POST-RESET PASSIVE SKIP
 

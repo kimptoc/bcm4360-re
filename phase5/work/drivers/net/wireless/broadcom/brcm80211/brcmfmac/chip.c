@@ -761,6 +761,15 @@ int brcmf_chip_get_raminfo(struct brcmf_chip *pub)
 	struct brcmf_core_priv *mem_core;
 	struct brcmf_core *mem;
 
+	if (ci->pub.chip == BRCM_CC_4360_CHIP_ID) {
+		ci->pub.rambase = 0;
+		ci->pub.ramsize = 0xa0000;
+		ci->pub.srsize = 0;
+		brcmf_err("BCM4360 test.121: using fixed RAM info rambase=0x%x ramsize=0x%x srsize=0x%x\n",
+			  ci->pub.rambase, ci->pub.ramsize, ci->pub.srsize);
+		return 0;
+	}
+
 	mem = brcmf_chip_get_core(&ci->pub, BCMA_CORE_ARM_CR4);
 	if (mem) {
 		mem_core = container_of(mem, struct brcmf_core_priv, pub);
@@ -1046,14 +1055,11 @@ static int brcmf_chip_recognition(struct brcmf_chip_priv *ci)
 	if (ci->ops->reset) {
 		ci->ops->reset(ci->ctx, &ci->pub);
 		if (ci->pub.chip == BRCM_CC_4360_CHIP_ID) {
-			brcmf_err("BCM4360 test.119: skipping post-reset passive call\n");
+			brcmf_err("BCM4360 test.121: post-reset passive skipped; using fixed RAM info next\n");
 		} else {
 			brcmf_chip_set_passive(&ci->pub);
 		}
 	}
-
-	if (ci->pub.chip == BRCM_CC_4360_CHIP_ID)
-		brcmf_err("BCM4360 test.119: entering raminfo after reset\n");
 
 	return brcmf_chip_get_raminfo(&ci->pub);
 }
