@@ -1,6 +1,39 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, PRE test.119 stage0 — skip post-reset passive)
+## Current state (2026-04-18, POST test.119 stage0 crash — after chip_attach returns)
+
+### HARDWARE STATUS: STAGE0 CRASHED AFTER CHIP_ATTACH RETURNED
+
+`test.119.stage0` was run with `bcm4360_skip_arm=1`; ARM was not released.
+
+**Persisted script log:** `phase5/logs/test.119.stage0`
+- Pre-test BAR0 guard saw fast UR/I/O error (~8ms) and proceeded.
+- Root port bus numbering was sane before test after forcing runtime PM `on`.
+- Script reached `insmod`, then the host crashed before `insmod returned`.
+
+**Previous boot journal markers:**
+- SBR worked; BAR0 probe returned `0x15034360 — alive`.
+- `test.118: reset_device complete`.
+- `test.119: skipping post-reset passive call`.
+- `test.119: entering raminfo after reset`.
+- `test.119: brcmf_chip_attach returned successfully`.
+- No later brcmfmac/BCM4360 markers persisted.
+
+**Interpretation:**
+- Skipping the second post-reset passive call worked.
+- RAM info completed and `brcmf_chip_attach()` returned.
+- Crash is now in the next part of `brcmf_pcie_probe()`, before firmware request/download and still before ARM release.
+- Next suspect block: PCIE2 core lookup/reginfo setup, allocations, module params, `brcmf_alloc()`, OTP check, or firmware request preparation.
+
+**Next code change:**
+- Add `test.120` markers through the post-chip_attach probe setup path:
+  PCIE2 core lookup/reginfo, `pcie_bus_dev` allocation, module params, bus/msgbuf allocation, `dev_set_drvdata`, `brcmf_alloc`, OTP, firmware request, and `brcmf_fw_get_firmwares`.
+- No behavior change yet; just narrow the next crash boundary.
+- Continue to force runtime PM `on` before any future insmod if root port/endpoint are suspended.
+
+---
+
+## Previous state (2026-04-18, PRE test.119 stage0 — skip post-reset passive)
 
 ### CODE STATE: POST-RESET PASSIVE CALL SKIPPED FOR BCM4360
 
