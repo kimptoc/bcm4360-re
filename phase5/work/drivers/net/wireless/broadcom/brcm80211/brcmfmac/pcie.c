@@ -3849,6 +3849,9 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		devinfo->ci = NULL;
 		goto fail;
 	}
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.119: brcmf_chip_attach returned successfully\n");
 
 	core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_PCIE2);
 	if (core->rev >= 64)

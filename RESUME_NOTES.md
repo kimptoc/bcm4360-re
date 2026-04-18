@@ -1,6 +1,30 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, POST test.118 stage0 crash — after reset_device complete)
+## Current state (2026-04-18, PRE test.119 stage0 — skip post-reset passive)
+
+### CODE STATE: POST-RESET PASSIVE CALL SKIPPED FOR BCM4360
+
+`test.118` proved `brcmf_pcie_reset_device()` now completes. The next suspected operation is the second `brcmf_chip_set_passive()` in `brcmf_chip_recognition()` immediately after `ci->ops->reset()`.
+
+**Code changes for test.119:**
+- In `chip.c`, BCM4360 skips the post-reset passive call after `ops->reset`.
+- Added marker before RAM info: `BCM4360 test.119: entering raminfo after reset`.
+- Added marker after `brcmf_chip_attach()` returns in `pcie.c`.
+- Staged script now writes `phase5/logs/test.119.stage0`.
+
+**Hypothesis (test.119 stage0):**
+- If post-reset passive caused the crash, journal should show `entering raminfo after reset`, `brcmf_chip_attach returned successfully`, then continue into firmware request/download.
+- If RAM info probing is unsafe after skipping passive, the last marker will be `entering raminfo after reset`.
+- If later probe setup is unsafe, the last marker will be `brcmf_chip_attach returned successfully`.
+- ARM remains skipped; stage1 is still forbidden.
+
+**Build:** clean via kernel build tree. Only warning: existing unused `brcmf_pcie_write_ram32`.
+
+**Do not run until platform PCIe state is recovered:** after the test.118 crash, root port 00:1c.2 showed invalid bus numbering (`secondary=ff, subordinate=fe`). Reboot or full power-cycle before the next insmod; then verify root port bus is `secondary=03, subordinate=03` and BAR0 guard is fast UR/OK.
+
+---
+
+## Previous state (2026-04-18, POST test.118 stage0 crash — after reset_device complete)
 
 ### HARDWARE STATUS: STAGE0 CRASHED AFTER MINIMAL RESET_DEVICE COMPLETED
 

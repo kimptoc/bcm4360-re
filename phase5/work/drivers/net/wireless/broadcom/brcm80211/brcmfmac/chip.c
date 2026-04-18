@@ -1045,8 +1045,15 @@ static int brcmf_chip_recognition(struct brcmf_chip_priv *ci)
 	 */
 	if (ci->ops->reset) {
 		ci->ops->reset(ci->ctx, &ci->pub);
-		brcmf_chip_set_passive(&ci->pub);
+		if (ci->pub.chip == BRCM_CC_4360_CHIP_ID) {
+			brcmf_err("BCM4360 test.119: skipping post-reset passive call\n");
+		} else {
+			brcmf_chip_set_passive(&ci->pub);
+		}
 	}
+
+	if (ci->pub.chip == BRCM_CC_4360_CHIP_ID)
+		brcmf_err("BCM4360 test.119: entering raminfo after reset\n");
 
 	return brcmf_chip_get_raminfo(&ci->pub);
 }
