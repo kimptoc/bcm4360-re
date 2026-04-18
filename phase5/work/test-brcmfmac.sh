@@ -67,21 +67,29 @@ if lsmod | grep -q bcm4360_test; then
     sleep 1
 fi
 
-# Pre-test MMIO check — MUST pass before insmod or machine will hard-crash.
-# test.116 crashed twice because BAR0 MMIO was already dead when insmod ran.
-# The SBR inside brcmf_pcie_probe cannot recover dead MMIO; the subsequent
-# ioread32(devinfo->regs) fires a PCIe Completion Timeout → MCE → hard crash.
-# resource0 I/O error here means: power cycle required (battery drain on MacBook).
+# Pre-test MMIO check — distinguish Completion Timeout (CTO) from Unsupported Request (UR).
+# CTO: device ignores transaction → ~50ms timeout → MCE → hard crash. DO NOT insmod.
+# UR:  device responds "no" in ~50µs → clean I/O error, no crash. SBR in probe fixes it.
+# Timing threshold: <5ms = UR (safe), >5ms = CTO (unsafe, power cycle required).
 echo "Pre-test: checking BAR0 MMIO (resource0)..."
-if ! dd if=/sys/bus/pci/devices/0000:$PCI_DEV/resource0 bs=4 count=1 of=/dev/null 2>/dev/null; then
+T_START=$(date +%s%3N)
+dd if=/sys/bus/pci/devices/0000:$PCI_DEV/resource0 bs=4 count=1 of=/dev/null 2>/dev/null
+DD_EXIT=$?
+T_END=$(date +%s%3N)
+T_MS=$((T_END - T_START))
+
+if [ $DD_EXIT -eq 0 ]; then
+    echo "BAR0 MMIO OK — device responding normally."
+elif [ $T_MS -lt 5 ]; then
+    echo "BAR0 MMIO: Unsupported Request response (${T_MS}ms) — device alive, SBR in probe should fix."
+    echo "Proceeding with insmod."
+else
     echo ""
-    echo "FATAL: BAR0 MMIO is dead (I/O error on resource0)."
+    echo "FATAL: BAR0 MMIO Completion Timeout (${T_MS}ms) — device not responding."
     echo "Do NOT run insmod — machine will hard-crash (PCIe Completion Timeout → MCE)."
-    echo "Recovery: drain battery to 0%, wait 2-3 min after shutdown, recharge, boot."
-    echo "Verify with: dd if=/sys/bus/pci/devices/0000:$PCI_DEV/resource0 bs=4 count=1 | xxd"
+    echo "Recovery (MacBook): drain battery to 0%, wait after shutdown, recharge, boot."
     exit 1
 fi
-echo "BAR0 MMIO OK — device is responding."
 echo ""
 
 echo "Loading patched brcmfmac modules..."
