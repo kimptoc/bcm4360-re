@@ -3062,3 +3062,19 @@ sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 
 If test.109 commit works → regression introduced test.110-114
 If test.109 also crashes → hardware corruption from earlier crash
+
+---
+
+## DIAGNOSTIC: Fresh rebuild of current code (2026-04-19 post-crash)
+
+### Hypothesis
+Tests 116+ all crash during insmod before probe markers.
+Fresh rebuild of current code to isolate:
+1. Is it a stale module binary issue?
+2. Is it a code regression since test.109?
+
+### Current State
+- Branch: main (e4a5097)
+- Fresh rebuild completed successfully
+- About to run: `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+- Expected: either the crash reproduces OR system recovers (no crash)
