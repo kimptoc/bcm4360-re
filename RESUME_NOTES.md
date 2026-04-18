@@ -1,6 +1,37 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, PRE test.120 stage0 — instrument post-chip-attach probe setup)
+## Current state (2026-04-18, POST test.120 stage0 crash — before RAM-info marker)
+
+### HARDWARE STATUS: STAGE0 CRASHED IMMEDIATELY AFTER POST-RESET PASSIVE SKIP
+
+`test.120.stage0` was run with `bcm4360_skip_arm=1`; ARM was not released.
+
+**Persisted script log:** `phase5/logs/test.120.stage0`
+- Pre-test BAR0 guard saw fast UR/I/O error (~6ms) and proceeded.
+- Root port bus numbering was sane before test (`secondary=03, subordinate=03`).
+- Script reached `insmod`, then the host crashed before `insmod returned`.
+
+**Previous boot journal markers:**
+- SBR worked; BAR0 probe returned `0x15034360 — alive`.
+- `test.118: reset_device complete`.
+- Last persisted BCM4360 marker: `test.119: skipping post-reset passive call`.
+- No `test.119: entering raminfo after reset` marker persisted.
+- No `test.120` post-chip-attach probe setup markers persisted.
+
+**Interpretation:**
+- `test.120` did not reach the post-chip-attach probe setup path.
+- Compared with `test.119`, the crash boundary moved back into the tiny region after the post-reset passive skip and before/inside RAM-info handling.
+- The remaining likely unsafe operation is `brcmf_chip_get_raminfo()`, which performs fresh core MMIO reads to size memory after reset.
+- Earlier firmware-download work already established the BCM4360 RAM map: `rambase=0`, `ramsize=0xa0000`, `srsize=0`.
+
+**Next code change:**
+- Add `test.121`: for BCM4360, skip `brcmf_chip_get_raminfo()` during chip recognition and use the known RAM map directly.
+- Keep `bcm4360_skip_arm=1`; stage1 remains forbidden.
+- Continue to force runtime PM `on` before any future insmod if root port/endpoint are suspended.
+
+---
+
+## Previous state (2026-04-18, PRE test.120 stage0 — instrument post-chip-attach probe setup)
 
 ### CODE STATE: POST-CHIP-ATTACH PROBE SETUP MARKERS ADDED
 
