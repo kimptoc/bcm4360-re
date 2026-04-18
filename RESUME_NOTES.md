@@ -1,6 +1,43 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-18, PRE test.117 stage0 — battery-drain recovery, BAR0 UR)
+## Current state (2026-04-18, POST test.117 stage0 crash — reset_device diagnostic crash)
+
+### HARDWARE STATUS: STAGE0 CRASHED; CURRENT BAR0 FAST I/O ERROR, ROOT PORT MAbort+
+
+`test.117.stage0` was run with `bcm4360_skip_arm=1`; ARM was not released.
+
+**Persisted script log:** `phase5/logs/test.117.stage0`
+- Pre-test BAR0 guard saw fast UR/I/O error (~6ms) and proceeded.
+- Script reached `insmod`, then the host crashed before `insmod returned`.
+
+**Previous boot journal markers:**
+- SBR worked: `test.53: SBR complete`
+- BAR0 came alive after SBR: `test.53: BAR0 probe ... = 0x15034360 — alive`
+- chip_attach completed far enough to enter `brcmf_pcie_reset_device`
+- reset_device printed EFI/PMU/pllcontrol baseline
+- last persisted BCM4360 line: `test.111: id=0x827 PMU NOT PRESENT`
+- no `test.111` lines after PMU and no `test.112` / `test.114a` markers persisted
+
+**Current post-crash checks:**
+- PCI config space still responds: BCM4360 `14e4:43a0`
+- Endpoint COMMAND is now `0x0000`; BARs are disabled
+- Root port secondary status has `MAbort+`
+- BAR0 userspace read still fails quickly (~8ms), not a slow CTO
+
+**Interpretation:**
+- The battery-drain recovery worked enough for probe-time SBR to restore BAR0 and for chip_attach to run.
+- The crash is now inside or immediately after the old reset-time diagnostic area, not in ARM release and not in firmware execution.
+- `test.111` had already served its purpose; keeping the core-list diagnostic and older `test.112` / `test.114a` probes in every reset path is now counterproductive.
+
+**Next code change before any more hardware tests:**
+- Remove or gate off the completed reset_device diagnostics (`test.111`, `test.112`, and `test.114a`) for BCM4360.
+- Keep only the minimal production-relevant reset behavior: SBR before chip_attach, skip ChipCommon watchdog for BCM4360, ASPM handling if still needed, and the BAR0 guard.
+- Add a new stage0 marker immediately before standard reset code and another immediately after reset_device returns, so the next test isolates whether standard reset still crashes once old diagnostics are removed.
+- Do not run stage1 until a clean stage0 completes and the module unloads.
+
+---
+
+## Previous state (2026-04-18, PRE test.117 stage0 — battery-drain recovery, BAR0 UR)
 
 ### HARDWARE STATUS: CONFIG/LINK RECOVERED; BAR0 MMIO FAST I/O ERROR (UR), NOT CTO
 
