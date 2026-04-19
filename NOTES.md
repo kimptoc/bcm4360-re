@@ -13,11 +13,13 @@ test.145 `buscore_reset` ARM halt. Therefore the current buscore-reset ARM
 halt point is too late for this failure mode, and test.144 already showed that
 raw BAR0 MMIO from module_init is too early/unsafe on fresh hardware.
 
-Before any further testing: commit/push test.145 logs and notes, then use SMC
-reset/full hardware power cut and verify clean PCIe state. Next useful code
-change is test.146: ultra-narrow markers inside `brcmf_pcie_register()` around
-the pre-`pci_register_driver` window to prove whether the crash happens before
-registration or inside the registration/enumeration transition.
+Test.145 logs and notes are preserved in commit `30a33bd` and pushed. Before
+any further testing, use SMC reset/full hardware power cut and verify clean PCIe
+state. Next useful code change is test.146: ultra-narrow markers inside
+`brcmf_pcie_register()` around the pre-`pci_register_driver` window to prove
+whether the crash happens before registration or inside the
+registration/enumeration transition. Commit/push the test.146 code and notes
+before running it.
 
 # Post-crash recovery checklist
 

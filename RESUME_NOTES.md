@@ -5,9 +5,11 @@
 ### CODE STATE: test.145 binary was built and run
 
 **Repository state at crash recovery:**
-- `main` is ahead of `origin/main` by commit `a79d4c4 test.145: move ARM halt after second SBR`
-- Untracked crash logs from test.145: `phase5/logs/test.145.stage0`, `phase5/logs/test.145.stage0.stream`
-- Next action before any further test: commit/push these logs and this note update
+- `main` is clean and pushed to `origin/main`
+- Preservation commit: `30a33bd test.145: capture post-crash state`
+- Test.145 code commit: `a79d4c4 test.145: move ARM halt after second SBR`
+- Test.145 crash logs are committed: `phase5/logs/test.145.stage0`, `phase5/logs/test.145.stage0.stream`
+- Next action before any further test: commit/push the PRE-test.146 code and notes
 
 **test.145 RESULT (stage0 crash during/after PCI registration):**
 - Pre-test BAR0 guard: fast UR/I/O error (7ms), not CTO; script proceeded
