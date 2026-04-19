@@ -2,7 +2,7 @@
 
 ## Current state (2026-04-19 23:20 BST, PRE test.148 — core/register call-site markers)
 
-### CODE STATE: test.148 source prepared; rebuild/commit/push required before running
+### CODE STATE: test.148 source prepared, rebuilt, committed, and pushed
 
 **test.148 change: no-hardware-access discriminator**
 - No new BAR0 MMIO, BAR2 MMIO, PCI config accesses, or pre-probe mitigation.
@@ -40,7 +40,8 @@
 - Build output: `brcmfmac.ko` linked; existing `brcmf_pcie_write_ram32` unused warning; BTF skipped because `vmlinux` is unavailable.
 
 **Required before running test.148:**
-- Commit and push PRE-test.148 source/notes/harness state.
+- PRE-test.148 source/notes/harness state is committed and pushed:
+  - `2924ae6 test.148: instrument core registration path`
 - Verify PCIe state is still clean:
   - root port `00:1c.2` secondary/subordinate `03/03`, MAbort clear
   - endpoint `03:00.0` present, MAbort clear
