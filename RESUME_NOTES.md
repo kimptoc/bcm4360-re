@@ -3407,6 +3407,32 @@ sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 
 ---
 
+## TEST.130 RESULT — 2026-04-19 (session restart after crash)
+
+### EARLY CRASH: hardware state variance, not a code regression
+
+**Boot -1 journal (test.130 run) last markers:**
+```
+BCM4360 test.125: buscore_reset entry, ci assigned
+BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+```
+(journal ends here — hard crash immediately after, before "after reset_device return")
+
+**Analysis:**
+- The crash occurred between "reset_device bypassed" (printed at end of `brcmf_pcie_reset_device` before its return) and the next marker "after reset_device return" in `brcmf_pcie_buscore_reset`
+- This is earlier than test.129 which reached "brcmf_pcie_attach bypassed" in the async callback
+- The test.130 code changes (enter_download_state bypass, brcmf_pcie_setup markers) are all AFTER chip_attach — they cannot cause an earlier crash
+- **Conclusion: hardware state variance** — sometimes the BCM4360 comes back from SBR in a worse state, causing chip_attach MMIO to crash before any more markers appear
+- The "reset_device bypassed" message was the last message that got flushed to the persistent journal before the crash — later messages (including "skipping PCIE2 mailbox clear; returning 0") were likely lost
+
+**PCIe state (current boot 0):**
+- Endpoint (03:00.0): MAbort- (clean), CommClk+
+- Root port (00:1c.2): MAbort- (clean), secondary=03, subordinate=03
+
+**Action:** Re-run test.130 — code is correct, hardware is in clean state.
+
+---
+
 ## Current state (2026-04-19, PRE test.130 — bypass brcmf_pcie_enter_download_state ARM_CR4 write)
 
 ### CODE STATE: brcmf_pcie_enter_download_state BYPASSED FOR BCM4360
