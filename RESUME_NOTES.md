@@ -2,7 +2,7 @@
 
 ## Current state (2026-04-19, PRE test.146 — brcmf_pcie_register() window instrumentation)
 
-### CODE STATE: test.146 source prepared and module rebuilt; commit/push before running
+### CODE STATE: test.146 source prepared, module rebuilt, committed and pushed
 
 **test.146 change: instrumentation only**
 - No new BAR0 MMIO and no new PCI config accesses.
@@ -17,6 +17,7 @@
 - Rebuild completed with:
   `make -C /nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules`
 - Build output: `brcmfmac.ko` linked; existing `brcmf_pcie_write_ram32` unused warning; BTF skipped because `vmlinux` is unavailable.
+- Commit pushed: `5021abb test.146: instrument PCI register window`
 
 **Purpose:**
 - test.145 last stream marker was `brcmf_pcie_register() entry`; it did not show the old `calling pci_register_driver` marker.
@@ -35,7 +36,7 @@
 - [ ] `lspci -s 00:1c.2 -nn -vv` shows secondary/subordinate `03/03`, MAbort clear
 - [ ] `lspci -s 03:00.0 -nn -vv` shows endpoint present, MAbort clear, CommClk+
 - [x] test.146 module rebuilt
-- [ ] PRE-test.146 code and notes committed/pushed
+- [x] PRE-test.146 code and notes committed/pushed
 
 **Interpretation matrix:**
 - Last marker `module_init entry` only: crash before/inside `brcmf_pcie_register()`.
