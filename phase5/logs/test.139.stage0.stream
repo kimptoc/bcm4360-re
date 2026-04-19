@@ -1,0 +1,46 @@
+=== dmesg stream start: Sun 19 Apr 19:04:30 BST 2026 ===
+[  492.782291] brcmfmac: loading out-of-tree module taints kernel.
+[  492.788852] brcmfmac: BCM4360 test.128: brcmf_pcie_register() entry
+[  492.788895] brcmfmac: BCM4360 test.128: calling pci_register_driver
+[  492.789138] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=00000000b1da5c8e)
+[  492.789180] brcmfmac: BCM4360 test.127: probe entry (vendor=14e4 device=43a0)
+[  492.789217] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+[  492.790759] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+[  492.792521] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+[  493.307075] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+[  493.307493] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcb7901600000
+[  493.307538] brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+[  493.357975] brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+[  493.358785] brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+[  493.358877] brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+[  493.361352] brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+[  493.364363] brcmfmac 0000:03:00.0: BCM4360 test.126: skipping PCIE2 mailbox clear; returning 0
+[  493.368430] brcmfmac: brcmf_chip_recognition: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+[  493.368436] brcmfmac: brcmf_chip_recognition: BCM4360 test.125: after reset, before get_raminfo
+[  493.368438] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[  493.368441] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[  493.368490] brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+[  493.371114] brcmfmac 0000:03:00.0: BCM4360 test.133: BusMaster cleared after chip_attach
+[  493.371187] brcmfmac 0000:03:00.0: BCM4360 test.133: ASPM disabled; LnkCtl before=0x0143 after=0x0140 ASPM-bits-after=0x0
+[  493.375063] brcmfmac 0000:03:00.0: BCM4360 test.120: before PCIE2 core/reginfo setup
+[  493.376653] brcmfmac 0000:03:00.0: BCM4360 test.120: reginfo selected (pcie2 rev=1)
+[  493.378228] brcmfmac 0000:03:00.0: BCM4360 test.120: pcie_bus_dev allocated
+[  493.379776] brcmfmac 0000:03:00.0: BCM4360 test.123: module params bypassed (dummy)
+[  493.381351] brcmfmac 0000:03:00.0: BCM4360 test.120: module params loaded
+[  493.382905] brcmfmac 0000:03:00.0: BCM4360 test.123: before bus kzalloc
+[  493.384440] brcmfmac 0000:03:00.0: BCM4360 test.120: bus allocated
+[  493.385974] brcmfmac 0000:03:00.0: BCM4360 test.120: msgbuf allocated
+[  493.387465] brcmfmac 0000:03:00.0: BCM4360 test.132: before struct wiring
+[  493.388961] brcmfmac 0000:03:00.0: BCM4360 test.132: before pci_pme_capable
+[  493.390470] brcmfmac 0000:03:00.0: BCM4360 test.132: after pci_pme_capable wowl=1
+[  493.392758] brcmfmac 0000:03:00.0: BCM4360 test.120: bus wired and drvdata set
+[  493.395087] brcmfmac 0000:03:00.0: BCM4360 test.120: before brcmf_alloc
+[  493.397456] brcmfmac 0000:03:00.0: BCM4360 test.120: brcmf_alloc complete
+[  493.399786] brcmfmac 0000:03:00.0: BCM4360 test.120: before OTP read
+[  493.402116] brcmfmac 0000:03:00.0: BCM4360 test.124: OTP read bypassed — OTP not needed
+[  493.404342] brcmfmac 0000:03:00.0: BCM4360 test.120: OTP read complete
+[  493.406659] brcmfmac 0000:03:00.0: BCM4360 test.120: before prepare_fw_request
+[  493.406685] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[  493.406688] brcmfmac 0000:03:00.0: BCM4360 test.120: firmware request prepared
+[  493.406690] brcmfmac 0000:03:00.0: BCM4360 test.120: before brcmf_fw_get_firmwares
+[  493.406696] brcmfmac 0000:03:00.0: BCM4360 test.120: brcmf_fw_get_firmwares returned async/success

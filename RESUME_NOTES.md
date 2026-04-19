@@ -1,13 +1,58 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.139 — assert ARM CR4 reset to stop async crash)
+## Current state (2026-04-19, PRE test.140 — assert ARM CR4 reset at probe-time, before async fw load)
 
-### CODE STATE: test.139 binary — assert RESET_CTL=1 at top of enter_download_state
+### CODE STATE: test.140 binary — assert RESET_CTL=1 in probe() after BusMaster-clear, before fw request
 
 **Hardware state (verified):**
-- PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.138 crash
+- PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.139 crash
 
-**test.138 RESULT (crash — ASYNC confirmed: ARM_CR4 IOCTL read never reached):**
+**test.139 RESULT (crash — async, before firmware callback):**
+- Stream ends at "brcmf_fw_get_firmwares returned async/success" — no callback markers
+- "enter_download_state" / "post-reset RESET_CTL=..." never appeared
+- CONCLUSION: ARM CR4 garbage killed host BEFORE firmware load callback fired (within ~1s of async fw request)
+- Matches pre-registered failure signature: "post-reset never appears → assert even earlier, at probe time"
+
+**test.140 plan: assert ARM CR4 RESET_CTL=1 in probe(), before brcmf_fw_get_firmwares**
+- Add RESET_CTL=1 write right after test.133 BusMaster-clear + ASPM-disable block in probe()
+- select_core(ARM_CR4), write RESET_CTL=1, mdelay(10), readback — NO mdelay before write
+- Log: "BCM4360 test.140: probe-time ARM CR4 reset asserted RESET_CTL=..."
+- In enter_download_state: change to diagnostic reads only (reset already asserted from probe)
+- BAR2 probe block in download_fw_nvram stays unchanged
+
+**Hypothesis (test.140):**
+- ARM CR4 is halted BEFORE async firmware load → no garbage execution during fw load
+- "probe-time ARM CR4 reset asserted IN_RESET=YES" appears in stream during sync probe
+- "enter_download_state" diagnostic reads confirm IN_RESET=YES (still held)
+- "pre-BAR2-ioread32" and "post-BAR2-ioread32" both appear
+- If BAR2 returns real value → SUCCESS (TCM accessible, proceed to copy_mem_todev)
+- If BAR2 returns 0xffffffff → CTO (ARM in reset but TCM/BAR2 still not accessible, need different approach)
+
+**Interpretation matrix (test.140):**
+- probe-time "IN_RESET=YES" + "pre-BAR2" + "post-BAR2" real value → SUCCESS
+- probe-time "IN_RESET=YES" + "pre-BAR2" + "post-BAR2"=0xffffffff → ARM reset alone insufficient for TCM access
+- probe-time "IN_RESET=YES" + "pre-BAR2" but no "post-BAR2" → sync crash at ioread32
+- probe-time "IN_RESET=YES" + no "pre-BAR2" → crash between enter_download_state and BAR2 probe (new failure mode)
+- probe-time "IN_RESET=NO" → RESET_CTL write failed or readback wrong, investigate
+- probe-time message never appears → crash even during probe BusMaster/ASPM block (very unexpected)
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+---
+
+## test.139 RESULT (crash — async before firmware callback):
+
+**Stream log (test.139.stage0.stream) — last entry:**
+- All sync probe markers through "brcmf_fw_get_firmwares returned async/success" ✓
+- **CRASH** — firmware load callback never fired; no enter_download_state markers
+- CONCLUSION: ARM CR4 garbage killed host within ~1s of async fw request during disk load
+
+---
+
+## test.138 RESULT (crash — ASYNC confirmed: ARM_CR4 IOCTL read never reached):
 - Markers appeared in stream:
   - "enter_download_state top" ✓ [488.082s]
   - "after select_core(ARM_CR4)" ✓ [488.382s]
