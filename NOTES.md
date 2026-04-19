@@ -34,25 +34,35 @@ sudo shutdown -h now
 Wait **30+ seconds** after power LED goes off, then power on.
 A reboot (`-r`) won't work — only full shutdown cuts PCIe slot power.
 
-## Step 2: Verify MMIO before loading anything
+## Step 2: Verify PCIe state before loading anything
+
+```bash
+sudo lspci -s 00:1c.2 -nn -vv
+sudo lspci -s 03:00.0 -nn -vv
+```
+
+Expected: root port secondary/subordinate `03/03`, endpoint present, MAbort
+clear, CommClk+.
+
+Optional BAR0 probe:
 
 ```bash
 sudo dd if=/sys/bus/pci/devices/0000:03:00.0/resource0 bs=4 count=1 | xxd
 ```
 
-**Right now this returns I/O error — that is the broken state you're trying to fix.**
-After a successful power cycle it should return 4 bytes of data (any value, not an error).
-If it still returns I/O error after power cycle → power off and wait longer, then try again.
+For this project, a fast I/O error/UR can still mean the endpoint is alive but
+the BAR0 backplane bridge is not initialized. A slow completion timeout is not
+safe for insmod. Prefer the current `test-staged-reset.sh` timing guard before
+loading the module.
 
-## Step 3: Rebuild module
+## Step 3: Prepare test.146, then commit/push before running
 
-```bash
-make -C /home/kimptoc/bcm4360-re/phase5/work
-```
+Next useful code change is instrumentation only: add ultra-narrow emergency
+markers inside `brcmf_pcie_register()` around the pre-`pci_register_driver`
+window. Save the PRE-test.146 plan in `RESUME_NOTES.md`, rebuild, then commit
+and push the notes/code before executing the test harness.
 
-## Step 4: Run test.116 stage0
+## Step 4: Run test.146 stage0 only
 
-The d11 guard code has never been reached — this is the first real test of it.
-Expected: BAR0 probe returns alive, d11 IN_RESET=YES, guard skips 0x1e0 read, stage0 completes cleanly.
-
-Only after stage0 clean: run stage1 (skip_arm=0).
+Use stage0 only. Stage1 remains forbidden until a stage0 run reaches the
+intended safe stopping point cleanly.
