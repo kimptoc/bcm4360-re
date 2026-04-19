@@ -3241,3 +3241,88 @@ Crash is in `brcmf_pcie_attach` → PCIe2 CONFIGADDR write (line 785 of pcie.c).
 
 This is test.128.
 
+---
+
+## TEST.128 RESULTS — 2026-04-19 (session restart after crash)
+
+Two test.128 runs captured from journal:
+
+### Run A — Boot -2 (00:54, module WITHOUT test.128 pcie_attach markers)
+Last BCM4360 marker: `BCM4360 test.120: before brcmf_fw_get_firmwares`
+→ Crash is in async callback fired by `brcmf_fw_get_firmwares` (i.e., `brcmf_pcie_setup`)
+
+### Run B — Boot -1 (07:40, module WITH test.128 pcie_attach markers)
+Last BCM4360 marker: `BCM4360 test.120: bus wired and drvdata set`
+→ Crash earlier than Run A; hardware state variance (worse PCIe state after Run A crash)
+→ `brcmf_pcie_setup/brcmf_pcie_attach` markers never reached
+
+### Analysis
+- Run A (more informative) confirms crash is in the async `brcmf_pcie_setup` callback
+- `brcmf_pcie_setup` immediately calls `brcmf_pcie_attach`
+- `brcmf_pcie_attach` writes to PCIe2 CONFIGADDR via backplane window (BAR0)
+- PCIe2 core is in BCMA reset at that point → CTO → MCE → hard reboot
+- Run B crashed earlier due to cumulative hardware state degradation after Run A
+
+### PCIe State (current)
+- MAbort- on endpoint (03:00.0): clean
+- MAbort+ in root port (00:1c.2) secondary status: dirty (from prior crash)
+- CommClk- in LnkCtl (dirty per CLAUDE.md pre-test checklist)
+
+### Test.128 Second Run Plan (test.128-run2)
+Run existing test.128 module binary again (already has pcie_attach markers).
+If hardware state permits, Run A behavior should repeat and we'll see:
+```
+BCM4360 test.128: brcmf_pcie_setup ENTRY
+BCM4360 test.128: before brcmf_pcie_attach
+BCM4360 test.128: brcmf_pcie_attach ENTRY
+BCM4360 test.128: before select_core PCIE2
+BCM4360 test.128: before write CONFIGADDR   ← likely last marker before crash
+```
+
+Command: `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+Log: phase5/logs/test.128.stage0 (will overwrite)
+
+### Test.129 Plan (implement fix)
+Based on evidence from Run A + BCMA reset theory:
+- Add BCM4360 early return in `brcmf_pcie_attach` before any MMIO
+- The function sets PCIe Command register (bus master enable) via backplane — already set by kernel PCI subsystem via pci_enable_device()
+- BCM4360 uses BAR2 for firmware download, so BAR1 config (purpose of pcie_attach) is unnecessary
+
+Fix: In `brcmf_pcie_attach`, before `select_core`, add:
+```c
+if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
+    pr_emerg("BCM4360 test.129: brcmf_pcie_attach bypassed for BCM4360\n");
+    return;
+}
+```
+
+---
+
+## PRE-test.128 second run — 2026-04-19 (session restart)
+
+### State
+- Module built: Apr 19 07:40 with test.128 pcie_attach markers
+- Test script: updated to test.128 labels
+- PCIe state: MAbort- endpoint, MAbort+ root port secondary (dirty), CommClk-
+- Previous run (07:40) crashed at "bus wired and drvdata set" (hardware state variance)
+
+### Hypothesis
+With current hardware state, we may see either:
+1. Crash again before async callback (hardware still degraded) → no new info on pcie_attach
+2. Crash inside brcmf_pcie_attach → confirms hypothesis, see which marker is last
+
+### Run
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+### Success criteria
+- Journal shows "brcmf_pcie_attach ENTRY" or "before write CONFIGADDR"
+- Confirms crash location in brcmf_pcie_attach
+- Ready to implement test.129 bypass
+
+### Failure signature
+- Journal only shows markers up to "bus wired and drvdata set" again
+- Hardware state too degraded; need power cycle before next attempt
+- In that case, skip second run and go straight to test.129 fix
+
