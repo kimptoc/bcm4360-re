@@ -1,65 +1,80 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.138 — confirm BAR2 ioread32 as sync crash)
+## Current state (2026-04-19, PRE test.139 — assert ARM CR4 reset to stop async crash)
 
-### CODE STATE: test.138 binary — pre/post BAR2 ioread32 markers
+### CODE STATE: test.139 binary — assert RESET_CTL=1 at top of enter_download_state
 
 **Hardware state (verified):**
-- PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.137 crash
-- Fresh boot after test.137 crash
-- **Module IS built** — test.138 code in brcmfmac.ko (compiled this session)
+- PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.138 crash
 
-**test.137 RESULT (crash — all ARM_CR4 BAR0 reads succeeded, crash is between last mdelay and BAR2 probe):**
-- ALL 4 ARM_CR4 markers appeared in stream:
-  - "enter_download_state top" ✓ [531.108697s]
-  - "after select_core(ARM_CR4)" ✓ [531.408774s]
-  - "after RESET_CTL read = 0x0000" ✓ [531.708860s]
-  - "ARM_CR4: RESET_CTL=0x0000 IN_RESET=NO IOCTL=0x0001 CPUHALT=NO CLK=YES" ✓ [532.008945s]
-- Stream ends after last ARM_CR4 marker — "pre-BAR2-ioread32" never appeared
-- CONCLUSION: crash is SOMEWHERE between end of enter_download_state (after mdelay(300) at line 840)
-  and the BAR2 probe ioread32 (line 1836). Two possibilities:
-  1. **ASYNC** crash fires during the trailing mdelay(300) at line 840
-  2. **SYNC** crash at ioread32(devinfo->tcm) line 1836 (first BAR2 access)
+**test.138 RESULT (crash — ASYNC confirmed: ARM_CR4 IOCTL read never reached):**
+- Markers appeared in stream:
+  - "enter_download_state top" ✓ [488.082s]
+  - "after select_core(ARM_CR4)" ✓ [488.382s]
+  - "after RESET_CTL read = 0x0000" ✓ [488.682s]
+  - **CRASH** — "ARM_CR4: RESET_CTL=..." diagnostic never appeared (300ms mdelay after RESET_CTL read)
+- Neither "pre-BAR2-ioread32" nor "post-BAR2-ioread32" appeared
+- CONCLUSION: **ASYNC crash** — ARM CR4 CPU executing garbage generates random PCIe errors
+  - Crash window is non-deterministic: test.137 got further (through IOCTL read + diagnostic)
+  - test.138 crashed earlier (between RESET_CTL read and IOCTL read)
+  - This rules out a SYNC crash at ioread32(tcm) — crash is earlier, in a mdelay()
+  - Root cause: ARM CR4 running without firmware → random garbage bus errors at any time
 
-**ARM_CR4 state at crash time:**
-- RESET_CTL=0x0000: core NOT in reset (running)
-- IOCTL=0x0001: CLK=YES, CPUHALT=NO (CPU actively running — no firmware loaded, executing garbage)
-- BAR0 reads all worked: BAR0 is stable and accessible
+**Root cause confirmed:** ARM CR4 is running after SBR with RESET_CTL=0 (not in reset),
+IOCTL=0x0001 (CLK=YES, CPUHALT=NO). It executes garbage, generating random PCIe errors
+that crash the host. The crash window is any mdelay() or other time after insmod.
 
-**Open question for test.138:**
-- Does "pre-BAR2-ioread32" marker appear?
-  - YES → ioread32(tcm) is the sync crash (CONFIRMED crash site)
-  - NO → crash is async during trailing mdelay(300) after ARM_CR4 diagnostic
+**test.139 plan: assert ARM CR4 reset immediately in enter_download_state**
+- Put RESET_CTL=1 write at the top of the BCM4360 branch, with only select_core before it
+- No diagnostic reads or mdelays BEFORE the reset write — minimize async crash window
+- After write: mdelay(100), read back RESET_CTL to confirm, read IOCTL for diagnostics
+- Keep test.138 BAR2 probe markers — if reset works, BAR2 should be accessible next
 
-**Code changes for test.138:**
-1. In download_fw_nvram BCM4360 path:
-   - Replace test.135 BAR2 probe block with:
-   - "pre-BAR2-ioread32" + mdelay(300) BEFORE ioread32(devinfo->tcm)
-   - "post-BAR2-ioread32 = 0x%08x" AFTER ioread32
-2. WAIT_SECS increased to 12 (extra mdelay(300) before ioread32)
+**Hypothesis (test.139):**
+- After asserting RESET_CTL=1, ARM CR4 stops executing garbage → no more async crashes
+- "post-reset RESET_CTL=..." marker should appear confirming reset asserted
+- Then "pre-BAR2-ioread32" and "post-BAR2-ioread32" should both appear
+- BAR2 probe may return real value (TCM accessible) or 0xffffffff (still not ready)
 
-**Interpretation matrix (test.138):**
-- "pre-BAR2-ioread32" appears, "post-BAR2" does NOT → CONFIRMED: ioread32(tcm) is sync crash
-- Neither "pre-BAR2" appears → ASYNC crash during trailing mdelay(300) in enter_download_state (before line 841 return)
-- Both appear → crash is later (copy_mem_todev iowrite32 to BAR2)
+**Code changes for test.139 (enter_download_state BCM4360 branch):**
+1. Remove all test.137 diagnostic read markers from enter_download_state
+2. select_core(ARM_CR4) immediately
+3. Write RESET_CTL=0x1 to assert reset (no mdelay before this)
+4. mdelay(100) to allow reset propagation
+5. Read back RESET_CTL and IOCTL to confirm state
+6. Log "post-reset RESET_CTL=0x... IN_RESET=... IOCTL=0x... CPUHALT=... CLK=..."
+7. mdelay(300) for journal flush, return 0
+8. test.138 BAR2 probe block in download_fw_nvram unchanged
 
-**Hypothesis (test.138):**
-- Most likely: "pre-BAR2-ioread32" appears but "post-BAR2" does NOT
-  → ioread32(devinfo->tcm) crashes because ARM_CR4 TCM not accessible while CPU is running with no firmware
-  → Fix will require: assert RESET_CTL=1 (or CPUHALT) in enter_download_state before BAR2 writes
+**Interpretation matrix (test.139):**
+- "post-reset RESET_CTL..." appears, "pre-BAR2" appears, "post-BAR2" has real value → SUCCESS, proceed to copy_mem_todev
+- "post-reset" appears, "pre-BAR2" appears, "post-BAR2" = 0xffffffff → BAR2 CTO (need more reset work)
+- "post-reset" appears, "pre-BAR2" appears, "post-BAR2" never appears → sync crash at ioread32(tcm)
+- "post-reset" appears, "pre-BAR2" never appears → async crash persists despite reset (need earlier reset)
+- "post-reset" never appears → crash during RESET_CTL write or mdelay(100) → need earlier reset (probe time)
 
-**If hypothesis confirmed, test.139 plan:**
-- In enter_download_state BCM4360 path: after reading state, write RESET_CTL=1 to assert reset
-- mdelay(100) to allow reset propagation, read back RESET_CTL to confirm
-- Then BAR2 probe should succeed
-- NOTE: BAR0 writes appear safe (BAR0 reads were safe in test.137) — lower risk than BAR2 writes
+**If test.139 crashes before "post-reset":**
+- Assert ARM CR4 reset even earlier — at end of probe right after SBR, not in enter_download_state
 
 **Test command:**
 ```
 sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 ```
 
-**Post-test: check both test.138.stage0 AND test.138.stage0.stream for markers.**
+**Post-test: check both test.139.stage0 AND test.139.stage0.stream for markers.**
+
+---
+
+## test.138 RESULT (crash — ASYNC confirmed, ARM CR4 running garbage):
+
+**Stream log (test.138.stage0.stream) — last entries:**
+- "enter_download_state top" ✓ [488.082s]
+- "after select_core(ARM_CR4)" ✓ [488.382s]
+- "after RESET_CTL read = 0x0000" ✓ [488.682s]
+- **CRASH** — "ARM_CR4: RESET_CTL=..." IOCTL diagnostic never appeared
+- "pre-BAR2-ioread32" never appeared
+- CONCLUSION: async crash during mdelay(300) after RESET_CTL read (or at IOCTL read)
+- Non-deterministic: test.137 got further (IOCTL read succeeded), test.138 crashed earlier
 
 ---
 

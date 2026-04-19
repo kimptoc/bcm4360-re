@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.138.stage${STAGE}"
+LOG="$LOG_DIR/test.139.stage${STAGE}"
 
-echo "=== test.138: confirm BAR2 crash site (pre/post ioread32 markers) — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.139: assert ARM CR4 reset to stop async crash — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -28,7 +28,7 @@ case "$STAGE" in
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.138: bisect whether BAR2 ioread32 is sync crash or async during preceding mdelay)" | tee -a "$LOG"
+echo "(test.139: assert ARM CR4 RESET_CTL=1 to stop garbage execution → should allow BAR2 access)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -105,14 +105,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=12  # test.138: 4x mdelay(300) in enter_download_state + 2x mdelay(300) around BAR2 probe
+    WAIT_SECS=12  # test.139: mdelay(100)+mdelay(300) in enter_download_state + 2x mdelay(300) around BAR2 probe
 else
     SKIP_ARM=0
     WAIT_SECS=35
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.138 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.139 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.

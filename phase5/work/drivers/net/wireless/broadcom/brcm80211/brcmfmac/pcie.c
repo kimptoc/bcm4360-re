@@ -812,28 +812,17 @@ static int brcmf_pcie_enter_download_state(struct brcmf_pciedev_info *devinfo)
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		u32 reset_ctl, ioctl;
 
-		/* test.137: fine-grained bisection of crash inside enter_download_state.
-		 * test.135/136: ARM_CR4 marker was never seen after "before download_fw_nvram",
-		 * suggesting crash happens here. Narrow it down step-by-step.
-		 * Interpretation:
-		 *   top logged, select_core NOT → crash async during mdelay or in select_core config write
-		 *   select_core logged, RESET_CTL NOT → ioread32 at BAR0+0x1800 is the crash (BAR0 CTO)
-		 *   RESET_CTL logged, IOCTL NOT → ioread32 at BAR0+0x1408 is the crash
-		 *   all logged → BAR0 ARM_CR4 accessible; crash must be at BAR2 probe below
-		 */
-		pr_emerg("BCM4360 test.137: enter_download_state top\n");
-		mdelay(300);
-
+		/* test.139: ARM CR4 running garbage after SBR → async PCIe crash.
+		 * Assert reset IMMEDIATELY — select_core then write, no mdelay before.
+		 * Diagnostic reads come AFTER reset (CPU halted = safe). */
+		pr_emerg("BCM4360 test.139: enter_download_state — asserting ARM CR4 reset\n");
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
-		pr_emerg("BCM4360 test.137: after select_core(ARM_CR4)\n");
-		mdelay(300);
+		brcmf_pcie_write_reg32(devinfo, 0x1800, 1); /* RESET_CTL = 1: assert reset */
+		mdelay(100); /* let reset propagate */
 
-		reset_ctl = brcmf_pcie_read_reg32(devinfo, 0x1800); /* BCMA_RESET_CTL */
-		pr_emerg("BCM4360 test.137: after RESET_CTL read = 0x%04x\n", reset_ctl);
-		mdelay(300);
-
-		ioctl = brcmf_pcie_read_reg32(devinfo, 0x1408); /* BCMA_IOCTL */
-		pr_emerg("BCM4360 test.137: ARM_CR4: RESET_CTL=0x%04x IN_RESET=%s IOCTL=0x%04x CPUHALT=%s CLK=%s\n",
+		reset_ctl = brcmf_pcie_read_reg32(devinfo, 0x1800); /* confirm reset */
+		ioctl     = brcmf_pcie_read_reg32(devinfo, 0x1408); /* IOCTL state */
+		pr_emerg("BCM4360 test.139: post-reset RESET_CTL=0x%04x IN_RESET=%s IOCTL=0x%04x CPUHALT=%s CLK=%s\n",
 			 reset_ctl, (reset_ctl & 1) ? "YES" : "NO",
 			 ioctl,     (ioctl & 0x0020) ? "YES" : "NO",
 			 (ioctl & 1) ? "YES" : "NO");
