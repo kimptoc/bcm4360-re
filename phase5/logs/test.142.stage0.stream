@@ -1,0 +1,6 @@
+=== dmesg stream start: Sun 19 Apr 19:57:14 BST 2026 ===
+[  904.845078] brcmfmac: loading out-of-tree module taints kernel.
+[  904.851921] brcmfmac: BCM4360 test.128: brcmf_pcie_register() entry
+[  904.851981] brcmfmac: BCM4360 test.128: calling pci_register_driver
+[  905.909875] pcieport 0000:00:1c.2: Enabling MPC IRBNCE
+[  905.909880] pcieport 0000:00:1c.2: Intel PCH root port ACS workaround enabled

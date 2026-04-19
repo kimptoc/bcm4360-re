@@ -1,50 +1,61 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.142 — ARM reset reordered FIRST after chip_attach; logs core base)
+## Current state (2026-04-19, PRE test.143 — re-run test.142 code; same module, new log name)
 
-### CODE STATE: test.142 binary — built and ready
+### CODE STATE: test.142 binary — NO REBUILD NEEDED (same code, test.143 = re-run)
 
 **Hardware state (verified):**
-- PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.141 crash
+- PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.142 crash
 
-**test.141 RESULT (crash — too early to determine; logging infrastructure failed):**
-- Last captured messages: "devinfo allocated, before pdev assign" (line 3970)
-  — only 5 brcmf messages total in journal from that boot
-- Stream log (.stream) contained only header + null bytes: `dmesg -wk >> file` writes to OS page
-  cache; the crash flushed nothing; all messages were lost
-- Test.141 crashed BEFORE the probe-time ARM reset code at line 4054 — purely random async crash
-  from ARM executing garbage during the 500ms SBR wait + chip_attach window
-- The IOCTL write was NOT confirmed to be the crash cause (discriminator never fired)
-- IMPORTANT: test.141 code is CORRECT — it just didn't reach the reset code due to bad timing luck
-- CONCLUSION: need to either (a) move reset earlier, or (b) survive long enough to reach it
+**test.142 RESULT (crash — BEFORE probe() — ARM killed host during PCIe enumeration window):**
+- Stream log captured 5 lines then stopped:
+  - [904.845] loading out-of-tree module taints kernel. ✓
+  - [904.851] brcmf_pcie_register() entry ✓
+  - [904.851] calling pci_register_driver ✓
+  - [905.909] pcieport 0000:00:1c.2: Enabling MPC IRBNCE ✓
+  - [905.909] pcieport 0000:00:1c.2: Intel PCH root port ACS workaround enabled ✓
+  - **CRASH** — "BCM4360 test.128: PROBE ENTRY" never appeared
+- Crash window: ~1s after insmod, during PCI driver enumeration (before probe() called)
+- streaming fix WORKED — we got 5 lines instead of 0
+- CONCLUSION: earlier-than-ever crash; but tests 137-141 all reached further; this is bad luck
+- ARM executed garbage during the ~1s between pci_register_driver and probe() callback
 
-**test.142 plan: ARM CR4 reset reordered FIRST after chip_attach; fix streaming; log core base**
-Changes from test.141:
-1. ARM CR4 reset code moved BEFORE BusMaster clear and ASPM disable — minimises window
-   after chip_attach to ARM halt
-2. Add log of `arm_core->base` — needed to hardcode BAR0_WINDOW for pre-chip_attach reset
-   in test.143
-3. Fixed streaming: `dmesg -wk | while read; do echo >> file; sync; done` — sync per line
-   ensures messages survive crash (previous: plain `>>` buffered in page cache, lost on crash)
+**test.143 plan: RE-RUN test.142 code (no code change)**
+- Same module, same parameters — we just need a surviving run to get ARM CR4 core->base
+- Tests 137-141 all reached enter_download_state or later; test.142 crash was outlier bad luck
+- Advisor: ~70% chance of getting core->base in one re-run
+- If test.143 also crashes before probe(): implement EROM-walking ARM halt in module_init
 
-**Hypothesis (test.142):**
-- If ARM reset reaches execution: RESET_CTL=0x00000001 (proper sequence = not wedged)
-- enter_download_state confirms: RESET_CTL=0x1, IOCTL=0x0023 (CPUHALT|FGC|CLK)
-- Log shows "ARM CR4 core->base=0x180XXXXX" — value needed for test.143 early reset
-- If ARM crash window strikes again before line 4054: crash early again (we get core base
-  from a SURVIVING run, or implement pre-chip_attach hardcoded reset in test.143)
+**Hypothesis (test.143):**
+- Likely (~70%) probe() is reached: "ARM CR4 core->base=0x180XXXXX" log appears after chip_attach
+- If ARM reset block executes: RESET_CTL=0x00000001 (proper sequence with IOCTL=FGC|CLK first)
+- If crashes before probe() again: need pre-chip_attach EROM-based ARM halt approach
+- Streaming fix confirmed working (test.142 got 5 lines); will capture any probe-time messages
 
-**Interpretation matrix (test.142):**
-- Reset message appears + RESET_CTL=0x1 → ARM properly halted; proceed to BAR2 test
-- Reset message appears + RESET_CTL=0xffffffff → wrapper wedged (unexpected — IOCTL gate should fix)
-- Crash before reset message (no "ARM CR4 core->base" log) → random async crash again;
-  need pre-chip_attach reset using hardcoded base (test.143)
-- Stream log has messages this time → streaming fix worked
+**Interpretation matrix (test.143):**
+- "ARM CR4 core->base=0x180XXXXX" appears → use base in test.144 for pre-chip_attach reset
+- Reset block fires + RESET_CTL=0x1 → ARM halted; proceed to BAR2 test (stage 1)
+- Reset block fires + RESET_CTL=0xffffffff → wedged (unexpected with IOCTL=FGC|CLK first)
+- Crashes before probe() again → implement EROM-walking ARM halt in module_init/earlier probe
 
 **Test command:**
 ```
 sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 ```
+
+---
+
+## test.142 RESULT (crash — BEFORE probe(); ARM crashed during PCIe enumeration window):
+
+**Stream log (test.142.stage0.stream) — all 5 lines captured:**
+- [904.845] brcmfmac: loading out-of-tree module taints kernel. ✓
+- [904.851] BCM4360 test.128: brcmf_pcie_register() entry ✓
+- [904.851] BCM4360 test.128: calling pci_register_driver ✓
+- [905.909] pcieport 0000:00:1c.2: Enabling MPC IRBNCE ✓
+- [905.909] pcieport 0000:00:1c.2: Intel PCH root port ACS workaround enabled ✓
+- **CRASH** — "PROBE ENTRY" never appeared; crash ~1s after insmod
+- Streaming fix CONFIRMED working (vs test.141 which captured 0 lines)
+- CONCLUSION: ARM crash window struck during PCI enumeration delay, BEFORE probe() callback
 
 ---
 
