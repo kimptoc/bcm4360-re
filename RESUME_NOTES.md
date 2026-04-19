@@ -1,45 +1,67 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.140 — assert ARM CR4 reset at probe-time, before async fw load)
+## Current state (2026-04-19, PRE test.141 — proper BCMA ARM CR4 reset: IOCTL=FGC|CLK|CPUHALT before RESET_CTL)
 
-### CODE STATE: test.140 binary — assert RESET_CTL=1 in probe() after BusMaster-clear, before fw request
+### CODE STATE: test.141 binary — built and ready
 
 **Hardware state (verified):**
-- PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.139 crash
+- PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.140 crash
 
-**test.139 RESULT (crash — async, before firmware callback):**
-- Stream ends at "brcmf_fw_get_firmwares returned async/success" — no callback markers
-- "enter_download_state" / "post-reset RESET_CTL=..." never appeared
-- CONCLUSION: ARM CR4 garbage killed host BEFORE firmware load callback fired (within ~1s of async fw request)
-- Matches pre-registered failure signature: "post-reset never appears → assert even earlier, at probe time"
+**test.140 RESULT (crash — wrapper wedged, RESET_CTL readback=0xffffffff):**
+- probe-time reset message appeared: "RESET_CTL=0xffffffff IN_RESET=YES"
+- BUT 0xffffffff indicates wrapper in undefined state — NOT a real reset confirmation
+- Stream ends truncated at "before brcmf_fw_get_firmwares" (4096-byte write at crash)
+- "brcmf_fw_get_firmwares returned async/success" NEVER appeared (unlike test.139 which got that far)
+- CONCLUSION: writing RESET_CTL=1 WITHOUT first writing IOCTL=FGC|CLK (0x0003) left ARM wrapper wedged
+  - Proper sequence (brcmf_chip_ai_coredisable): IOCTL=FGC|CLK|CPUHALT FIRST, then RESET_CTL=1
+  - Without FGC, ARM core clock was NOT gated before asserting reset → wrapper entered undefined state
+  - ARM may still have been running; crash happened earlier than test.139 (random window)
+- Root cause: missing IOCTL=prereset|FGC|CLK step before RESET_CTL write
 
-**test.140 plan: assert ARM CR4 RESET_CTL=1 in probe(), before brcmf_fw_get_firmwares**
-- Add RESET_CTL=1 write right after test.133 BusMaster-clear + ASPM-disable block in probe()
-- select_core(ARM_CR4), write RESET_CTL=1, mdelay(10), readback — NO mdelay before write
-- Log: "BCM4360 test.140: probe-time ARM CR4 reset asserted RESET_CTL=..."
-- In enter_download_state: change to diagnostic reads only (reset already asserted from probe)
-- BAR2 probe block in download_fw_nvram stays unchanged
+**test.141 plan: proper BCMA reset sequence for ARM CR4 at probe-time**
+- Mirror brcmf_chip_ai_coredisable() sequence exactly:
+  1. select_core(ARM_CR4)
+  2. Read IOCTL (baseline: expect 0x0001 = CLK=YES, FGC=NO)
+  3. Write IOCTL = CPUHALT | FGC | CLK = 0x0020 | 0x0002 | 0x0001 = 0x0023
+  4. Read IOCTL back (dummy flush)
+  5. Write RESET_CTL = 1
+  6. mdelay(1) (usleep_range(10,20) in chip.c; 1ms is ample)
+  7. Read RESET_CTL back — MUST be exactly 0x00000001, not 0xffffffff
+  8. Log: "BCM4360 test.141: probe-time ARM CR4 reset: IOCTL_before=0x... IOCTL_after_fgc=0x... RESET_CTL=0x... IN_RESET=..."
+  9. Write IOCTL = CPUHALT | FGC | CLK again (in-reset configure, per chip.c)
+- In enter_download_state: read IOCTL and RESET_CTL to confirm state held
+- Update test script: s/test.139/test.141/g
 
-**Hypothesis (test.140):**
-- ARM CR4 is halted BEFORE async firmware load → no garbage execution during fw load
-- "probe-time ARM CR4 reset asserted IN_RESET=YES" appears in stream during sync probe
-- "enter_download_state" diagnostic reads confirm IN_RESET=YES (still held)
-- "pre-BAR2-ioread32" and "post-BAR2-ioread32" both appear
-- If BAR2 returns real value → SUCCESS (TCM accessible, proceed to copy_mem_todev)
-- If BAR2 returns 0xffffffff → CTO (ARM in reset but TCM/BAR2 still not accessible, need different approach)
+**Hypothesis (test.141):**
+- After proper sequence: RESET_CTL readback = 0x00000001 (not 0xffffffff) → ARM genuinely in reset
+- Machine survives through async fw load (no more ARM garbage on PCIe)
+- enter_download_state diagnostic reads: RESET_CTL=0x1, IOCTL=0x0023 (CPUHALT|FGC|CLK)
+- Then we can safely access BAR2/TCM
 
-**Interpretation matrix (test.140):**
-- probe-time "IN_RESET=YES" + "pre-BAR2" + "post-BAR2" real value → SUCCESS
-- probe-time "IN_RESET=YES" + "pre-BAR2" + "post-BAR2"=0xffffffff → ARM reset alone insufficient for TCM access
-- probe-time "IN_RESET=YES" + "pre-BAR2" but no "post-BAR2" → sync crash at ioread32
-- probe-time "IN_RESET=YES" + no "pre-BAR2" → crash between enter_download_state and BAR2 probe (new failure mode)
-- probe-time "IN_RESET=NO" → RESET_CTL write failed or readback wrong, investigate
-- probe-time message never appears → crash even during probe BusMaster/ASPM block (very unexpected)
+**Interpretation matrix (test.141):**
+- RESET_CTL=0x00000001 + survive to enter_download_state → ARM reset worked, proceed to BAR2 test
+- RESET_CTL=0xffffffff AGAIN → wrapper still wedged, need different approach (e.g. IOCTL write itself crashes)
+- IOCTL write triggers crash (no reset message at all) → IOCTL write is also unsafe, need SBR-based reset
+- RESET_CTL=0x00000001 but crash still at fw_get_firmwares → ARM reset OK but something else crashing
+
+**Discriminator:** RESET_CTL must read exactly 0x00000001 to confirm success. 0xffffffff = wrapper wedged (same as test.140, try a different approach). Any other value = unexpected.
 
 **Test command:**
 ```
 sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 ```
+
+---
+
+## test.140 RESULT (crash — wrapper wedged, missing IOCTL=FGC|CLK pre-step):
+
+**Stream log (test.140.stage0.stream) — last entries:**
+- All probe markers through ASPM-disable ✓
+- "BCM4360 test.140: probe-time ARM CR4 reset asserted RESET_CTL=0xffffffff IN_RESET=YES" ← WEDGED
+- Machine continued (probe setup kept running: PCIE2 setup, alloc, OTP bypass, fw request prep)
+- CRASH — stream truncated mid-line at "before brcmf_fw_get_firmwares" (4096-byte FS block write)
+- "brcmf_fw_get_firmwares returned async/success" NEVER appeared
+- CONCLUSION: wrapper wedged by incomplete reset sequence; ARM likely still running; crash earlier than test.139
 
 ---
 
