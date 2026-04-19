@@ -1,6 +1,6 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19 23:20 BST, PRE test.148 — core/register call-site markers)
+## Current state (2026-04-19 23:18 BST, PRE test.148 — PCIe clean; ready to run stage0)
 
 ### CODE STATE: test.148 source prepared, rebuilt, committed, and pushed
 
@@ -42,9 +42,11 @@
 **Required before running test.148:**
 - PRE-test.148 source/notes/harness state is committed and pushed:
   - `2924ae6 test.148: instrument core registration path`
-- Verify PCIe state is still clean:
-  - root port `00:1c.2` secondary/subordinate `03/03`, MAbort clear
-  - endpoint `03:00.0` present, MAbort clear
+- PCIe state verified clean immediately before running:
+  - root port `00:1c.2` secondary/subordinate `03/03`, MAbort clear, `DLActive+`
+  - endpoint `03:00.0` present, BAR0 `b0600000` size `32K`, BAR2 `b0400000` size `2M`
+  - endpoint `Status` shows `<MAbort-`; AER `UESta` is clear, including `CmpltTO-` and `UnsupReq-`
+  - endpoint `DevSta` still shows `CorrErr+` / `UnsupReq+`, matching prior fast-UR guard behavior
 
 **Interpretation matrix:**
 - Last marker `module_init entry`: crash before the `brcmf_core_init()` call-site marker; consider an ultra-minimal module-init/no-core-init discriminator.
