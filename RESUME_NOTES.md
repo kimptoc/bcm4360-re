@@ -3078,3 +3078,55 @@ Fresh rebuild of current code to isolate:
 - Fresh rebuild completed successfully
 - About to run: `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
 - Expected: either the crash reproduces OR system recovers (no crash)
+
+### test.127 RESULT: CRASHED during insmod (kernel panic) — system recovered via watchdog
+
+**test.127 ran at 2026-04-19 00:54. Module crashed the kernel during insmod, before any probe output. System recovered cleanly.**
+
+**Crash signature (same as test.116-126):**
+- Log ends with: `=== Loading brcmfmac (bcm4360_reset_stage=0, bcm4360_skip_arm=1) ---`
+- No `insmod returned rc=` output (script halted)
+- No probe markers (test.114b code never ran)
+- Kernel panic → automatic watchdog recovery
+
+**Evidence the crash is in module load, not probe:**
+- insmod call at line 121 of test-staged-reset.sh never returns
+- Proof: script sets `set +e` at line 120 to capture RC, but never logs it
+- If probe had run, dev_info lines from pcie.c would appear before the crash
+- None appear → crash happens in module initialization, before probe entry
+
+**Regression timeline (test.109 working → test.115+ crashing):**
+- test.109 (commit e590e51): "enum moved before skip_arm; skip_arm=1 to avoid crash"
+  + Baseline safe state, module loads cleanly
+- test.110-114: Various diagnostic code added (core enum, d11 wrapper reads, d11 forceht)
+- test.115 (commit 2f3c12a): "remove resetcore from test.114b — pure diagnostic control"
+  + First crash observed
+  + ALL subsequent tests (116-127) crash identically
+
+**Key observation:**
+- The code between test.109 and test.115 looks safe (mostly diagnostic reads)
+- But the crash is happening BEFORE the probe function entry
+- This means either:
+  1. **Module initialization** (module_init or static initializers) has unsafe code
+  2. **Kernel module ABI** changed (kbuild/kernel incompatibility)
+  3. **Symbol resolution failure** causes a late kernel crash during insmod
+
+**Symbol check needed:**
+- Verify module dependencies haven't broken
+- Confirm brcmutil, cfg80211 are present and compatible
+- Check for unresolved symbols that could cause late-stage panic
+
+### NEXT: Isolate the insmod crash
+
+Phase 2a (Hypothesis: kernel module ABI corruption):
+1. Check module symbol resolution: `modinfo ./brcmfmac.ko | grep depends`
+2. Compare with test.109 baseline: git show e590e51:drivers/.../pcie.c | wc -l
+3. If symbols OK → rebuild with test.109 exact code to confirm that works
+
+If test.109 code runs cleanly → regression is in test.110-114 diffs.
+If test.109 also crashes → module infrastructure broken (compile flags? kernel version?)
+
+### Files to check
+- phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c (line 1-100 for static init)
+- Kbuild flags (CFLAGS, module dependencies)
+- Compare test.109 binary size vs current binary (if binary bloat suggests symbol table corruption)
