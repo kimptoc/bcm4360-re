@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.136.stage${STAGE}"
+LOG="$LOG_DIR/test.137.stage${STAGE}"
 
-echo "=== test.136: streaming dmesg capture + ARM_CR4 wrapper diagnostic + BAR2 probe — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.137: fine-grained bisection inside enter_download_state — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -104,14 +104,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=6
+    WAIT_SECS=10  # test.137: 4 extra mdelay(300) inside enter_download_state
 else
     SKIP_ARM=0
     WAIT_SECS=35
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.136 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.137 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.

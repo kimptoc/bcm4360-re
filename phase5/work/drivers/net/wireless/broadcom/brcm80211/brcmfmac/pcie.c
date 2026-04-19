@@ -812,17 +812,28 @@ static int brcmf_pcie_enter_download_state(struct brcmf_pciedev_info *devinfo)
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		u32 reset_ctl, ioctl;
 
-		/* test.135: diagnostic — read ARM_CR4 wrapper state via BAR0.
-		 * test.130 comment claimed ARM_CR4 in BCMA reset after SBR, but that was
-		 * written before chip_attach worked. Now chip_attach succeeds (set_passive
-		 * uses resetcore which releases RESET_CTL), so ARM_CR4 may be halted-but-not-
-		 * in-BCMA-reset. Verify actual state before deciding fix.
-		 * BCMA_IOCTL=0x0408, BCMA_RESET_CTL=0x0800; wrapper at core+0x1000 via BAR0.
+		/* test.137: fine-grained bisection of crash inside enter_download_state.
+		 * test.135/136: ARM_CR4 marker was never seen after "before download_fw_nvram",
+		 * suggesting crash happens here. Narrow it down step-by-step.
+		 * Interpretation:
+		 *   top logged, select_core NOT → crash async during mdelay or in select_core config write
+		 *   select_core logged, RESET_CTL NOT → ioread32 at BAR0+0x1800 is the crash (BAR0 CTO)
+		 *   RESET_CTL logged, IOCTL NOT → ioread32 at BAR0+0x1408 is the crash
+		 *   all logged → BAR0 ARM_CR4 accessible; crash must be at BAR2 probe below
 		 */
+		pr_emerg("BCM4360 test.137: enter_download_state top\n");
+		mdelay(300);
+
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
+		pr_emerg("BCM4360 test.137: after select_core(ARM_CR4)\n");
+		mdelay(300);
+
 		reset_ctl = brcmf_pcie_read_reg32(devinfo, 0x1800); /* BCMA_RESET_CTL */
-		ioctl     = brcmf_pcie_read_reg32(devinfo, 0x1408); /* BCMA_IOCTL */
-		pr_emerg("BCM4360 test.135: ARM_CR4 wrapper: RESET_CTL=0x%04x IN_RESET=%s IOCTL=0x%04x CPUHALT=%s CLK=%s\n",
+		pr_emerg("BCM4360 test.137: after RESET_CTL read = 0x%04x\n", reset_ctl);
+		mdelay(300);
+
+		ioctl = brcmf_pcie_read_reg32(devinfo, 0x1408); /* BCMA_IOCTL */
+		pr_emerg("BCM4360 test.137: ARM_CR4: RESET_CTL=0x%04x IN_RESET=%s IOCTL=0x%04x CPUHALT=%s CLK=%s\n",
 			 reset_ctl, (reset_ctl & 1) ? "YES" : "NO",
 			 ioctl,     (ioctl & 0x0020) ? "YES" : "NO",
 			 (ioctl & 1) ? "YES" : "NO");
@@ -3675,6 +3686,10 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 
 	pr_emerg("BCM4360 test.130: before brcmf_pcie_download_fw_nvram\n");
 	mdelay(300);
+	/* test.137: confirm mdelay completed — if this appears, crash is NOT async during the
+	 * 300ms above; it's inside download_fw_nvram (enter_download_state or BAR2).
+	 */
+	pr_emerg("BCM4360 test.137: post-mdelay — calling brcmf_pcie_download_fw_nvram\n");
 	ret = brcmf_pcie_download_fw_nvram(devinfo, fw, nvram, nvram_len);
 	if (ret) {
 		pr_emerg("BCM4360 test.130: brcmf_pcie_download_fw_nvram FAILED ret=%d\n", ret);
