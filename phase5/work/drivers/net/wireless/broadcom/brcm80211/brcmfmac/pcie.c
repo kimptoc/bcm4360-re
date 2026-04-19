@@ -3599,6 +3599,11 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 	pr_emerg("BCM4360 test.128: before brcmf_pcie_attach\n");
 	brcmf_pcie_attach(devinfo);
 	pr_emerg("BCM4360 test.128: after brcmf_pcie_attach\n");
+	mdelay(300); /* test.134: force journal flush before next risky op */
+
+	/* test.134: bisect crash site — pure memory ops, no MMIO */
+	pr_emerg("BCM4360 test.134: post-attach before fw-ptr-extract\n");
+	mdelay(300);
 
 	fw = fwreq->items[BRCMF_PCIE_FW_CODE].binary;
 	nvram = fwreq->items[BRCMF_PCIE_FW_NVRAM].nv_data.data;
@@ -3607,7 +3612,11 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 	devinfo->txcap_fw = fwreq->items[BRCMF_PCIE_FW_TXCAP].binary;
 	kfree(fwreq);
 
+	pr_emerg("BCM4360 test.134: after kfree(fwreq)\n");
+	mdelay(300);
+
 	pr_emerg("BCM4360 test.130: before brcmf_chip_get_raminfo\n");
+	mdelay(300);
 	ret = brcmf_chip_get_raminfo(devinfo->ci);
 	if (ret) {
 		brcmf_err(bus, "Failed to get RAM info\n");
@@ -3616,6 +3625,7 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 		goto fail;
 	}
 	pr_emerg("BCM4360 test.130: after brcmf_chip_get_raminfo\n");
+	mdelay(300);
 
 	/* Some of the firmwares have the size of the memory of the device
 	 * defined inside the firmware. This is because part of the memory in
@@ -3624,39 +3634,61 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 	 */
 	brcmf_pcie_adjust_ramsize(devinfo, (u8 *)fw->data, fw->size);
 	pr_emerg("BCM4360 test.130: after brcmf_pcie_adjust_ramsize\n");
+	mdelay(300);
+
+	/* test.134: re-enable BusMaster before firmware download (MMIO writes
+	 * to TCM via BAR2 don't need it, but MSI delivery later will require it) */
+	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
+		u16 lnkctl;
+
+		pci_set_master(devinfo->pdev);
+		pcie_capability_read_word(devinfo->pdev, PCI_EXP_LNKCTL, &lnkctl);
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.134: BusMaster re-enabled before fw-download; LnkCtl=0x%04x ASPM-bits=0x%x\n",
+			  lnkctl, lnkctl & PCI_EXP_LNKCTL_ASPMC);
+		mdelay(300);
+	}
 
 	pr_emerg("BCM4360 test.130: before brcmf_pcie_download_fw_nvram\n");
+	mdelay(300);
 	ret = brcmf_pcie_download_fw_nvram(devinfo, fw, nvram, nvram_len);
 	if (ret) {
 		pr_emerg("BCM4360 test.130: brcmf_pcie_download_fw_nvram FAILED ret=%d\n", ret);
 		goto fail;
 	}
 	pr_emerg("BCM4360 test.130: after brcmf_pcie_download_fw_nvram\n");
+	mdelay(300);
 
 	devinfo->state = BRCMFMAC_PCIE_STATE_UP;
 
 	pr_emerg("BCM4360 test.130: before brcmf_pcie_init_ringbuffers\n");
+	mdelay(300);
 	ret = brcmf_pcie_init_ringbuffers(devinfo);
 	if (ret) {
 		pr_emerg("BCM4360 test.130: brcmf_pcie_init_ringbuffers FAILED ret=%d\n", ret);
 		goto fail;
 	}
 	pr_emerg("BCM4360 test.130: after brcmf_pcie_init_ringbuffers\n");
+	mdelay(300);
 
 	ret = brcmf_pcie_init_scratchbuffers(devinfo);
 	if (ret)
 		goto fail;
 	pr_emerg("BCM4360 test.130: after brcmf_pcie_init_scratchbuffers\n");
+	mdelay(300);
 
 	pr_emerg("BCM4360 test.130: before select_core PCIE2\n");
+	mdelay(300);
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
 	pr_emerg("BCM4360 test.130: before brcmf_pcie_request_irq\n");
+	mdelay(300);
 	ret = brcmf_pcie_request_irq(devinfo);
 	if (ret) {
 		pr_emerg("BCM4360 test.130: brcmf_pcie_request_irq FAILED ret=%d\n", ret);
 		goto fail;
 	}
 	pr_emerg("BCM4360 test.130: after brcmf_pcie_request_irq\n");
+	mdelay(300);
 
 	/* hook the commonrings in the bus structure. */
 	for (i = 0; i < BRCMF_NROF_COMMON_MSGRINGS; i++)
@@ -3966,12 +3998,17 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	 * mappings are set up yet. Clear BusMaster to prevent any async chip DMA causing
 	 * SERR→MCE hard reset. Also disable ASPM to prevent link L1 re-entry during probe. */
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
+		u16 lnkctl_before, lnkctl_after;
+
 		pci_clear_master(pdev);
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.133: BusMaster cleared after chip_attach\n");
+		pcie_capability_read_word(pdev, PCI_EXP_LNKCTL, &lnkctl_before);
 		pci_disable_link_state(pdev, PCIE_LINK_STATE_ASPM_ALL);
+		pcie_capability_read_word(pdev, PCI_EXP_LNKCTL, &lnkctl_after);
 		dev_emerg(&pdev->dev,
-			  "BCM4360 test.133: ASPM disabled after chip_attach\n");
+			  "BCM4360 test.133: ASPM disabled; LnkCtl before=0x%04x after=0x%04x ASPM-bits-after=0x%x\n",
+			  lnkctl_before, lnkctl_after, lnkctl_after & PCI_EXP_LNKCTL_ASPMC);
 	}
 
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)

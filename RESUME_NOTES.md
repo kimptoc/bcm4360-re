@@ -1,6 +1,76 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.133 — pci_clear_master + ASPM disable after chip_attach)
+## Current state (2026-04-19, PRE test.134 — mdelay flush markers + ASPM verify + BusMaster restore)
+
+### CODE STATE: test.134 — mdelay(300) after every marker in brcmf_pcie_setup to force journal flush
+
+**Hardware state (verified):**
+- PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.133 crash
+- Fresh boot (boot 0 after test.133)
+- Module rebuilt: brcmfmac.ko compiled for test.134
+
+**test.133 RESULT (MAJOR BREAKTHROUGH — new crash territory):**
+- HYPOTHESIS CONFIRMED: BusMaster clear + ASPM disable eliminated the async crash barrier
+- Got through ALL previous barriers: chip_attach, msgbuf alloc, pci_pme_capable, brcmf_alloc,
+  firmware load, brcmf_pcie_setup entry, brcmf_pcie_attach bypass
+- **Last marker seen: "BCM4360 test.128: after brcmf_pcie_attach" (pcie.c line 3601)**
+- No markers after line 3601 visible in journal — but this may be message loss, NOT actual crash site
+- Code between line 3601 and next marker (3610) is pure memory ops + kfree — no MMIO
+- Most likely: crash is LATER (brcmf_pcie_download_fw_nvram MMIO write, ring buffer DMA, or IRQ setup)
+  and earlier journal flush prevented those markers from being captured
+
+**ASPM verification added for test.134:**
+- Read LnkCtl register before and after pci_disable_link_state to confirm it actually disabled ASPM
+- Previous test.133 had ASPM L0s L1 still visible in lspci pre-test (BIOS default), unknown if disabled
+
+**Root cause hypothesis (test.134):**
+- The crash site is likely brcmf_pcie_download_fw_nvram (line 3629) writing firmware to BAR2/TCM
+  OR brcmf_pcie_select_core(BCMA_CORE_PCIE2) MMIO at line 3652
+  OR brcmf_pcie_request_irq MSI setup at line 3654
+- mdelay(300) after each marker will force journal to persist each step before the next risky operation
+
+**Code changes for test.134 (pcie.c):**
+1. ASPM verification: read LnkCtl before/after pci_disable_link_state, log the result
+2. New bisection markers after "after brcmf_pcie_attach": "post-attach before fw-ptr-extract" + "after kfree(fwreq)"
+3. mdelay(300) after EVERY pr_emerg in brcmf_pcie_setup (lines 3601-3660)
+4. Re-enable BusMaster (pci_set_master) before firmware download with LnkCtl diagnostic print
+5. All existing test.130 markers retained with mdelay(300) added after each
+
+**Build status:** REBUILT — test.134 pcie.c compiled, brcmfmac.ko ready
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+---
+
+## test.133 RESULT (MAJOR BREAKTHROUGH — new crash territory after brcmf_pcie_attach):
+
+**Markers observed (ALL new territory):**
+- All markers through chip_attach (test.119) ✓
+- `BCM4360 test.133: BusMaster cleared after chip_attach` ✓
+- `BCM4360 test.133: ASPM disabled after chip_attach` ✓
+- All struct wiring (test.132 markers: before/after pci_pme_capable) ✓
+- `BCM4360 test.120: bus wired and drvdata set` ✓
+- `BCM4360 test.120: brcmf_alloc complete` ✓
+- OTP bypassed ✓
+- `BCM4360 test.120: firmware request prepared` ✓
+- `BCM4360 test.120: brcmf_fw_get_firmwares returned async/success` ✓
+- Direct firmware load for clm_blob/txcap_blob FAILED (-2) — expected, files not present
+- `BCM4360 test.128: brcmf_pcie_setup ENTRY ret=0` ✓
+- `BCM4360 test.129: brcmf_pcie_attach bypassed for BCM4360` ✓
+- `BCM4360 test.128: after brcmf_pcie_attach` ✓
+- **CRASH** — no test.130 markers visible (may be journal message loss, not crash site)
+
+**Key finding:**
+- BusMaster clear + ASPM disable after chip_attach WORKED — completely eliminated the previous async crash
+- This is the farthest we have ever gotten — into brcmf_pcie_setup firmware callback
+- Journal log saved: phase5/logs/test.133.journal
+
+---
+
+## Previous state (2026-04-19, PRE test.133 — pci_clear_master + ASPM disable after chip_attach)
 
 ### CODE STATE: test.133 — BusMaster cleared and ASPM disabled immediately after chip_attach
 
