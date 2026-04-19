@@ -3298,31 +3298,80 @@ if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
 
 ---
 
-## PRE-test.128 second run — 2026-04-19 (session restart)
+## POST-test.128 second run — 2026-04-19 (session restart after crash)
 
-### State
-- Module built: Apr 19 07:40 with test.128 pcie_attach markers
-- Test script: updated to test.128 labels
-- PCIe state: MAbort- endpoint, MAbort+ root port secondary (dirty), CommClk-
-- Previous run (07:40) crashed at "bus wired and drvdata set" (hardware state variance)
+### Result: CRASHED EARLY (hardware state degradation)
 
-### Hypothesis
-With current hardware state, we may see either:
-1. Crash again before async callback (hardware still degraded) → no new info on pcie_attach
-2. Crash inside brcmf_pcie_attach → confirms hypothesis, see which marker is last
+Boot -1 (07:41-07:49) ran test.128 second run. Last markers in journal:
+- `BCM4360 test.128: brcmf_pcie_register() entry`
+- `BCM4360 test.128: calling pci_register_driver`
+- `BCM4360 test.128: PROBE ENTRY`
+- `BCM4360 test.127: probe entry`
+- `BCM4360 test.127: devinfo allocated, before pdev assign`
+- **NO** `BCM4360 test.127: devinfo->pdev assigned, before SBR`
 
-### Run
+Crash is after devinfo kzalloc but before devinfo->pdev = pdev. This is trivially safe code —
+crash is almost certainly an asynchronous MCE/NMI from a pending PCIe completion timeout
+queued from the previous crash firing during module load.
+
+**Conclusion:** Hardware too degraded after two consecutive crashes for meaningful data.
+Per failure signature plan: skip second run, proceed directly to test.129 fix.
+
+**PCIe state (current boot 0):**
+- Endpoint (03:00.0): MAbort- (clean), CommClk- (dirty)
+- Root port (00:1c.2) secondary: MAbort+ (dirty)
+
+---
+
+## Current state (2026-04-19, PRE test.129 — bypass brcmf_pcie_attach for BCM4360)
+
+### CODE STATE: brcmf_pcie_attach BYPASSED FOR BCM4360
+
+**Evidence supporting bypass:**
+- Run A (boot during session at 00:54): last marker `BCM4360 test.120: before brcmf_fw_get_firmwares`
+  → crash is in async callback `brcmf_pcie_setup`, which immediately calls `brcmf_pcie_attach`
+- `brcmf_pcie_attach` selects PCIe2 core and writes to CONFIGADDR via BAR0
+- PCIe2 core is in BCMA reset at that point → CTO → MCE → hard crash
+
+**Code change (pcie.c line ~783):**
+Added at start of `brcmf_pcie_attach`, before any MMIO:
+```c
+if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
+    pr_emerg("BCM4360 test.129: brcmf_pcie_attach bypassed for BCM4360\n");
+    return;
+}
+```
+
+**Why safe to skip:**
+- BCM4360 uses BAR2 for firmware download, not BAR1
+- BAR1 window sizing (the purpose of brcmf_pcie_attach) is unnecessary for BCM4360
+- BusMaster already enabled by kernel PCI subsystem via pci_enable_device()
+- device_wakeup_enable can be skipped at this stage
+
+**Hypothesis (test.129 stage0):**
+- Probe continues through SBR, chip_attach, reset path, firmware download without crashing
+- Should see `BCM4360 test.129: brcmf_pcie_attach bypassed for BCM4360` in journal
+- Then probe continues further into firmware setup
+- Possible next crash: in firmware download or OTP access (but more likely clean run)
+
+**Build status:** BUILT — brcmfmac.ko compiled 2026-04-19 (test.129 bypass in place)
+
+**Pre-test requirements:**
+1. Build the module
+2. Check PCIe state (MAbort+ root port secondary — may need clearing or power cycle)
+3. Force runtime PM on if needed
+
+**Test command:**
 ```
 sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 ```
 
-### Success criteria
-- Journal shows "brcmf_pcie_attach ENTRY" or "before write CONFIGADDR"
-- Confirms crash location in brcmf_pcie_attach
-- Ready to implement test.129 bypass
+**Success criteria:**
+- Journal shows `BCM4360 test.129: brcmf_pcie_attach bypassed for BCM4360`
+- Probe continues past brcmf_pcie_attach without crash
+- Next crash point identified (or no crash — very unlikely but possible)
 
-### Failure signature
-- Journal only shows markers up to "bus wired and drvdata set" again
-- Hardware state too degraded; need power cycle before next attempt
-- In that case, skip second run and go straight to test.129 fix
+**Failure signatures:**
+- Crash before bypass marker: hardware state too degraded, need power cycle
+- Crash after bypass but before firmware download: different code path is the issue
 

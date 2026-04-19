@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.128.stage${STAGE}"
+LOG="$LOG_DIR/test.129.stage${STAGE}"
 
-echo "=== test.128: markers in brcmf_pcie_setup/attach to find async callback crash location — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.129: bypass brcmf_pcie_attach for BCM4360 to avoid PCIe2 BAR0 MMIO crash — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -111,7 +111,7 @@ else
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.128 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.129 ===" | tee -a "$LOG"
 sync
 
 dmesg -C

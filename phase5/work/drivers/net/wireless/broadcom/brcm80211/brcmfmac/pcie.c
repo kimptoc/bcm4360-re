@@ -781,6 +781,16 @@ static void brcmf_pcie_attach(struct brcmf_pciedev_info *devinfo)
 	u32 config;
 
 	pr_emerg("BCM4360 test.128: brcmf_pcie_attach ENTRY\n");
+
+	/* test.129: BCM4360 — skip BAR1 window sizing; PCIe2 core is in BCMA reset at this
+	 * point, so any BAR0 MMIO to it causes CTO → MCE → hard crash. BAR2 is used for
+	 * firmware download, not BAR1, so this config is unnecessary for BCM4360.
+	 */
+	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
+		pr_emerg("BCM4360 test.129: brcmf_pcie_attach bypassed for BCM4360\n");
+		return;
+	}
+
 	/* BAR1 window may not be sized properly */
 	pr_emerg("BCM4360 test.128: before select_core PCIE2\n");
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
