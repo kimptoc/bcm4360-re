@@ -1,4 +1,46 @@
-# Current crash recovery snapshot - 2026-04-19 PRE test.146
+# Current crash recovery snapshot - 2026-04-19 POST test.146
+
+The machine restarted after `test.146` stage0 and SMC has been reset. Current
+visible PCIe state after reboot is restored: root port `00:1c.2` has
+secondary/subordinate `03/03` with MAbort clear, and endpoint `03:00.0`
+(`14e4:43a0` rev `03`) is present with BAR0/BAR2 assigned and MAbort clear.
+
+`test.146` crashed before `pci_register_driver()`. The stream log captured:
+
+```
+brcmfmac: loading out-of-tree module taints kernel.
+brcmfmac: BCM4360 test.146: module_init entry (no BAR0 MMIO)
+brcmfmac: BCM4360 test.146: brcmf_pcie_register() entry
+brcmfmac: BCM4360 test.146: before brcmf_dbg in brcmf_pcie_register
+```
+
+It did not capture:
+
+```
+BCM4360 test.146: after brcmf_dbg, before pci_register_driver
+BCM4360 test.146: pci_register_driver returned ret=...
+BCM4360 test.128: PROBE ENTRY
+```
+
+The immediate source statement after the last marker is:
+
+```
+brcmf_dbg(PCIE, "Enter\n");
+```
+
+With tracing/debug enabled, `brcmf_dbg()` enters `__brcmf_dbg()`, conditionally
+uses `pr_debug()`, and always emits `trace_brcmf_dbg(...)`. There is no intended
+BCM4360 BAR0/BAR2 MMIO or new PCI config access in this window.
+
+Recommended next step is `test.147`: make a no-hardware-access discriminator by
+removing/skipping the early `brcmf_dbg(PCIE, "Enter\n")` in
+`brcmf_pcie_register()`, keeping emergency markers before `pci_register_driver`
+and after it returns. Rebuild, update notes, commit, and push before running
+stage0. Stage1 remains forbidden.
+
+---
+
+# Previous crash recovery snapshot - 2026-04-19 PRE test.146
 
 Test.146 is instrumentation only. It adds narrow emergency markers inside
 `brcmf_pcie_register()` to distinguish a crash before `pci_register_driver()`

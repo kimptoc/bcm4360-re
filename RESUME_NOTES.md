@@ -1,6 +1,76 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.146 — brcmf_pcie_register() window instrumentation)
+## Current state (2026-04-19 22:57 BST, POST test.146 crash; SMC reset complete)
+
+### CODE/LOG STATE: test.146 ran and crashed in the brcmf_dbg() registration window
+
+**Repository state before saving this snapshot:**
+- Branch: `main`
+- Remote tracking: `main...origin/main`
+- New uncommitted files found after reboot:
+  - `phase5/logs/test.146.stage0`
+  - `phase5/logs/test.146.stage0.stream`
+- User reports the machine restarted after the crash and SMC has been reset.
+
+**Post-SMC PCIe state checked after reboot:**
+- Root port `00:1c.2`:
+  - Bus hierarchy is restored: primary `00`, secondary `03`, subordinate `03`.
+  - Status/secondary status/BridgeCtl show `<MAbort-` / `MAbort-`.
+  - Kernel driver in use: `pcieport`.
+  - Non-root lspci showed capability details as `<access denied>`, but the visible bridge state is clean enough for planning.
+- Endpoint `03:00.0`:
+  - BCM4360 present: `14e4:43a0` rev `03`.
+  - BAR0 `b0600000` size `32K`; BAR2 `b0400000` size `2M`.
+  - Status shows `<MAbort-`.
+  - Kernel modules listed: `bcma`, `wl`; no driver bound in the visible lspci output.
+
+**test.146 RESULT (stage0 crash before `pci_register_driver()`):**
+- Pre-test BAR0 guard: fast UR/I/O error (`6ms`), not completion timeout; script proceeded.
+- Pre-test PCIe/root-port state: endpoint present at `03:00.0`, bridge bus window `03/03`, MAbort clear.
+- Stream log captured:
+  - `brcmfmac: loading out-of-tree module taints kernel.`
+  - `brcmfmac: BCM4360 test.146: module_init entry (no BAR0 MMIO)`
+  - `brcmfmac: BCM4360 test.146: brcmf_pcie_register() entry`
+  - `brcmfmac: BCM4360 test.146: before brcmf_dbg in brcmf_pcie_register`
+- Missing markers:
+  - `BCM4360 test.146: after brcmf_dbg, before pci_register_driver`
+  - `BCM4360 test.146: pci_register_driver returned ret=...`
+  - `BCM4360 test.128: PROBE ENTRY`
+  - `BCM4360 test.145: halting ARM CR4 after second SBR`
+
+**Interpretation:**
+- The crash is before `pci_register_driver()`, not in PCI registration/enumeration and not in probe.
+- The next statement after the last marker is `brcmf_dbg(PCIE, "Enter\n")`.
+- In this build, `brcmf_dbg()` maps to `__brcmf_dbg()` when `CONFIG_BRCM_TRACING` or `CONFIG_BRCMDBG` is enabled. `__brcmf_dbg()`:
+  - conditionally calls `pr_debug()` only if `brcmf_msg_level & level`
+  - always calls `trace_brcmf_dbg(level, func, &vaf)`
+- There is no intentional BCM4360 BAR0/BAR2 MMIO or new PCI config access in this window.
+- Best current inference: the crash is either inside the tracing/debug path itself, or an external asynchronous hardware crash happens in the tiny interval between the pre-`brcmf_dbg` marker and the next marker. Since test.145 stopped after only the register-entry marker and test.146 got to the pre-`brcmf_dbg` marker, the instrumentation has narrowed the immediate code window substantially.
+
+**Recommended next candidate test (PRE test.147):**
+1. Preserve and push this post-test.146 snapshot first.
+2. Make test.147 a no-hardware-access discriminator:
+   - remove or compile out the `brcmf_dbg(PCIE, "Enter\n")` call in `brcmf_pcie_register()`
+   - keep emergency markers before and immediately before `pci_register_driver()`
+   - add a marker immediately after `pci_register_driver()` returns
+   - do not add BAR0 MMIO, BAR2 MMIO, PCI config pokes, or any pre-probe mitigation yet
+3. Rebuild module.
+4. Commit and push test.147 code/notes before running.
+5. Run stage0 only after clean PCIe verification.
+
+**Interpretation matrix for test.147:**
+- Reaches `after skipped brcmf_dbg, before pci_register_driver`: `brcmf_dbg()`/tracepoint path is implicated; continue avoiding early `brcmf_dbg()` and then isolate why tracing is unsafe this early.
+- Crashes before that marker despite removing `brcmf_dbg()`: asynchronous hardware crash is still possible immediately after module_init/register entry; consider even earlier host-only mitigation or deferring more module init work.
+- Reaches `pci_register_driver returned ret=...`: registration completed; inspect subsequent probe markers.
+- Reaches `PROBE ENTRY`: the old buscore-reset ARM halt may still be too late for some runs, but test.147 will have proven that `brcmf_dbg()` was blocking progress before registration.
+
+**Hard rule remains:**
+- Do not run stage1.
+- Before running any future test, save notes, commit, and push.
+
+---
+
+## Previous state (2026-04-19, PRE test.146 — brcmf_pcie_register() window instrumentation)
 
 ### CODE STATE: test.146 source prepared, module rebuilt, committed and pushed
 
