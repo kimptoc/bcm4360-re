@@ -4206,3 +4206,23 @@ The test.141/142/143 crashes are NOT caused by a code bug — the fixed BCMA seq
 
 **Test command:** `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
 
+
+---
+
+## PRE-TEST.144 HARDWARE STATE — 2026-04-19 (post SMC reset)
+
+**Context:** Cold reboot (power off/on) did NOT reset BCM4360 — secondary=ff survived because BCM4360 is on Apple standby rail. SMC reset (Shift+Ctrl+Option+Power 10s) was required to fully power-cycle the chip.
+
+**Root port (00:1c.2):** secondary=03, subordinate=03, MAbort-, secondary-MAbort- ✓
+**Endpoint (03:00.0):** MAbort- ✓, Mem+, BusMaster+, Region0=b0600000, Region2=b0400000 ✓
+**IRBNCE:** Normal boot-time init messages only (all ports simultaneously at 20:54:09) ✓
+
+**Hypothesis:** On clean hardware (ARM CR4 BCMA wrapper freshly reset by SMC), probe() will:
+1. Execute SBR cleanly
+2. chip_attach succeeds
+3. ARM halt block runs: IOCTL=0x0023 then RESET_CTL=1
+4. RESET_CTL reads back 0x0001 (not 0xffffffff)
+5. ARM halted; downstream MMIO proceeds past enter_download_state without crash
+
+**Note:** A normal cold reboot is insufficient for this hardware — need SMC reset if BCM4360 wrapper gets wedged.
+
