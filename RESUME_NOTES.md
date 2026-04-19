@@ -3172,3 +3172,31 @@ If test.109 also crashes → module infrastructure broken (compile flags? kernel
 - If "calling pci_register_driver" is last message → crash is in pci_register_driver internals
 - If nothing → crash is earlier (module_init → brcmf_core_init → ...)
 - If "PROBE ENTRY" appears → we have a new crash location to investigate
+
+### MODULE BUILD STATUS
+
+The module binary (14MB, compiled 2026-04-19 00:54) is a pre-compiled binary NOT rebuilt with the test.128 diagnostic additions. To test with the new pr_emerg markers, the module must be rebuilt.
+
+**Build system:** NixOS/kbuild required. Attempted `make -C phase5/work` failed (no kernel Makefile in that directory). Full build likely requires:
+- Kernel headers for 6.12.80
+- kbuild environment (via nix-shell or similar NixOS tooling)
+- KDIR or KERNELDIR pointing to kernel source
+
+**Options:**
+1. **Manual rebuild:** User should run `make -C phase5/work` or equivalent with proper kernel build environment (if previous session established one)
+2. **Alternative approach:** Analyze crash WITHOUT rebuild by examining:
+   - Binary diffs between test.109 and current (14MB vs prior size)
+   - Kernel log from previous tests to find pattern
+   - Code audit of test.109→current diffs for module-init-phase issues
+
+**Code audit findings (from diff analysis):**
+- test.114b: d11 wrapper reads are GUARDED (check IN_RESET before reading core register) — safe
+- test.125/126: PCIE2 mailbox clear now returns early for BCM4360 — avoids known crash
+- test.127/128: pr_emerg markers added to probe entry (needs rebuild to take effect)
+- No suspicious static initializers or module_init changes found
+
+**Hypothesis update:**
+Since the crash happens BEFORE probe even prints its first message, and all code from test.109→current appears safe (diagnostic/read-only), the issue might be:
+1. **Stale module cache** — kernel caching old version of .ko file
+2. **Binary corruption** — 14MB module might have a corrupted section
+3. **Hidden code path** — static initialization or symbol resolution in a code path we haven't examined
