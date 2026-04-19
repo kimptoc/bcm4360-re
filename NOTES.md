@@ -1,4 +1,36 @@
-# Current crash recovery snapshot - 2026-04-19 POST test.146
+# Current crash recovery snapshot - 2026-04-19 PRE test.147
+
+Test.147 is the next no-hardware-access discriminator after the test.146 crash.
+It skips the early:
+
+```
+brcmf_dbg(PCIE, "Enter\n");
+```
+
+inside `brcmf_pcie_register()`, while preserving emergency markers immediately
+before `pci_register_driver()` and after it returns. It does not add BAR0 MMIO,
+BAR2 MMIO, or PCI config pokes.
+
+Expected test.147 marker sequence:
+
+```
+BCM4360 test.147: module_init entry (no BAR0 MMIO)
+BCM4360 test.147: brcmf_pcie_register() entry
+BCM4360 test.147: skipping brcmf_dbg in brcmf_pcie_register
+BCM4360 test.147: after skipped brcmf_dbg, before pci_register_driver
+BCM4360 test.147: pci_register_driver returned ret=...
+```
+
+The module has been rebuilt successfully for test.147. Build output linked
+`brcmfmac.ko`, repeated the existing unused `brcmf_pcie_write_ram32` warning,
+and skipped BTF because `vmlinux` is unavailable.
+
+Before running, commit and push this PRE-test.147 state, then verify clean PCIe
+state. Run stage0 only. Stage1 remains forbidden.
+
+---
+
+# Previous crash recovery snapshot - 2026-04-19 POST test.146
 
 The machine restarted after `test.146` stage0 and SMC has been reset. Current
 visible PCIe state after reboot is restored: root port `00:1c.2` has

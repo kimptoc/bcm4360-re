@@ -1,6 +1,53 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19 22:57 BST, POST test.146 crash; SMC reset complete)
+## Current state (2026-04-19 23:00 BST, PRE test.147 — skip early brcmf_dbg before PCI registration)
+
+### CODE STATE: test.147 source prepared and rebuilt; commit/push required before running
+
+**test.147 change: no-hardware-access discriminator**
+- No new BAR0 MMIO, BAR2 MMIO, or PCI config accesses.
+- `brcmf_pcie_early_arm_halt()` remains a module_init marker only:
+  - `BCM4360 test.147: module_init entry (no BAR0 MMIO)`
+- `brcmf_pcie_register()` now skips the early `brcmf_dbg(PCIE, "Enter\n")` call that immediately followed the last surviving test.146 marker.
+- `brcmf_pcie_register()` now logs:
+  - `BCM4360 test.147: brcmf_pcie_register() entry`
+  - `BCM4360 test.147: skipping brcmf_dbg in brcmf_pcie_register`
+  - `BCM4360 test.147: after skipped brcmf_dbg, before pci_register_driver`
+  - `BCM4360 test.147: pci_register_driver returned ret=%d`
+- `test-staged-reset.sh` now writes `phase5/logs/test.147.stage0` and `.stream`.
+- test.145 buscore_reset ARM halt remains in place if probe/chip_attach gets that far.
+
+**Purpose:**
+- test.146 crashed after `before brcmf_dbg in brcmf_pcie_register` and before `after brcmf_dbg, before pci_register_driver`.
+- Since `brcmf_dbg()` may always emit `trace_brcmf_dbg(...)` in this build, test.147 distinguishes a tracing/debug-path crash from an asynchronous hardware crash in the same tiny window.
+
+**Build status:**
+- Rebuild completed with:
+  `make -C /nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules`
+- Build output: `brcmfmac.ko` linked; existing `brcmf_pcie_write_ram32` unused warning; BTF skipped because `vmlinux` is unavailable.
+
+**Required before running test.147:**
+- Commit and push the PRE-test.147 source/notes/harness state.
+- Verify PCIe state is still clean:
+  - root port `00:1c.2` secondary/subordinate `03/03`, MAbort clear
+  - endpoint `03:00.0` present, MAbort clear
+
+**Interpretation matrix:**
+- Reaches `after skipped brcmf_dbg, before pci_register_driver`: `brcmf_dbg()`/tracepoint path is implicated; keep early registration free of `brcmf_dbg()` while isolating the tracing hazard.
+- Crashes before that marker despite the skipped `brcmf_dbg()`: asynchronous hardware crash remains likely immediately after module_init/register entry.
+- Reaches `pci_register_driver returned ret=...`: registration returned; inspect following markers for probe/chip_attach/buscore_reset progress.
+- Reaches `PROBE ENTRY`: registration path is past the previous blocker; continue interpreting probe path with the existing buscore-reset ARM halt markers.
+
+**Test command after rebuild/commit/push only:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+Stage1 remains forbidden.
+
+---
+
+## Previous state (2026-04-19 22:57 BST, POST test.146 crash; SMC reset complete)
 
 ### CODE/LOG STATE: test.146 ran and crashed in the brcmf_dbg() registration window
 

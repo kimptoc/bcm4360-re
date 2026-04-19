@@ -4440,25 +4440,24 @@ static struct pci_driver brcmf_pciedrvr = {
 };
 
 
-/* test.144/145/146: observability probe — log module_init entry.
+/* test.144/145/146/147: observability probe — log module_init entry.
  * BAR0 MMIO on a fresh uninitialized chip (no prior driver run) returns UR
  * which crashes the host.  ARM halt is now done in brcmf_pcie_buscore_reset()
  * after chip_attach() has initialized the PCIe-to-backplane bridge. */
 void brcmf_pcie_early_arm_halt(void)
 {
-	pr_emerg("BCM4360 test.146: module_init entry (no BAR0 MMIO)\n");
+	pr_emerg("BCM4360 test.147: module_init entry (no BAR0 MMIO)\n");
 }
 
 int brcmf_pcie_register(void)
 {
 	int ret;
 
-	pr_emerg("BCM4360 test.146: brcmf_pcie_register() entry\n");
-	pr_emerg("BCM4360 test.146: before brcmf_dbg in brcmf_pcie_register\n");
-	brcmf_dbg(PCIE, "Enter\n");
-	pr_emerg("BCM4360 test.146: after brcmf_dbg, before pci_register_driver\n");
+	pr_emerg("BCM4360 test.147: brcmf_pcie_register() entry\n");
+	pr_emerg("BCM4360 test.147: skipping brcmf_dbg in brcmf_pcie_register\n");
+	pr_emerg("BCM4360 test.147: after skipped brcmf_dbg, before pci_register_driver\n");
 	ret = pci_register_driver(&brcmf_pciedrvr);
-	pr_emerg("BCM4360 test.146: pci_register_driver returned ret=%d\n", ret);
+	pr_emerg("BCM4360 test.147: pci_register_driver returned ret=%d\n", ret);
 	return ret;
 }
 
