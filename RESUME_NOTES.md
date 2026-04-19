@@ -3433,6 +3433,28 @@ BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
 
 ---
 
+## PRE-TEST.130 RE-RUN (2026-04-19 session restart)
+
+**STATE:** test.130 crashed on first run due to hardware variance. PCIe state is now clean.
+- Endpoint MAbort-, CommClk+; root port MAbort-, secondary=03, subordinate=03
+- Module built 2026-04-19 08:06 — test.130 bypasses in place (no rebuild needed)
+
+**HYPOTHESIS (re-run):**
+The first test.130 run was a hardware variance crash (chip_attach MMIO timing).
+On this run, chip_attach should complete cleanly (same path as test.129 which succeeded).
+Then the async callback brcmf_pcie_setup should fire and we should see:
+1. "brcmf_pcie_setup ENTRY" (test.128 marker)
+2. "before brcmf_pcie_attach" → "brcmf_pcie_attach bypassed for BCM4360" → "after brcmf_pcie_attach"
+3. "before brcmf_chip_get_raminfo" → "after brcmf_chip_get_raminfo" (fixed BCM4360 values)
+4. "after brcmf_pcie_adjust_ramsize"
+5. "before brcmf_pcie_download_fw_nvram" → firmware written to BAR2 TCM → "after..."
+6. Progress markers until next crash OR "after brcmf_pcie_request_irq"
+Expected crash point: `brcmf_pcie_init_ringbuffers` (reads from firmware shared memory — requires firmware running)
+
+**Run:** `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+
+---
+
 ## Current state (2026-04-19, PRE test.130 — bypass brcmf_pcie_enter_download_state ARM_CR4 write)
 
 ### CODE STATE: brcmf_pcie_enter_download_state BYPASSED FOR BCM4360
