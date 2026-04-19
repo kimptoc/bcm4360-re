@@ -1,6 +1,69 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19 23:07 BST, POST test.147 crash; SMC reset complete)
+## Current state (2026-04-19 23:20 BST, PRE test.148 — core/register call-site markers)
+
+### CODE STATE: test.148 source prepared; rebuild/commit/push required before running
+
+**test.148 change: no-hardware-access discriminator**
+- No new BAR0 MMIO, BAR2 MMIO, PCI config accesses, or pre-probe mitigation.
+- `brcmf_pcie_early_arm_halt()` remains a module_init marker only:
+  - `BCM4360 test.148: module_init entry (no BAR0 MMIO)`
+- `brcmfmac_module_init()` now logs around the bus-registration fanout:
+  - `BCM4360 test.148: before brcmf_core_init()`
+  - `BCM4360 test.148: after brcmf_core_init() err=%d`
+- `brcmf_core_init()` now logs:
+  - `BCM4360 test.148: brcmf_core_init() entry`
+  - before/after `brcmf_sdio_register()`
+  - before/after `brcmf_usb_register()`
+  - before/after `brcmf_pcie_register()`
+- `core.c` is now included in the tracked brcmfmac source allowlist because the PCI call-site lives there.
+- `brcmf_pcie_register()` still skips the early `brcmf_dbg(PCIE, "Enter\n")` call and logs:
+  - `BCM4360 test.148: brcmf_pcie_register() entry`
+  - `BCM4360 test.148: skipping brcmf_dbg in brcmf_pcie_register`
+  - `BCM4360 test.148: after skipped brcmf_dbg, before pci_register_driver`
+  - `BCM4360 test.148: pci_register_driver returned ret=%d`
+- `test-staged-reset.sh` now writes `phase5/logs/test.148.stage0` and `.stream`.
+- test.145 buscore_reset ARM halt remains in place if probe/chip_attach gets that far.
+
+**Purpose:**
+- test.147 skipped early `brcmf_dbg()` but only persisted the module-init entry marker.
+- test.148 distinguishes:
+  1. crash before `brcmf_core_init()`
+  2. crash in SDIO/USB registration before PCI registration
+  3. crash at/around the call to `brcmf_pcie_register()`
+  4. crash inside `brcmf_pcie_register()` before `pci_register_driver()`
+  5. successful PCI registration followed by probe/chip_attach progress
+
+**Build status:**
+- Rebuild completed with:
+  `make -C /nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules`
+- Build output: `brcmfmac.ko` linked; existing `brcmf_pcie_write_ram32` unused warning; BTF skipped because `vmlinux` is unavailable.
+
+**Required before running test.148:**
+- Commit and push PRE-test.148 source/notes/harness state.
+- Verify PCIe state is still clean:
+  - root port `00:1c.2` secondary/subordinate `03/03`, MAbort clear
+  - endpoint `03:00.0` present, MAbort clear
+
+**Interpretation matrix:**
+- Last marker `module_init entry`: crash before the `brcmf_core_init()` call-site marker; consider an ultra-minimal module-init/no-core-init discriminator.
+- Last marker `before brcmf_core_init()`: crash entering `brcmf_core_init()` or marker persistence loss.
+- Last marker before/after SDIO or USB registration: non-PCI bus registration side effect is implicated.
+- Last marker `before brcmf_pcie_register()`: crash at/around the PCI registration call transition.
+- Reaches `brcmf_pcie_register() entry`: continue interpreting the register-body markers.
+- Reaches `after skipped brcmf_dbg, before pci_register_driver`: old `brcmf_dbg()` path is not the blocker; `pci_register_driver()` / probe becomes next suspect.
+- Reaches `PROBE ENTRY`: registration path is past the current blocker; continue with existing buscore-reset/probe markers.
+
+**Test command after rebuild/commit/push only:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+Stage1 remains forbidden.
+
+---
+
+## Previous state (2026-04-19 23:07 BST, POST test.147 crash; SMC reset complete)
 
 ### CODE/LOG STATE: test.147 ran and crashed after module_init entry only
 

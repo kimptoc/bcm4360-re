@@ -603,7 +603,7 @@ static int __init brcmfmac_module_init(void)
 {
 	int err;
 
-	/* test.146: log module_init entry before the PCI enumeration window.
+	/* test.148: log module_init entry before the PCI registration window.
 	 * ARM halt happens later in buscore_reset, after BAR0/backplane access is safe. */
 	brcmf_pcie_early_arm_halt();
 
@@ -616,7 +616,9 @@ static int __init brcmfmac_module_init(void)
 	brcmf_mp_attach();
 
 	/* Continue the initialization by registering the different busses */
+	pr_emerg("BCM4360 test.148: before brcmf_core_init()\n");
 	err = brcmf_core_init();
+	pr_emerg("BCM4360 test.148: after brcmf_core_init() err=%d\n", err);
 	if (err) {
 		if (brcmfmac_pdata)
 			platform_driver_unregister(&brcmf_pd);

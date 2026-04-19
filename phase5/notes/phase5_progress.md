@@ -577,3 +577,17 @@ immediately before and after `brcmf_pcie_register()`. A no-call/early-return
 variant is also useful if we want to prove that merely loading the module is
 safe when PCI registration is not attempted. As usual, no stage1, and save
 notes plus commit/push before any run.
+
+## Phase 5.3: PRE test.148
+
+test.148 is prepared as a no-new-hardware-access discriminator for the
+module-load crash window. It adds markers around `brcmf_core_init()` in
+`common.c`, around SDIO/USB/PCI registration in `core.c`, and keeps the
+`brcmf_pcie_register()` body free of the early `brcmf_dbg()` call. The harness
+now writes `test.148.stage*` logs.
+
+Expected value: if the crash still only persists `module_init entry`, the next
+variant should avoid calling `brcmf_core_init()` entirely. If it reaches
+`before brcmf_pcie_register()` but not the PCI entry marker, the registration
+call transition is the current suspect. If it reaches the PCI body markers,
+continue narrowing around `pci_register_driver()` / probe.
