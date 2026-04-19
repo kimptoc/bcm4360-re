@@ -1,10 +1,37 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.131 re-run — fresh boot after crash)
+## Current state (2026-04-19, PRE test.131 re-run #2 — fresh boot, boot 0, crash cycle 0)
 
 ### CODE STATE: test.131 — post-SBR delay 500ms + BAR0 stability probe
 
-**test.131 RESULT (boot -1, crash cycle #3 from previous session):**
+**Hardware state (verified):**
+- PCIe endpoint 03:00.0: MAbort- (CLEAN)
+- This is boot 0, crash cycle 0 for this session — fresh hardware, no prior degradation
+- Module is built: brcmfmac.ko from 08:22:28 (matches pcie.c from 08:22:14) — up to date
+
+**Hypothesis (test.131 re-run on fresh boot, boot 0):**
+- Prior test.131 crash was crash cycle #3 (cumulative degradation confound)
+- On clean hardware (0 prior crashes), 500ms delay should NOT trigger ASPM issues
+- Expected: BAR0 probe succeeds, chip_attach proceeds, further markers visible
+- If BAR0 probe still fails BEFORE first marker: 500ms delay itself is the culprit
+  (ASPM L1 engages during long sleep, first config access fails on link wakeup)
+- If crash still before BAR0 probe: next test = disable ASPM on root port before delay
+
+**Contingency plan if BAR0 probe fails again on fresh hardware:**
+- ASPM-during-delay hypothesis becomes primary
+- Next test (test.132): log LnkCtl before/after msleep, try disabling ASPM L0s/L1 on root port before the delay
+- Keep code change minimal — one variable at a time
+
+**Build status:** REBUILT (no-op — .ko up to date at 08:22:28)
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+---
+
+## test.131 RESULT (boot -1, crash cycle #3 from previous session):
 
 Boot -1 journal markers:
 - `BCM4360 test.128: brcmf_pcie_register() entry`
