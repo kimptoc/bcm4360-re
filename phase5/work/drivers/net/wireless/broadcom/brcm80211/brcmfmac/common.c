@@ -603,7 +603,7 @@ static int __init brcmfmac_module_init(void)
 {
 	int err;
 
-	/* test.145: log module_init entry before the PCI enumeration window.
+	/* test.146: log module_init entry before the PCI enumeration window.
 	 * ARM halt happens later in buscore_reset, after BAR0/backplane access is safe. */
 	brcmf_pcie_early_arm_halt();
 

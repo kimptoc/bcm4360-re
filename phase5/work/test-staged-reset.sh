@@ -17,18 +17,18 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.145.stage${STAGE}"
+LOG="$LOG_DIR/test.146.stage${STAGE}"
 
-echo "=== test.145: ARM halt in buscore_reset after second SBR — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.146: brcmf_pcie_register() window instrumentation — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: skip_arm=1 — module_init marker + SBR + chip_attach + buscore_reset ARM halt, no ARM release." | tee -a "$LOG" ;;
+    0) echo "Stage 0: skip_arm=1 — module_init/register markers; no ARM release if probe reaches firmware path." | tee -a "$LOG" ;;
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.145: module_init only logs; ARM CR4 halt occurs in buscore_reset after chip_attach initializes BAR0/backplane access)" | tee -a "$LOG"
+echo "(test.146: no new MMIO; narrows crash before/inside pci_register_driver; test.145 buscore_reset ARM halt remains in place if reached)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -105,14 +105,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=12  # test.145: buscore_reset ARM halt + existing staged-reset/download diagnostics
+    WAIT_SECS=12  # test.146: registration-window markers + existing staged-reset/download diagnostics
 else
     SKIP_ARM=0
     WAIT_SECS=35
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.145 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.146 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.

@@ -1,4 +1,9 @@
-# Current crash recovery snapshot - 2026-04-19 22:13 BST
+# Current crash recovery snapshot - 2026-04-19 PRE test.146
+
+Test.146 is instrumentation only. It adds narrow emergency markers inside
+`brcmf_pcie_register()` to distinguish a crash before `pci_register_driver()`
+from a crash inside PCI registration/enumeration. It does not add BAR0 MMIO or
+new PCI config accesses. The test.146 module has been rebuilt.
 
 Latest run was `test.145` stage0. It crashed after these stream markers:
 
@@ -15,11 +20,7 @@ raw BAR0 MMIO from module_init is too early/unsafe on fresh hardware.
 
 Test.145 logs and notes are preserved in commit `30a33bd` and pushed. Before
 any further testing, use SMC reset/full hardware power cut and verify clean PCIe
-state. Next useful code change is test.146: ultra-narrow markers inside
-`brcmf_pcie_register()` around the pre-`pci_register_driver` window to prove
-whether the crash happens before registration or inside the
-registration/enumeration transition. Commit/push the test.146 code and notes
-before running it.
+state. Before running test.146, commit/push the test.146 code and notes.
 
 # Post-crash recovery checklist
 
@@ -57,10 +58,10 @@ loading the module.
 
 ## Step 3: Prepare test.146, then commit/push before running
 
-Next useful code change is instrumentation only: add ultra-narrow emergency
-markers inside `brcmf_pcie_register()` around the pre-`pci_register_driver`
-window. Save the PRE-test.146 plan in `RESUME_NOTES.md`, rebuild, then commit
-and push the notes/code before executing the test harness.
+Test.146 code is instrumentation only: ultra-narrow emergency markers inside
+`brcmf_pcie_register()` around the pre-`pci_register_driver` window. The
+PRE-test.146 plan is saved in `RESUME_NOTES.md` and the module is rebuilt.
+Commit and push the notes/code before executing the test harness.
 
 ## Step 4: Run test.146 stage0 only
 

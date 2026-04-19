@@ -1,6 +1,60 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19 22:13 BST, POST test.145 crash)
+## Current state (2026-04-19, PRE test.146 — brcmf_pcie_register() window instrumentation)
+
+### CODE STATE: test.146 source prepared and module rebuilt; commit/push before running
+
+**test.146 change: instrumentation only**
+- No new BAR0 MMIO and no new PCI config accesses.
+- `brcmf_pcie_early_arm_halt()` remains a module_init marker only.
+- `brcmf_pcie_register()` now logs:
+  - `BCM4360 test.146: brcmf_pcie_register() entry`
+  - `BCM4360 test.146: before brcmf_dbg in brcmf_pcie_register`
+  - `BCM4360 test.146: after brcmf_dbg, before pci_register_driver`
+  - `BCM4360 test.146: pci_register_driver returned ret=%d`
+- `test-staged-reset.sh` now writes `phase5/logs/test.146.stage0` and `.stream`.
+- test.145 buscore_reset ARM halt remains in place if probe/chip_attach gets that far.
+- Rebuild completed with:
+  `make -C /nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules`
+- Build output: `brcmfmac.ko` linked; existing `brcmf_pcie_write_ram32` unused warning; BTF skipped because `vmlinux` is unavailable.
+
+**Purpose:**
+- test.145 last stream marker was `brcmf_pcie_register() entry`; it did not show the old `calling pci_register_driver` marker.
+- This test distinguishes:
+  1. crash in/around `brcmf_dbg(PCIE, "Enter")`
+  2. crash immediately before or inside `pci_register_driver()`
+  3. successful return from `pci_register_driver()` followed by later async/probe crash
+
+**Hardware recovery before running test.146:**
+- User will perform SMC reset first.
+- SMC reset is expected to be sufficient because previous SMC reset restored clean `03/03` PCIe hierarchy when normal cold reboot did not.
+- Battery drain/full extended power removal is fallback only if SMC reset does not restore clean root-port/endpoint state or if the BAR0 timing guard indicates slow completion timeout.
+
+**Pre-test checklist:**
+- [ ] SMC reset performed
+- [ ] `lspci -s 00:1c.2 -nn -vv` shows secondary/subordinate `03/03`, MAbort clear
+- [ ] `lspci -s 03:00.0 -nn -vv` shows endpoint present, MAbort clear, CommClk+
+- [x] test.146 module rebuilt
+- [ ] PRE-test.146 code and notes committed/pushed
+
+**Interpretation matrix:**
+- Last marker `module_init entry` only: crash before/inside `brcmf_pcie_register()`.
+- Last marker `brcmf_pcie_register() entry`: crash before second marker; very small window after first printk.
+- Last marker `before brcmf_dbg`: crash in `brcmf_dbg()` (unexpected, no hardware access intended).
+- Last marker `after brcmf_dbg, before pci_register_driver`: crash inside `pci_register_driver()` / PCI enumeration before probe.
+- `pci_register_driver returned ret=...`: registration returned; inspect following markers for probe/chip_attach/buscore_reset progress.
+- `PROBE ENTRY` and buscore_reset test.145 markers appear: continue interpreting as test.145 path with more precise pre-register evidence.
+
+**Test command after rebuild/commit/push only:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+Stage1 remains forbidden.
+
+---
+
+## Previous state (2026-04-19 22:13 BST, POST test.145 crash)
 
 ### CODE STATE: test.145 binary was built and run
 
