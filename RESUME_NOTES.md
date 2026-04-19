@@ -1,13 +1,14 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.135 — ARM_CR4 wrapper diagnostic + BAR2 probe + remove BusMaster re-enable)
+## Current state (2026-04-19, PRE test.135 run — module built, test not yet executed)
 
 ### CODE STATE: test.135 — diagnostic reads before firmware download to find exact crash cause
 
 **Hardware state (verified):**
-- PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.134 crash
-- Fresh boot (boot 0 after test.134)
-- Module NOT yet rebuilt — need to make after code changes
+- PCIe endpoint 03:00.0: MAbort- (CLEAN) — clean after last crash
+- Fresh boot (boot 0 after test.134 crash)
+- **Module IS built** — test.135 code compiled into brcmfmac.ko (12:49 timestamp, same as commit)
+- test.135.stage0 file is a DUPLICATE of test.134.stage0 — test.135 has NOT actually run yet
 
 **test.134 RESULT (BREAKTHROUGH — crash precisely inside brcmf_pcie_download_fw_nvram):**
 - All markers through "BusMaster re-enabled before fw-download" ✓
