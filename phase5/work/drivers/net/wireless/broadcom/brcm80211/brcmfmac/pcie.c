@@ -3834,6 +3834,8 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	}
 
 	/* test.127: add very early marker in probe entry to confirm probe is called */
+	pr_emerg("BCM4360 test.128: PROBE ENTRY (device=%04x vendor=%04x id=%p)\n",
+		 pdev->device, pdev->vendor, id);
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
 		pr_emerg("BCM4360 test.127: probe entry (vendor=%x device=%x)\n",
 			 pdev->vendor, pdev->device);
@@ -4260,7 +4262,9 @@ static struct pci_driver brcmf_pciedrvr = {
 
 int brcmf_pcie_register(void)
 {
+	pr_emerg("BCM4360 test.128: brcmf_pcie_register() entry\n");
 	brcmf_dbg(PCIE, "Enter\n");
+	pr_emerg("BCM4360 test.128: calling pci_register_driver\n");
 	return pci_register_driver(&brcmf_pciedrvr);
 }
 

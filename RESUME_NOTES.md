@@ -3130,3 +3130,45 @@ If test.109 also crashes → module infrastructure broken (compile flags? kernel
 - phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c (line 1-100 for static init)
 - Kbuild flags (CFLAGS, module dependencies)
 - Compare test.109 binary size vs current binary (if binary bloat suggests symbol table corruption)
+
+### Investigation Update — Crash Hidden from dmesg
+
+**Observations:**
+1. BCM4360 device present (lspci confirms 03:00.0)
+2. probe() has pr_emerg markers at line 3838 (very early) — NOT LOGGED
+3. Module dependencies resolve (cfg80211, brcmutil)
+4. dmesg buffer contains no kernel panic / BUG / Oops messages
+5. System recovers cleanly (watchdog resets)
+6. **Crash signature:** insmod syscall never returns (blocked or hard panic)
+
+**Key insight:** 
+- If probe reached, line 3838 pr_emerg would appear (even in a panic)
+- It doesn't appear → kernel panic is in pci_register_driver() BEFORE probe
+- OR kernel crashes so hard (e.g., NULL deref in insmod itself) that dmesg is lost
+
+**Binary state:** Module size 14MB (Apr 19 00:54), same as test.127 build
+- modinfo shows correct dependencies
+- Symbol table appears intact
+
+### test.128 PLAN: Surgical diagnostics to isolate crash point
+
+**Hypothesis:** Crash is in pci_register_driver, BEFORE probe is called. Goal: add early pr_emerg messages that survive panics to narrow the crash point.
+
+**Changes made (pcie.c):**
+- Line 4261: Added `pr_emerg("BCM4360 test.128: brcmf_pcie_register() entry\n");` at function entry
+- Line 4263: Added `pr_emerg("BCM4360 test.128: calling pci_register_driver\n");` before pci_register_driver()
+- Line ~3836: Added `pr_emerg("BCM4360 test.128: PROBE ENTRY\n");` at very start of probe function
+
+**Expected results:**
+- If "brcmf_pcie_register entry" appears → module init is running
+- If "calling pci_register_driver" appears → about to register
+- If "PROBE ENTRY" appears → probe was called before crash
+- If nothing appears → crash in module init phase before pcie_register runs
+
+**Build:** Use existing module binary if rebuild fails (source changes alone won't cause module load issue anyway)
+
+**After test.128:**
+- Match logged messages to crash point
+- If "calling pci_register_driver" is last message → crash is in pci_register_driver internals
+- If nothing → crash is earlier (module_init → brcmf_core_init → ...)
+- If "PROBE ENTRY" appears → we have a new crash location to investigate
