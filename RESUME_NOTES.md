@@ -4019,3 +4019,190 @@ sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 - Crash in init_ringbuffers: need to check if firmware initialized shared memory
 - Crash in select_core PCIE2: PCIE2 core still in BCMA reset and needs explicit reset sequence
 
+
+---
+
+## TEST SERIES 131–143 RESULTS — 2026-04-19 (retrospective documentation)
+
+### Summary: ARM CR4 discovered running; halt attempts led to hardware degeneration
+
+These tests progressively added diagnostic markers and attempted to solve the ARM CR4 async crash discovered in tests 127-130.
+
+---
+
+### TEST.131 — BAR0 stability probe added
+**Code:** Added `BCM4360 test.131: BAR0 2nd probe = ... — stable` marker 50ms after first probe.
+**Result:** Consistent `0x15034360` — chip ID stable post-SBR.
+
+### TESTS 132-134 — Structural markers
+- **test.132**: struct wiring / pci_pme_capable logging (wowl=1 confirmed)
+- **test.133**: BusMaster cleared + ASPM disabled after chip_attach (LnkCtl before=0x0143 after=0x0140)
+- **test.134**: post-attach fw-ptr-extract + kfree markers
+
+All ran clean (probe reached async callback).
+
+---
+
+### TESTS 135-136 — Firmware path exploration
+Tested various bypass/logging combinations. No new crashes; logs show full probe→async callback path completing up to `before brcmf_pcie_download_fw_nvram`.
+
+---
+
+### TEST.137 — KEY FINDING: ARM CR4 state logged after SBR
+
+**Purpose:** Added ARM CR4 BCMA register read inside `enter_download_state` (before touching it), logging RESET_CTL and IOCTL state.
+
+**Result (stream):**
+```
+BCM4360 test.137: ARM_CR4: RESET_CTL=0x0000 IN_RESET=NO IOCTL=0x0001 CPUHALT=NO CLK=YES
+```
+
+**Significance:** SBR does NOT leave ARM CR4 in reset. ARM is RUNNING immediately after SBR. IOCTL=0x0001 = CLK only (no CPUHALT). This confirms the root cause of all prior crashes: the ARM CR4 executes firmware during chip_attach and MMIO operations.
+
+Stream was truncated here — crash during/after the RESET_CTL read, before the full log message could be printed.
+
+---
+
+### TEST.138 — ARM running confirmed; crash in enter_download_state
+
+**Purpose:** Same code as test.137 (re-run on fresh boot).
+
+**Result:** Crash during the ARM CR4 state read inside `enter_download_state`. Stream ended after `after RESET_CTL read = 0x0000`. ARM was running and crashed the host when BAR0 window was pointed at ARM CR4 core (0x18002000) and RESET_CTL was read.
+
+**Conclusion:** ARM executing firmware = CTO when driver touches BCMA wrapper MMIO.
+
+---
+
+### TEST.139 — First ARM halt attempt (probe-time, RESET_CTL only)
+
+**Purpose:** Added probe-time ARM halt in probe() after chip_attach: write RESET_CTL=1 to assert ARM in reset.
+
+**Problem:** Code wrote RESET_CTL=1 WITHOUT first writing IOCTL=FGC|CLK. The correct BCMA halt sequence requires:
+1. IOCTL |= CPUHALT|FGC|CLK (0x0023) first
+2. Then RESET_CTL = 1
+
+**Result:** Log shows crash before probe-time ARM halt code ran. Stream truncated before reaching that point.
+
+---
+
+### TEST.140 — ARM halt attempt with wrong BCMA sequence → WEDGED WRAPPER
+
+**Purpose:** Re-run of test.139-style halt, this time with probe reaching the ARM halt block.
+
+**Result (stream):**
+```
+BCM4360 test.140: probe-time ARM CR4 reset asserted RESET_CTL=0xffffffff IN_RESET=YES
+```
+
+**CRITICAL:** `RESET_CTL=0xffffffff` = all-ones = PCIe CTO response. Writing RESET_CTL=1 to the ARM CR4 wrapper WITHOUT first setting IOCTL=FGC|CLK caused a completion timeout. The BCMA wrapper is now **wedged** — subsequent reads return 0xffffffff.
+
+**Root cause:** ARM was still running (CLK enabled) when RESET_CTL=1 was written. The proper BCMA sequence is IOCTL=CPUHALT|FGC|CLK first, which gates the clock to allow safe reset assertion.
+
+---
+
+### TEST.141 — Correct BCMA sequence, but wedged state from test.140
+
+**Purpose:** Fixed BCMA sequence: write IOCTL=0x0023 first, then RESET_CTL=1. Code change is correct.
+
+**Pre-test state:** MAbort+ on secondary bus, CommClk- — bad state inherited from test.140 wedge.
+
+**Result (stream):** BLANK. Only stream header. Crash during PCIe enumeration (`pci_register_driver`), before probe() fired.
+
+**Reason:** test.140 left the ARM CR4 BCMA wrapper in a wedged state. When pci_register_driver triggered PCIe enumeration and the system tried to access the device's config space, it generated CTO → MPC IRBNCE → hard crash.
+
+---
+
+### TEST.142 — Re-run with ARM CR4 base logging, same wedged state
+
+**Purpose:** Added `ARM CR4 core->base=0x%08x` logging. Same fundamental code.
+
+**Pre-test state:** MAbort+ confirmed in header — still degraded from test.140.
+
+**Result (stream):**
+```
+BCM4360 test.128: brcmf_pcie_register() entry
+BCM4360 test.128: calling pci_register_driver
+pcieport 0000:00:1c.2: Enabling MPC IRBNCE
+```
+
+Crash during pci_register_driver PCIe enumeration — identical to test.141. ARM halt code in probe() never ran.
+
+---
+
+### TEST.143 — Re-run (same code as test.142)
+
+**Purpose:** Attempt to confirm or break the test.142 pattern.
+
+**Pre-test state:** MAbort+, CommClk- (persistent degraded state).
+
+**Result:** Identical to test.142:
+```
+BCM4360 test.128: brcmf_pcie_register() entry
+BCM4360 test.128: calling pci_register_driver
+pcieport 0000:00:1c.2: Enabling MPC IRBNCE
+```
+Crash before probe. PCIe hierarchy lost: root port secondary=ff, subordinate=fe.
+
+---
+
+### ROOT CAUSE ANALYSIS — Hardware degeneration chain
+
+```
+test.139: ARM halt code didn't reach (crash before probe-time block)
+test.140: ARM halt code ran, but used RESET_CTL=1 WITHOUT IOCTL=FGC|CLK first
+          → BCMA wrapper wedged (RESET_CTL=0xffffffff = CTO response)
+          → Hardware state: MAbort+, CommClk-
+tests 141-143: Ran on wedged hardware
+              → pci_register_driver triggers PCIe enumeration CTO
+              → pcieport MPC IRBNCE, hard crash before probe() fires
+```
+
+The test.141/142/143 crashes are NOT caused by a code bug — the fixed BCMA sequence is correct. They are caused by the persistent wedged state from test.140 running on degraded hardware.
+
+**On clean hardware (test.137/138)**: ARM running was problematic but didn't immediately crash during `pci_register_driver`. The crash came later (inside enter_download_state MMIO access with ARM running).
+
+---
+
+### CURRENT STATE — 2026-04-19 end of session
+
+**PCIe state:** BROKEN. Root port secondary=ff, subordinate=fe. Module MUST NOT be loaded.
+
+**Code state (test.142/143):**
+- Correct BCMA halt sequence in probe(): IOCTL=0x0023 then RESET_CTL=1
+- ARM CR4 base address logging present
+- `brcmf_chip_get_core(BCMA_CORE_ARM_CR4)` used for base address
+
+**Known ARM CR4 hardcoded base:** `0x18002000` (confirmed from test.111 log)
+
+**Required action:** COLD REBOOT (full power cycle — warm reboot does NOT power-cycle BCM4360).
+
+**Post-reboot plan:**
+1. Check `lspci -s 00:1c.2` → verify secondary=03, subordinate=03 (hierarchy restored)
+2. Check `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk'` → verify MAbort-, CommClk+
+3. Run discriminator test (current code, unchanged): `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+4. HYPOTHESIS: On clean hardware, probe() will reach ARM halt block; IOCTL=0x0023 + RESET_CTL=1 will halt ARM properly; downstream tests can proceed
+
+**If discriminator passes (ARM halted cleanly):** Firmware download should proceed past enter_download_state without crash → next barrier is init_ringbuffers.
+
+**If discriminator fails:** Implement pre-register ARM halt in `brcmf_pcie_register()` using pci_get_device() + hardcoded ARM CR4 base 0x18002000, BEFORE pci_register_driver call.
+
+---
+
+## PRE-TEST.144 — Post-cold-reboot discriminator test
+
+**PURPOSE:** Confirm clean-boot behavior on test.142/143 code (correct BCMA ARM halt sequence).
+
+**HYPOTHESIS:** On clean hardware with no inherited wedged state:
+- probe() fires successfully
+- ARM CR4 halt block executes: IOCTL=0x0023 then RESET_CTL=1
+- RESET_CTL reads back 0x0001 (not 0xffffffff)
+- ARM is halted; downstream MMIO proceeds without crash
+
+**Pre-test checklist:**
+- [ ] Cold reboot performed (full power cycle)
+- [ ] `lspci -s 00:1c.2` shows secondary=03, subordinate=03
+- [ ] `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk'` shows MAbort-, CommClk+
+- [ ] No rebuild needed — test.142/143 code is the current module
+
+**Test command:** `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+
