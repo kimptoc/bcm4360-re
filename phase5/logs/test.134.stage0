@@ -1,0 +1,132 @@
+=== test.134: mdelay flush markers + ASPM verify + BusMaster restore before fw-download — stage=0 ===
+Date: Sun 19 Apr 09:41:39 BST 2026
+
+Stage 0: skip_arm=1 — SBR + chip_attach + reset path + firmware download, but no ARM release.
+
+=== Pre-test BAR0 MMIO guard ===
+BAR0 MMIO UR/I/O error (7ms) — device alive; SBR in probe should fix. Proceeding.
+
+=== Pre-test PCIe state ===
+03:00.0 Network controller [0280]: Broadcom Inc. and subsidiaries BCM4360 802.11ac Dual Band Wireless Network Adapter [14e4:43a0] (rev 03)
+	Subsystem: Apple Inc. Device [106b:0112]
+	Control: I/O- Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+	Latency: 0, Cache Line Size: 256 bytes
+	Interrupt: pin A routed to IRQ 0
+	IOMMU group: 6
+	Region 0: Memory at b0600000 (64-bit, non-prefetchable) [size=32K]
+	Region 2: Memory at b0400000 (64-bit, non-prefetchable) [size=2M]
+	Capabilities: [48] Power Management version 3
+		Flags: PMEClk- DSI- D1+ D2+ AuxCurrent=0mA PME(D0+,D1+,D2+,D3hot+,D3cold+)
+		Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=2 PME-
+	Capabilities: [58] MSI: Enable- Count=1/1 Maskable- 64bit+
+		Address: 0000000000000000  Data: 0000
+	Capabilities: [68] Vendor Specific Information: Len=44 <?>
+	Capabilities: [ac] Express (v2) Endpoint, IntMsgNum 0
+		DevCap:	MaxPayload 256 bytes, PhantFunc 0, Latency L0s <4us, L1 unlimited
+			ExtTag- AttnBtn- AttnInd- PwrInd- RBE+ FLReset- SlotPowerLimit 10W TEE-IO-
+		DevCtl:	CorrErr- NonFatalErr- FatalErr- UnsupReq-
+			RlxdOrd+ ExtTag- PhantFunc- AuxPwr+ NoSnoop+
+			MaxPayload 128 bytes, MaxReadReq 512 bytes
+		DevSta:	CorrErr+ NonFatalErr- FatalErr- UnsupReq+ AuxPwr+ TransPend-
+		LnkCap:	Port #0, Speed 2.5GT/s, Width x1, ASPM L0s L1, Exit Latency L0s <2us, L1 <32us
+			ClockPM+ Surprise- LLActRep- BwNot- ASPMOptComp+
+		LnkCtl:	ASPM L0s L1 Enabled; RCB 64 bytes, LnkDisable- CommClk+
+			ExtSynch- ClockPM+ AutWidDis- BWInt- AutBWInt- FltModeDis-
+		LnkSta:	Speed 2.5GT/s, Width x1
+			TrErr- Train- SlotClk+ DLActive- BWMgmt- ABWMgmt-
+		DevCap2: Completion Timeout: Range ABCD, TimeoutDis+ NROPrPrP- LTR+
+			 10BitTagComp- 10BitTagReq- OBFF Via WAKE#, ExtFmt- EETLPPrefix-
+
+=== Pre-test root port (00:1c.2) state ===
+00:1c.2 PCI bridge [0604]: Intel Corporation 8 Series PCI Express Root Port 3 [8086:9c14] (rev e4) (prog-if 00 [Normal decode])
+	Subsystem: Intel Corporation Device [8086:7270]
+	Control: I/O+ Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx+
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+	Latency: 0, Cache Line Size: 256 bytes
+	Interrupt: pin C routed to IRQ 44
+	IOMMU group: 6
+	Bus: primary=00, secondary=03, subordinate=03, sec-latency=0
+	I/O behind bridge: [disabled] [16-bit]
+	Memory behind bridge: b0400000-b06fffff [size=3M] [32-bit]
+	Prefetchable memory behind bridge: [disabled] [64-bit]
+	Secondary status: 66MHz- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- <SERR- <PERR-
+	BridgeCtl: Parity- SERR+ NoISA- VGA- VGA16- MAbort- >Reset- FastB2B-
+		PriDiscTmr- SecDiscTmr- DiscTmrStat- DiscTmrSERREn-
+	Capabilities: [40] Express (v2) Root Port (Slot+), IntMsgNum 0
+		DevCap:	MaxPayload 128 bytes, PhantFunc 0
+			ExtTag- RBE+ TEE-IO-
+		DevCtl:	CorrErr- NonFatalErr+ FatalErr+ UnsupReq+
+			RlxdOrd- ExtTag- PhantFunc- AuxPwr- NoSnoop-
+			MaxPayload 128 bytes, MaxReadReq 128 bytes
+
+=== Flushing to disk ===
+Flush complete.
+
+=== Loading brcmfmac (bcm4360_reset_stage=0, bcm4360_skip_arm=1) --- test.134 ===
+insmod returned rc=0
+Waiting 2s for firmware init...
+
+=== dmesg capture (kernel ring buffer) ===
+[  565.479137] brcmfmac: loading out-of-tree module taints kernel.
+[  565.486185] brcmfmac: BCM4360 test.128: brcmf_pcie_register() entry
+[  565.486229] brcmfmac: BCM4360 test.128: calling pci_register_driver
+[  565.486294] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=0000000047c82e0b)
+[  565.486343] brcmfmac: BCM4360 test.127: probe entry (vendor=14e4 device=43a0)
+[  565.486404] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+[  565.488486] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+[  565.490605] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+[  566.006205] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+[  566.006465] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcefd01400000
+[  566.006507] brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+[  566.057063] brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+[  566.057832] brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+[  566.057883] brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+[  566.060126] brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+[  566.062121] brcmfmac 0000:03:00.0: BCM4360 test.126: skipping PCIE2 mailbox clear; returning 0
+[  566.064146] brcmfmac: brcmf_chip_recognition: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+[  566.066217] brcmfmac: brcmf_chip_recognition: BCM4360 test.125: after reset, before get_raminfo
+[  566.068356] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[  566.070834] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[  566.070886] brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+[  566.071008] brcmfmac 0000:03:00.0: BCM4360 test.133: BusMaster cleared after chip_attach
+[  566.071118] brcmfmac 0000:03:00.0: BCM4360 test.133: ASPM disabled; LnkCtl before=0x0143 after=0x0140 ASPM-bits-after=0x0
+[  566.071181] brcmfmac 0000:03:00.0: BCM4360 test.120: before PCIE2 core/reginfo setup
+[  566.073257] brcmfmac 0000:03:00.0: BCM4360 test.120: reginfo selected (pcie2 rev=1)
+[  566.075033] brcmfmac 0000:03:00.0: BCM4360 test.120: pcie_bus_dev allocated
+[  566.076678] brcmfmac 0000:03:00.0: BCM4360 test.123: module params bypassed (dummy)
+[  566.078372] brcmfmac 0000:03:00.0: BCM4360 test.120: module params loaded
+[  566.080014] brcmfmac 0000:03:00.0: BCM4360 test.123: before bus kzalloc
+[  566.081648] brcmfmac 0000:03:00.0: BCM4360 test.120: bus allocated
+[  566.083211] brcmfmac 0000:03:00.0: BCM4360 test.120: msgbuf allocated
+[  566.084747] brcmfmac 0000:03:00.0: BCM4360 test.132: before struct wiring
+[  566.086265] brcmfmac 0000:03:00.0: BCM4360 test.132: before pci_pme_capable
+[  566.087829] brcmfmac 0000:03:00.0: BCM4360 test.132: after pci_pme_capable wowl=1
+[  566.089356] brcmfmac 0000:03:00.0: BCM4360 test.120: bus wired and drvdata set
+[  566.090893] brcmfmac 0000:03:00.0: BCM4360 test.120: before brcmf_alloc
+[  566.092441] brcmfmac 0000:03:00.0: BCM4360 test.120: brcmf_alloc complete
+[  566.093970] brcmfmac 0000:03:00.0: BCM4360 test.120: before OTP read
+[  566.095491] brcmfmac 0000:03:00.0: BCM4360 test.124: OTP read bypassed — OTP not needed
+[  566.097048] brcmfmac 0000:03:00.0: BCM4360 test.120: OTP read complete
+[  566.098547] brcmfmac 0000:03:00.0: BCM4360 test.120: before prepare_fw_request
+[  566.100024] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[  566.100028] brcmfmac 0000:03:00.0: BCM4360 test.120: firmware request prepared
+[  566.101474] brcmfmac 0000:03:00.0: BCM4360 test.120: before brcmf_fw_get_firmwares
+[  566.102880] brcmfmac 0000:03:00.0: BCM4360 test.120: brcmf_fw_get_firmwares returned async/success
+[  566.112327] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+[  566.115963] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+[  566.115971] brcmfmac: BCM4360 test.128: brcmf_pcie_setup ENTRY ret=0
+[  566.116002] brcmfmac: BCM4360 test.128: before brcmf_pcie_attach
+[  566.116037] brcmfmac: BCM4360 test.128: brcmf_pcie_attach ENTRY
+[  566.116075] brcmfmac: BCM4360 test.129: brcmf_pcie_attach bypassed for BCM4360
+[  566.116126] brcmfmac: BCM4360 test.128: after brcmf_pcie_attach
+[  566.417826] brcmfmac: BCM4360 test.134: post-attach before fw-ptr-extract
+[  566.717863] brcmfmac: BCM4360 test.134: after kfree(fwreq)
+[  567.017910] brcmfmac: BCM4360 test.130: before brcmf_chip_get_raminfo
+[  567.317945] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[  567.317998] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[  567.318030] brcmfmac: BCM4360 test.130: after brcmf_chip_get_raminfo
+[  567.618061] brcmfmac: BCM4360 test.130: after brcmf_pcie_adjust_ramsize
+[  567.918138] brcmfmac 0000:03:00.0: BCM4360 test.134: BusMaster re-enabled before fw-download; LnkCtl=0x0140 ASPM-bits=0x0
+=== Capture complete ===
+                        

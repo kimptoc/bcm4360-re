@@ -810,11 +810,23 @@ static void brcmf_pcie_attach(struct brcmf_pciedev_info *devinfo)
 static int brcmf_pcie_enter_download_state(struct brcmf_pciedev_info *devinfo)
 {
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-		/* test.130: BCM4360 — ARM_CR4 is in BCMA reset after SBR; writing to
-		 * its wrapper registers via BAR0 triggers a PCIe Completion Timeout → MCE.
-		 * Skip bank protection setup; ARM stays halted (bcm4360_skip_arm=1).
+		u32 reset_ctl, ioctl;
+
+		/* test.135: diagnostic — read ARM_CR4 wrapper state via BAR0.
+		 * test.130 comment claimed ARM_CR4 in BCMA reset after SBR, but that was
+		 * written before chip_attach worked. Now chip_attach succeeds (set_passive
+		 * uses resetcore which releases RESET_CTL), so ARM_CR4 may be halted-but-not-
+		 * in-BCMA-reset. Verify actual state before deciding fix.
+		 * BCMA_IOCTL=0x0408, BCMA_RESET_CTL=0x0800; wrapper at core+0x1000 via BAR0.
 		 */
-		pr_emerg("BCM4360 test.130: brcmf_pcie_enter_download_state bypassed for BCM4360\n");
+		brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
+		reset_ctl = brcmf_pcie_read_reg32(devinfo, 0x1800); /* BCMA_RESET_CTL */
+		ioctl     = brcmf_pcie_read_reg32(devinfo, 0x1408); /* BCMA_IOCTL */
+		pr_emerg("BCM4360 test.135: ARM_CR4 wrapper: RESET_CTL=0x%04x IN_RESET=%s IOCTL=0x%04x CPUHALT=%s CLK=%s\n",
+			 reset_ctl, (reset_ctl & 1) ? "YES" : "NO",
+			 ioctl,     (ioctl & 0x0020) ? "YES" : "NO",
+			 (ioctl & 1) ? "YES" : "NO");
+		mdelay(300);
 		return 0;
 	}
 	if (devinfo->ci->chip == BRCM_CC_43602_CHIP_ID) {
@@ -1803,6 +1815,23 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 devinfo->ci->rambase, devinfo->ci->ramsize,
 		 devinfo->ci->srsize, fw->size, devinfo->tcm);
 	brcmf_dbg(PCIE, "Download FW %s\n", devinfo->fw_name);
+
+	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
+		/* test.135: probe BAR2 with a single read before writing firmware.
+		 * If this crashes → BAR2/TCM inaccessible (ARM_CR4 issue).
+		 * If 0xffffffff → device returning error (CTO?).
+		 * If any other value → BAR2 accessible, crash must be elsewhere.
+		 */
+		u32 bar2_probe = ioread32(devinfo->tcm);
+
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.135: BAR2 probe at offset 0x0 = 0x%08x %s\n",
+			  bar2_probe,
+			  bar2_probe == 0xffffffff ? "(0xffffffff — possible CTO/error)" :
+						     "(real value — BAR2 accessible)");
+		mdelay(300);
+	}
+
 	brcmf_pcie_copy_mem_todev(devinfo, devinfo->ci->rambase,
 				  fw->data, fw->size);
 
@@ -3636,18 +3665,13 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 	pr_emerg("BCM4360 test.130: after brcmf_pcie_adjust_ramsize\n");
 	mdelay(300);
 
-	/* test.134: re-enable BusMaster before firmware download (MMIO writes
-	 * to TCM via BAR2 don't need it, but MSI delivery later will require it) */
-	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
-		u16 lnkctl;
-
-		pci_set_master(devinfo->pdev);
-		pcie_capability_read_word(devinfo->pdev, PCI_EXP_LNKCTL, &lnkctl);
-		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.134: BusMaster re-enabled before fw-download; LnkCtl=0x%04x ASPM-bits=0x%x\n",
-			  lnkctl, lnkctl & PCI_EXP_LNKCTL_ASPMC);
-		mdelay(300);
-	}
+	/* test.135: BusMaster re-enable removed. BAR2/TCM writes are CPU→device MMIO
+	 * (posted writes) and do NOT need BusMaster. BusMaster allows device-initiated
+	 * DMA; re-enabling it before ring buffers are set up may trigger stray DMA
+	 * from the chip → crash. Will re-enable later (before IRQ request).
+	 * test.134 result: crash happened right after BusMaster re-enable, suggesting
+	 * this was the crash trigger. Testing without it for test.135.
+	 */
 
 	pr_emerg("BCM4360 test.130: before brcmf_pcie_download_fw_nvram\n");
 	mdelay(300);

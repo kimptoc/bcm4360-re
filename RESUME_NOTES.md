@@ -1,6 +1,80 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.134 — mdelay flush markers + ASPM verify + BusMaster restore)
+## Current state (2026-04-19, PRE test.135 — ARM_CR4 wrapper diagnostic + BAR2 probe + remove BusMaster re-enable)
+
+### CODE STATE: test.135 — diagnostic reads before firmware download to find exact crash cause
+
+**Hardware state (verified):**
+- PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.134 crash
+- Fresh boot (boot 0 after test.134)
+- Module NOT yet rebuilt — need to make after code changes
+
+**test.134 RESULT (BREAKTHROUGH — crash precisely inside brcmf_pcie_download_fw_nvram):**
+- All markers through "BusMaster re-enabled before fw-download" ✓
+- "before brcmf_pcie_download_fw_nvram" ✓ (seen in previous-boot journal, missed in stage0)
+- "brcmf_pcie_enter_download_state bypassed for BCM4360" ✓ (enter_download_state returns 0)
+- **CRASH** — no further markers
+- Crash site: first iowrite32 in brcmf_pcie_copy_mem_todev (BAR2 write for firmware)
+- ASPM successfully disabled: LnkCtl was 0x0143 → 0x0140 ASPM-bits=0x0 ✓
+
+**Key analysis (test.134 → test.135 hypothesis):**
+- Crash is at the FIRST BAR2/TCM write (brcmf_pcie_copy_mem_todev)
+- Two possible causes under investigation:
+  A) ARM_CR4 in BCMA reset → TCM/BAR2 inaccessible → first iowrite32 → CTO → SERR → MCE
+  B) BusMaster re-enable triggers stray chip DMA (ring buffers not yet set up) → crash
+- NOTE: brcmf_chip_disable_arm (called via chip_attach→set_passive) uses brcmf_chip_resetcore
+  which RELEASES RESET_CTL (out of BCMA reset). So ARM_CR4 may already be OUT of BCMA reset
+  with CPUHALT set — need to verify with diagnostic reads
+- Test.130 comment "ARM_CR4 in BCMA reset after SBR" was written before chip_attach worked
+  and may be OUTDATED
+
+**Root cause hypothesis (test.135):**
+- Primary suspect: BusMaster re-enable triggers chip to DMA before ring buffers set up
+- Secondary suspect: ARM_CR4 wrapper state incorrect (not halted-and-clocked)
+- Investigation: diagnostic reads of ARM_CR4 RESET_CTL/IOCTL + single BAR2 probe read
+- Simplification: Remove BusMaster re-enable (not needed for MMIO/BAR2 writes)
+
+**Code changes for test.135 (pcie.c):**
+1. brcmf_pcie_enter_download_state: read ARM_CR4 wrapper RESET_CTL (BAR0+0x1800) and
+   IOCTL (BAR0+0x1408) after selecting ARM_CR4 core; log state before returning 0
+2. brcmf_pcie_download_fw_nvram: add single ioread32 from devinfo->tcm (BAR2+0) before
+   copy_mem_todev call; log result + mdelay(300)
+3. Remove BusMaster re-enable block for BCM4360 (pci_set_master not needed for BAR2 writes)
+
+**Hypothesis (test.135):**
+- If ARM_CR4 wrapper diagnostic crashes: wrapper registers not accessible (unexpected)
+- If ARM_CR4 shows RESET_CTL=0 CPUHALT=YES: ARM is halted-but-not-in-BCMA-reset (correct state)
+- If BAR2 probe crashes: BAR2 truly inaccessible despite ARM_CR4 state → root cause found
+- If BAR2 probe succeeds + BusMaster removed: firmware copy may proceed → major progress
+
+**Build status:** NOT yet rebuilt — need make after implementing code changes
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+---
+
+## test.134 RESULT (crash inside brcmf_pcie_download_fw_nvram — first BAR2 write):
+
+**Markers observed (from stage0 AND previous-boot journal):**
+- All previous barriers passed ✓
+- `BCM4360 test.134: post-attach before fw-ptr-extract` ✓
+- `BCM4360 test.134: after kfree(fwreq)` ✓
+- `BCM4360 test.130: before brcmf_chip_get_raminfo` ✓
+- `BCM4360 test.130: after brcmf_chip_get_raminfo` ✓
+- `BCM4360 test.130: after brcmf_pcie_adjust_ramsize` ✓
+- `BCM4360 test.134: BusMaster re-enabled before fw-download; LnkCtl=0x0140 ASPM-bits=0x0` ✓
+- `BCM4360 test.130: before brcmf_pcie_download_fw_nvram` ✓ (journal only)
+- `BCM4360 test.130: brcmf_pcie_enter_download_state bypassed for BCM4360` ✓ (journal only)
+- **CRASH** — no further markers
+
+**Crash site: brcmf_pcie_copy_mem_todev — first iowrite32 to BAR2/TCM**
+
+---
+
+## Previous state (2026-04-19, PRE test.134 — mdelay flush markers + ASPM verify + BusMaster restore)
 
 ### CODE STATE: test.134 — mdelay(300) after every marker in brcmf_pcie_setup to force journal flush
 
