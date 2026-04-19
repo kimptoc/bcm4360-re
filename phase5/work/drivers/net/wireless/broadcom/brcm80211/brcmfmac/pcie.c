@@ -812,17 +812,12 @@ static int brcmf_pcie_enter_download_state(struct brcmf_pciedev_info *devinfo)
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		u32 reset_ctl, ioctl;
 
-		/* test.139: ARM CR4 running garbage after SBR → async PCIe crash.
-		 * Assert reset IMMEDIATELY — select_core then write, no mdelay before.
-		 * Diagnostic reads come AFTER reset (CPU halted = safe). */
-		pr_emerg("BCM4360 test.139: enter_download_state — asserting ARM CR4 reset\n");
+		/* test.140: ARM CR4 reset was asserted at probe-time; just confirm state here. */
+		pr_emerg("BCM4360 test.140: enter_download_state — reading ARM CR4 state\n");
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
-		brcmf_pcie_write_reg32(devinfo, 0x1800, 1); /* RESET_CTL = 1: assert reset */
-		mdelay(100); /* let reset propagate */
-
-		reset_ctl = brcmf_pcie_read_reg32(devinfo, 0x1800); /* confirm reset */
-		ioctl     = brcmf_pcie_read_reg32(devinfo, 0x1408); /* IOCTL state */
-		pr_emerg("BCM4360 test.139: post-reset RESET_CTL=0x%04x IN_RESET=%s IOCTL=0x%04x CPUHALT=%s CLK=%s\n",
+		reset_ctl = brcmf_pcie_read_reg32(devinfo, 0x1800);
+		ioctl     = brcmf_pcie_read_reg32(devinfo, 0x1408);
+		pr_emerg("BCM4360 test.140: ARM CR4 state RESET_CTL=0x%04x IN_RESET=%s IOCTL=0x%04x CPUHALT=%s CLK=%s\n",
 			 reset_ctl, (reset_ctl & 1) ? "YES" : "NO",
 			 ioctl,     (ioctl & 0x0020) ? "YES" : "NO",
 			 (ioctl & 1) ? "YES" : "NO");
@@ -4045,6 +4040,22 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.133: ASPM disabled; LnkCtl before=0x%04x after=0x%04x ASPM-bits-after=0x%x\n",
 			  lnkctl_before, lnkctl_after, lnkctl_after & PCI_EXP_LNKCTL_ASPMC);
+
+		/* test.140: assert ARM CR4 reset NOW — before async fw load.
+		 * test.139 confirmed ARM CR4 running garbage kills host before the
+		 * firmware callback fires. No mdelay before the write; mdelay(10)
+		 * is enough for reset propagation (sub-ms hardware operation). */
+		{
+			u32 reset_ctl;
+
+			brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
+			brcmf_pcie_write_reg32(devinfo, 0x1800, 1); /* RESET_CTL=1 */
+			mdelay(10);
+			reset_ctl = brcmf_pcie_read_reg32(devinfo, 0x1800);
+			dev_emerg(&pdev->dev,
+				  "BCM4360 test.140: probe-time ARM CR4 reset asserted RESET_CTL=0x%04x IN_RESET=%s\n",
+				  reset_ctl, (reset_ctl & 1) ? "YES" : "NO");
+		}
 	}
 
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
