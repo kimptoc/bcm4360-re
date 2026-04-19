@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.135.stage${STAGE}"
+LOG="$LOG_DIR/test.136.stage${STAGE}"
 
-echo "=== test.135: ARM_CR4 wrapper diagnostic + BAR2 probe + no BusMaster re-enable — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.136: streaming dmesg capture + ARM_CR4 wrapper diagnostic + BAR2 probe — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -104,15 +104,24 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=2
+    WAIT_SECS=6
 else
     SKIP_ARM=0
     WAIT_SECS=35
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.135 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.136 ===" | tee -a "$LOG"
 sync
+
+# Start streaming kernel messages to a separate file BEFORE insmod.
+# This persists markers to disk in real-time — critical when the machine may
+# hard-crash before the sleep ends (snapshot after sleep would be on next boot).
+STREAM_LOG="${LOG}.stream"
+echo "=== dmesg stream start: $(date) ===" > "$STREAM_LOG"
+sync
+stdbuf -oL dmesg -wk 2>/dev/null >> "$STREAM_LOG" &
+DMESG_PID=$!
 
 dmesg -C
 modprobe brcmutil 2>/dev/null || true
@@ -123,11 +132,20 @@ INSMOD_RC=$?
 set -e
 echo "insmod returned rc=$INSMOD_RC" | tee -a "$LOG"
 
-echo "Waiting ${WAIT_SECS}s for firmware init..." | tee -a "$LOG"
-sleep "$WAIT_SECS"
+echo "Waiting ${WAIT_SECS}s for firmware init (streaming to $(basename "$STREAM_LOG"))..." | tee -a "$LOG"
+for _i in $(seq 1 "$WAIT_SECS"); do
+    sleep 1
+    sync
+done
+
+# Stop the background stream
+kill "$DMESG_PID" 2>/dev/null || true
+wait "$DMESG_PID" 2>/dev/null || true
+echo "=== dmesg stream end: $(date) ===" >> "$STREAM_LOG"
+sync
 
 echo "" | tee -a "$LOG"
-echo "=== dmesg capture (kernel ring buffer) ===" | tee -a "$LOG"
+echo "=== dmesg snapshot (kernel ring buffer) ===" | tee -a "$LOG"
 dmesg -k --nopager 2>&1 | grep -iE "BCM4360|brcmfmac" | tee -a "$LOG"
 sync
 echo "=== Capture complete ===" | tee -a "$LOG"

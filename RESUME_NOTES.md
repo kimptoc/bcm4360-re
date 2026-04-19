@@ -1,63 +1,59 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.135 run — module built, test not yet executed)
+## Current state (2026-04-19, PRE test.136 — streaming dmesg capture to catch crash markers)
 
-### CODE STATE: test.135 — diagnostic reads before firmware download to find exact crash cause
+### CODE STATE: test.135 binary (unchanged for test.136) — ARM_CR4 diagnostic + BAR2 probe
 
 **Hardware state (verified):**
-- PCIe endpoint 03:00.0: MAbort- (CLEAN) — clean after last crash
-- Fresh boot (boot 0 after test.134 crash)
-- **Module IS built** — test.135 code compiled into brcmfmac.ko (12:49 timestamp, same as commit)
-- test.135.stage0 file is a DUPLICATE of test.134.stage0 — test.135 has NOT actually run yet
+- PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.135 crash
+- Fresh boot (boot 0 after test.135 crash)
+- **Module IS built** — test.135 code in brcmfmac.ko (12:49 timestamp), no rebuild needed
 
-**test.134 RESULT (BREAKTHROUGH — crash precisely inside brcmf_pcie_download_fw_nvram):**
-- All markers through "BusMaster re-enabled before fw-download" ✓
-- "before brcmf_pcie_download_fw_nvram" ✓ (seen in previous-boot journal, missed in stage0)
-- "brcmf_pcie_enter_download_state bypassed for BCM4360" ✓ (enter_download_state returns 0)
-- **CRASH** — no further markers
-- Crash site: first iowrite32 in brcmf_pcie_copy_mem_todev (BAR2 write for firmware)
-- ASPM successfully disabled: LnkCtl was 0x0143 → 0x0140 ASPM-bits=0x0 ✓
+**test.135 RESULT (INCONCLUSIVE — capture window too narrow, crash markers missed):**
+- test.135 ran with the correct binary (verified: ARM_CR4 wrapper/BAR2 probe strings in .ko)
+- Markers captured: all through "after brcmf_chip_get_raminfo" ✓ (same as test.134)
+- Crash happened AFTER "after brcmf_chip_get_raminfo" at ~boot+273.4s
+- ARM_CR4 reads at ~boot+274.3s and BAR2 probe at ~boot+274.6s BOTH missed by 2s capture window
+- Machine crashed (rebooted) — journal only has 15 messages (hard reset lost later journal)
+- ROOT CAUSE STILL UNKNOWN: could be ARM_CR4 reads, BAR2 probe, or copy_mem_todev
 
-**Key analysis (test.134 → test.135 hypothesis):**
-- Crash is at the FIRST BAR2/TCM write (brcmf_pcie_copy_mem_todev)
-- Two possible causes under investigation:
-  A) ARM_CR4 in BCMA reset → TCM/BAR2 inaccessible → first iowrite32 → CTO → SERR → MCE
-  B) BusMaster re-enable triggers stray chip DMA (ring buffers not yet set up) → crash
-- NOTE: brcmf_chip_disable_arm (called via chip_attach→set_passive) uses brcmf_chip_resetcore
-  which RELEASES RESET_CTL (out of BCMA reset). So ARM_CR4 may already be OUT of BCMA reset
-  with CPUHALT set — need to verify with diagnostic reads
-- Test.130 comment "ARM_CR4 in BCMA reset after SBR" was written before chip_attach worked
-  and may be OUTDATED
+**Analysis of timing failure:**
+- insmod at boot+271s → 2s sleep → dmesg snapshot at boot+273s
+- "after brcmf_chip_get_raminfo" logged at boot+273.385s (just entered dmesg buffer)
+- ARM_CR4 reads + "ARM_CR4 wrapper:" marker at boot+274.3s → MISSED
+- BAR2 probe ioread32 + "BAR2 probe at offset 0x0" at boot+274.6s → MISSED
+- Snapshot capture is the wrong approach when crash races with sleep
 
-**Root cause hypothesis (test.135):**
-- Primary suspect: BusMaster re-enable triggers chip to DMA before ring buffers set up
-- Secondary suspect: ARM_CR4 wrapper state incorrect (not halted-and-clocked)
-- Investigation: diagnostic reads of ARM_CR4 RESET_CTL/IOCTL + single BAR2 probe read
-- Simplification: Remove BusMaster re-enable (not needed for MMIO/BAR2 writes)
+**Fix for test.136 — streaming capture:**
+- Use `stdbuf -oL dmesg -wk >> log.stream &` started BEFORE insmod
+- Add `sync` every second during 6s wait
+- Kill stream background process after wait
+- On crash: stream data already on disk up to crash moment
+- Increase WAIT_SECS from 2 to 6 for stage 0 (ARM_CR4+BAR2 at insmod+3-4s)
 
-**Code changes for test.135 (pcie.c):**
-1. brcmf_pcie_enter_download_state: read ARM_CR4 wrapper RESET_CTL (BAR0+0x1800) and
-   IOCTL (BAR0+0x1408) after selecting ARM_CR4 core; log state before returning 0
-2. brcmf_pcie_download_fw_nvram: add single ioread32 from devinfo->tcm (BAR2+0) before
-   copy_mem_todev call; log result + mdelay(300)
-3. Remove BusMaster re-enable block for BCM4360 (pci_set_master not needed for BAR2 writes)
+**Hypothesis (test.136 / repeating test.135 with better capture):**
+- ARM_CR4 reads via BAR0: BAR0 has been stable throughout, unlikely to crash
+- BAR2 probe ioread32: FIRST ever BAR2 access — likely crash point OR returns 0xffffffff (CTO)
+- If BAR2 probe crashes: BAR2 totally inaccessible → need to understand why
+- If BAR2 probe returns 0xffffffff: CTO — ARM_CR4 not in correct state for TCM access
+- If BAR2 probe returns real value: crash must be elsewhere (iowrite32 issue, not ioread32)
 
-**Hypothesis (test.135):**
-- If ARM_CR4 wrapper diagnostic crashes: wrapper registers not accessible (unexpected)
-- If ARM_CR4 shows RESET_CTL=0 CPUHALT=YES: ARM is halted-but-not-in-BCMA-reset (correct state)
-- If BAR2 probe crashes: BAR2 truly inaccessible despite ARM_CR4 state → root cause found
-- If BAR2 probe succeeds + BusMaster removed: firmware copy may proceed → major progress
-
-**Build status:** NOT yet rebuilt — need make after implementing code changes
+**No code changes needed — test.135 binary is correct, only test script updated.**
 
 **Test command:**
 ```
 sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 ```
 
+**Post-test: check both test.136.stage0 AND test.136.stage0.stream for markers.**
+
 ---
 
-## test.134 RESULT (crash inside brcmf_pcie_download_fw_nvram — first BAR2 write):
+## test.135 RESULT (crash — capture window missed critical markers):
+
+---
+
+## test.134 RESULT (crash at first BAR2 write — brcmf_pcie_copy_mem_todev):
 
 **Markers observed (from stage0 AND previous-boot journal):**
 - All previous barriers passed ✓
