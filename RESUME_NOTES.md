@@ -1,6 +1,70 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.132 — bisect crash between msgbuf-alloc and bus-wired)
+## Current state (2026-04-19, PRE test.133 — pci_clear_master + ASPM disable after chip_attach)
+
+### CODE STATE: test.133 — BusMaster cleared and ASPM disabled immediately after chip_attach
+
+**Hardware state (verified):**
+- PCIe endpoint 03:00.0: MAbort- (CLEAN)
+- Fresh boot (boot 0 after test.132 crash)
+- Module rebuilt: brcmfmac.ko compiled for test.133
+
+**test.132 RESULT (previous crash):**
+- Got to "bus allocated" (line 4018) then crashed — EARLIER than test.131-rerun which reached "msgbuf allocated"
+- Confirmed crash is ASYNCHRONOUS — no hardware access between "bus allocated" and "msgbuf allocated"
+- Journal showed no AER (pci=noaer suppresses logging) and no MCE oops → hard reset from SERR→NMI
+- Stage0 log had "test.131" in loading message (typo, fixed for test.133)
+
+**Root cause hypothesis (test.133):**
+- After chip_attach, BusMaster is ON (set by pci_set_master in brcmf_pcie_buscoreprep)
+- ASPM L0s/L1 is still enabled (reset_device bypassed, no ASPM disable)
+- With BusMaster+ and no DMA mappings, BCM4360 may attempt stray DMA or the PCIe link may
+  re-enter L1 during kernel allocations, causing completion errors that escalate via SERR→MCE
+- Primary fix: pci_clear_master(pdev) immediately after chip_attach returns
+- Secondary fix: pci_disable_link_state(PCIE_LINK_STATE_ASPM_ALL) after chip_attach
+
+**Code changes for test.133 (pcie.c):**
+- After chip_attach returns (after test.119 marker):
+  1. pci_clear_master(pdev) — "BCM4360 test.133: BusMaster cleared after chip_attach"
+  2. pci_disable_link_state(pdev, PCIE_LINK_STATE_ASPM_ALL) — "BCM4360 test.133: ASPM disabled"
+- BusMaster is re-enabled at line 2051 (before ARM release) which is unchanged
+
+**Hypothesis (test.133):**
+- With BusMaster cleared and ASPM disabled, the async crash source is eliminated
+- Should get past bus/msgbuf kzalloc, through struct wiring, through pci_pme_capable
+- Should reach "bus wired and drvdata set" marker and continue into brcmf_alloc
+- If crash still happens: root cause is something other than async DMA or ASPM
+
+**Build status:** REBUILT — test.133 pcie.c compiled, brcmfmac.ko ready
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+---
+
+## test.132 RESULT (boot 0, crash — regressed earlier than test.131-rerun):
+
+**Markers observed:**
+- All markers through `BCM4360 test.119: brcmf_chip_attach returned successfully` ✓
+- `BCM4360 test.120: reginfo selected (pcie2 rev=1)` ✓
+- `BCM4360 test.120: pcie_bus_dev allocated` ✓
+- `BCM4360 test.120: module params loaded` ✓
+- `BCM4360 test.120: bus allocated` ✓
+- **CRASH** — no "msgbuf allocated", no test.132 markers
+
+**Analysis:**
+- Crashed EARLIER than test.131-rerun (which got to "msgbuf allocated")
+- Zero hardware access between "bus allocated" and "msgbuf allocated" → crash is ASYNC
+- No AER events (pci=noaer), no MCE oops → hard reset from SERR#→NMI escalation
+- BusMaster is ON after chip_attach (set in buscoreprep), ASPM is ON (never disabled)
+- Async crash source: stray chip DMA or ASPM link re-entry → UR → SERR → MCE hard reset
+- test.133 will clear BusMaster + disable ASPM after chip_attach to eliminate async sources
+
+---
+
+## Previous state (2026-04-19, PRE test.132 — bisect crash between msgbuf-alloc and bus-wired)
 
 ### CODE STATE: test.132 — marker-only bisection of crash gap after msgbuf allocation
 

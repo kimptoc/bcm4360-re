@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.132.stage${STAGE}"
+LOG="$LOG_DIR/test.133.stage${STAGE}"
 
-echo "=== test.132: bisect crash gap after msgbuf alloc — pci_pme_capable markers — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.133: pci_clear_master + ASPM disable after chip_attach — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -111,7 +111,7 @@ else
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.131 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.133 ===" | tee -a "$LOG"
 sync
 
 dmesg -C

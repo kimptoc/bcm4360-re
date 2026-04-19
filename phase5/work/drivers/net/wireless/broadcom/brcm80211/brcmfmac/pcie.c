@@ -3962,6 +3962,18 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.119: brcmf_chip_attach returned successfully\n");
 
+	/* test.133: after chip_attach, chip has BusMaster+ (set in buscoreprep) but no DMA
+	 * mappings are set up yet. Clear BusMaster to prevent any async chip DMA causing
+	 * SERR→MCE hard reset. Also disable ASPM to prevent link L1 re-entry during probe. */
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
+		pci_clear_master(pdev);
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.133: BusMaster cleared after chip_attach\n");
+		pci_disable_link_state(pdev, PCIE_LINK_STATE_ASPM_ALL);
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.133: ASPM disabled after chip_attach\n");
+	}
+
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.120: before PCIE2 core/reginfo setup\n");
