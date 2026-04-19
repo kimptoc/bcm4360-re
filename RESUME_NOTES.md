@@ -3200,3 +3200,44 @@ Since the crash happens BEFORE probe even prints its first message, and all code
 1. **Stale module cache** — kernel caching old version of .ko file
 2. **Binary corruption** — 14MB module might have a corrupted section
 3. **Hidden code path** — static initialization or symbol resolution in a code path we haven't examined
+
+---
+
+## CORRECTED ANALYSIS: test.127 Crash Location Found (2026-04-19 session)
+
+### Key Finding: Previous-Boot Log Confirms Probe DID Run
+
+The previous hypothesis "crash before probe entry" was WRONG. The test script does `dmesg -C` BEFORE insmod, so if the machine crashes during insmod, the shell never reaches the dmesg capture. This made it look like probe never ran.
+
+Reading `journalctl -k -b -1` (previous boot log from test.127) shows:
+```
+brcmfmac: BCM4360 test.127: probe entry (vendor=14e4 device=43a0)
+... (all probe steps run including chip_attach, buscore_reset bypass, chip_recognition)
+brcmfmac 0000:03:00.0: BCM4360 test.120: before brcmf_fw_get_firmwares
+```
+
+The LAST line in the kernel log is "before brcmf_fw_get_firmwares". Machine hard-crashed (MCE/CTO — no BUG/Oops/panic message) immediately after calling `brcmf_fw_get_firmwares`.
+
+### Crash Location: brcmf_pcie_setup async callback
+
+`brcmf_fw_get_firmwares` calls `request_firmware_nowait` which fires the callback `brcmf_pcie_setup` asynchronously (but quickly, since firmware is cached). The callback's first MMIO-unsafe action is `brcmf_pcie_attach` which writes to PCIe2 core config registers.
+
+**Likely cause:** PCIe2 core is in BCMA reset state. Writing to its config registers via the backplane window triggers a PCIe Completion Timeout (CTO) → Machine Check Exception → hard reboot.
+
+### Next Step: Add markers to pinpoint exact crash line
+
+PLAN: Add pr_emerg markers inside `brcmf_pcie_setup` and `brcmf_pcie_attach` to find exact line.
+
+Markers needed:
+1. `brcmf_pcie_setup` entry (line 3548)
+2. Before `brcmf_pcie_attach(devinfo)` (line 3565)
+3. Inside `brcmf_pcie_attach` (line 779), before each MMIO write
+
+After markers → build → test stage 0 → read journalctl -k -b -1 → last marker = crash location.
+
+### Test.128 HYPOTHESIS
+
+Crash is in `brcmf_pcie_attach` → PCIe2 CONFIGADDR write (line 785 of pcie.c). If confirmed, fix is to skip that function for BCM4360 (BAR1 fix not needed; we use BAR2 for firmware download).
+
+This is test.128.
+

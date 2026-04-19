@@ -780,13 +780,20 @@ static void brcmf_pcie_attach(struct brcmf_pciedev_info *devinfo)
 {
 	u32 config;
 
+	pr_emerg("BCM4360 test.128: brcmf_pcie_attach ENTRY\n");
 	/* BAR1 window may not be sized properly */
+	pr_emerg("BCM4360 test.128: before select_core PCIE2\n");
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
+	pr_emerg("BCM4360 test.128: before write CONFIGADDR\n");
 	brcmf_pcie_write_reg32(devinfo, BRCMF_PCIE_PCIE2REG_CONFIGADDR, 0x4e0);
+	pr_emerg("BCM4360 test.128: before read CONFIGDATA\n");
 	config = brcmf_pcie_read_reg32(devinfo, BRCMF_PCIE_PCIE2REG_CONFIGDATA);
+	pr_emerg("BCM4360 test.128: before write CONFIGDATA config=0x%08x\n", config);
 	brcmf_pcie_write_reg32(devinfo, BRCMF_PCIE_PCIE2REG_CONFIGDATA, config);
+	pr_emerg("BCM4360 test.128: after write CONFIGDATA\n");
 
 	device_wakeup_enable(&devinfo->pdev->dev);
+	pr_emerg("BCM4360 test.128: brcmf_pcie_attach EXIT\n");
 }
 
 
@@ -3558,11 +3565,15 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 	pcie_bus_dev = bus->bus_priv.pcie;
 	devinfo = pcie_bus_dev->devinfo;
 
+	pr_emerg("BCM4360 test.128: brcmf_pcie_setup ENTRY ret=%d\n", ret);
+
 	/* check firmware loading result */
 	if (ret)
 		goto fail;
 
+	pr_emerg("BCM4360 test.128: before brcmf_pcie_attach\n");
 	brcmf_pcie_attach(devinfo);
+	pr_emerg("BCM4360 test.128: after brcmf_pcie_attach\n");
 
 	fw = fwreq->items[BRCMF_PCIE_FW_CODE].binary;
 	nvram = fwreq->items[BRCMF_PCIE_FW_NVRAM].nv_data.data;
