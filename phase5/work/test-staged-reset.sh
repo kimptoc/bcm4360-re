@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.130.stage${STAGE}"
+LOG="$LOG_DIR/test.131.stage${STAGE}"
 
-echo "=== test.130: bypass brcmf_pcie_enter_download_state ARM_CR4 write for BCM4360 — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.131: increase post-SBR delay to 500ms + stability probe for BCM4360 — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -111,7 +111,7 @@ else
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.130 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.131 ===" | tee -a "$LOG"
 sync
 
 dmesg -C

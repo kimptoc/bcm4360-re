@@ -3178,7 +3178,7 @@ static int brcmf_pcie_get_resource(struct brcmf_pciedev_info *devinfo)
 	 * If it prints 0xffffffff → device not responding even after SBR → need power cycle.
 	 */
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
-		u32 probe_val;
+		u32 probe_val, probe_val2;
 
 		pci_write_config_dword(pdev, BRCMF_PCIE_BAR0_WINDOW, 0x18000000);
 		probe_val = ioread32(devinfo->regs);
@@ -3186,13 +3186,21 @@ static int brcmf_pcie_get_resource(struct brcmf_pciedev_info *devinfo)
 			  "BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x%08x%s\n",
 			  probe_val,
 			  probe_val == 0xffffffff ? " — DEAD (no MMIO response)" : " — alive");
-		/* Abort before chip_attach enumeration — proceeding with a dead device
-		 * causes brcmf_chip_attach to do hundreds of ioread32 calls that trigger
-		 * PCIe Completion Timeout → MCE → hard crash with no kernel output.
-		 */
 		if (probe_val == 0xffffffff) {
 			dev_emerg(&pdev->dev,
 				  "BCM4360 test.53: ABORT — BAR0 dead after SBR, skipping chip_attach\n");
+			return -ENODEV;
+		}
+		/* test.131: second probe read after brief settle — confirms MMIO stable */
+		msleep(50);
+		probe_val2 = ioread32(devinfo->regs);
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.131: BAR0 2nd probe = 0x%08x%s\n",
+			  probe_val2,
+			  probe_val2 == 0xffffffff ? " — DEAD" : " — stable");
+		if (probe_val2 == 0xffffffff) {
+			dev_emerg(&pdev->dev,
+				  "BCM4360 test.131: ABORT — BAR0 unstable after SBR\n");
 			return -ENODEV;
 		}
 	}
@@ -3936,7 +3944,8 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 				      bc | PCI_BRIDGE_CTL_BUS_RESET);
 		msleep(10);  /* PCIe spec: hold reset ≥1ms */
 		pci_write_config_word(bridge, PCI_BRIDGE_CONTROL, bc);
-		msleep(200); /* PCIe spec: device must respond within 1s after reset; 200ms is safe */
+		msleep(500); /* test.131: increased from 200ms — chip_attach MMIO crashed at 200ms after
+			      * multiple crash cycles; 500ms gives AXI fabric more stabilization time */
 		pci_restore_state(pdev);
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.53: SBR complete — bridge_ctrl restored\n");
