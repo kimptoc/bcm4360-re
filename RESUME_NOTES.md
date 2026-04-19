@@ -1,33 +1,66 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.131 re-run #2 — fresh boot, boot 0, crash cycle 0)
+## Current state (2026-04-19, PRE test.132 — bisect crash between msgbuf-alloc and bus-wired)
 
-### CODE STATE: test.131 — post-SBR delay 500ms + BAR0 stability probe
+### CODE STATE: test.132 — marker-only bisection of crash gap after msgbuf allocation
 
 **Hardware state (verified):**
 - PCIe endpoint 03:00.0: MAbort- (CLEAN)
-- This is boot 0, crash cycle 0 for this session — fresh hardware, no prior degradation
-- Module is built: brcmfmac.ko from 08:22:28 (matches pcie.c from 08:22:14) — up to date
+- Fresh boot (boot 0, crash cycle 0)
+- Module is built: brcmfmac.ko rebuilt for test.132
 
-**Hypothesis (test.131 re-run on fresh boot, boot 0):**
-- Prior test.131 crash was crash cycle #3 (cumulative degradation confound)
-- On clean hardware (0 prior crashes), 500ms delay should NOT trigger ASPM issues
-- Expected: BAR0 probe succeeds, chip_attach proceeds, further markers visible
-- If BAR0 probe still fails BEFORE first marker: 500ms delay itself is the culprit
-  (ASPM L1 engages during long sleep, first config access fails on link wakeup)
-- If crash still before BAR0 probe: next test = disable ASPM on root port before delay
+**Hypothesis (test.132):**
+- test.131 re-run (boot -1, fresh hardware) crashed after "msgbuf allocated" marker (line 4027)
+  before "bus wired and drvdata set" (line 4042).
+- The 10-line gap contains only pure memory ops EXCEPT `pci_pme_capable(pdev, PCI_D3hot)` (line 4038)
+  which reads PCI config space.
+- Root port has SERR+ — a UR on config read from flaky endpoint could escalate to MCE → hard reset
+- Primary suspect: pci_pme_capable() is the crash trigger
+- Test.132 adds pr_emerg markers around each operation in the gap to bisect exactly
 
-**Contingency plan if BAR0 probe fails again on fresh hardware:**
-- ASPM-during-delay hypothesis becomes primary
-- Next test (test.132): log LnkCtl before/after msleep, try disabling ASPM L0s/L1 on root port before the delay
-- Keep code change minimal — one variable at a time
+**Plan (test.132):**
+Add markers at:
+1. After msgbuf null-check (line ~4029): "before struct wiring"
+2. After bus->chip = devinfo->coreid (line ~4038): "before pci_pme_capable"
+3. After pci_pme_capable (line ~4039): "after pci_pme_capable"
+4. After dev_set_drvdata (line ~4040): "bus wired" (already exists)
 
-**Build status:** REBUILT (no-op — .ko up to date at 08:22:28)
+**Build status:** REBUILT — test.132 pcie.c compiled, brcmfmac.ko ready
 
 **Test command:**
 ```
 sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 ```
+
+---
+
+## test.131 RE-RUN RESULT (boot -1, crash cycle 0 — MAJOR PROGRESS):
+
+**Markers observed:**
+- `BCM4360 test.127: probe entry` ✓
+- `BCM4360 test.53: SBR complete` ✓
+- `BCM4360 test.53: BAR0 probe = 0x15034360 — alive` ✓
+- `BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable` ✓ (stability check passed!)
+- `BCM4360 test.125: buscore_reset entry` ✓
+- `BCM4360 test.122: reset_device bypassed` ✓
+- `BCM4360 test.126: skipping PCIE2 mailbox clear` ✓
+- `BCM4360 test.119: brcmf_chip_attach returned successfully` ✓
+- `BCM4360 test.120: reginfo selected (pcie2 rev=1)` ✓
+- `BCM4360 test.120: pcie_bus_dev allocated` ✓
+- `BCM4360 test.120: bus allocated` ✓
+- `BCM4360 test.120: msgbuf allocated` ✓
+- **CRASH** — no further markers
+
+**Analysis:**
+- HYPOTHESIS CONFIRMED: 500ms delay on fresh hardware (crash cycle 0) succeeded past BAR0 probe
+- BAR0 2nd probe stable confirms the delay doesn't cause ASPM regression on clean HW
+- chip_attach succeeded — this is the farthest we've ever gotten
+- Crash moved from "before BAR0 probe" → "after msgbuf allocation" — enormous progress
+- Crash point is now in the 10-line gap (pcie.c ~4029-4042) between msgbuf kzalloc and bus wiring
+- Most likely culprit: `pci_pme_capable(pdev, PCI_D3hot)` (only PCI config read in that block)
+- Hard reset (no oops) consistent with MCE from UR on PCIe config access
+
+**Journal saved:** phase5/logs/test.131-rerun.journal
 
 ---
 

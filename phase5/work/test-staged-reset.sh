@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.131.stage${STAGE}"
+LOG="$LOG_DIR/test.132.stage${STAGE}"
 
-echo "=== test.131: increase post-SBR delay to 500ms + stability probe for BCM4360 — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.132: bisect crash gap after msgbuf alloc — pci_pme_capable markers — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 

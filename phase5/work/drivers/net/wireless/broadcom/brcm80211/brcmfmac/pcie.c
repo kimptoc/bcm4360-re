@@ -4027,6 +4027,9 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 			  "BCM4360 test.120: msgbuf allocated\n");
 
 	/* hook it all together. */
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.132: before struct wiring\n");
 	pcie_bus_dev->devinfo = devinfo;
 	pcie_bus_dev->bus = bus;
 	bus->dev = &pdev->dev;
@@ -4035,7 +4038,14 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	bus->proto_type = BRCMF_PROTO_MSGBUF;
 	bus->fwvid = id->driver_data;
 	bus->chip = devinfo->coreid;
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.132: before pci_pme_capable\n");
 	bus->wowl_supported = pci_pme_capable(pdev, PCI_D3hot);
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.132: after pci_pme_capable wowl=%d\n",
+			  bus->wowl_supported);
 	dev_set_drvdata(&pdev->dev, bus);
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
 		dev_emerg(&pdev->dev,
