@@ -1,44 +1,35 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.131 — increase post-SBR delay + retry)
+## Current state (2026-04-19, PRE test.131 re-run — fresh boot after crash)
 
-### CODE STATE: test.131 — post-SBR delay increased to 500ms for BCM4360
+### CODE STATE: test.131 — post-SBR delay 500ms + BAR0 stability probe
 
-**test.130 re-run RESULT — hardware variance crash (2nd consecutive):**
+**test.131 RESULT (boot -1, crash cycle #3 from previous session):**
 
 Boot -1 journal markers:
-- `BCM4360 test.53: SBR via bridge complete`
-- `BCM4360 test.53: BAR0 probe = 0x15034360 alive`
-- (**NO** chip_attach / buscore_reset markers — crash before those)
+- `BCM4360 test.128: brcmf_pcie_register() entry`
+- `BCM4360 test.127: probe entry / devinfo allocated / devinfo->pdev assigned`
+- `BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach`
+- `BCM4360 test.53: SBR complete — bridge_ctrl restored`
+- **NO** BAR0 probe marker, NO chip_attach marker → crashed in brcmf_pcie_get_resource
 
-**Analysis:**
-- test.130 re-run crashed EARLIER than run 1 (run 1 got to buscore_reset entry)
-- Both crash after SBR+BAR0-alive but during chip_attach MMIO enumeration (EROM reads)
-- test.129 (first run on this session's clean boot) worked fine with 200ms delay
-- Pattern: works on fresh reboot/session, fails on subsequent runs in same session
+**Analysis — same crash point as test.130 re-run (crash cycle #2):**
+- test.131 crashed BEFORE the first BAR0 probe print (line 3184 ioread32 or earlier)
+- test.130 re-run (200ms) had same crash point: SBR complete, no BAR0 probe
+- CONFOUND: test.131 had BOTH 500ms delay AND was crash cycle #3 — can't attribute to delay alone
+- To isolate: must re-run test.131 code on fresh hardware (boot 0, zero prior crashes this session)
 
-**Root cause hypothesis:**
-Each crash-reboot cycle leaves the BCM4360 PCIe link in incrementally worse electrical state.
-The 200ms post-SBR delay is sufficient when hardware is fresh, but insufficient after multiple crashes.
-The EROM enumeration reads (first extensive MMIO after SBR) are hitting CTO because the chip's
-AXI fabric hasn't fully stabilized.
+**Fresh boot state (boot 0, current):**
+- Endpoint (03:00.0): MAbort- — CLEAN
+- Module not built (out-of-tree modules don't survive reboot) — MUST REBUILD before test
 
-**Code change for test.131:**
-- In `brcmf_pcie_probe` SBR block: increase `msleep(200)` to `msleep(500)` after bridge reset
-- Add extra BAR0 stability probe (second read after delay) before `brcmf_chip_attach`
-- Update test script to log `test.131.stage0`
+**Hypothesis (test.131 re-run on fresh boot):**
+- On fresh hardware (0 prior crashes), 500ms delay should allow BAR0 probe to succeed
+- If BAR0 probe prints and chip_attach completes → confirms cumulative degradation is the real enemy
+- If crash happens at same point (before BAR0 probe) → 500ms delay genuinely broke something
+  (possible cause: ASPM L1 engages during 500ms wait, first config access fails on link wakeup)
 
-**Hypothesis (test.131 stage0):**
-- 500ms delay gives the chip more time to stabilize PCIe link after SBR
-- Second BAR0 probe read confirms chip is still stable before MMIO-heavy chip_attach
-- Expected: chip_attach completes, async callback fires, brcmf_pcie_setup reaches test.130 markers
-- Most likely next crash: `brcmf_pcie_init_ringbuffers` (requires firmware running)
-
-**PCIe state (current boot 0, before test):**
-- Endpoint (03:00.0): MAbort-, CommClk+ — CLEAN
-- Root port (00:1c.2): MAbort-, secondary=03, subordinate=03 — CLEAN
-
-**Build status:** BUILT — brcmfmac.ko compiled 2026-04-19 (test.131 changes in place)
+**Build status:** NOT YET REBUILT — run make before test
 
 **Test command:**
 ```
