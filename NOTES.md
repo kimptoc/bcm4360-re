@@ -1,3 +1,24 @@
+# Current crash recovery snapshot - 2026-04-19 22:13 BST
+
+Latest run was `test.145` stage0. It crashed after these stream markers:
+
+```
+brcmfmac: loading out-of-tree module taints kernel.
+brcmfmac: BCM4360 test.145: module_init entry
+brcmfmac: BCM4360 test.128: brcmf_pcie_register() entry
+```
+
+It did NOT reach `calling pci_register_driver`, `PROBE ENTRY`, or the
+test.145 `buscore_reset` ARM halt. Therefore the current buscore-reset ARM
+halt point is too late for this failure mode, and test.144 already showed that
+raw BAR0 MMIO from module_init is too early/unsafe on fresh hardware.
+
+Before any further testing: commit/push test.145 logs and notes, then use SMC
+reset/full hardware power cut and verify clean PCIe state. Next useful code
+change is test.146: ultra-narrow markers inside `brcmf_pcie_register()` around
+the pre-`pci_register_driver` window to prove whether the crash happens before
+registration or inside the registration/enumeration transition.
+
 # Post-crash recovery checklist
 
 BCM4360 MMIO is dead. Requires full hardware power cycle.

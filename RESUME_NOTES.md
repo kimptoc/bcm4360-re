@@ -1,6 +1,60 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.145 — ARM halt moved to buscore_reset after second SBR)
+## Current state (2026-04-19 22:13 BST, POST test.145 crash)
+
+### CODE STATE: test.145 binary was built and run
+
+**Repository state at crash recovery:**
+- `main` is ahead of `origin/main` by commit `a79d4c4 test.145: move ARM halt after second SBR`
+- Untracked crash logs from test.145: `phase5/logs/test.145.stage0`, `phase5/logs/test.145.stage0.stream`
+- Next action before any further test: commit/push these logs and this note update
+
+**test.145 RESULT (stage0 crash during/after PCI registration):**
+- Pre-test BAR0 guard: fast UR/I/O error (7ms), not CTO; script proceeded
+- Pre-test PCIe state: endpoint present at `03:00.0`, root port `00:1c.2` had secondary/subordinate `03/03`, MAbort clear
+- Stream log captured:
+  - `brcmfmac: loading out-of-tree module taints kernel.`
+  - `brcmfmac: BCM4360 test.145: module_init entry`
+  - `brcmfmac: BCM4360 test.128: brcmf_pcie_register() entry`
+- Missing markers:
+  - `BCM4360 test.128: calling pci_register_driver`
+  - `BCM4360 test.128: PROBE ENTRY`
+  - `BCM4360 test.125: buscore_reset entry`
+  - `BCM4360 test.145: halting ARM CR4 after second SBR`
+
+**Crash window:**
+- Later than test.143's "taint only" failure because `module_init entry` and `brcmf_pcie_register() entry` both printed.
+- Earlier than the intended test.145 intervention point because `buscore_reset` was never reached.
+- Likely inside `brcmf_pcie_register()` before or at the `pci_register_driver()` printk, or an asynchronous hardware/AER crash immediately after the register-entry printk.
+
+**Interpretation:**
+- Moving the second ARM halt to `buscore_reset()` is too late for this failure mode.
+- Direct BAR0 MMIO in module_init is also unsafe on fresh hardware (test.144 UR crash).
+- The next discriminator should instrument the tiny window inside `brcmf_pcie_register()` with synced/emergency markers around any work before `pci_register_driver()`, especially immediately before and after the "calling pci_register_driver" printk.
+- Do NOT run stage1. Stage0 did not complete.
+
+**Hardware recovery before next test:**
+- Assume BCM4360/root port may be wedged after test.145 crash.
+- Do SMC reset / full hardware power cut, not warm reboot.
+- Verify root port and endpoint are clean before loading anything:
+  - `lspci -s 00:1c.2 -nn -vv` shows secondary/subordinate `03/03`, MAbort clear
+  - `lspci -s 03:00.0 -nn -vv` shows endpoint present, MAbort clear, CommClk+
+
+**Next candidate test (PRE test.146):**
+1. Keep test.145 behavioral change? Not useful yet, since crash is before buscore_reset.
+2. Add ultra-narrow instrumentation inside `brcmf_pcie_register()`:
+   - entry marker already exists
+   - marker immediately before any statement after entry
+   - marker immediately before `pci_register_driver`
+   - marker immediately after `pci_register_driver` returns
+   - sync-friendly stream logging remains mandatory
+3. If crash is reproducibly before `pci_register_driver`, inspect pre-registration calls/data touched by `brcmf_pcie_register()`.
+4. If crash is at/after `pci_register_driver` before probe, buscore_reset remains too late; need a no-BAR0 pre-probe mitigation or a PCI config-space-only reset/gating approach.
+5. Commit and push test.146 notes/code before running the test.
+
+---
+
+## Previous current state (2026-04-19, PRE test.145 — ARM halt moved to buscore_reset after second SBR)
 
 ### CODE STATE: test.145 binary — REBUILD NEEDED
 

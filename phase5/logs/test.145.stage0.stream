@@ -1,0 +1,4 @@
+=== dmesg stream start: Sun Apr 19 22:07:40 BST 2026 ===
+[ 2971.065629] brcmfmac: loading out-of-tree module taints kernel.
+[ 2971.072686] brcmfmac: BCM4360 test.145: module_init entry
+[ 2971.072799] brcmfmac: BCM4360 test.128: brcmf_pcie_register() entry
