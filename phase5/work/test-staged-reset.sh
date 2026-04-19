@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.141.stage${STAGE}"
+LOG="$LOG_DIR/test.142.stage${STAGE}"
 
-echo "=== test.141: assert ARM CR4 reset to stop async crash — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.142: ARM CR4 reset reordered — FIRST after chip_attach, log core base — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -28,7 +28,7 @@ case "$STAGE" in
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.141: assert ARM CR4 RESET_CTL=1 to stop garbage execution → should allow BAR2 access)" | tee -a "$LOG"
+echo "(test.142: ARM reset moved to FIRST after chip_attach; logs ARM CR4 core base for future early-reset hardcode)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -105,23 +105,26 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=12  # test.141: mdelay(100)+mdelay(300) in enter_download_state + 2x mdelay(300) around BAR2 probe
+    WAIT_SECS=12  # test.142: mdelay(1) probe-reset + mdelay(300) in enter_download_state
 else
     SKIP_ARM=0
     WAIT_SECS=35
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.141 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.142 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.
-# This persists markers to disk in real-time — critical when the machine may
-# hard-crash before the sleep ends (snapshot after sleep would be on next boot).
+# Each line is synced to disk immediately so crashes don't lose messages.
+# test.141 used plain ">>" append which went through OS page cache — crash lost all messages.
 STREAM_LOG="${LOG}.stream"
 echo "=== dmesg stream start: $(date) ===" > "$STREAM_LOG"
 sync
-stdbuf -oL dmesg -wk 2>/dev/null >> "$STREAM_LOG" &
+stdbuf -oL dmesg -wk 2>/dev/null | while IFS= read -r _dmesg_line; do
+    echo "$_dmesg_line" >> "$STREAM_LOG"
+    sync
+done &
 DMESG_PID=$!
 
 dmesg -C

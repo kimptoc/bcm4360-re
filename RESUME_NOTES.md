@@ -1,55 +1,63 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.141 — proper BCMA ARM CR4 reset: IOCTL=FGC|CLK|CPUHALT before RESET_CTL)
+## Current state (2026-04-19, PRE test.142 — ARM reset reordered FIRST after chip_attach; logs core base)
 
-### CODE STATE: test.141 binary — built and ready
+### CODE STATE: test.142 binary — built and ready
 
 **Hardware state (verified):**
-- PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.140 crash
+- PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.141 crash
 
-**test.140 RESULT (crash — wrapper wedged, RESET_CTL readback=0xffffffff):**
-- probe-time reset message appeared: "RESET_CTL=0xffffffff IN_RESET=YES"
-- BUT 0xffffffff indicates wrapper in undefined state — NOT a real reset confirmation
-- Stream ends truncated at "before brcmf_fw_get_firmwares" (4096-byte write at crash)
-- "brcmf_fw_get_firmwares returned async/success" NEVER appeared (unlike test.139 which got that far)
-- CONCLUSION: writing RESET_CTL=1 WITHOUT first writing IOCTL=FGC|CLK (0x0003) left ARM wrapper wedged
-  - Proper sequence (brcmf_chip_ai_coredisable): IOCTL=FGC|CLK|CPUHALT FIRST, then RESET_CTL=1
-  - Without FGC, ARM core clock was NOT gated before asserting reset → wrapper entered undefined state
-  - ARM may still have been running; crash happened earlier than test.139 (random window)
-- Root cause: missing IOCTL=prereset|FGC|CLK step before RESET_CTL write
+**test.141 RESULT (crash — too early to determine; logging infrastructure failed):**
+- Last captured messages: "devinfo allocated, before pdev assign" (line 3970)
+  — only 5 brcmf messages total in journal from that boot
+- Stream log (.stream) contained only header + null bytes: `dmesg -wk >> file` writes to OS page
+  cache; the crash flushed nothing; all messages were lost
+- Test.141 crashed BEFORE the probe-time ARM reset code at line 4054 — purely random async crash
+  from ARM executing garbage during the 500ms SBR wait + chip_attach window
+- The IOCTL write was NOT confirmed to be the crash cause (discriminator never fired)
+- IMPORTANT: test.141 code is CORRECT — it just didn't reach the reset code due to bad timing luck
+- CONCLUSION: need to either (a) move reset earlier, or (b) survive long enough to reach it
 
-**test.141 plan: proper BCMA reset sequence for ARM CR4 at probe-time**
-- Mirror brcmf_chip_ai_coredisable() sequence exactly:
-  1. select_core(ARM_CR4)
-  2. Read IOCTL (baseline: expect 0x0001 = CLK=YES, FGC=NO)
-  3. Write IOCTL = CPUHALT | FGC | CLK = 0x0020 | 0x0002 | 0x0001 = 0x0023
-  4. Read IOCTL back (dummy flush)
-  5. Write RESET_CTL = 1
-  6. mdelay(1) (usleep_range(10,20) in chip.c; 1ms is ample)
-  7. Read RESET_CTL back — MUST be exactly 0x00000001, not 0xffffffff
-  8. Log: "BCM4360 test.141: probe-time ARM CR4 reset: IOCTL_before=0x... IOCTL_after_fgc=0x... RESET_CTL=0x... IN_RESET=..."
-  9. Write IOCTL = CPUHALT | FGC | CLK again (in-reset configure, per chip.c)
-- In enter_download_state: read IOCTL and RESET_CTL to confirm state held
-- Update test script: s/test.139/test.141/g
+**test.142 plan: ARM CR4 reset reordered FIRST after chip_attach; fix streaming; log core base**
+Changes from test.141:
+1. ARM CR4 reset code moved BEFORE BusMaster clear and ASPM disable — minimises window
+   after chip_attach to ARM halt
+2. Add log of `arm_core->base` — needed to hardcode BAR0_WINDOW for pre-chip_attach reset
+   in test.143
+3. Fixed streaming: `dmesg -wk | while read; do echo >> file; sync; done` — sync per line
+   ensures messages survive crash (previous: plain `>>` buffered in page cache, lost on crash)
 
-**Hypothesis (test.141):**
-- After proper sequence: RESET_CTL readback = 0x00000001 (not 0xffffffff) → ARM genuinely in reset
-- Machine survives through async fw load (no more ARM garbage on PCIe)
-- enter_download_state diagnostic reads: RESET_CTL=0x1, IOCTL=0x0023 (CPUHALT|FGC|CLK)
-- Then we can safely access BAR2/TCM
+**Hypothesis (test.142):**
+- If ARM reset reaches execution: RESET_CTL=0x00000001 (proper sequence = not wedged)
+- enter_download_state confirms: RESET_CTL=0x1, IOCTL=0x0023 (CPUHALT|FGC|CLK)
+- Log shows "ARM CR4 core->base=0x180XXXXX" — value needed for test.143 early reset
+- If ARM crash window strikes again before line 4054: crash early again (we get core base
+  from a SURVIVING run, or implement pre-chip_attach hardcoded reset in test.143)
 
-**Interpretation matrix (test.141):**
-- RESET_CTL=0x00000001 + survive to enter_download_state → ARM reset worked, proceed to BAR2 test
-- RESET_CTL=0xffffffff AGAIN → wrapper still wedged, need different approach (e.g. IOCTL write itself crashes)
-- IOCTL write triggers crash (no reset message at all) → IOCTL write is also unsafe, need SBR-based reset
-- RESET_CTL=0x00000001 but crash still at fw_get_firmwares → ARM reset OK but something else crashing
-
-**Discriminator:** RESET_CTL must read exactly 0x00000001 to confirm success. 0xffffffff = wrapper wedged (same as test.140, try a different approach). Any other value = unexpected.
+**Interpretation matrix (test.142):**
+- Reset message appears + RESET_CTL=0x1 → ARM properly halted; proceed to BAR2 test
+- Reset message appears + RESET_CTL=0xffffffff → wrapper wedged (unexpected — IOCTL gate should fix)
+- Crash before reset message (no "ARM CR4 core->base" log) → random async crash again;
+  need pre-chip_attach reset using hardcoded base (test.143)
+- Stream log has messages this time → streaming fix worked
 
 **Test command:**
 ```
 sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 ```
+
+---
+
+## test.141 RESULT (crash — too early; logging failed; random async ARM crash):
+
+**Stream log (test.141.stage0.stream):** null bytes after header — OS page cache lost on crash
+**Journal (-b -1) last brcmf messages:**
+- "BCM4360 test.128: PROBE ENTRY" ✓
+- "BCM4360 test.127: probe entry" ✓
+- "BCM4360 test.127: devinfo allocated, before pdev assign" ✓ [19:41:39]
+- **CRASH** — all subsequent messages lost (crash at random point in 500ms SBR window)
+- Machine rebooted at ~19:42:09 (35s after insmod)
+- CONCLUSION: pure random async ARM crash; test.141 code correct but not reached
 
 ---
 

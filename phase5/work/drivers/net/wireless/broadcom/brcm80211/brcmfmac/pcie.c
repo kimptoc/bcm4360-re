@@ -812,13 +812,13 @@ static int brcmf_pcie_enter_download_state(struct brcmf_pciedev_info *devinfo)
 	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
 		u32 reset_ctl, ioctl;
 
-		/* test.141: ARM CR4 reset asserted at probe-time with proper BCMA sequence.
+		/* test.142: ARM CR4 reset asserted at probe-time with proper BCMA sequence.
 		 * Confirm reset state still held when firmware callback fires. */
-		pr_emerg("BCM4360 test.141: enter_download_state — confirming ARM CR4 reset state\n");
+		pr_emerg("BCM4360 test.142: enter_download_state — confirming ARM CR4 reset state\n");
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
 		reset_ctl = brcmf_pcie_read_reg32(devinfo, 0x1800);
 		ioctl     = brcmf_pcie_read_reg32(devinfo, 0x1408);
-		pr_emerg("BCM4360 test.141: ARM CR4 state RESET_CTL=0x%08x IN_RESET=%s IOCTL=0x%04x CPUHALT=%s FGC=%s CLK=%s\n",
+		pr_emerg("BCM4360 test.142: ARM CR4 state RESET_CTL=0x%08x IN_RESET=%s IOCTL=0x%04x CPUHALT=%s FGC=%s CLK=%s\n",
 			 reset_ctl, (reset_ctl == 1) ? "YES" : "NO/BAD",
 			 ioctl, (ioctl & 0x0020) ? "YES" : "NO",
 			 (ioctl & 0x0002) ? "YES" : "NO",
@@ -4027,12 +4027,40 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.119: brcmf_chip_attach returned successfully\n");
 
-	/* test.133: after chip_attach, chip has BusMaster+ (set in buscoreprep) but no DMA
-	 * mappings are set up yet. Clear BusMaster to prevent any async chip DMA causing
-	 * SERR→MCE hard reset. Also disable ASPM to prevent link L1 re-entry during probe. */
+	/* test.142: reordered — ARM CR4 reset FIRST (highest priority: stop garbage
+	 * execution before any other probe work), then BusMaster/ASPM cleanup.
+	 * test.141 had the same reset code but AFTER BusMaster/ASPM; moved earlier
+	 * to minimise the window between chip_attach and ARM halt. */
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
 		u16 lnkctl_before, lnkctl_after;
+		u32 ioctl_before, ioctl_after_fgc, reset_ctl;
+		struct brcmf_core *arm_core;
 
+		/* Log ARM CR4 base address so it can be hardcoded for pre-chip_attach
+		 * reset in a future test (needed to set BAR0_WINDOW without devinfo->ci). */
+		arm_core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_ARM_CR4);
+		if (arm_core)
+			dev_emerg(&pdev->dev,
+				  "BCM4360 test.142: ARM CR4 core->base=0x%08x (for early-reset hardcode)\n",
+				  arm_core->base);
+
+		/* test.141/142: proper BCMA ARM CR4 reset — IOCTL=FGC|CLK|CPUHALT first,
+		 * then RESET_CTL=1.  test.140 omitted the IOCTL gate step and got
+		 * RESET_CTL=0xffffffff (wrapper wedged). */
+		brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
+		ioctl_before = brcmf_pcie_read_reg32(devinfo, 0x1408);
+		brcmf_pcie_write_reg32(devinfo, 0x1408, 0x0023); /* CPUHALT|FGC|CLK */
+		ioctl_after_fgc = brcmf_pcie_read_reg32(devinfo, 0x1408); /* flush */
+		brcmf_pcie_write_reg32(devinfo, 0x1800, 1);      /* assert RESET_CTL */
+		mdelay(1);
+		reset_ctl = brcmf_pcie_read_reg32(devinfo, 0x1800);
+		brcmf_pcie_write_reg32(devinfo, 0x1408, 0x0023); /* in-reset configure */
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.142: probe-time ARM CR4 reset: IOCTL_before=0x%04x IOCTL_fgc=0x%04x RESET_CTL=0x%08x IN_RESET=%s\n",
+			  ioctl_before, ioctl_after_fgc, reset_ctl,
+			  (reset_ctl == 1) ? "YES" : "NO/WEDGED");
+
+		/* Now safe to clear BusMaster and disable ASPM — ARM is in reset. */
 		pci_clear_master(pdev);
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.133: BusMaster cleared after chip_attach\n");
@@ -4042,32 +4070,6 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.133: ASPM disabled; LnkCtl before=0x%04x after=0x%04x ASPM-bits-after=0x%x\n",
 			  lnkctl_before, lnkctl_after, lnkctl_after & PCI_EXP_LNKCTL_ASPMC);
-
-		/* test.141: proper BCMA ARM CR4 reset sequence at probe-time.
-		 * test.140 wrote RESET_CTL=1 without first gating the clock
-		 * (IOCTL=FGC|CLK). Readback returned 0xffffffff (wrapper wedged).
-		 * Proper sequence from brcmf_chip_ai_coredisable():
-		 *   IOCTL = CPUHALT|FGC|CLK first, then RESET_CTL = 1. */
-		{
-			u32 ioctl_before, ioctl_after_fgc, reset_ctl;
-
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
-			/* Step 1: read baseline IOCTL (expect 0x0001 = CLK) */
-			ioctl_before = brcmf_pcie_read_reg32(devinfo, 0x1408);
-			/* Step 2: gate clock — CPUHALT(0x20)|FGC(0x02)|CLK(0x01) */
-			brcmf_pcie_write_reg32(devinfo, 0x1408, 0x0023);
-			ioctl_after_fgc = brcmf_pcie_read_reg32(devinfo, 0x1408); /* flush */
-			/* Step 3: assert reset */
-			brcmf_pcie_write_reg32(devinfo, 0x1800, 1);
-			mdelay(1);
-			reset_ctl = brcmf_pcie_read_reg32(devinfo, 0x1800);
-			/* Step 4: in-reset configure (IOCTL stays CPUHALT|FGC|CLK) */
-			brcmf_pcie_write_reg32(devinfo, 0x1408, 0x0023);
-			dev_emerg(&pdev->dev,
-				  "BCM4360 test.141: probe-time ARM CR4 reset: IOCTL_before=0x%04x IOCTL_fgc=0x%04x RESET_CTL=0x%08x IN_RESET=%s\n",
-				  ioctl_before, ioctl_after_fgc, reset_ctl,
-				  (reset_ctl == 1) ? "YES" : "NO/WEDGED");
-		}
 	}
 
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
