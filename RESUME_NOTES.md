@@ -32,11 +32,29 @@
 - Battery drain/full extended power removal is fallback only if SMC reset does not restore clean root-port/endpoint state or if the BAR0 timing guard indicates slow completion timeout.
 
 **Pre-test checklist:**
-- [ ] SMC reset performed
-- [ ] `lspci -s 00:1c.2 -nn -vv` shows secondary/subordinate `03/03`, MAbort clear
-- [ ] `lspci -s 03:00.0 -nn -vv` shows endpoint present, MAbort clear, CommClk+
+- [x] SMC reset performed
+- [x] `lspci -s 00:1c.2 -nn -vv` shows secondary/subordinate `03/03`, MAbort clear
+- [x] `lspci -s 03:00.0 -nn -vv` shows endpoint present, MAbort clear, CommClk+
 - [x] test.146 module rebuilt
 - [x] PRE-test.146 code and notes committed/pushed
+
+**Post-SMC chip status (2026-04-19 22:49 BST):**
+- Git state before status check: clean, `main...origin/main`.
+- Root port `00:1c.2`:
+  - Bus hierarchy restored: primary `00`, secondary `03`, subordinate `03`.
+  - `Status`: `<MAbort-`; secondary status `<MAbort-`.
+  - `BridgeCtl`: `MAbort-`.
+  - Link: `CommClk+`, `DLActive+`, speed `2.5GT/s`, width `x1`.
+- Endpoint `03:00.0`:
+  - BCM4360 present: `14e4:43a0` rev `03`.
+  - BARs present: BAR0 `b0600000` size `32K`, BAR2 `b0400000` size `2M`.
+  - `Status`: `<MAbort-`; `LnkCtl`: `CommClk+`; `LnkSta`: speed `2.5GT/s`, width `x1`.
+  - AER UESta all clear, including `CmpltTO-` and `UnsupReq-`.
+  - `DevSta` shows `CorrErr+` / `UnsupReq+` after the deliberate BAR0 timing probe; this is expected for the fast-UR probe and is not the slow completion-timeout failure.
+- Timed BAR0 probe:
+  - `sudo dd if=/sys/bus/pci/devices/0000:03:00.0/resource0 bs=4 count=1 of=/dev/null`
+  - Result: exit `1`, `Input/output error`, elapsed `29ms`.
+  - Interpretation: fast UR/I/O error, not slow CTO. Device is alive but BAR0 backplane bridge is not initialized; this is acceptable for test.146 stage0 because the harness guard treats `<40ms` as proceed.
 
 **Interpretation matrix:**
 - Last marker `module_init entry` only: crash before/inside `brcmf_pcie_register()`.

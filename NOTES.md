@@ -24,6 +24,11 @@ any further testing, use SMC reset/full hardware power cut and verify clean PCIe
 state. Test.146 code and notes are committed/pushed; after hardware recovery
 and PCIe-state verification, run stage0 only.
 
+Post-SMC check at 2026-04-19 22:49 BST: root port is restored to secondary /
+subordinate `03/03`, endpoint `03:00.0` is present, MAbort is clear, CommClk is
+set, AER completion timeout is clear, and the BAR0 probe returned fast I/O
+error in 29ms. This is the expected fast-UR state, not the slow CTO state.
+
 # Post-crash recovery checklist
 
 BCM4360 MMIO is dead. Requires full hardware power cycle.
