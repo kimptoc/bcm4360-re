@@ -1,8 +1,57 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.143 — re-run test.142 code; same module, new log name)
+## Current state (2026-04-19, PRE test.145 — ARM halt moved to buscore_reset after second SBR)
 
-### CODE STATE: test.142 binary — NO REBUILD NEEDED (same code, test.143 = re-run)
+### CODE STATE: test.145 binary — REBUILD NEEDED
+
+**test.144 RESULT (crash — UR at iowrite32 in brcmf_pcie_early_arm_halt):**
+- Stream log: only "loading out-of-tree module taints kernel." then crash
+- Journal (-b -1): confirmed "BCM4360 test.144: early ARM halt — module_init entry" then crash
+- Root cause: `iowrite32(0x0023, bar0 + 0x1408)` in module_init hits UR on fresh chip (no prior driver run)
+  - Fresh chip: PCIe-to-backplane bridge not yet initialized → BAR0 MMIO → UR → AER → host crash
+  - Device IS alive (UR not CTO: 7ms pre-test, clean MAbort-) but backplane not accessible yet
+- Fix: remove ioremap/iowrite32 from early_arm_halt (neutered to entry log only)
+- Fix: add `brcmf_chip_set_passive(chip)` in `brcmf_pcie_buscore_reset()` after second SBR
+  - chip_attach() calls set_passive once before SBR; second SBR releases ARM again
+  - BCM4360 skipped second set_passive (legacy test.121); now done in buscore_reset instead
+  - bridge is initialized by chip_attach before buscore_reset is called → MMIO safe
+
+**test.145 plan: ARM halt in buscore_reset (after chip_attach initializes bridge)**
+- `brcmf_pcie_early_arm_halt()`: neutered to entry log only (no MMIO)
+- `brcmf_pcie_buscore_reset()`: for BCM4360, call `brcmf_chip_set_passive(chip)` after `brcmf_pcie_reset_device()`
+- This is the same infrastructure as test.131+: set_passive already confirmed working in chip_attach path
+
+**Hypothesis (test.145):**
+- "BCM4360 test.145: module_init entry" appears ✓ (no MMIO crash)
+- "BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)" appears ✓
+- "BCM4360 test.145: ARM CR4 halt done" appears ✓ → ARM halted, no more async crashes
+- Probe completes, enter_download_state reached, firmware loads
+
+**Interpretation matrix (test.145):**
+- All three test.145 markers appear + enter_download_state → ARM halt worked; proceed to stage 1
+- Crash between "halting ARM CR4 after second SBR (buscore_reset)" and "ARM CR4 halt done" → crash IN set_passive (unexpected)
+- Crash after "ARM CR4 halt done" but before enter_download_state → ARM halted but other crash
+- Only module_init entry appears + crash → something else crashed (not the MMIO we fixed)
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+---
+
+## test.144 RESULT (2026-04-19 crash — UR at iowrite32 in module_init early_arm_halt):
+
+**Stream log (test.144.stage0.stream):**
+- [1191.973808] brcmfmac: loading out-of-tree module taints kernel. ✓
+- **CRASH** — "BCM4360 test.144: early ARM halt — module_init entry" never appeared in stream
+  (confirmed via journal -b -1: entry log DID fire, crash was at the first iowrite32)
+- Root cause: BAR0 MMIO on uninitialized chip → UR → AER FatalErr → host crash
+- Pre-test state: clean (MAbort-, CommClk+, UR/I/O error 7ms)
+
+---
+
+## PRE-test.144 (2026-04-19, after SMC reset from test.143 crash)
 
 **Hardware state (verified):**
 - PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.142 crash
@@ -4279,4 +4328,3 @@ Must halt ARM at the very top of brcmfmac_module_init().
 ```
 sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 ```
-

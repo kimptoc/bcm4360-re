@@ -603,8 +603,8 @@ static int __init brcmfmac_module_init(void)
 {
 	int err;
 
-	/* test.144: halt ARM CR4 as first action in module_init — before any
-	 * PCI enumeration window opens that could race with ARM garbage execution. */
+	/* test.145: log module_init entry before the PCI enumeration window.
+	 * ARM halt happens later in buscore_reset, after BAR0/backplane access is safe. */
 	brcmf_pcie_early_arm_halt();
 
 	/* Get the platform data (if available) for our devices */
@@ -634,4 +634,3 @@ static void __exit brcmfmac_module_exit(void)
 
 module_init(brcmfmac_module_init);
 module_exit(brcmfmac_module_exit);
-
