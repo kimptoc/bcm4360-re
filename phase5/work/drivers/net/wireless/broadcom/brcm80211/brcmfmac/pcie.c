@@ -809,8 +809,15 @@ static void brcmf_pcie_attach(struct brcmf_pciedev_info *devinfo)
 
 static int brcmf_pcie_enter_download_state(struct brcmf_pciedev_info *devinfo)
 {
-	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID ||
-	    devinfo->ci->chip == BRCM_CC_43602_CHIP_ID) {
+	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+		/* test.130: BCM4360 — ARM_CR4 is in BCMA reset after SBR; writing to
+		 * its wrapper registers via BAR0 triggers a PCIe Completion Timeout → MCE.
+		 * Skip bank protection setup; ARM stays halted (bcm4360_skip_arm=1).
+		 */
+		pr_emerg("BCM4360 test.130: brcmf_pcie_enter_download_state bypassed for BCM4360\n");
+		return 0;
+	}
+	if (devinfo->ci->chip == BRCM_CC_43602_CHIP_ID) {
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
 		brcmf_pcie_write_reg32(devinfo, BRCMF_PCIE_ARMCR4REG_BANKIDX,
 				       5);
@@ -3592,6 +3599,7 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 	devinfo->txcap_fw = fwreq->items[BRCMF_PCIE_FW_TXCAP].binary;
 	kfree(fwreq);
 
+	pr_emerg("BCM4360 test.130: before brcmf_chip_get_raminfo\n");
 	ret = brcmf_chip_get_raminfo(devinfo->ci);
 	if (ret) {
 		brcmf_err(bus, "Failed to get RAM info\n");
@@ -3599,6 +3607,7 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 		brcmf_fw_nvram_free(nvram);
 		goto fail;
 	}
+	pr_emerg("BCM4360 test.130: after brcmf_chip_get_raminfo\n");
 
 	/* Some of the firmwares have the size of the memory of the device
 	 * defined inside the firmware. This is because part of the memory in
@@ -3606,25 +3615,40 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 	 * the firmware and adjust the chip memory size now.
 	 */
 	brcmf_pcie_adjust_ramsize(devinfo, (u8 *)fw->data, fw->size);
+	pr_emerg("BCM4360 test.130: after brcmf_pcie_adjust_ramsize\n");
 
+	pr_emerg("BCM4360 test.130: before brcmf_pcie_download_fw_nvram\n");
 	ret = brcmf_pcie_download_fw_nvram(devinfo, fw, nvram, nvram_len);
-	if (ret)
+	if (ret) {
+		pr_emerg("BCM4360 test.130: brcmf_pcie_download_fw_nvram FAILED ret=%d\n", ret);
 		goto fail;
+	}
+	pr_emerg("BCM4360 test.130: after brcmf_pcie_download_fw_nvram\n");
 
 	devinfo->state = BRCMFMAC_PCIE_STATE_UP;
 
+	pr_emerg("BCM4360 test.130: before brcmf_pcie_init_ringbuffers\n");
 	ret = brcmf_pcie_init_ringbuffers(devinfo);
-	if (ret)
+	if (ret) {
+		pr_emerg("BCM4360 test.130: brcmf_pcie_init_ringbuffers FAILED ret=%d\n", ret);
 		goto fail;
+	}
+	pr_emerg("BCM4360 test.130: after brcmf_pcie_init_ringbuffers\n");
 
 	ret = brcmf_pcie_init_scratchbuffers(devinfo);
 	if (ret)
 		goto fail;
+	pr_emerg("BCM4360 test.130: after brcmf_pcie_init_scratchbuffers\n");
 
+	pr_emerg("BCM4360 test.130: before select_core PCIE2\n");
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
+	pr_emerg("BCM4360 test.130: before brcmf_pcie_request_irq\n");
 	ret = brcmf_pcie_request_irq(devinfo);
-	if (ret)
+	if (ret) {
+		pr_emerg("BCM4360 test.130: brcmf_pcie_request_irq FAILED ret=%d\n", ret);
 		goto fail;
+	}
+	pr_emerg("BCM4360 test.130: after brcmf_pcie_request_irq\n");
 
 	/* hook the commonrings in the bus structure. */
 	for (i = 0; i < BRCMF_NROF_COMMON_MSGRINGS; i++)

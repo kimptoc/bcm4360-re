@@ -3323,6 +3323,36 @@ Per failure signature plan: skip second run, proceed directly to test.129 fix.
 
 ---
 
+## TEST.129 RESULT — 2026-04-19 (session restart after crash)
+
+### PARTIAL SUCCESS: brcmf_pcie_attach bypass WORKED, crash moved forward
+
+**Boot -1 journal (test.129 run) last markers:**
+```
+BCM4360 test.129: brcmf_pcie_attach bypassed for BCM4360
+BCM4360 test.128: after brcmf_pcie_attach
+```
+(journal ends here — hard crash immediately after)
+
+**Analysis:**
+- The `brcmf_pcie_attach` bypass is confirmed working
+- Next call in `brcmf_pcie_setup` after `brcmf_pcie_attach` is `brcmf_chip_get_raminfo`
+- `brcmf_chip_get_raminfo` BCM4360 bypass would print markers — they didn't appear
+- Crash occurred between "after brcmf_pcie_attach" and `brcmf_chip_get_raminfo` print
+- OR crash is in `brcmf_pcie_enter_download_state` (called inside `brcmf_pcie_download_fw_nvram`)
+
+**Root cause identified:**
+`brcmf_pcie_enter_download_state` for BCM4360/43602:
+1. Calls `brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4)` — changes BAR0 window
+2. Calls `brcmf_pcie_write_reg32(devinfo, BRCMF_PCIE_ARMCR4REG_BANKIDX, 5)` — **CRASH**
+   ARM_CR4 core is in BCMA reset → BAR0 MMIO write → PCIe CTO → MCE → hard crash
+
+**PCIe state (current boot 0):**
+- Endpoint (03:00.0): MAbort- (clean), CommClk+
+- Root port (00:1c.2) secondary: MAbort- (clean)
+
+---
+
 ## Current state (2026-04-19, PRE test.129 — bypass brcmf_pcie_attach for BCM4360)
 
 ### CODE STATE: brcmf_pcie_attach BYPASSED FOR BCM4360
@@ -3374,4 +3404,56 @@ sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 **Failure signatures:**
 - Crash before bypass marker: hardware state too degraded, need power cycle
 - Crash after bypass but before firmware download: different code path is the issue
+
+---
+
+## Current state (2026-04-19, PRE test.130 — bypass brcmf_pcie_enter_download_state ARM_CR4 write)
+
+### CODE STATE: brcmf_pcie_enter_download_state BYPASSED FOR BCM4360
+
+**Evidence:**
+- test.129 confirmed brcmf_pcie_attach bypass works
+- Crash after "after brcmf_pcie_attach" — next dangerous BAR0 write is in `brcmf_pcie_enter_download_state`
+- That function writes to ARM_CR4 core via BAR0 MMIO while ARM is in BCMA reset → CTO → MCE
+
+**Code changes (pcie.c):**
+1. In `brcmf_pcie_enter_download_state`: added BCM4360 early return before ARM_CR4 writes
+2. Added markers throughout `brcmf_pcie_setup`:
+   - before/after `brcmf_chip_get_raminfo`
+   - after `brcmf_pcie_adjust_ramsize`
+   - before/after `brcmf_pcie_download_fw_nvram`
+   - before/after `brcmf_pcie_init_ringbuffers`
+   - after `brcmf_pcie_init_scratchbuffers`
+   - before `select_core PCIE2`
+   - before/after `brcmf_pcie_request_irq`
+
+**Why safe to skip:**
+- bcm4360_skip_arm=1: ARM is never released in this stage, so bank protection setup is irrelevant
+- The BANKIDX/BANKPDA writes only matter before ARM execution
+
+**Hypothesis (test.130 stage0):**
+- Should see `brcmf_pcie_enter_download_state bypassed for BCM4360` marker
+- Firmware download proceeds (BAR2 MMIO writes to TCM) — should work since BAR2 is accessible
+- Progress markers reveal how far we get before next crash (likely in ringbuffer init or PCIE2 select_core MMIO)
+
+**Build status:** BUILT — brcmfmac.ko compiled 2026-04-19 (test.130 bypass in place)
+
+**PCIe state (pre-test):**
+- Endpoint (03:00.0): MAbort- (clean), CommClk+
+- Root port (00:1c.2) secondary: MAbort- (clean)
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+**Success criteria:**
+- Journal shows `brcmf_pcie_enter_download_state bypassed for BCM4360`
+- Journal shows `before/after brcmf_pcie_download_fw_nvram`
+- If no crash: journal shows `after brcmf_pcie_request_irq`
+
+**Failure signatures:**
+- Crash before download marker: different code path (unlikely)
+- Crash in init_ringbuffers: need to check if firmware initialized shared memory
+- Crash in select_core PCIE2: PCIE2 core still in BCMA reset and needs explicit reset sequence
 
