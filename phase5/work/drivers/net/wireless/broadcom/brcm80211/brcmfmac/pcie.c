@@ -1828,17 +1828,25 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	brcmf_dbg(PCIE, "Download FW %s\n", devinfo->fw_name);
 
 	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
-		/* test.135: probe BAR2 with a single read before writing firmware.
-		 * If this crashes → BAR2/TCM inaccessible (ARM_CR4 issue).
-		 * If 0xffffffff → device returning error (CTO?).
-		 * If any other value → BAR2 accessible, crash must be elsewhere.
+		u32 bar2_probe;
+
+		/* test.138: confirm crash site — is it the ioread32 itself (sync)
+		 * or async during the preceding mdelay in enter_download_state?
+		 * If pre-BAR2 appears but post-BAR2 doesn't → ioread32 is sync crash.
+		 * If neither appears → async crash during trailing mdelay(300) above.
+		 * If both appear → crash is later (copy_mem_todev).
 		 */
-		u32 bar2_probe = ioread32(devinfo->tcm);
+		dev_emerg(&devinfo->pdev->dev,
+			  "BCM4360 test.138: pre-BAR2-ioread32 (tcm=%px)\n",
+			  devinfo->tcm);
+		mdelay(300);
+
+		bar2_probe = ioread32(devinfo->tcm);
 
 		dev_emerg(&devinfo->pdev->dev,
-			  "BCM4360 test.135: BAR2 probe at offset 0x0 = 0x%08x %s\n",
+			  "BCM4360 test.138: post-BAR2-ioread32 = 0x%08x %s\n",
 			  bar2_probe,
-			  bar2_probe == 0xffffffff ? "(0xffffffff — possible CTO/error)" :
+			  bar2_probe == 0xffffffff ? "(0xffffffff — CTO/error)" :
 						     "(real value — BAR2 accessible)");
 		mdelay(300);
 	}

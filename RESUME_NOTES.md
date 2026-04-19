@@ -1,60 +1,82 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19, PRE test.137 — fine-grained bisection inside brcmf_pcie_enter_download_state)
+## Current state (2026-04-19, PRE test.138 — confirm BAR2 ioread32 as sync crash)
 
-### CODE STATE: test.137 binary — 4-step bisection markers in enter_download_state + post-mdelay marker
+### CODE STATE: test.138 binary — pre/post BAR2 ioread32 markers
 
 **Hardware state (verified):**
-- PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.136 crash
-- Fresh boot (boot 0 after test.136 crash)
-- **Module IS built** — test.137 code in brcmfmac.ko (compiled this session)
+- PCIe endpoint 03:00.0: MAbort- (CLEAN) — fresh boot after test.137 crash
+- Fresh boot after test.137 crash
+- **Module IS built** — test.138 code in brcmfmac.ko (compiled this session)
 
-**test.136 RESULT (crash — streaming confirms same location as test.135):**
-- Stream captured up to "before brcmf_pcie_download_fw_nvram" at [604.504s], nothing after
-- mdelay(300) follows that marker — yet ARM_CR4 diagnostics (brcmf_pcie_enter_download_state)
-  never appeared in stream
-- CONCLUSION: crash happens INSIDE brcmf_pcie_download_fw_nvram before ARM_CR4 marker,
-  i.e., either ASYNC during mdelay OR at first MMIO in enter_download_state
+**test.137 RESULT (crash — all ARM_CR4 BAR0 reads succeeded, crash is between last mdelay and BAR2 probe):**
+- ALL 4 ARM_CR4 markers appeared in stream:
+  - "enter_download_state top" ✓ [531.108697s]
+  - "after select_core(ARM_CR4)" ✓ [531.408774s]
+  - "after RESET_CTL read = 0x0000" ✓ [531.708860s]
+  - "ARM_CR4: RESET_CTL=0x0000 IN_RESET=NO IOCTL=0x0001 CPUHALT=NO CLK=YES" ✓ [532.008945s]
+- Stream ends after last ARM_CR4 marker — "pre-BAR2-ioread32" never appeared
+- CONCLUSION: crash is SOMEWHERE between end of enter_download_state (after mdelay(300) at line 840)
+  and the BAR2 probe ioread32 (line 1836). Two possibilities:
+  1. **ASYNC** crash fires during the trailing mdelay(300) at line 840
+  2. **SYNC** crash at ioread32(devinfo->tcm) line 1836 (first BAR2 access)
 
-**Analysis: two competing hypotheses:**
-1. ASYNC crash — timer/SMI fires ~300-800ms after "before brcmf_pcie_download_fw_nvram"
-   regardless of code path (mdelay is irrelevant to the crash trigger)
-2. SYNC crash — ioread32 at BAR0 for ARM_CR4 wrapper (0x1800 / 0x1408) causes PCIe CTO
-   which escalates to SERR→NMI machine hard reset
+**ARM_CR4 state at crash time:**
+- RESET_CTL=0x0000: core NOT in reset (running)
+- IOCTL=0x0001: CLK=YES, CPUHALT=NO (CPU actively running — no firmware loaded, executing garbage)
+- BAR0 reads all worked: BAR0 is stable and accessible
 
-**Key question: does the 300ms mdelay after "before brcmf_pcie_download_fw_nvram" complete?**
-- If new marker "post-mdelay" appears → mdelay completes, crash is INSIDE enter_download_state
-- If "post-mdelay" is absent → crash is ASYNC (fires during mdelay)
+**Open question for test.138:**
+- Does "pre-BAR2-ioread32" marker appear?
+  - YES → ioread32(tcm) is the sync crash (CONFIRMED crash site)
+  - NO → crash is async during trailing mdelay(300) after ARM_CR4 diagnostic
 
-**Code changes for test.137:**
-1. Add "post-mdelay — calling brcmf_pcie_download_fw_nvram" AFTER mdelay(300) at line 3677
-2. Inside brcmf_pcie_enter_download_state (BCM4360 path), replace single log with 4-step markers:
-   - "enter_download_state top" + mdelay(300) (before select_core)
-   - "after select_core(ARM_CR4)" + mdelay(300) (before ioread32 #1)
-   - "after RESET_CTL read = 0x%x" + mdelay(300) (before ioread32 #2)
-   - Final combined ARM_CR4 state log + mdelay(300)
+**Code changes for test.138:**
+1. In download_fw_nvram BCM4360 path:
+   - Replace test.135 BAR2 probe block with:
+   - "pre-BAR2-ioread32" + mdelay(300) BEFORE ioread32(devinfo->tcm)
+   - "post-BAR2-ioread32 = 0x%08x" AFTER ioread32
+2. WAIT_SECS increased to 12 (extra mdelay(300) before ioread32)
 
-**Interpretation matrix:**
-- Only "before brcmf_pcie_download_fw_nvram" → ASYNC during mdelay (same as before, no new info)
-- + "post-mdelay" but not "enter_download_state top" → ASYNC during 2nd mdelay (download_fw_nvram early)
-- + "enter_download_state top" but not "after select_core" → ASYNC or select_core config write crash
-- + "after select_core" but not "after RESET_CTL" → ioread32(BAR0+0x1800) is crash (BAR0 CTO!)
-- + "after RESET_CTL" but not "after IOCTL" → ioread32(BAR0+0x1408) is crash
-- All markers → BAR0 ARM_CR4 fully accessible; crash must be at BAR2 probe or copy_mem_todev
+**Interpretation matrix (test.138):**
+- "pre-BAR2-ioread32" appears, "post-BAR2" does NOT → CONFIRMED: ioread32(tcm) is sync crash
+- Neither "pre-BAR2" appears → ASYNC crash during trailing mdelay(300) in enter_download_state (before line 841 return)
+- Both appear → crash is later (copy_mem_todev iowrite32 to BAR2)
 
-**Hypothesis (test.137):**
-- Most likely: "after select_core" logs but "after RESET_CTL" does not
-  → ioread32 at ARM_CR4 wrapper generates BAR0 completion timeout (ARM_CR4 clock gated after chip_attach)
-  → fix: skip ARM_CR4 reads for BCM4360, proceed directly to BAR2 probe
+**Hypothesis (test.138):**
+- Most likely: "pre-BAR2-ioread32" appears but "post-BAR2" does NOT
+  → ioread32(devinfo->tcm) crashes because ARM_CR4 TCM not accessible while CPU is running with no firmware
+  → Fix will require: assert RESET_CTL=1 (or CPUHALT) in enter_download_state before BAR2 writes
 
-**WAIT_SECS increased to 10** (was 6) to cover the 4 additional mdelay(300) calls.
+**If hypothesis confirmed, test.139 plan:**
+- In enter_download_state BCM4360 path: after reading state, write RESET_CTL=1 to assert reset
+- mdelay(100) to allow reset propagation, read back RESET_CTL to confirm
+- Then BAR2 probe should succeed
+- NOTE: BAR0 writes appear safe (BAR0 reads were safe in test.137) — lower risk than BAR2 writes
 
 **Test command:**
 ```
 sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 ```
 
-**Post-test: check both test.137.stage0 AND test.137.stage0.stream for markers.**
+**Post-test: check both test.138.stage0 AND test.138.stage0.stream for markers.**
+
+---
+
+## test.137 RESULT (crash — all ARM_CR4 BAR0 reads succeeded):
+
+**Stream log (test.137.stage0.stream) — markers appeared:**
+- All previous barriers ✓
+- "post-mdelay — calling brcmf_pcie_download_fw_nvram" ✓ at [531.108655s]
+- "enter_download_state top" ✓ at [531.108697s]
+- "after select_core(ARM_CR4)" ✓ at [531.408774s]
+- "after RESET_CTL read = 0x0000" ✓ at [531.708860s]
+- "ARM_CR4: RESET_CTL=0x0000 IN_RESET=NO IOCTL=0x0001 CPUHALT=NO CLK=YES" ✓ at [532.008945s]
+- **CRASH** — stream ends, "pre-BAR2-ioread32" never appeared
+
+**ARM_CR4 state learned:**
+- Core is running (not in reset, not halted) — executing garbage (no firmware loaded)
+- All BAR0 wrapper register reads are STABLE and SAFE
 
 ---
 
