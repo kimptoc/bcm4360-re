@@ -4226,3 +4226,57 @@ The test.141/142/143 crashes are NOT caused by a code bug — the fixed BCMA seq
 
 **Note:** A normal cold reboot is insufficient for this hardware — need SMC reset if BCM4360 wrapper gets wedged.
 
+---
+
+## test.143 SECOND RUN RESULT (2026-04-19 20:56:07) — crash EVEN EARLIER (only 1 line captured)
+
+**Context:** This run was done immediately after the PRE-test.144 SMC reset (clean hardware state).
+
+**Stream log (test.143.stage0.stream — second run):**
+- [120.778412] brcmfmac: loading out-of-tree module taints kernel.
+- **CRASH** — "BCM4360 test.128: brcmf_pcie_register() entry" NEVER appeared
+
+**Crash window:** Between kernel taint printk and first line of brcmf_pcie_register() — i.e.,
+inside brcmfmac_module_init → brcmf_core_init → ... before brcmf_pcie_register() is called.
+
+**CONCLUSION:** Even brcmf_pcie_register() is too late to place the ARM halt.
+The ARM CR4 executed garbage during the module_init window, BEFORE pci_register_driver.
+Must halt ARM at the very top of brcmfmac_module_init().
+
+---
+
+## Current state — 2026-04-19, PRE test.144 — early ARM halt in module_init
+
+### CODE STATE: test.144 binary — NEEDS REBUILD ✓ (rebuilt at 21:xx BST)
+
+**Hardware state (post-crash SMC reset by user):**
+- PCIe endpoint 03:00.0: MAbort- (CLEAN) ✓
+- Root port: secondary=03/03, MAbort- ✓
+
+**test.144 change: brcmf_pcie_early_arm_halt() called as FIRST action in brcmfmac_module_init()**
+- New function in pcie.c: uses pci_get_device(0x14e4, 0x43a0) + ioremap(BAR0, 0x2000)
+- Sets BAR0_WINDOW (config[0x80]) = 0x18002000 (ARM CR4 base, from test.111)
+- Writes IOCTL=0x0023 (FGC|CLK|CPUHALT) then RESET_CTL=0x0001
+- Reads back both registers for diagnostic logging
+- Called from brcmfmac_module_init() before platform_driver_probe, before brcmf_core_init
+- ARM halted BEFORE pci_register_driver is ever called
+
+**Hypothesis (test.144):**
+- ARM halted in module_init → probe() survives → chip_attach succeeds
+- "BCM4360 test.144: early ARM halt done: IOCTL=0x00000023 RESET_CTL=0x00000001 IN_RESET=YES" appears
+- "BCM4360 test.128: PROBE ENTRY" appears
+- Probe-time ARM reset block also fires (re-asserts IOCTL=0x0023, RESET_CTL=1) — harmless
+- enter_download_state runs without crash
+
+**Interpretation matrix (test.144):**
+- "early ARM halt done: IN_RESET=YES" + "PROBE ENTRY" appears → SUCCESS; proceed to next test
+- "early ARM halt done: IN_RESET=NO/WEDGED" → IOCTL sequencing wrong; investigate
+- "BCM4360 test.144: BCM4360 not found" → pci_get_device failed (unexpected)
+- "early ARM halt" never appears → crash even before module_init first line (very unlikely)
+- Early halt succeeds but probe() still crashes → different crash cause; analyze
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+

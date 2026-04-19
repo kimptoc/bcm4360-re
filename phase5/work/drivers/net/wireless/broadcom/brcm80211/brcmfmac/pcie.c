@@ -4434,6 +4434,51 @@ static struct pci_driver brcmf_pciedrvr = {
 };
 
 
+/* test.144: halt ARM CR4 before pci_register_driver opens the probe window.
+ * Called from brcmfmac_module_init() as its very first action so the ARM is
+ * stopped before ANY module housekeeping that could race with garbage execution.
+ * ARM CR4 base 0x18002000 confirmed from test.111 log. */
+void brcmf_pcie_early_arm_halt(void)
+{
+	struct pci_dev *pdev;
+	void __iomem *bar0;
+	u32 ioctl_val, reset_val;
+
+	pr_emerg("BCM4360 test.144: early ARM halt — module_init entry\n");
+
+	pdev = pci_get_device(BRCM_PCIE_VENDOR_ID_BROADCOM,
+			      BRCM_PCIE_4360_DEVICE_ID, NULL);
+	if (!pdev) {
+		pr_emerg("BCM4360 test.144: BCM4360 not found, skipping early ARM halt\n");
+		return;
+	}
+
+	/* Set BAR0 window to ARM CR4 base (hardcoded 0x18002000, from test.111) */
+	pci_write_config_dword(pdev, BRCMF_PCIE_BAR0_WINDOW, 0x18002000);
+
+	bar0 = ioremap(pci_resource_start(pdev, 0), 0x2000);
+	if (!bar0) {
+		pr_emerg("BCM4360 test.144: ioremap BAR0 failed, skipping early ARM halt\n");
+		pci_dev_put(pdev);
+		return;
+	}
+
+	/* IOCTL=FGC|CLK|CPUHALT first (gate clocks before asserting reset) */
+	iowrite32(0x0023, bar0 + 0x1408);
+	ioread32(bar0 + 0x1408); /* flush */
+	/* Assert reset */
+	iowrite32(0x0001, bar0 + 0x1800);
+	mdelay(1);
+	ioctl_val  = ioread32(bar0 + 0x1408);
+	reset_val  = ioread32(bar0 + 0x1800);
+	pr_emerg("BCM4360 test.144: early ARM halt done: IOCTL=0x%08x RESET_CTL=0x%08x IN_RESET=%s\n",
+		 ioctl_val, reset_val,
+		 (reset_val == 0x00000001) ? "YES" : "NO/WEDGED");
+
+	iounmap(bar0);
+	pci_dev_put(pdev);
+}
+
 int brcmf_pcie_register(void)
 {
 	pr_emerg("BCM4360 test.128: brcmf_pcie_register() entry\n");

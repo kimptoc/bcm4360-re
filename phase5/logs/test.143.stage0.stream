@@ -1,5 +1,2 @@
-=== dmesg stream start: Sun 19 Apr 20:20:21 BST 2026 ===
-[ 1171.026970] brcmfmac: loading out-of-tree module taints kernel.
-[ 1171.034043] brcmfmac: BCM4360 test.128: brcmf_pcie_register() entry
-[ 1171.034084] brcmfmac: BCM4360 test.128: calling pci_register_driver
-[ 1172.124949] pcieport 0000:00:1c.2: Enabling MPC IRBNCE
+=== dmesg stream start: Sun 19 Apr 20:56:07 BST 2026 ===
+[  120.778412] brcmfmac: loading out-of-tree module taints kernel.

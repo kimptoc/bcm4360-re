@@ -9,11 +9,13 @@
 modules.builtin
 
 # Upstream brcmfmac source files (needed for build, not our changes).
-# We only track files we've modified: pcie.c, chip.c, brcm_hw_ids.h, Makefile.
+# We only track files we've modified.
 work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/*
 work/drivers/net/wireless/broadcom/brcm80211/include/*
 !work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 !work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/chip.c
+!work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/common.c
+!work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bus.h
 !work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/Makefile
 !work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie_only.h
 !work/drivers/net/wireless/broadcom/brcm80211/include/brcm_hw_ids.h
