@@ -552,3 +552,28 @@ order, cheapest first:
 
 Each probe follows the established pattern: stage0 code dump → targeted
 TCM/MMIO read at T+200ms → commit pre-test + post-test notes.
+
+## Phase 5.3: Current state (2026-04-19, POST test.147)
+
+After the later crash-recovery series, the immediate failure is now before the
+old firmware/D11 path. Tests 145-147 narrowed the host crash to module load /
+PCI registration setup:
+
+- test.145 reached `module_init entry` and `brcmf_pcie_register() entry`, but
+  not the old `calling pci_register_driver` marker.
+- test.146 reached `before brcmf_dbg in brcmf_pcie_register`, implicating either
+  `brcmf_dbg()`/tracepoint work or an asynchronous hardware crash in that tiny
+  window.
+- test.147 skipped that early `brcmf_dbg()` and still crashed; the persisted
+  stream only contains `module_init entry`, not `brcmf_pcie_register() entry`.
+
+Post-SMC recovery after test.147 restored the PCIe hierarchy: root port
+`00:1c.2` is back at secondary/subordinate `03/03`, the BCM4360 endpoint is
+present at `03:00.0`, MAbort is clear, BAR0/BAR2 are visible, and endpoint AER
+UESta is clear.
+
+Next discriminator should be test.148: add call-site markers in `common.c`
+immediately before and after `brcmf_pcie_register()`. A no-call/early-return
+variant is also useful if we want to prove that merely loading the module is
+safe when PCI registration is not attempted. As usual, no stage1, and save
+notes plus commit/push before any run.

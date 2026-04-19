@@ -1,6 +1,71 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19 23:00 BST, PRE test.147 — skip early brcmf_dbg before PCI registration)
+## Current state (2026-04-19 23:07 BST, POST test.147 crash; SMC reset complete)
+
+### CODE/LOG STATE: test.147 ran and crashed after module_init entry only
+
+**Repository state before saving this snapshot:**
+- Branch: `main`
+- Remote tracking before notes/log commit: `main...origin/main`
+- Source tree is unchanged from pushed commit `fdf5696 test.147: skip early PCIe debug trace`.
+- New uncommitted files found after reboot:
+  - `phase5/logs/test.147.stage0`
+  - `phase5/logs/test.147.stage0.stream`
+- User reports the machine restarted after the crash and SMC has been reset.
+
+**Post-SMC PCIe state checked after reboot (2026-04-19 23:07 BST):**
+- Root port `00:1c.2`:
+  - Bus hierarchy is restored: primary `00`, secondary `03`, subordinate `03`.
+  - `Status`, `Secondary status`, and `BridgeCtl` all show `<MAbort-` / `MAbort-`.
+  - Link is up: `CommClk+`, `DLActive+`, speed `2.5GT/s`, width `x1`.
+  - Kernel driver in use: `pcieport`.
+- Endpoint `03:00.0`:
+  - BCM4360 present: `14e4:43a0` rev `03`.
+  - BAR0 `b0600000` size `32K`; BAR2 `b0400000` size `2M`.
+  - `Status` shows `<MAbort-`; AER `UESta` is clear, including `CmpltTO-` and `UnsupReq-`.
+  - `DevSta` still shows `CorrErr+` / `UnsupReq+`, consistent with prior deliberate BAR0 guard behavior.
+  - Kernel modules listed: `bcma`, `wl`; no driver bound in the visible lspci output.
+
+**test.147 RESULT (stage0 crash before `brcmf_pcie_register()` entry marker):**
+- Pre-test BAR0 guard: fast UR/I/O error (`7ms`), not completion timeout; script proceeded.
+- Pre-test PCIe/root-port state: endpoint present at `03:00.0`, bridge bus window `03/03`, MAbort clear.
+- Stream log captured:
+  - `brcmfmac: loading out-of-tree module taints kernel.`
+  - `brcmfmac: BCM4360 test.147: module_init entry (no BAR0 MMIO)`
+- Missing markers:
+  - `BCM4360 test.147: brcmf_pcie_register() entry`
+  - `BCM4360 test.147: skipping brcmf_dbg in brcmf_pcie_register`
+  - `BCM4360 test.147: after skipped brcmf_dbg, before pci_register_driver`
+  - `BCM4360 test.147: pci_register_driver returned ret=...`
+  - `BCM4360 test.128: PROBE ENTRY`
+  - `BCM4360 test.145: halting ARM CR4 after second SBR`
+
+**Interpretation:**
+- test.147 rules out the early `brcmf_dbg(PCIE, "Enter\n")` call as the immediate crash source for this run.
+- The crash window has moved earlier than test.146: after the module-init entry marker and before the first statement in `brcmf_pcie_register()` emits.
+- No intentional BAR0 MMIO, BAR2 MMIO, PCI config access, or `pci_register_driver()` call is reached in the visible log window.
+- Best current inference: a host/asynchronous hardware failure is being triggered immediately by module insertion/initialization, or by work outside the visible PCIe registration code path between the module init marker and the function body marker. The exact ordering could also be affected by printk persistence across the crash, so one more marker at the call site is warranted.
+
+**Recommended next candidate test (PRE test.148):**
+1. Preserve and push this post-test.147 snapshot first.
+2. Add a marker in `common.c` module init immediately before and immediately after the call to `brcmf_pcie_register()`.
+3. Optionally make test.148 return before calling `brcmf_pcie_register()` as an ultra-safe host-only discriminator, but only after capturing the call-site marker layout in notes.
+4. Do not add BAR0 MMIO, BAR2 MMIO, PCI config pokes, or any pre-probe mitigation yet.
+5. Rebuild, then commit and push PRE-test.148 source/notes/harness before any run.
+
+**Interpretation matrix for test.148:**
+- Reaches `before brcmf_pcie_register call` but not `brcmf_pcie_register() entry`: crash is at/around the call transition or printk persistence lost the callee marker.
+- Reaches `brcmf_pcie_register() entry`: test.147 likely lost later markers due to crash persistence; continue with narrower register-body markers.
+- If a no-call variant returns safely: registering the PCI driver, or side effects around that call, are implicated.
+- If a no-call variant still crashes: module insertion/taint/module-init plumbing or unrelated asynchronous hardware state is implicated before brcmfmac PCI registration.
+
+**Hard rule remains:**
+- Do not run stage1.
+- Before running any future test, save notes, commit, and push.
+
+---
+
+## Previous state (2026-04-19 23:00 BST, PRE test.147 — skip early brcmf_dbg before PCI registration)
 
 ### CODE STATE: test.147 source prepared and rebuilt; commit/push required before running
 
