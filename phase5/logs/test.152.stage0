@@ -1,0 +1,44 @@
+=== test.151: brcmf_core_init/brcmf_pcie_register call-site markers — stage=0 ===
+Date: Mon 20 Apr 08:18:39 BST 2026
+
+Stage 0: skip_arm=1 — module_init/register markers; no ARM release if probe reaches firmware path.
+(test.151: SDIO+PCI registration discriminator — USB skipped; 50ms post-PCI sync marker; pci_register_driver() is re-introduced)
+
+=== Pre-test BAR0 MMIO guard ===
+BAR0 MMIO UR/I/O error (8ms) — device alive; SBR in probe should fix. Proceeding.
+
+=== Pre-test PCIe state ===
+(lspci not available)
+
+=== Pre-test root port (00:1c.2) state ===
+
+=== Flushing to disk ===
+Flush complete.
+
+=== Loading brcmfmac (bcm4360_reset_stage=0, bcm4360_skip_arm=1) --- test.151 ===
+insmod returned rc=0
+Waiting 12s for firmware init (streaming to test.151.stage0.stream)...
+
+=== dmesg snapshot (kernel ring buffer) ===
+[  513.490276] brcmfmac: loading out-of-tree module taints kernel.
+[  513.497638] brcmfmac: BCM4360 test.152: module_init entry (no BAR0 MMIO)
+[  513.497733] brcmfmac: BCM4360 test.152: before brcmf_core_init()
+[  513.497776] brcmfmac: BCM4360 test.152: brcmf_core_init() entry
+[  513.497811] brcmfmac: BCM4360 test.152: before brcmf_sdio_register()
+[  513.497849] brcmfmac: BCM4360 test.152: after brcmf_sdio_register() err=0
+[  513.549431] brcmfmac: BCM4360 test.152: post-SDIO sync (before PCI)
+[  513.549462] brcmfmac: BCM4360 test.152: before brcmf_pcie_register()
+[  513.549487] brcmfmac: BCM4360 test.152: brcmf_pcie_register() entry
+[  513.549512] brcmfmac: BCM4360 test.152: skipping brcmf_dbg in brcmf_pcie_register
+[  513.549541] brcmfmac: BCM4360 test.152: after skipped brcmf_dbg, before pci_register_driver
+[  513.551185] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=00000000a39a6ef5)
+[  513.552869] brcmfmac: BCM4360 test.127: probe entry (vendor=14e4 device=43a0)
+[  513.554642] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+[  513.556411] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+[  513.558210] brcmfmac: BCM4360 test.152: probe early-return — before SBR, no HW access
+[  513.559920] brcmfmac: BCM4360 test.152: pci_register_driver returned ret=0
+[  513.561598] brcmfmac: BCM4360 test.152: after brcmf_pcie_register() err=0
+[  513.613342] brcmfmac: BCM4360 test.152: post-PCI sync (skipping USB)
+[  513.613373] brcmfmac: BCM4360 test.152: after brcmf_core_init() err=0
+=== Capture complete ===
+Cleaning up brcmfmac...

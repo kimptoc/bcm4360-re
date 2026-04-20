@@ -1,30 +1,31 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.152 — probe early-return discriminator; PCIe clean)
+## Current state (2026-04-20, PRE test.153 — full SBR, early-return before chip_attach; PCIe clean)
 
-### CODE STATE: test.152 source prepared, rebuilt, committed, and pushed
+### CODE STATE: test.153 source prepared, rebuilt, committed, and pushed
 
-**test.152 change: probe early-return before SBR (no HW access)**
-- `brcmf_pcie_probe()` returns `-ENODEV` immediately after `devinfo` alloc,
-  BEFORE `pci_save_state()` or `PCI_BRIDGE_CTL_BUS_RESET` writes.
-- 50ms delay added after SDIO registration (before PCI) to ensure SDIO markers
-  survive in journald before PCI probe runs.
-- All markers updated to test.152.
+**test.153 change: full SBR block runs, early-return AFTER SBR, BEFORE chip_attach**
+- `brcmf_pcie_probe()` now runs the full SBR block:
+  `pci_save_state()`, `pci_read_config_word()`, `pci_write_config_word(PCI_BRIDGE_CTL_BUS_RESET)`,
+  `msleep(10)`, `pci_write_config_word(deassert)`, `msleep(500)`, `pci_restore_state()`
+- Returns `-ENODEV` AFTER SBR complete, BEFORE `brcmf_chip_attach()`.
+- 50ms delays in core.c retained (post-SDIO, post-PCI sync).
+- Test script: dmesg kill bug fixed (also kills `dmesg -wk` subprocess); WAIT_SECS=15.
 
 **Purpose:**
-- test.151 CRASHED: `pci_register_driver()` → `brcmf_pcie_probe()` triggers hard freeze.
-- journalctl -b -1 confirmed: only 3 markers survived; SDIO markers lost (hard freeze,
-  not kernel panic — no panic output captured).
-- test.152 confirms whether the crash is in the SBR block specifically, or elsewhere in probe.
+- test.152 SUCCESS: probe entry without HW access is safe (all markers, no crash).
+- test.153 narrows crash to: SBR block OR chip_attach (BAR0 MMIO reads).
+- If no crash: SBR is safe; chip_attach is next (known to work in test.53 era).
+- If crash: SBR is the crash trigger; narrow down which SBR operation (most likely
+  `pci_write_config_word(PCI_BRIDGE_CTL_BUS_RESET)` assertion).
 
 **Hypothesis:**
-- Expect NO crash — probe entry without hardware access should be safe.
-- If no crash: SBR (`PCI_BRIDGE_CTL_BUS_RESET` to bridge) is the crash trigger.
-- If crash: something in probe entry itself crashes (probe called from irq context? unlikely).
+- Expect NO crash — SBR worked cleanly in test.53; the bridge reset should not crash.
+- If SBR is safe: the crash regressed in chip_attach (or later probe ops).
 
-**Pre-test PCIe state (2026-04-20, post-SMC-reset):**
+**Pre-test PCIe state (2026-04-20, post-test.152 clean run):**
 - Root port `00:1c.2`: `DLActive+`, `CommClk+`, `MAbort-`, `BridgeCtl: >Reset-` — clean.
-- Endpoint `03:00.0`: `MAbort-`, `DevSta: CorrErr+ UnsupReq+` (expected from UR guard).
+- Endpoint `03:00.0`: `MAbort-`, `DevSta: CorrErr+ UnsupReq+` (expected).
 - No driver bound; no brcm modules loaded.
 
 **Test command:**
@@ -34,10 +35,46 @@ sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 Stage1 remains forbidden.
 
 **Interpretation matrix:**
-- No crash, `PROBE ENTRY` appears, `post-PCI sync` appears: probe entry safe; SBR is next suspect. Next test: add SBR read-only ops (pci_save_state, pci_read_config_word).
-- No crash, `PROBE ENTRY` missing: probe not called (unexpected) or marker lost.
-- Crash before `PROBE ENTRY` marker: something in probe entry itself crashes (very unlikely).
-- Crash after `before brcmf_pcie_register()` but `PROBE ENTRY` missing: crash in `pci_register_driver()` itself before probe (extremely unlikely).
+- No crash, `SBR complete` marker, `post-PCI sync` appear: SBR safe; chip_attach next.
+- Crash after `before SBR` but before `SBR complete`: crash is in SBR body (pci_write_config_word assertion likely).
+- Crash after `SBR complete`: crash in post-SBR pci_restore_state or mdelay (very unlikely).
+
+---
+
+## Previous state (2026-04-20, POST test.152 SUCCESS — probe safe without HW; SBR next)
+
+### CODE/LOG STATE: test.152 ran cleanly — all markers appeared
+
+**test.152 stream log captured:**
+```
+brcmfmac: BCM4360 test.152: module_init entry (no BAR0 MMIO)
+brcmfmac: BCM4360 test.152: before brcmf_core_init()
+brcmfmac: BCM4360 test.152: brcmf_core_init() entry
+brcmfmac: BCM4360 test.152: before brcmf_sdio_register()
+brcmfmac: BCM4360 test.152: after brcmf_sdio_register() err=0
+brcmfmac: BCM4360 test.152: post-SDIO sync (before PCI)
+brcmfmac: BCM4360 test.152: before brcmf_pcie_register()
+brcmfmac: BCM4360 test.152: brcmf_pcie_register() entry
+brcmfmac: BCM4360 test.152: skipping brcmf_dbg in brcmf_pcie_register
+brcmfmac: BCM4360 test.152: after skipped brcmf_dbg, before pci_register_driver
+brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=...)
+brcmfmac: BCM4360 test.127: probe entry (vendor=14e4 device=43a0)
+brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+brcmfmac: BCM4360 test.152: probe early-return — before SBR, no HW access
+brcmfmac: BCM4360 test.152: pci_register_driver returned ret=0
+brcmfmac: BCM4360 test.152: after brcmf_pcie_register() err=0
+brcmfmac: BCM4360 test.152: post-PCI sync (skipping USB)
+brcmfmac: BCM4360 test.152: after brcmf_core_init() err=0
+```
+
+**Key findings:**
+- Probe IS called by pci_register_driver() — `PROBE ENTRY` confirmed.
+- Probe entry up to (and including) kzalloc + devinfo->pdev assignment is safe.
+- No crash: crash trigger is in the SBR block or chip_attach.
+- rmmod completed cleanly (pci_unregister_driver with no bound device).
+- dmesg kill bug in test script: `kill -9 $DMESG_PID` killed only the while-subshell,
+  not the `dmesg -wk` subprocess → 20min hang fixed by adding pkill of subprocess.
 
 ---
 

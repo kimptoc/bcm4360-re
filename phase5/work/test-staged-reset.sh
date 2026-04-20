@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.151.stage${STAGE}"
+LOG="$LOG_DIR/test.153.stage${STAGE}"
 
-echo "=== test.151: brcmf_core_init/brcmf_pcie_register call-site markers — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.153: SBR-complete early-return — before chip_attach — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -28,7 +28,7 @@ case "$STAGE" in
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.151: SDIO+PCI registration discriminator — USB skipped; 50ms post-PCI sync marker; pci_register_driver() is re-introduced)" | tee -a "$LOG"
+echo "(test.153: full SBR runs in probe; early return after SBR, before chip_attach)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -105,14 +105,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=12  # test.151: module/core/register markers + existing staged-reset/download diagnostics
+    WAIT_SECS=15  # test.153: SBR takes ~510ms; 15s allows full SBR + 50ms delays
 else
     SKIP_ARM=0
     WAIT_SECS=35
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.151 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.153 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.
@@ -126,6 +126,9 @@ stdbuf -oL dmesg -wk 2>/dev/null | while IFS= read -r _dmesg_line; do
     sync
 done &
 DMESG_PID=$!
+# Also record the dmesg subprocess PID so we can kill it directly.
+# $! captures the while-subshell PID; the dmesg process is its sibling in the pipeline.
+DMESG_PROC=$(pgrep -n -f "dmesg -wk" 2>/dev/null || true)
 
 dmesg -C
 modprobe brcmutil 2>/dev/null || true
@@ -144,6 +147,7 @@ done
 
 # Stop the background stream (use -9; dmesg -wk ignores SIGTERM)
 kill -9 "$DMESG_PID" 2>/dev/null || true
+[ -n "$DMESG_PROC" ] && kill -9 "$DMESG_PROC" 2>/dev/null || true
 wait "$DMESG_PID" 2>/dev/null || true
 echo "=== dmesg stream end: $(date) ===" >> "$STREAM_LOG"
 sync

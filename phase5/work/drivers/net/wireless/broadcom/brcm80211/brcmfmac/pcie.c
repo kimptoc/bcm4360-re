@@ -3981,9 +3981,6 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
 		pr_emerg("BCM4360 test.127: devinfo->pdev assigned, before SBR\n");
-		pr_emerg("BCM4360 test.152: probe early-return — before SBR, no HW access\n");
-		kfree(devinfo);
-		return -ENODEV;
 	}
 
 	/* test.53: secondary bus reset via upstream bridge, before chip_attach.
@@ -4023,6 +4020,9 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		pci_restore_state(pdev);
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.53: SBR complete — bridge_ctrl restored\n");
+		pr_emerg("BCM4360 test.153: SBR complete — early return before chip_attach\n");
+		kfree(devinfo);
+		return -ENODEV;
 	}
 
 	devinfo->ci = brcmf_chip_attach(devinfo, pdev->device,
@@ -4449,18 +4449,18 @@ static struct pci_driver brcmf_pciedrvr = {
  * after chip_attach() has initialized the PCIe-to-backplane bridge. */
 void brcmf_pcie_early_arm_halt(void)
 {
-	pr_emerg("BCM4360 test.152: module_init entry (no BAR0 MMIO)\n");
+	pr_emerg("BCM4360 test.153: module_init entry (no BAR0 MMIO)\n");
 }
 
 int brcmf_pcie_register(void)
 {
 	int ret;
 
-	pr_emerg("BCM4360 test.152: brcmf_pcie_register() entry\n");
-	pr_emerg("BCM4360 test.152: skipping brcmf_dbg in brcmf_pcie_register\n");
-	pr_emerg("BCM4360 test.152: after skipped brcmf_dbg, before pci_register_driver\n");
+	pr_emerg("BCM4360 test.153: brcmf_pcie_register() entry\n");
+	pr_emerg("BCM4360 test.153: skipping brcmf_dbg in brcmf_pcie_register\n");
+	pr_emerg("BCM4360 test.153: after skipped brcmf_dbg, before pci_register_driver\n");
 	ret = pci_register_driver(&brcmf_pciedrvr);
-	pr_emerg("BCM4360 test.152: pci_register_driver returned ret=%d\n", ret);
+	pr_emerg("BCM4360 test.153: pci_register_driver returned ret=%d\n", ret);
 	return ret;
 }
 
