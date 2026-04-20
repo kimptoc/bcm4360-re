@@ -1,0 +1,20 @@
+=== test.171: split post-fw-write mdelay(100) into 10x[mdelay(10)+ARM probe] to localize async crash — stage=0 ===
+Date: Mon 20 Apr 14:50:35 BST 2026
+
+Stage 0: skip_arm=1 — test.162 scope + download_fw_nvram: enter_download_state (read-only) + BAR2 ioread32 probe + 442KB iowrite32 fw + NVRAM write + TCM verify dump; returns -ENODEV.
+(test.171: test.170 completed full 442KB fw write then machine hard-froze during the single mdelay(100) before the post-mdelay100 marker. This run replaces that delay with 10 x mdelay(10) each followed by a read-only ARM CR4 probe (hi-window). Expected: either we learn which 10ms sub-window triggers the async tear-down, or MMIO activity keeps the link alive — both outcomes narrow the hypothesis to ASPM/L1-idle.)
+
+=== Pre-test BAR0 MMIO guard ===
+BAR0 MMIO UR/I/O error (6ms) — device alive; SBR in probe should fix. Proceeding.
+
+=== Pre-test PCIe state ===
+(lspci not available)
+
+=== Pre-test root port (00:1c.2) state ===
+
+=== Flushing to disk ===
+Flush complete.
+
+=== Loading brcmfmac (bcm4360_reset_stage=0, bcm4360_skip_arm=1) --- test.171 ===
+insmod returned rc=0
+Waiting 90s for firmware init (streaming to test.171.stage0.stream)...

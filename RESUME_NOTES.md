@@ -6472,3 +6472,90 @@ sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 - Endpoint 03:00.0: MAbort- ✓, BusMaster+, Mem+, Region0=b0600000, Region2=b0400000
 - Root port 00:1c.2: secondary=03, subordinate=03, MAbort-, secondary-MAbort-
 
+---
+
+## TEST.171 RESULT — 2026-04-20 14:50 (crash narrowed to ~20-30 ms after fw write)
+
+### Captured evidence
+- Stage0 wrapper log: `phase5/logs/test.171.stage0`
+- Crash-time dmesg stream: `phase5/logs/test.171.stage0.stream`
+- Previous-boot journal captured after SMC reset: `phase5/logs/test.171.journalctl.txt`
+
+The wrapper stream was mostly lost to the hard freeze: it contains only early
+boot lines and no `brcmfmac` breadcrumbs. The previous boot journal was
+recoverable and is the authoritative artifact for this test.
+
+### Result
+
+test.171 again completed the full 442233 byte BAR2 firmware write:
+- `all 110558 words written, before tail (tail=1)`
+- `tail 1 bytes written at offset 442232`
+- `post-write ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES`
+- `fw write complete (442233 bytes)`
+
+The split idle loop then logged:
+- `idle-0 ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES`
+- `idle-1 ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES`
+
+No `idle-2`, no `post-idle-loop`, no MCE, no panic, and no PCIe/AER error
+were captured before the host froze. SMC reset was required.
+
+### Interpretation
+
+The fatal window is now approximately **20-30 ms after `fw write complete`**:
+the first two 10 ms delays plus BAR0 ARM CR4 probes completed, then the host
+froze before the third probe printed.
+
+Important constraints:
+- ARM CR4 is still reported halted at `post-write`, `idle-0`, and `idle-1`.
+  This weakens the "ARM auto-resumed and executed partial firmware" theory for
+  this specific post-write crash.
+- Periodic BAR0 MMIO probes did **not** keep the system alive through the
+  whole 100 ms idle window. That weakens the simple "any MMIO activity prevents
+  idle ASPM/L1" version of the ASPM hypothesis.
+- The crash still happens after the firmware payload is fully in TCM and before
+  NVRAM/resetintr handling, so the current failure is downstream of the raw
+  442 KB BAR2 write.
+
+### Current HW state after SMC reset (2026-04-20 ~15:00)
+
+`/run/current-system/sw/bin/lspci` is available; the old pinned
+`/nix/store/...pciutils-3.14.0/bin/lspci` path used by the wrapper no longer
+exists in this boot, so the wrapper's pre-test lspci section is blank.
+
+Post-reset enumeration is clean:
+- Endpoint 03:00.0: BCM4360 visible, Mem+, BusMaster+, BAR0=b0600000,
+  BAR2=b0400000, Status has `<MAbort-`.
+- Root port 00:1c.2: secondary=03/subordinate=03, memory window
+  b0400000-b06fffff, bridge control `MAbort-`, secondary status `<MAbort-`.
+
+### PRE-TEST.172 recommendation
+
+Do **not** run another test until this note and the test.171 artifacts are
+committed and pushed.
+
+Next best test: disable ASPM on the **upstream root port** before the firmware
+download, not only on the endpoint.
+
+Rationale: test.158 disabled endpoint ASPM (`LnkCtl after=0x0140`), but the
+root port may still be entering L1 or otherwise transitioning the link during
+the post-write idle gap. Since test.171 freezes after ~20-30 ms of post-write
+settle time with ARM still halted, root-port link-state/power-management is
+now the highest-value variable to remove.
+
+Suggested code change for test.172:
+1. In the BCM4360 probe/setup path, find `pci_upstream_bridge(devinfo->pdev)`.
+2. Log root-port `LnkCtl` before/after.
+3. Call `pci_disable_link_state(root_port, PCIE_LINK_STATE_L0S |
+   PCIE_LINK_STATE_L1 | PCIE_LINK_STATE_CLKPM)` before `brcmf_pcie_download_fw_nvram`.
+4. Keep the test.171 idle-loop probes unchanged so the result is comparable.
+5. Update `test-staged-reset.sh` to use `/run/current-system/sw/bin/lspci`
+   when the pinned Nix-store path is absent.
+
+Interpretation:
+- If test.172 survives all 10 idle probes and reaches `post-idle-loop`, root
+  port ASPM/CLKPM was implicated.
+- If it still freezes after `idle-1`, focus next on chip-internal PMU/watchdog
+  or the BAR0 ARM probe side effects rather than generic link idle.
+- If root-port LnkCtl already has ASPM bits clear, test.172 still records that
+  fact and avoids assuming endpoint-only ASPM was sufficient.

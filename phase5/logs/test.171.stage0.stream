@@ -1,0 +1,83 @@
+=== dmesg stream start: Mon 20 Apr 14:50:36 BST 2026 ===
+[    0.000000] Linux version 6.12.80 (nixbld@localhost) (gcc (GCC) 14.3.0, GNU ld (GNU Binutils) 2.44) #1-NixOS SMP PREEMPT_DYNAMIC Thu Apr  2 11:09:54 UTC 2026
+[    0.000000] Command line: initrd=\EFI\nixos\v6bc83nw2h5x85106qkcr1v1qyi1ax7g-initrd-linux-6.12.80-initrd.efi init=/nix/store/vkf1lapdlnhabmi02h61l7cspmbfwbfd-nixos-system-nixos-25.11.9067.54170c54449e/init pci=noaer intel_iommu=on iommu=strict loglevel=4 lsm=landlock,yama,bpf
+[    0.000000] BIOS-provided physical RAM map:
+[    0.000000] BIOS-e820: [mem 0x0000000000000000-0x0000000000057fff] usable
+[    0.000000] BIOS-e820: [mem 0x0000000000058000-0x0000000000058fff] reserved
+[    0.000000] BIOS-e820: [mem 0x0000000000059000-0x000000000008efff] usable
+[    0.000000] BIOS-e820: [mem 0x000000000008f000-0x000000000008ffff] reserved
+[    0.000000] BIOS-e820: [mem 0x0000000000090000-0x000000000009ffff] usable
+[    0.000000] BIOS-e820: [mem 0x00000000000a0000-0x00000000000bffff] reserved
+[    0.000000] BIOS-e820: [mem 0x0000000000100000-0x000000008ad0ffff] usable
+[    0.000000] BIOS-e820: [mem 0x000000008ad10000-0x000000008ad52fff] ACPI NVS
+[    0.000000] BIOS-e820: [mem 0x000000008ad53000-0x000000008ad5cfff] usable
+[    0.000000] BIOS-e820: [mem 0x000000008ad5d000-0x000000008ad8efff] ACPI data
+[    0.000000] BIOS-e820: [mem 0x000000008ad8f000-0x000000008ae38fff] usable
+[    0.000000] BIOS-e820: [mem 0x000000008ae39000-0x000000008ae8efff] reserved
+[    0.000000] BIOS-e820: [mem 0x000000008ae8f000-0x000000008aed1fff] usable
+[    0.000000] BIOS-e820: [mem 0x000000008aed2000-0x000000008aefefff] reserved
+[    0.000000] BIOS-e820: [mem 0x000000008aeff000-0x000000008af83fff] usable
+[    0.000000] BIOS-e820: [mem 0x000000008af84000-0x000000008afeffff] reserved
+[    0.000000] BIOS-e820: [mem 0x000000008aff0000-0x000000008affffff] usable
+[    0.000000] BIOS-e820: [mem 0x000000008b000000-0x000000008f9fffff] reserved
+[    0.000000] BIOS-e820: [mem 0x00000000e00f8000-0x00000000e00f8fff] reserved
+[    0.000000] BIOS-e820: [mem 0x00000000fed1c000-0x00000000fed1ffff] reserved
+[    0.000000] BIOS-e820: [mem 0x00000000ffe10000-0x00000000ffe3ffff] reserved
+[    0.000000] BIOS-e820: [mem 0x0000000100000000-0x000000026f5fffff] usable
+[    0.000000] NX (Execute Disable) protection: active
+[    0.000000] APIC: Static calls initialized
+[    0.000000] e820: update [mem 0x75f29190-0x75f391cf] usable ==> usable
+[    0.000000] e820: update [mem 0x75f27810-0x75f27cd2] usable ==> usable
+[    0.000000] extended physical RAM map:
+[    0.000000] reserve setup_data: [mem 0x0000000000000000-0x0000000000057fff] usable
+[    0.000000] reserve setup_data: [mem 0x0000000000058000-0x0000000000058fff] reserved
+[    0.000000] reserve setup_data: [mem 0x0000000000059000-0x000000000008efff] usable
+[    0.000000] reserve setup_data: [mem 0x000000000008f000-0x000000000008ffff] reserved
+[    0.000000] reserve setup_data: [mem 0x0000000000090000-0x000000000009ffff] usable
+[    0.000000] reserve setup_data: [mem 0x00000000000a0000-0x00000000000bffff] reserved
+[    0.000000] reserve setup_data: [mem 0x0000000000100000-0x0000000075f2780f] usable
+[    0.000000] reserve setup_data: [mem 0x0000000075f27810-0x0000000075f27cd2] usable
+[    0.000000] reserve setup_data: [mem 0x0000000075f27cd3-0x0000000075f2918f] usable
+[    0.000000] reserve setup_data: [mem 0x0000000075f29190-0x0000000075f391cf] usable
+[    0.000000] reserve setup_data: [mem 0x0000000075f391d0-0x000000008ad0ffff] usable
+[    0.000000] reserve setup_data: [mem 0x000000008ad10000-0x000000008ad52fff] ACPI NVS
+[    0.000000] reserve setup_data: [mem 0x000000008ad53000-0x000000008ad5cfff] usable
+[    0.000000] reserve setup_data: [mem 0x000000008ad5d000-0x000000008ad8efff] ACPI data
+[    0.000000] reserve setup_data: [mem 0x000000008ad8f000-0x000000008ae38fff] usable
+[    0.000000] reserve setup_data: [mem 0x000000008ae39000-0x000000008ae8efff] reserved
+[    0.000000] reserve setup_data: [mem 0x000000008ae8f000-0x000000008aed1fff] usable
+[    0.000000] reserve setup_data: [mem 0x000000008aed2000-0x000000008aefefff] reserved
+[    0.000000] reserve setup_data: [mem 0x000000008aeff000-0x000000008af83fff] usable
+[    0.000000] reserve setup_data: [mem 0x000000008af84000-0x000000008afeffff] reserved
+[    0.000000] reserve setup_data: [mem 0x000000008aff0000-0x000000008affffff] usable
+[    0.000000] reserve setup_data: [mem 0x000000008b000000-0x000000008f9fffff] reserved
+[    0.000000] reserve setup_data: [mem 0x00000000e00f8000-0x00000000e00f8fff] reserved
+[    0.000000] reserve setup_data: [mem 0x00000000fed1c000-0x00000000fed1ffff] reserved
+[    0.000000] reserve setup_data: [mem 0x00000000ffe10000-0x00000000ffe3ffff] reserved
+[    0.000000] reserve setup_data: [mem 0x0000000100000000-0x000000026f5fffff] usable
+[    0.000000] efi: EFI v1.1 by Apple
+[    0.000000] efi: ACPI=0x8ad8e000 ACPI 2.0=0x8ad8e014 SMBIOS=0x8ad11000 RNG=0x8ad61f90 INITRD=0x75f53f90 
+[    0.000000] random: crng init done
+[    0.000000] efi: Not removing mem284: MMIO range=[0xe00f8000-0xe00f8fff] (4KB) from e820 map
+[    0.000000] efi: Not removing mem285: MMIO range=[0xfed1c000-0xfed1ffff] (16KB) from e820 map
+[    0.000000] efi: Not removing mem286: MMIO range=[0xffe10000-0xffe3ffff] (192KB) from e820 map
+[    0.000000] [Firmware Bug]: Corrupted DMI table, offset 2189 (only 40 entries processed)
+[    0.000000] SMBIOS 2.4 present.
+[    0.000000] DMI: Apple Inc. MacBookPro11,1/Mac-189A3D4F975D5FFC, BIOS 478.0.0.0.0 01/13/2023
+[    0.000000] DMI: Memory slots populated: 2/2
+[    0.000000] tsc: Fast TSC calibration using PIT
+[    0.000000] tsc: Detected 2599.752 MHz processor
+[    0.000085] e820: update [mem 0x00000000-0x00000fff] usable ==> reserved
+[    0.000088] e820: remove [mem 0x000a0000-0x000fffff] usable
+[    0.000101] last_pfn = 0x26f600 max_arch_pfn = 0x400000000
+[    0.000106] MTRR map: 5 entries (4 fixed + 1 variable; max 24), built from 10 variable MTRRs
+[    0.000108] x86/PAT: Configuration [0-7]: WB  WC  UC- UC  WB  WP  UC- WT  
+[    0.000397] last_pfn = 0x8b000 max_arch_pfn = 0x400000000
+[    0.016638] Using GB pages for direct mapping
+[    0.017453] Secure boot disabled
+[    0.017454] RAMDISK: [mem 0x71371000-0x72d3ffff]
+[    0.017459] ACPI: Early table checksum verification disabled
+[    0.017462] ACPI: RSDP 0x000000008AD8E014 000024 (v02 APPLE )
+[    0.017467] ACPI: XSDT 0x000000008AD8E1C0 0000A4 (v01 APPLE  Apple00  00000000      01000013)
+[    0.017473] ACPI: FACP 0x000000008AD8C000 0000F4 (v05 APPLE  Apple00  00000000 Loki 0000005F)
+[    0.017480] ACPI: DSDT 0x000000008AD7F000 007681 (v03 APPLE  MacBookP 00110001 INTL 20100915)
