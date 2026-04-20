@@ -17,18 +17,18 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.156.stage${STAGE}"
+LOG="$LOG_DIR/test.157.stage${STAGE}"
 
-echo "=== test.156: ARM halt discriminator — early return after ARM halt, before BusMaster/ASPM — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.157: ARM halt discriminator + per-marker msleep(300) for precise crash location — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: skip_arm=1 — module_init/register markers; early return after ARM halt MMIO writes." | tee -a "$LOG" ;;
+    0) echo "Stage 0: skip_arm=1 — per-marker msleep(300); ARM halt scope; early return after ARM halt." | tee -a "$LOG" ;;
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.156: SBR + chip_attach + ARM halt MMIO writes; early return before BusMaster/ASPM)" | tee -a "$LOG"
+echo "(test.157: SBR + chip_attach + ARM halt MMIO writes; early return before BusMaster/ASPM; 300ms sleep between each step)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -105,14 +105,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=15  # test.156: SBR 510ms + chip_attach + ARM halt; 15s is enough
+    WAIT_SECS=60  # test.157: 300ms * ~15 sleeps + SBR 510ms + chip_attach; 60s is safe
 else
     SKIP_ARM=0
     WAIT_SECS=35
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.155 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.157 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.

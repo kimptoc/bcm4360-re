@@ -1,6 +1,66 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.155 CRASH — preparing test.156)
+## Current state (2026-04-20, POST test.156 CRASH — preparing test.157)
+
+### CODE STATE: test.157 source prepared — same scope as test.156 + msleep(300) between markers
+
+**test.156 CRASH ANALYSIS (boot -1, 08:54–09:06):**
+- test.156 RAN in boot -1 (started 09:06:38) and CRASHED — machine required SMC reset.
+- Last journalctl -b -1 marker: `test.155: before brcmf_pcie_register()` (09:06:39).
+- CRITICAL INSIGHT — journald flush lag: journald polls the ring buffer at intervals (~200-500ms).
+  If the crash happened within one polling cycle of the last marker, later markers were written
+  to the ring buffer but NOT flushed to disk before the MCE killed the system.
+  - This means the crash could be ANYWHERE after `before brcmf_pcie_register()` —
+    including inside `brcmf_pcie_register()` itself, inside probe, or inside ARM halt MMIO writes.
+  - We CANNOT conclude the crash was at PCI registration — we only know it was at or after it.
+- pstore (EFI): `sudo mount -t pstore pstore /sys/fs/pstore` works!
+  - pstore captured an older Oops (test.149 era, uptime ~588s) — a rmmod crash in
+    `pci_unregister_driver → driver_unregister → "Unexpected driver unregister!"` (NULL deref).
+  - This older bug is already fixed: brcmf_core_exit() has `brcmf_pcie_was_registered` guard.
+  - MCE-level hard freezes (test.155/156) do NOT write pstore — only kernel Oops/panic does.
+- Stream log (`phase5/logs/test.156.stage0.stream`) captured boot messages but no test markers
+  — crash was too fast for the stream sync loop to capture new messages.
+- Full journalctl -b -1 saved to: `phase5/logs/test.156.boot-1.journalctl.txt`
+- pstore dump saved to: `phase5/logs/pstore-crash-dump-2026-04-20.txt`
+
+**test.157: same ARM halt scope + msleep(300) between markers for precise crash location.**
+- Root cause: journald flush lag means we can't locate crash without marker-flush discipline.
+- Fix: add `msleep(300)` after each key marker so journald flushes before the next step.
+- Scope unchanged: SBR → chip_attach → ARM halt MMIO writes → early return.
+- With 300ms sleeps, the LAST FLUSHED marker before a crash tells us the exact crash location.
+
+**Pre-test PCIe state (post-test.156 crash + SMC reset, 2026-04-20 ~09:09):**
+- Endpoint `03:00.0`: `MAbort-`, `CommClk+`, `LnkSta: Speed 2.5GT/s Width x1` — CLEAN.
+- `DevSta: CorrErr+ UnsupReq+`, `CESta: AdvNonFatalErr+` (masked, non-dangerous).
+- `LnkCtl: ASPM L0s L1 Enabled`, `BusMaster+` — normal post-SMC state, no driver bound.
+- Config space readable; no completion timeout.
+- No brcm modules loaded.
+
+**Hypothesis (unchanged from test.156):**
+- ARM halt MMIO writes likely crash the machine.
+- With per-marker msleep(300), the exact failing MMIO step will be captured in journalctl.
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+Stage1 remains forbidden.
+
+**Interpretation matrix (test.157 with per-marker sleeps):**
+- Last marker `test.157: before brcmf_pcie_register() entry` + crash: crash in pci_register_driver kernel code (unlikely but possible — config space timeout).
+- Last marker `test.128: PROBE ENTRY` + crash: crash in early probe (before chip_attach setup).
+- Last marker `test.156: before brcmf_chip_attach` + crash: crash in chip_attach (regression from test.154).
+- Last marker `test.119: chip_attach returned successfully` + crash: crash in select_core for ARM.
+- Last marker `test.157: ARM select_core done` + crash: crash in IOCTL read (0x1408).
+- Last marker `test.157: IOCTL read done` + crash: crash in IOCTL write (0x1408 = 0x0023).
+- Last marker `test.157: IOCTL write done` + crash: crash in IOCTL flush-read.
+- Last marker `test.157: IOCTL flush done` + crash: crash in RESET_CTL write (0x1800 = 1).
+- Last marker `test.157: RESET_CTL write done` + crash: crash in RESET_CTL read-back.
+- All markers appear incl `test.156: early return after ARM halt`: ARM halt safe, next test adds BusMaster/ASPM.
+
+---
+
+## Previous state (2026-04-20, POST test.155 CRASH — preparing test.156)
 
 ### CODE STATE: test.156 source prepared, rebuilt, committed
 

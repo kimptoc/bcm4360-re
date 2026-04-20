@@ -1,0 +1,18 @@
+=== test.156: ARM halt discriminator — early return after ARM halt, before BusMaster/ASPM — stage=0 ===
+Date: Mon 20 Apr 09:06:38 BST 2026
+
+Stage 0: skip_arm=1 — module_init/register markers; early return after ARM halt MMIO writes.
+(test.156: SBR + chip_attach + ARM halt MMIO writes; early return before BusMaster/ASPM)
+
+=== Pre-test BAR0 MMIO guard ===
+BAR0 MMIO UR/I/O error (7ms) — device alive; SBR in probe should fix. Proceeding.
+
+=== Pre-test PCIe state ===
+(lspci not available)
+
+=== Pre-test root port (00:1c.2) state ===
+
+=== Flushing to disk ===
+Flush complete.
+
+=== Loading brcmfmac (bcm4360_reset_stage=0, bcm4360_skip_arm=1) --- test.155 ===

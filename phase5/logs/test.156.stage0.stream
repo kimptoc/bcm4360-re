@@ -1,0 +1,10 @@
+=== dmesg stream start: Mon 20 Apr 09:06:38 BST 2026 ===
+[    0.000000] Linux version 6.12.80 (nixbld@localhost) (gcc (GCC) 14.3.0, GNU ld (GNU Binutils) 2.44) #1-NixOS SMP PREEMPT_DYNAMIC Thu Apr  2 11:09:54 UTC 2026
+[    0.000000] Command line: initrd=\EFI\nixos\v6bc83nw2h5x85106qkcr1v1qyi1ax7g-initrd-linux-6.12.80-initrd.efi init=/nix/store/vkf1lapdlnhabmi02h61l7cspmbfwbfd-nixos-system-nixos-25.11.9067.54170c54449e/init pci=noaer intel_iommu=on iommu=strict loglevel=4 lsm=landlock,yama,bpf
+[    0.000000] BIOS-provided physical RAM map:
+[    0.000000] BIOS-e820: [mem 0x0000000000000000-0x0000000000057fff] usable
+[    0.000000] BIOS-e820: [mem 0x0000000000058000-0x0000000000058fff] reserved
+[    0.000000] BIOS-e820: [mem 0x0000000000059000-0x000000000008efff] usable
+[    0.000000] BIOS-e820: [mem 0x000000000008f000-0x000000000008ffff] reserved
+[    0.000000] BIOS-e820: [mem 0x0000000000090000-0x000000000009ffff] usable
+[    0.000000] BIOS-e820: [mem 0x00000000000a0000-0x00000000000bffff] reserved
