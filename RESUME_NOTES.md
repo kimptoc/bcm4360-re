@@ -48,26 +48,38 @@ MMIO, NVRAM write, readback, or ARM release.
 - Root port 00:1c.2 is visible: bus 03/03, memory window b0400000-b06fffff,
   bridge `MAbort-`, secondary `<MAbort-`, link 2.5GT/s x1, ASPM disabled.
 
-### Recommended next step — PRE test.176
+### PRE test.176 — host resetintr extraction after safe sleep
 
-Do **not** run another hardware test until this note and the test.175 artifacts
-are committed, pushed, and synced.
+Do **not** run another hardware test until this note and the test.176 code/build
+checkpoint are committed, pushed, and synced.
 
-Best next discriminator: keep test.175's safe `msleep(100)`, then add only the
-host-side resetintr extraction and firmware release boundary:
+Implemented test.176 discriminator:
+1. Relabeled active breadcrumbs to `test.176`.
+2. Kept endpoint/root-port link-state logging and the existing chunked 442233 B
+   firmware write unchanged for comparability.
+3. Preserved test.175's safe `msleep(100)` after `fw write complete`.
+4. Added only `resetintr = get_unaligned_le32(fw->data)` from host firmware
+   memory and a log of that value.
+5. Then releases `fw`/`nvram` and returns `-ENODEV`.
+6. Still skips post-write ARM probe, resetintr device write/use, NVRAM write,
+   readback, and ARM release. Stage0 remains the only intended run.
 
-1. After `fw write complete`, `msleep(100)` as test.175 did.
-2. Read `resetintr = get_unaligned_le32(fw->data)` and log it.
-3. `release_firmware(fw)` and `brcmf_fw_nvram_free(nvram)`.
-4. Return `-ENODEV`.
-5. Still skip post-write ARM probe, resetintr device write/use, NVRAM write,
-   readback, and ARM release.
-
-Expected interpretation:
-- Survives: host-side `resetintr` extraction/release is safe; next test should
-  add the NVRAM write after `msleep(100)`.
-- Freezes: surprising, because this is host memory only; inspect for lifetime or
+Hypothesis:
+- Clean return/unload: host-side `resetintr` extraction/release is safe; next
+  test should add NVRAM write after `msleep(100)`.
+- Freeze: surprising, because this is host memory only; inspect for lifetime or
   scheduling interactions rather than device MMIO.
+
+Pre-test checklist:
+- [x] Code changed for host resetintr extraction after safe `msleep(100)`.
+- [x] Build module via kbuild. Result OK; existing warning only:
+  `brcmf_pcie_write_ram32` defined but not used. BTF skipped because `vmlinux`
+  is unavailable.
+- [x] Verified `brcmfmac.ko` contains `test.176`, `host resetintr`, and
+  `released fw/nvram after host resetintr` markers.
+- [x] Commit + push + sync this checkpoint.
+- [ ] Run only stage0:
+  `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
 
 ---
 

@@ -732,3 +732,20 @@ Recommended test.176: preserve test.175's `msleep(100)`, then add only
 host-side `resetintr = get_unaligned_le32(fw->data)` plus release of `fw` and
 `nvram`, then return `-ENODEV`. Continue to skip post-write ARM probing, device
 resetintr use, NVRAM write, readback, and ARM release.
+
+## Phase 5.4: PRE test.176
+
+test.176 is implemented as the host-memory resetintr discriminator. It keeps the
+same setup, endpoint/root-port link-state logging, ARM halt checks before the
+write, chunked 442233 byte BAR2 firmware write, and `msleep(100)` after
+`fw write complete`. After the sleep it reads `resetintr` from `fw->data`, logs
+the value, releases `fw` and `nvram`, and returns `-ENODEV`.
+
+This intentionally still skips post-write ARM probing, device-side resetintr
+use, NVRAM write, readback, and ARM release. If it survives, the host-side
+firmware-header boundary is safe and the next test should add NVRAM write after
+the safe sleep.
+
+Build status: OK via kernel kbuild. The only warning is the pre-existing unused
+`brcmf_pcie_write_ram32` helper, and BTF is skipped because `vmlinux` is
+unavailable. `brcmfmac.ko` contains the `test.176` host resetintr markers.
