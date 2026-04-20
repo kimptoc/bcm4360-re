@@ -851,3 +851,31 @@ Build status: OK via kernel kbuild. The only warning is the pre-existing unused
 `brcmf_pcie_write_ram32` helper, and BTF is skipped because `vmlinux` is
 unavailable. `brcmfmac.ko` contains the `test.178` post-NVRAM, marker-readback,
 and early-return markers.
+
+## Phase 5.4: Current state (2026-04-20, POST test.178)
+
+test.178 succeeded. It completed the full 442233 byte BAR2 firmware write,
+slept for 100 ms, read host resetintr, wrote the 228-byte NVRAM blob to BAR2 at
+`0x9ff1c`, read the `ramsize - 4` marker as `0xffc70038`, released
+`fw`/`nvram`, returned `-ENODEV`, waited 30 seconds in the harness, and
+unloaded `brcmfmac` without a host freeze.
+
+Persisted key markers:
+- `BCM4360 test.178: post-NVRAM write done (228 bytes)`
+- `BCM4360 test.178: NVRAM marker at ramsize-4 = 0xffc70038`
+- `BCM4360 test.178: released fw/nvram after NVRAM marker readback; returning -ENODEV`
+
+This proves the NVRAM marker BAR2 readback is safe. The current safe boundary
+now includes full firmware write, sleeping dwell, host resetintr extraction,
+NVRAM write, and marker readback.
+
+Current post-test PCIe state remains sane for fatal errors: endpoint and root
+port are visible, link is 2.5GT/s x1, endpoint/root port ASPM are disabled,
+`MAbort-` is clear on the relevant bridges/device state, and endpoint UESta is
+clear. Endpoint correctable AER still reports `Timeout+ AdvNonFatalErr+`.
+
+Recommended test.179: preserve the test.178 sequence through marker readback,
+then add only a small BAR2 TCM verify dump, preferably 8 words at offsets
+`0x0..0x1c`, release `fw`/`nvram`, and return `-ENODEV`. Continue to skip
+post-write ARM probing, device-side resetintr use, exit-download-state, broad
+TCM dumps, and ARM release.

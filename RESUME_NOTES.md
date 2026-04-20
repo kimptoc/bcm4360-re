@@ -1,6 +1,74 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.178 — NVRAM marker readback discriminator)
+## Current state (2026-04-20, POST test.178 — NVRAM marker readback SUCCESS)
+
+### TEST.178 RESULT — NVRAM marker readback survives
+
+Captured artifacts:
+- `phase5/logs/test.178.stage0`
+- `phase5/logs/test.178.stage0.stream`
+
+Result: **SUCCESS / no crash.** test.178 completed the full 442233-byte BAR2
+firmware write, slept for 100 ms, read host resetintr, wrote the 228-byte NVRAM
+blob to BAR2 at `0x9ff1c`, read back the `ramsize - 4` NVRAM marker, released
+`fw`/`nvram`, returned `-ENODEV`, waited the harness's 30 seconds, and cleaned
+up without freezing.
+
+Key persisted markers:
+```
+BCM4360 test.178: fw write complete (442233 bytes)
+BCM4360 test.178: before post-fw msleep(100)
+BCM4360 test.178: after post-fw msleep(100)
+BCM4360 test.178: host resetintr=0xb80ef000 before NVRAM
+BCM4360 test.178: pre-NVRAM write address=0x9ff1c len=228 naddr=ffffcf598229ff1c
+BCM4360 test.178: post-NVRAM write done (228 bytes)
+BCM4360 test.178: NVRAM marker at ramsize-4 = 0xffc70038
+BCM4360 test.178: released fw/nvram after NVRAM marker readback; returning -ENODEV
+BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+BCM4360 test.163: fw released; returning from setup (state still DOWN)
+```
+
+### Interpretation
+
+The NVRAM marker BAR2 readback is safe after the NVRAM write. The old crash
+boundary is now downstream of full firmware write, sleeping dwell, host
+resetintr extraction, NVRAM write, and marker readback. The next conservative
+boundary is a small BAR2 TCM verify dump, still returning before any
+device-side resetintr use, exit-download-state transition, or ARM release.
+
+### Current HW state after test.178
+
+- `brcmfmac` is unloaded. `brcmutil` remains loaded from the harness; USB Wi-Fi
+  stack modules remain unrelated.
+- Endpoint 03:00.0 is visible: `Mem+ BusMaster-`, BAR0=b0600000, BAR2=b0400000,
+  `<MAbort-`, link 2.5GT/s x1, endpoint ASPM disabled.
+- Endpoint AER UESta is clear; correctable `Timeout+ AdvNonFatalErr+` remains.
+- Root port 00:1c.2 is visible: bus 03/03, memory window b0400000-b06fffff,
+  bridge `MAbort-`, secondary `<MAbort-`, link 2.5GT/s x1, ASPM disabled.
+
+### Recommended next step — PRE test.179
+
+Do **not** run another hardware test until this note and the test.178 artifacts
+are committed, pushed, and synced.
+
+Best next discriminator: add only a small BAR2 TCM verify dump after the
+successful test.178 marker readback, then release and return:
+1. Keep the test.178 sequence through `NVRAM marker at ramsize-4`.
+2. Read/log a small fixed TCM window, preferably 8 words at offsets
+   `0x0..0x1c`, enough to confirm BAR2 readback without a broad scan.
+3. Release `fw`/`nvram` and return `-ENODEV`.
+4. Still skip post-write ARM probing, device-side resetintr use,
+   exit-download-state, broad TCM dumps, and ARM release.
+
+Expected interpretation:
+- Survives: small BAR2 readback is safe; next boundary can isolate
+  device-side resetintr / exit-download-state work.
+- Freezes during the small dump: post-NVRAM BAR2 reads beyond the marker are
+  the next unsafe operation.
+
+---
+
+## Previous state (2026-04-20, PRE test.178 — NVRAM marker readback discriminator)
 
 ### PRE-TEST.178 checkpoint
 
