@@ -1,44 +1,96 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.166 — REBUILT, PCIe clean, ready for insmod)
+## Current state (2026-04-20, POST test.166 CRASH — machine rebooted + SMC reset)
+
+### TEST.166 RESULT — DECISIVE: ARM CR4 IS NOT HALTED AT FW-WRITE TIME
+
+**Captured markers from journal -b -1 (saved to `phase5/logs/test.166.journalctl.txt`):**
+```
+test.166: pre-write ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 (IN_RESET=NO)
+test.166: starting chunked fw write, total_words=110558 (442233 bytes) tail=1
+test.166: wrote 4096 words (16384 bytes)   <- breadcrumb 1
+...
+test.166: wrote 90112 words (360448 bytes) <- breadcrumb 22 (last surviving)
+<no further log — system frozen>
+```
+
+**Interpretation:**
+- **ARM CR4 is RUNNING, not halted** — `RESET_CTL=0x0000000` + `IN_RESET=NO` at the moment
+  the fw write begins. Despite test.145 halting ARM after buscore_reset, something in the
+  setup path between then and download_fw_nvram un-halted it (candidates: fw_get_firmwares
+  async wait ~1-3s, setup callback, msleep(300)s, a HW watchdog).
+- **Crash offset is non-deterministic** — test.164 crashed at 425984 B, test.165 at
+  340992 B, test.166 at 360448 B (between 90112 and 94208 words). The spread
+  (~16–85 KB) is incompatible with a fixed TCM boundary; it is consistent with ARM
+  running partially-written firmware, which eventually executes something that crashes
+  the host (e.g. MMIO abort on BAR2, link drop, DMA into driver memory).
+- **Crash theory #1 (ARM auto-resume) is CONFIRMED** (for this phase). Theory #2 (async
+  watchdog) not ruled out but less likely — the spread is byte-count driven, not
+  wall-clock driven (test.165 used 20 ms × 340 chunks ≈ 7 s; test.166 used 50 ms × 22
+  chunks ≈ 1 s — very different wall-clock windows, similar-ish byte offsets).
 
 ### CODE STATE
 
-- Branch main at `5fcdd93` (test.166 pre/post ARM CR4 RESET_CTL reads around 442KB BAR2 fw write).
-- Module built: `phase5/work/drivers/.../brcmfmac.ko` contains test.166 markers
-  (module_init entry, pre-write RESET_CTL, post-write RESET_CTL, chunked fw write banners).
-- test.165 log files restored from HEAD — the stream/stage0 files had been overwritten
-  by the post-crash reboot of the recovery machine; authoritative test.165 record is
-  `phase5/logs/test.165.journalctl.txt`.
+- Branch main at `5fcdd93` (test.166 implementation). Module built.
+- Untracked log files: `phase5/logs/test.166.stage0`, `test.166.stage0.stream`,
+  `test.166.journalctl.txt`.
 
-### PRE-TEST PCIe STATE (2026-04-20, post-crash machine boot, no SMC reset)
+### POST-TEST PCIe STATE (2026-04-20, reboot + SMC reset)
 
-- 03:00.0: `MAbort-`, `LnkSta 2.5GT/s x1`, `CommClk+` — clean per CLAUDE.md criteria.
-- `Control: Mem+ BusMaster+` — residual from prior driver; insmod/probe will reconfigure.
-- `DevSta: CorrErr+` — sticky correctable-error leftover from test.165 crash. Not a blocker.
-- `LnkCtl: ASPM L0s L1 Enabled` — noteworthy; may relate to the async-watchdog theory
-  (test.133 disabled ASPM on the endpoint during probe, but fresh boot has it back on).
-- brcmfmac NOT loaded.
+- `sudo lspci -vvv -s 03:00.0` shows: `Mem+ BusMaster+` (stale), `MAbort-`, `LnkSta
+  2.5GT/s x1`, `LnkCtl CommClk+ ASPM L0s/L1 Enabled`, `DevSta CorrErr+ UnsupReq+`.
+- The UnsupReq+/CorrErr+ are sticky leftovers from the crash (expected post-SMC on
+  the link). MAbort-/LnkSta are clean — safe to reload.
+- `lsmod | grep brcm` → nothing loaded.
 
-### HYPOTHESIS FOR TEST.166
+### PLAN FOR TEST.167 — RE-HALT ARM CR4 JUST BEFORE FW WRITE
 
-- If `test.166: pre-write RESET_CTL=0x0001` prints AND fw-write loop completes AND
-  `post-write RESET_CTL=0x0001` prints → ARM stayed halted; crash theory #1 (auto-resume)
-  is DISPROVED — suspect ASPM / async-watchdog next.
-- If pre-write RESET_CTL=0x0000 → ARM was un-halted between buscore_reset and the fw
-  write; must re-halt here and retry.
-- If crash mid-write (pre-write fires, post-write never) → either ARM resumed silently
-  (IOCTL bit clear would hint) or an async link-teardown. Watch stage0.stream for the
-  last surviving breadcrumb offset.
-- If crash offset similar to test.164 (~426 KB with 16 KB breadcrumbs) → watchdog
-  hypothesis strengthened since test.166 uses the same cadence as test.164.
+**Goal:** Verify whether halting ARM CR4 immediately prior to the 442 KB BAR2 write
+(with post-halt/post-write RESET_CTL checks) stops the crash. This isolates "ARM
+running garbage firmware" from "async watchdog / link teardown".
+
+**Code changes (pcie.c `brcmf_pcie_download_fw_nvram`, BCM4360 branch around line
+1860–1915):**
+1. Keep the existing pre-write RESET_CTL read (shows `0x0` — ARM running).
+2. After the pre-read, call `brcmf_chip_set_passive(devinfo->ci)` to re-halt ARM CR4.
+   Using the public chip API avoids the direct-RESET_CTL-write wedging seen in
+   test.157/test.158 (that was a probe-time duplicate halt; this is after a
+   ~4-second gap since test.145, different context).
+3. `mdelay(100)` to let halt settle.
+4. Read RESET_CTL again — expect `0x0001` (`IN_RESET=YES`). Log as
+   `test.167: post-halt`.
+5. Do the chunked 16 KB/50 ms fw write (identical to test.166).
+6. After the write loop + tail, read RESET_CTL once more — log as `test.167:
+   post-write`. This catches the case where the write itself un-halts ARM partway.
+7. Keep NVRAM write + TCM verify + -ENODEV return unchanged from test.166.
+
+**Hypothesis for test.167:**
+- **Success case:** post-halt=0x1, write completes, post-write=0x1, line
+  `test.167: fw write complete (442233 bytes)` prints. → ARM-resume is the root
+  cause. Next step: figure out what un-halts ARM in the setup path OR move the halt
+  to immediately before download (and keep it there permanently).
+- **Write crashes mid-way with post-halt=0x1:** something un-halts ARM during the
+  write, OR a separate mechanism (watchdog) crashes the host independently. Need
+  mid-write RESET_CTL polls.
+- **post-halt=0x0 (halt failed):** `brcmf_chip_set_passive` no-op at this point
+  (unexpected; chip core still registered). Fall back to direct RESET_CTL=1 write
+  via BAR0 window.
+
+**Risk:** Duplicate halt wedged ARM-core BAR0 window in test.157 (per pcie.c:4141
+comment). This was at probe entry; test.167 halts much later after chip is fully
+enumerated and ARM has been released/re-halted several times. Accept the risk —
+crash blast radius is identical to test.166 (hard reboot).
 
 ### PRE-TEST CHECKLIST
 
-- [x] test.166 implemented in pcie.c (commit 5fcdd93)
-- [x] Module built, test.166 markers present in .ko strings
-- [x] PCIe 03:00.0 state checked (MAbort-, CommClk+)
-- [x] Plan written here, will commit + push + sync before insmod
+- [x] Save test.166 journal to phase5/logs/test.166.journalctl.txt
+- [ ] Commit + push test.166 logs and this post-analysis
+- [ ] Implement test.167 in pcie.c (add halt + post-halt RESET_CTL read)
+- [ ] Bump module_init + register banners to test.167
+- [ ] Bump `test-staged-reset.sh` log prefix test.166 → test.167
+- [ ] `make -C phase5/work` and verify test.167 markers in .ko
+- [ ] Re-check PCIe state (MAbort-, CommClk+, LnkSta clean)
+- [ ] Commit + push pre-test state + `sync`
 - [ ] Run `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
 
 ---

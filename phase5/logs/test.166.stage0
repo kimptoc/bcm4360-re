@@ -1,0 +1,20 @@
+=== test.166: pre/post ARM CR4 RESET_CTL reads around 442KB BAR2 fw write (16KB breadcrumbs) — stage=0 ===
+Date: Mon 20 Apr 11:09:02 BST 2026
+
+Stage 0: skip_arm=1 — test.162 scope + download_fw_nvram: enter_download_state (read-only) + BAR2 ioread32 probe + 442KB iowrite32 fw + NVRAM write + TCM verify dump; returns -ENODEV.
+(test.166: test.162 flow + download_fw_nvram with pre/post ARM CR4 RESET_CTL reads bracketing 442KB iowrite32 fw write [16KB breadcrumbs])
+
+=== Pre-test BAR0 MMIO guard ===
+BAR0 MMIO UR/I/O error (7ms) — device alive; SBR in probe should fix. Proceeding.
+
+=== Pre-test PCIe state ===
+(lspci not available)
+
+=== Pre-test root port (00:1c.2) state ===
+
+=== Flushing to disk ===
+Flush complete.
+
+=== Loading brcmfmac (bcm4360_reset_stage=0, bcm4360_skip_arm=1) --- test.166 ===
+insmod returned rc=0
+Waiting 90s for firmware init (streaming to test.166.stage0.stream)...
