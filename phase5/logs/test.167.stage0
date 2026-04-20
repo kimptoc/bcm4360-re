@@ -1,0 +1,18 @@
+=== test.167: re-halt ARM CR4 (brcmf_chip_set_passive) before 442KB BAR2 fw write — stage=0 ===
+Date: Mon 20 Apr 11:25:13 BST 2026
+
+Stage 0: skip_arm=1 — test.162 scope + download_fw_nvram: enter_download_state (read-only) + BAR2 ioread32 probe + 442KB iowrite32 fw + NVRAM write + TCM verify dump; returns -ENODEV.
+(test.167: test.166 flow + pre-fw-write re-halt of ARM CR4 via brcmf_chip_set_passive; pre-halt/post-halt/post-write RESET_CTL reads)
+
+=== Pre-test BAR0 MMIO guard ===
+BAR0 MMIO UR/I/O error (7ms) — device alive; SBR in probe should fix. Proceeding.
+
+=== Pre-test PCIe state ===
+(lspci not available)
+
+=== Pre-test root port (00:1c.2) state ===
+
+=== Flushing to disk ===
+Flush complete.
+
+=== Loading brcmfmac (bcm4360_reset_stage=0, bcm4360_skip_arm=1) --- test.167 ===

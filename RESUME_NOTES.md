@@ -1,6 +1,130 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.166 CRASH — machine rebooted + SMC reset)
+## Current state (2026-04-20, POST test.167 CRASH — machine rebooted + SMC reset)
+
+### TEST.167 RESULT — setup callback crashed BEFORE any fw-write code
+
+**Captured markers from `journalctl -k -b -1`** (saved to
+`phase5/logs/test.167.journalctl.txt`):
+```
+11:25:13 BCM4360 test.167: module_init entry — re-halt ARM CR4 before 442KB BAR2 fw write
+11:25:14 BCM4360 test.167: before pci_register_driver
+11:25:14 BCM4360 test.128: PROBE ENTRY
+11:25:15 BCM4360 test.53:  SBR via bridge (probe-start SBR complete)
+11:25:15 BCM4360 test.158: before brcmf_chip_attach
+11:25:16 BCM4360 test.125: buscore_reset entry / reset_device bypassed
+11:25:16 BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)    <-- ARM halted here
+11:25:16 BCM4360 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0
+11:25:16 BCM4360 test.119: brcmf_chip_attach returned successfully
+11:25:16 BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+... (test.158 ASPM disable, test.159 reginfo/alloc, test.160 alloc+fw_request, test.161 get_firmwares)
+11:25:22 BCM4360 test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0   <-- LAST USEFUL MARKER
+11:25:22 BCM4360 test.167: pci_register_driver returned ret=0
+<no further log — system frozen>
+```
+
+**Missing markers (expected per pcie.c:3727-3802):**
+`test.128: before brcmf_pcie_attach`, `test.128: after brcmf_pcie_attach`,
+`test.134: post-attach before fw-ptr-extract`, `test.134: after kfree(fwreq)`,
+`test.130: before brcmf_chip_get_raminfo`, `test.130: after brcmf_chip_get_raminfo`,
+`test.130: after brcmf_pcie_adjust_ramsize`, `test.163: before brcmf_pcie_download_fw_nvram`,
+and ALL test.167-specific fw-write markers (pre-halt, post-halt, write breadcrumbs,
+post-write). → Crash hit inside the setup callback during the `msleep(300)` that
+follows test.162's log line, or inside `brcmf_pcie_attach` before the first
+post-attach marker flushed.
+
+**No new pstore dump.** The existing `/sys/fs/pstore/dmesg-efi_pstore-*` entries
+are from Mon 2026-04-20 07:46 (an earlier crash, `[ 588s]` after that boot).
+No panic message was written for the 11:25 crash → pure CPU hang, not an oops.
+
+**Interpretation (hypothesis, high confidence):**
+test.166 established that ARM CR4 is running (RESET_CTL=0x0) at fw-write time
+despite having been halted at buscore_reset (test.145). That means ARM un-halts
+somewhere between test.145 and fw-write. If ARM runs *garbage* firmware, it
+can execute MMIO reads/writes or DMA that crash the host at a non-deterministic
+point. test.166 crashed during fw-write; **test.167 crashed earlier, during the
+msleep(300)+mdelay(300) chain at the start of `brcmf_pcie_setup`**, which fits
+the same root cause. The code change in test.167 was entirely inside
+`brcmf_pcie_download_fw_nvram`, which was never reached, so the new code
+cannot be the crash trigger.
+
+### POST-TEST PCIe STATE (2026-04-20, reboot + SMC reset — NOW)
+
+- `sudo lspci -vvv -s 03:00.0`:
+  - `Mem+ BusMaster+`, `MAbort-`, `<MAbort-`
+  - `LnkSta 2.5GT/s x1`, `LnkCtl ASPM L0s/L1 Enabled; CommClk+`
+  - `DevSta CorrErr+ UnsupReq+ AuxPwr+` (CorrErr+/UnsupReq+ sticky from prior crash, harmless)
+- `lsmod | grep brcm` → empty. Device safe to insmod.
+
+### PLAN FOR TEST.168 — MAP WHERE ARM CR4 UN-HALTS IN SETUP
+
+**Goal:** pinpoint the exact setup-callback stage at which ARM CR4 RESET_CTL
+transitions 0x1 → 0x0 (halted → running). Read-only diagnostic — no behavioral
+change, so crash blast-radius is identical to test.167 (still a host hang
+candidate if ARM is already running garbage at callback entry).
+
+**Code changes (all inside `brcmf_pcie_setup`, pcie.c ~3712-3802):**
+Add an inline helper `brcmf_pcie_probe_armcr4(devinfo, "<tag>")` that:
+  1. Saves the current BAR0 window register.
+  2. Points the BAR0 window at `ci->pub.ccrev < X ? 0x18002000 : core->base`
+     (the ARM_CR4 core we already located — pcie.c:3404 area).
+  3. Reads IOCTL and RESET_CTL via a BAR0-window read (same technique as the
+     test.166 pre-write read that worked).
+  4. Restores the saved BAR0 window.
+  5. `pr_emerg("BCM4360 test.168: <tag> ARM CR4 IOCTL=0x%x RESET_CTL=0x%x (IN_RESET=%s)\n", ...)`.
+
+Call sites inside `brcmf_pcie_setup`:
+  (a) Right after `test.162: CALLBACK INVOKED` log → tag `setup-entry`
+  (b) Right before `test.128: before brcmf_pcie_attach` → tag `pre-attach`
+  (c) Right after `test.128: after brcmf_pcie_attach` → tag `post-attach`
+  (d) Right before `test.130: before brcmf_chip_get_raminfo` → tag `pre-raminfo`
+  (e) Right after `test.130: after brcmf_chip_get_raminfo` → tag `post-raminfo`
+  (f) Right before `test.163: before brcmf_pcie_download_fw_nvram` → tag `pre-download`
+Plus keep the existing pre-write probe inside `download_fw_nvram` (tag
+`pre-write`) — that's the 7th measurement point.
+
+**Hypothesis matrix for test.168:**
+| Stage   | Expected if  | Expected if un-halted    | Meaning                            |
+|---------|--------------|--------------------------|------------------------------------|
+| setup-entry | 0x1       | 0x0                      | un-halt happened DURING the ~6s between test.145 and the fw-request async callback (most likely candidate) |
+| pre-attach  | 0x1       | 0x0 (if setup-entry=0x1) | un-halt during brcmf_pcie_attach internals |
+| post-attach | 0x1       | 0x0                      | un-halt inside brcmf_pcie_attach |
+| pre-raminfo | 0x1       | 0x0                      | un-halt between attach and raminfo (mdelay window) |
+| post-raminfo| 0x1       | 0x0                      | un-halt inside brcmf_chip_get_raminfo |
+| pre-download| 0x1       | 0x0                      | un-halt in ramsize adjust |
+| pre-write (existing) | 0x0 (per test.166) |            | confirmed previously |
+
+**Risk review for the probe itself:**
+- Reading RESET_CTL via BAR0 window is proven (test.166 did it once and lived
+  long enough to start the fw write). Six additional reads are an extra ~150
+  config-space writes + 6 BAR0 MMIO reads — negligible.
+- `brcmf_chip_set_passive` has a side effect (actually halts ARM). A plain
+  RESET_CTL read does NOT. So the probe is truly diagnostic.
+- We will NOT re-halt ARM in test.168 — that is test.169's job, once we know
+  WHERE to put the halt.
+
+**Kept from test.167 (unchanged):**
+- chunked 16KB fw-write loop (will be reached only if ARM stays halted long
+  enough; if pre-write probe shows RESET_CTL=0x0 we'll expect a mid-write
+  crash again).
+- NVRAM write + TCM verify dump + early `-ENODEV` return.
+- `bcm4360_skip_arm=1` module-param default.
+
+### PRE-TEST.168 CHECKLIST
+
+- [x] Save test.167 journal to phase5/logs/test.167.journalctl.txt
+- [ ] Commit + push test.167 logs and this post-crash analysis
+- [ ] Implement test.168 probe helper + 6 call sites in pcie.c
+- [ ] Bump module_init + register banners to test.168
+- [ ] Bump `test-staged-reset.sh` log prefix test.167 → test.168
+- [ ] Build OK (kbuild), verify .ko contains all 6 test.168 call-site tags via strings
+- [ ] Re-verify PCIe 03:00.0 state (MAbort-, CommClk+, brcmfmac unloaded) right before insmod
+- [ ] Commit + push pre-test state + `sync`
+- [ ] Run `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+
+---
+
+## Previous state (2026-04-20, POST test.166 CRASH — machine rebooted + SMC reset)
 
 ### TEST.166 RESULT — DECISIVE: ARM CR4 IS NOT HALTED AT FW-WRITE TIME
 
