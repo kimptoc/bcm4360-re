@@ -1,6 +1,49 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.164 CRASH — machine rebooted, no SMC reset)
+## Current state (2026-04-20, PRE test.166 — REBUILT, PCIe clean, ready for insmod)
+
+### CODE STATE
+
+- Branch main at `5fcdd93` (test.166 pre/post ARM CR4 RESET_CTL reads around 442KB BAR2 fw write).
+- Module built: `phase5/work/drivers/.../brcmfmac.ko` contains test.166 markers
+  (module_init entry, pre-write RESET_CTL, post-write RESET_CTL, chunked fw write banners).
+- test.165 log files restored from HEAD — the stream/stage0 files had been overwritten
+  by the post-crash reboot of the recovery machine; authoritative test.165 record is
+  `phase5/logs/test.165.journalctl.txt`.
+
+### PRE-TEST PCIe STATE (2026-04-20, post-crash machine boot, no SMC reset)
+
+- 03:00.0: `MAbort-`, `LnkSta 2.5GT/s x1`, `CommClk+` — clean per CLAUDE.md criteria.
+- `Control: Mem+ BusMaster+` — residual from prior driver; insmod/probe will reconfigure.
+- `DevSta: CorrErr+` — sticky correctable-error leftover from test.165 crash. Not a blocker.
+- `LnkCtl: ASPM L0s L1 Enabled` — noteworthy; may relate to the async-watchdog theory
+  (test.133 disabled ASPM on the endpoint during probe, but fresh boot has it back on).
+- brcmfmac NOT loaded.
+
+### HYPOTHESIS FOR TEST.166
+
+- If `test.166: pre-write RESET_CTL=0x0001` prints AND fw-write loop completes AND
+  `post-write RESET_CTL=0x0001` prints → ARM stayed halted; crash theory #1 (auto-resume)
+  is DISPROVED — suspect ASPM / async-watchdog next.
+- If pre-write RESET_CTL=0x0000 → ARM was un-halted between buscore_reset and the fw
+  write; must re-halt here and retry.
+- If crash mid-write (pre-write fires, post-write never) → either ARM resumed silently
+  (IOCTL bit clear would hint) or an async link-teardown. Watch stage0.stream for the
+  last surviving breadcrumb offset.
+- If crash offset similar to test.164 (~426 KB with 16 KB breadcrumbs) → watchdog
+  hypothesis strengthened since test.166 uses the same cadence as test.164.
+
+### PRE-TEST CHECKLIST
+
+- [x] test.166 implemented in pcie.c (commit 5fcdd93)
+- [x] Module built, test.166 markers present in .ko strings
+- [x] PCIe 03:00.0 state checked (MAbort-, CommClk+)
+- [x] Plan written here, will commit + push + sync before insmod
+- [ ] Run `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+
+---
+
+## Previous state (2026-04-20, POST test.164 CRASH — machine rebooted, no SMC reset)
 
 ### RESULT: test.164 CRASHED in the FINAL 16KB chunk of the 442KB fw write
 
