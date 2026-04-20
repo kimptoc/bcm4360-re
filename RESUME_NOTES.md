@@ -6559,3 +6559,33 @@ Interpretation:
   or the BAR0 ARM probe side effects rather than generic link idle.
 - If root-port LnkCtl already has ASPM bits clear, test.172 still records that
   fact and avoids assuming endpoint-only ASPM was sufficient.
+
+---
+
+## PRE-TEST.172 STATE — 2026-04-20 16:50
+
+Implemented the recommended test.172 code checkpoint:
+- `pcie.c`: relabeled current breadcrumbs to test.172; after endpoint ASPM
+  disable, finds `pci_upstream_bridge(pdev)`, logs root-port `LnkCtl`, calls
+  `pci_disable_link_state(bridge, PCIE_LINK_STATE_L0S | PCIE_LINK_STATE_L1 |
+  PCIE_LINK_STATE_CLKPM)`, then logs root-port `LnkCtl` again.
+- `test-staged-reset.sh`: writes `test.172.stageN` logs, describes the
+  root-port ASPM/CLKPM hypothesis, and falls back from the stale pinned
+  Nix-store `lspci` path to `/run/current-system/sw/bin/lspci` or `command -v
+  lspci`.
+
+Build status:
+- `make -C /home/kimptoc/bcm4360-re/phase5/work` still fails because that
+  directory has no Makefile. Use the kernel kbuild path instead.
+- Build command used:
+  `make -C /nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules`
+- Build result: OK. Existing warning only:
+  `brcmf_pcie_write_ram32` defined but not used. BTF skipped because `vmlinux`
+  is unavailable.
+- `strings brcmfmac.ko | rg "test\\.172|root port|post-idle-loop"` confirms
+  the new markers are in the module.
+
+Before running:
+1. Commit and push this test.172 code/build-state checkpoint.
+2. Run only stage 0:
+   `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`

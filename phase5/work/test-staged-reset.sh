@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.171.stage${STAGE}"
+LOG="$LOG_DIR/test.172.stage${STAGE}"
 
-echo "=== test.171: split post-fw-write mdelay(100) into 10x[mdelay(10)+ARM probe] to localize async crash — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.172: disable upstream root-port ASPM/CLKPM before test.171 post-fw idle probes — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -28,7 +28,7 @@ case "$STAGE" in
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.171: test.170 completed full 442KB fw write then machine hard-froze during the single mdelay(100) before the post-mdelay100 marker. This run replaces that delay with 10 x mdelay(10) each followed by a read-only ARM CR4 probe (hi-window). Expected: either we learn which 10ms sub-window triggers the async tear-down, or MMIO activity keeps the link alive — both outcomes narrow the hypothesis to ASPM/L1-idle.)" | tee -a "$LOG"
+echo "(test.172: test.171 completed the full 442KB fw write, logged idle-0 and idle-1 with ARM halted, then hard-froze before idle-2. This run disables ASPM/CLKPM on the upstream root port before download while preserving the same 10 x mdelay(10)+ARM-probe idle loop. Expected: survival through post-idle-loop implicates root-port link power management; another freeze after idle-1 shifts focus to chip PMU/watchdog or BAR0 probe side effects.)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -84,7 +84,14 @@ fi
 # Capture pre-test PCIe state
 echo "=== Pre-test PCIe state ===" | tee -a "$LOG"
 LSPCI="/nix/store/hnif0bxpp0p4w3h7gdfmaglmgk0dp6x8-pciutils-3.14.0/bin/lspci"
+if [ ! -x "$LSPCI" ]; then
+    LSPCI="/run/current-system/sw/bin/lspci"
+fi
+if [ ! -x "$LSPCI" ]; then
+    LSPCI="$(command -v lspci 2>/dev/null || true)"
+fi
 if [ -x "$LSPCI" ]; then
+    echo "(using lspci: $LSPCI)" | tee -a "$LOG"
     "$LSPCI" -s "$PCI_DEV" -nn -vv 2>&1 | head -30 | tee -a "$LOG"
 else
     echo "(lspci not available)" | tee -a "$LOG"
@@ -94,6 +101,7 @@ echo "" | tee -a "$LOG"
 # Also show root port state (00:1c.2) before the test
 echo "=== Pre-test root port (00:1c.2) state ===" | tee -a "$LOG"
 if [ -x "$LSPCI" ]; then
+    echo "(using lspci: $LSPCI)" | tee -a "$LOG"
     "$LSPCI" -s "00:1c.2" -nn -vv 2>&1 | head -20 | tee -a "$LOG"
 fi
 echo "" | tee -a "$LOG"
@@ -105,14 +113,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=90  # test.171: +10 probe breadcrumbs in the post-fw idle loop — still fits in 90s budget
+    WAIT_SECS=90  # test.172: root-port link-state disable plus same post-fw idle probes
 else
     SKIP_ARM=0
     WAIT_SECS=60
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.171 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.172 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.
