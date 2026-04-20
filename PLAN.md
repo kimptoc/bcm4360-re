@@ -19,18 +19,34 @@ compare against the existing `brcmfmac` codebase.
 > documentation. Do not copy disassembly structure directly into driver code.
 > See README.md and CLAUDE.md for full guidelines (ref: issue #12).
 
-## Current Status (2026-04-16)
+## Current Status (2026-04-20)
 
-**Active phase:** Phase 5 — firmware boot forensics on a live `brcmfmac` harness.
+**Active phase:** Phase 5.2 — probe-path stability regression recovery after
+hard-crash sessions (tests 149–157).
 
-**Blocker:** Firmware counter freezes at `0x43b1` between T+200ms and T+400ms
-after ARM release. test.98 (pointer-chain probe) found
-`TCM[0x58f08] == 0` — the D11 core object is never linked into the global
-that downstream code expects, so the hang is inside si_attach's D11
-initialization, upstream of the previously suspected PHY wait loop at
-`fn 0x1624c`. Next: probe D11 core BCMA state (reset/enable/clock/PMU
-resources) per GitHub issue #11 recommendation #3. See
-`phase5_progress.md` for the Path B probe order.
+**Completed in this recovery (2026-04-20):**
+- **test.157 CRASH PINPOINTED:** per-marker `msleep(300)` discipline identified
+  the MCE trigger — duplicate probe-level ARM halt caused `RESET_CTL=1` to wedge
+  the ARM core's BAR0 window, and the next MMIO write triggered the MCE
+  (iommu=strict likely escalates bad MMIO to a hard fault).
+- **test.158 SUCCESS:** removed the duplicate ARM halt; BusMaster clear and
+  ASPM disable (both config-space ops) are safe.
+- **test.159 SUCCESS:** reginfo selection + pcie_bus_dev/settings/bus/msgbuf
+  kzalloc + struct wiring + pci_pme_capable + dev_set_drvdata all safe.
+- **test.160 SUCCESS:** brcmf_alloc (wiphy_new + cfg80211 ops) + OTP bypass +
+  brcmf_pcie_prepare_fw_request all safe. Firmware name resolved:
+  `brcm/brcmfmac4360-pcie` for chip BCM4360/3.
+
+**Next boundary:** `brcmf_fw_get_firmwares()` → async callback
+`brcmf_pcie_setup()` — where firmware download to TCM, NVRAM placement, ring
+buffer setup, and ARM release happen.  This is the historical crash-prone path
+that gated the pre-regression Phase 5.2 work (TCM[0x58f08] D11 probe).
+
+**Re-entering the old 5.2 investigation:** once the probe-path restore is
+complete (i.e. firmware download and ARM release can run without host crash),
+the TCM[0x58f08] D11-object-not-linked finding from test.98 still applies —
+the path-B D11 core bring-up probe plan remains valid, just currently gated
+behind getting firmware boot to run again.
 
 **What is proven working:**
 - Chip recognition, BAR0/BAR2 mapping, firmware download, NVRAM placement.

@@ -1,0 +1,182 @@
+=== dmesg stream start: Mon 20 Apr 09:45:40 BST 2026 ===
+[  766.431267] brcmfmac: BCM4360 test.159: module_init entry — reginfo + allocs + wiring slice
+[  766.431363] brcmfmac: BCM4360 test.156: before brcmf_core_init()
+[  766.431400] brcmfmac: BCM4360 test.155: brcmf_core_init() entry
+[  766.431437] brcmfmac: BCM4360 test.155: before brcmf_sdio_register()
+[  766.431474] brcmfmac: BCM4360 test.155: after brcmf_sdio_register() err=0
+[  766.484538] brcmfmac: BCM4360 test.155: post-SDIO sync (before PCI)
+[  766.486230] brcmfmac: BCM4360 test.155: before brcmf_pcie_register()
+[  766.487886] brcmfmac: BCM4360 test.159: brcmf_pcie_register() entry
+[  766.797712] brcmfmac: BCM4360 test.159: before pci_register_driver
+[  767.101734] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=0000000099522f10)
+[  767.405615] brcmfmac: BCM4360 test.158: probe entry flush done — proceeding
+[  767.709683] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+[  767.709731] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+[  767.709835] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+[  768.221716] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+[  768.221768] brcmfmac: BCM4360 test.158: before brcmf_chip_attach
+[  768.525853] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcab302400000
+[  768.525878] brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+[  768.576600] brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+[  768.577019] brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+[  768.577058] brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+[  768.577105] brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+[  768.577139] brcmfmac 0000:03:00.0: BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)
+[  768.579243] brcmfmac 0000:03:00.0: BCM4360 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0
+[  768.581570] brcmfmac: brcmf_chip_recognition: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+[  768.583508] brcmfmac: brcmf_chip_recognition: BCM4360 test.125: after reset, before get_raminfo
+[  768.585331] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[  768.587392] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[  768.589398] brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+[  768.893708] brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+[  768.893846] brcmfmac: BCM4360 test.158: about to pci_clear_master (config-space write)
+[  769.197592] brcmfmac 0000:03:00.0: BCM4360 test.158: BusMaster cleared after chip_attach
+[  769.501695] brcmfmac: BCM4360 test.158: about to read LnkCtl before ASPM disable
+[  769.805647] brcmfmac: BCM4360 test.158: LnkCtl read before=0x0140 — disabling ASPM
+[  770.109639] brcmfmac: BCM4360 test.158: pci_disable_link_state returned — reading LnkCtl
+[  770.413707] brcmfmac 0000:03:00.0: BCM4360 test.158: ASPM disabled; LnkCtl before=0x0140 after=0x0140 ASPM-bits-after=0x0
+[  770.717605] brcmfmac 0000:03:00.0: BCM4360 test.159: before PCIE2 core/reginfo setup
+[  771.021529] brcmfmac 0000:03:00.0: BCM4360 test.159: reginfo selected (pcie2 rev=1)
+[  771.325519] brcmfmac 0000:03:00.0: BCM4360 test.159: pcie_bus_dev allocated
+[  771.629559] brcmfmac 0000:03:00.0: BCM4360 test.159: settings allocated (BCM4360 dummy path)
+[  771.933578] brcmfmac 0000:03:00.0: BCM4360 test.159: bus allocated
+[  772.237516] brcmfmac 0000:03:00.0: BCM4360 test.159: msgbuf allocated
+[  772.541517] brcmfmac 0000:03:00.0: BCM4360 test.159: struct wiring done — before pci_pme_capable
+[  772.845560] brcmfmac 0000:03:00.0: BCM4360 test.159: after pci_pme_capable wowl=1
+[  773.149471] brcmfmac 0000:03:00.0: BCM4360 test.159: drvdata set — before early return
+[  773.453487] brcmfmac: BCM4360 test.159: early return after allocs/wiring — before brcmf_alloc
+[  773.453543] brcmfmac: brcmf_pcie_probe: failed 14e4:43a0
+[  773.453684] brcmfmac: BCM4360 test.159: pci_register_driver returned ret=0
+[  773.453718] brcmfmac: BCM4360 test.155: after brcmf_pcie_register() err=0
+[  773.503756] brcmfmac: BCM4360 test.155: post-PCI sync (skipping USB)
+[  773.505762] brcmfmac: BCM4360 test.156: after brcmf_core_init() err=0
+[  824.335026] ------------[ cut here ]------------
+[  824.335033] /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c:4142 module brcmfmac func:brcmf_pcie_probe has 64 allocated at module unload
+[  824.335053] WARNING: CPU: 2 PID: 23185 at lib/alloc_tag.c:171 alloc_tag_module_unload+0xc8/0x110
+[  824.335064] Modules linked in: brcmfmac(O-) brcmutil ccm af_packet btusb btrtl btintel btbcm btmtk bluetooth ecdh_generic ecc mt76x2u mt76x2_common mt76x02_usb mt76_usb mt76x02_lib mt76 mac80211 cfg80211 joydev rfkill uas libarc4 mousedev input_leds bcm5974 apple_mfi_fastcharge snd_hda_codec_hdmi ofpart cmdlinepart intel_rapl_msr spi_nor intel_rapl_common mtd x86_pkg_temp_thermal intel_powerclamp coretemp crct10dif_pclmul crc32_pclmul polyval_clmulni polyval_generic ghash_clmulni_intel iTCO_wdt sha512_ssse3 sha256_ssse3 intel_pmc_bxt spi_intel_platform sha1_ssse3 watchdog spi_intel mei_hdcp mei_pxp aesni_intel evdev mac_hid i915 gf128mul applesmc crypto_simd cryptd rapl intel_cstate intel_uncore nls_iso8859_1 snd_hda_codec_cirrus nls_cp437 snd_hda_codec_generic vfat fat snd_hda_intel i2c_i801 i2c_smbus i2c_mux efi_pstore lpc_ich snd_intel_dspcfg snd_intel_sdw_acpi sbs snd_hda_codec drm_buddy sbshc snd_hda_core acpi_als thunderbolt ttm rtc_cmos industrialio_triggered_buffer kfifo_buf industrialio drm_display_helper
+[  824.335184]  snd_hwdep cec mei_me snd_pcm tiny_power_button intel_gtt ac mei i2c_algo_bit snd_timer button video snd wmi soundcore xt_conntrack nf_conntrack nf_defrag_ipv6 nf_defrag_ipv4 ip6t_rpfilter ipt_rpfilter xt_pkttype xt_LOG nf_log_syslog xt_tcpudp nft_compat x_tables nf_tables libcrc32c sch_fq_codel msr loop kvm_intel kvm irqbypass atkbd libps2 serio vivaldi_fmap nfnetlink efivarfs dmi_sysfs autofs4 ext4 crc32c_generic crc16 mbcache jbd2 usb_storage hid_apple led_class hid_generic usbhid hid sd_mod ahci libahci libata crc32c_intel xhci_pci scsi_mod xhci_hcd scsi_common dm_mod dax [last unloaded: brcmfmac(O)]
+[  824.335279] CPU: 2 UID: 0 PID: 23185 Comm: rmmod Tainted: G           O       6.12.80 #1-NixOS
+[  824.335284] Tainted: [O]=OOT_MODULE
+[  824.335286] Hardware name: Apple Inc. MacBookPro11,1/Mac-189A3D4F975D5FFC, BIOS 478.0.0.0.0 01/13/2023
+[  824.335289] RIP: 0010:alloc_tag_module_unload+0xc8/0x110
+[  824.335295] Code: 39 f0 72 d1 4d 85 f6 74 a4 90 49 8b 4d 08 41 8b 55 04 4d 89 f1 48 c7 c7 e0 9f 84 a8 49 8b 75 18 4d 8b 45 10 e8 e9 0f 9b ff 90 <0f> 0b 90 90 48 89 ef 45 31 e4 e8 49 f7 ff ff 49 89 c5 48 85 c0 75
+[  824.335298] RSP: 0018:ffffcab301f7bdf0 EFLAGS: 00010282
+[  824.335302] RAX: 0000000000000000 RBX: ffff89f582b3dda0 RCX: 0000000000000027
+[  824.335304] RDX: ffff89f6e7323ac8 RSI: 0000000000000001 RDI: ffff89f6e7323ac0
+[  824.335306] RBP: ffffcab301f7bdf0 R08: 0000000000000000 R09: ffffcab301f7bc80
+[  824.335307] R10: ffffffffa910d1e8 R11: 0000000000000003 R12: 0000000000000001
+[  824.335308] R13: ffffffffc1ae4e48 R14: 0000000000000040 R15: ffff89f582b3dda0
+[  824.335310] FS:  00007f8e65a94740(0000) GS:ffff89f6e7300000(0000) knlGS:0000000000000000
+[  824.335312] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  824.335313] CR2: 000055ac755ee7e8 CR3: 0000000110290003 CR4: 00000000001726f0
+[  824.335315] Call Trace:
+[  824.335318]  <TASK>
+[  824.335324]  codetag_unload_module+0x108/0x140
+[  824.335329]  free_module+0x17/0x140
+[  824.335333]  __do_sys_delete_module+0x26b/0x320
+[  824.335337]  do_syscall_64+0xb7/0x200
+[  824.335342]  entry_SYSCALL_64_after_hwframe+0x77/0x7f
+[  824.335348] RIP: 0033:0x7f8e6592411b
+[  824.335366] Code: 73 01 c3 48 8b 0d 0d 4d 0d 00 f7 d8 64 89 01 48 83 c8 ff c3 66 2e 0f 1f 84 00 00 00 00 00 90 f3 0f 1e fa b8 b0 00 00 00 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 8b 0d dd 4c 0d 00 f7 d8 64 89 01 48
+[  824.335369] RSP: 002b:00007ffd41efecd8 EFLAGS: 00000206 ORIG_RAX: 00000000000000b0
+[  824.335373] RAX: ffffffffffffffda RBX: 000055ac755e2710 RCX: 00007f8e6592411b
+[  824.335375] RDX: 0000000000000000 RSI: 0000000000000800 RDI: 000055ac755e2778
+[  824.335378] RBP: 00007ffd41efed00 R08: 0000000000000000 R09: 0000000000000000
+[  824.335380] R10: 0000000000000000 R11: 0000000000000206 R12: 0000000000000000
+[  824.335382] R13: 00007ffd41efef50 R14: 0000000000000000 R15: 00007ffd41efef58
+[  824.335387]  </TASK>
+[  824.335389] ---[ end trace 0000000000000000 ]---
+[  824.335392] ------------[ cut here ]------------
+[  824.335393] /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c:4133 module brcmfmac func:brcmf_pcie_probe has 96 allocated at module unload
+[  824.335404] WARNING: CPU: 2 PID: 23185 at lib/alloc_tag.c:171 alloc_tag_module_unload+0xc8/0x110
+[  824.335411] Modules linked in: brcmfmac(O-) brcmutil ccm af_packet btusb btrtl btintel btbcm btmtk bluetooth ecdh_generic ecc mt76x2u mt76x2_common mt76x02_usb mt76_usb mt76x02_lib mt76 mac80211 cfg80211 joydev rfkill uas libarc4 mousedev input_leds bcm5974 apple_mfi_fastcharge snd_hda_codec_hdmi ofpart cmdlinepart intel_rapl_msr spi_nor intel_rapl_common mtd x86_pkg_temp_thermal intel_powerclamp coretemp crct10dif_pclmul crc32_pclmul polyval_clmulni polyval_generic ghash_clmulni_intel iTCO_wdt sha512_ssse3 sha256_ssse3 intel_pmc_bxt spi_intel_platform sha1_ssse3 watchdog spi_intel mei_hdcp mei_pxp aesni_intel evdev mac_hid i915 gf128mul applesmc crypto_simd cryptd rapl intel_cstate intel_uncore nls_iso8859_1 snd_hda_codec_cirrus nls_cp437 snd_hda_codec_generic vfat fat snd_hda_intel i2c_i801 i2c_smbus i2c_mux efi_pstore lpc_ich snd_intel_dspcfg snd_intel_sdw_acpi sbs snd_hda_codec drm_buddy sbshc snd_hda_core acpi_als thunderbolt ttm rtc_cmos industrialio_triggered_buffer kfifo_buf industrialio drm_display_helper
+[  824.335463]  snd_hwdep cec mei_me snd_pcm tiny_power_button intel_gtt ac mei i2c_algo_bit snd_timer button video snd wmi soundcore xt_conntrack nf_conntrack nf_defrag_ipv6 nf_defrag_ipv4 ip6t_rpfilter ipt_rpfilter xt_pkttype xt_LOG nf_log_syslog xt_tcpudp nft_compat x_tables nf_tables libcrc32c sch_fq_codel msr loop kvm_intel kvm irqbypass atkbd libps2 serio vivaldi_fmap nfnetlink efivarfs dmi_sysfs autofs4 ext4 crc32c_generic crc16 mbcache jbd2 usb_storage hid_apple led_class hid_generic usbhid hid sd_mod ahci libahci libata crc32c_intel xhci_pci scsi_mod xhci_hcd scsi_common dm_mod dax [last unloaded: brcmfmac(O)]
+[  824.335500] CPU: 2 UID: 0 PID: 23185 Comm: rmmod Tainted: G        W  O       6.12.80 #1-NixOS
+[  824.335503] Tainted: [W]=WARN, [O]=OOT_MODULE
+[  824.335504] Hardware name: Apple Inc. MacBookPro11,1/Mac-189A3D4F975D5FFC, BIOS 478.0.0.0.0 01/13/2023
+[  824.335505] RIP: 0010:alloc_tag_module_unload+0xc8/0x110
+[  824.335508] Code: 39 f0 72 d1 4d 85 f6 74 a4 90 49 8b 4d 08 41 8b 55 04 4d 89 f1 48 c7 c7 e0 9f 84 a8 49 8b 75 18 4d 8b 45 10 e8 e9 0f 9b ff 90 <0f> 0b 90 90 48 89 ef 45 31 e4 e8 49 f7 ff ff 49 89 c5 48 85 c0 75
+[  824.335510] RSP: 0018:ffffcab301f7bdf0 EFLAGS: 00010282
+[  824.335512] RAX: 0000000000000000 RBX: ffff89f582b3dda0 RCX: 0000000000000027
+[  824.335513] RDX: ffff89f6e7323ac8 RSI: 0000000000000001 RDI: ffff89f6e7323ac0
+[  824.335515] RBP: ffffcab301f7bdf0 R08: 0000000000000000 R09: ffffcab301f7bc80
+[  824.335516] R10: ffffffffa910d1e8 R11: 0000000000000003 R12: 0000000000000000
+[  824.335517] R13: ffffffffc1ae4e70 R14: 0000000000000060 R15: ffff89f582b3dda0
+[  824.335518] FS:  00007f8e65a94740(0000) GS:ffff89f6e7300000(0000) knlGS:0000000000000000
+[  824.335520] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  824.335521] CR2: 000055ac755ee7e8 CR3: 0000000110290003 CR4: 00000000001726f0
+[  824.335523] Call Trace:
+[  824.335524]  <TASK>
+[  824.335526]  codetag_unload_module+0x108/0x140
+[  824.335530]  free_module+0x17/0x140
+[  824.335533]  __do_sys_delete_module+0x26b/0x320
+[  824.335536]  do_syscall_64+0xb7/0x200
+[  824.335540]  entry_SYSCALL_64_after_hwframe+0x77/0x7f
+[  824.335542] RIP: 0033:0x7f8e6592411b
+[  824.335547] Code: 73 01 c3 48 8b 0d 0d 4d 0d 00 f7 d8 64 89 01 48 83 c8 ff c3 66 2e 0f 1f 84 00 00 00 00 00 90 f3 0f 1e fa b8 b0 00 00 00 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 8b 0d dd 4c 0d 00 f7 d8 64 89 01 48
+[  824.335549] RSP: 002b:00007ffd41efecd8 EFLAGS: 00000206 ORIG_RAX: 00000000000000b0
+[  824.335551] RAX: ffffffffffffffda RBX: 000055ac755e2710 RCX: 00007f8e6592411b
+[  824.335552] RDX: 0000000000000000 RSI: 0000000000000800 RDI: 000055ac755e2778
+[  824.335554] RBP: 00007ffd41efed00 R08: 0000000000000000 R09: 0000000000000000
+[  824.335555] R10: 0000000000000000 R11: 0000000000000206 R12: 0000000000000000
+[  824.335556] R13: 00007ffd41efef50 R14: 0000000000000000 R15: 00007ffd41efef58
+[  824.335558]  </TASK>
+[  824.335559] ---[ end trace 0000000000000000 ]---
+[  824.335563] brcmfmac: memory allocation(s) from the module still alive, cannot unload cleanly
+[  991.742179] brcmfmac: BCM4360 test.160: module_init entry — brcmf_alloc + OTP bypass + prepare_fw_request slice
+[  991.742281] brcmfmac: BCM4360 test.156: before brcmf_core_init()
+[  991.742336] brcmfmac: BCM4360 test.155: brcmf_core_init() entry
+[  991.742374] brcmfmac: BCM4360 test.155: before brcmf_sdio_register()
+[  991.742426] brcmfmac: BCM4360 test.155: after brcmf_sdio_register() err=0
+[  991.795600] brcmfmac: BCM4360 test.155: post-SDIO sync (before PCI)
+[  991.795630] brcmfmac: BCM4360 test.155: before brcmf_pcie_register()
+[  991.795656] brcmfmac: BCM4360 test.160: brcmf_pcie_register() entry
+[  992.103373] brcmfmac: BCM4360 test.160: before pci_register_driver
+[  992.407392] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=0000000030fa0cef)
+[  992.711290] brcmfmac: BCM4360 test.158: probe entry flush done — proceeding
+[  993.015283] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+[  993.015369] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+[  993.015520] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+[  993.535498] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+[  993.535589] brcmfmac: BCM4360 test.158: before brcmf_chip_attach
+[  993.839458] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcab302000000
+[  993.839469] brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+[  993.890395] brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+[  993.891089] brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+[  993.891224] brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+[  993.891414] brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+[  993.897060] brcmfmac 0000:03:00.0: BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)
+[  993.899735] brcmfmac 0000:03:00.0: BCM4360 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0
+[  993.905357] brcmfmac: brcmf_chip_recognition: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+[  993.908021] brcmfmac: brcmf_chip_recognition: BCM4360 test.125: after reset, before get_raminfo
+[  993.909887] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[  993.914008] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[  993.917246] brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+[  994.223234] brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+[  994.223294] brcmfmac: BCM4360 test.158: about to pci_clear_master (config-space write)
+[  994.527381] brcmfmac 0000:03:00.0: BCM4360 test.158: BusMaster cleared after chip_attach
+[  994.831258] brcmfmac: BCM4360 test.158: about to read LnkCtl before ASPM disable
+[  995.135247] brcmfmac: BCM4360 test.158: LnkCtl read before=0x0140 — disabling ASPM
+[  995.439287] brcmfmac: BCM4360 test.158: pci_disable_link_state returned — reading LnkCtl
+[  995.743271] brcmfmac 0000:03:00.0: BCM4360 test.158: ASPM disabled; LnkCtl before=0x0140 after=0x0140 ASPM-bits-after=0x0
+[  996.047211] brcmfmac 0000:03:00.0: BCM4360 test.159: before PCIE2 core/reginfo setup
+[  996.351332] brcmfmac 0000:03:00.0: BCM4360 test.159: reginfo selected (pcie2 rev=1)
+[  996.655259] brcmfmac 0000:03:00.0: BCM4360 test.159: pcie_bus_dev allocated
+[  996.959312] brcmfmac 0000:03:00.0: BCM4360 test.159: settings allocated (BCM4360 dummy path)
+[  997.263213] brcmfmac 0000:03:00.0: BCM4360 test.159: bus allocated
+[  997.567354] brcmfmac 0000:03:00.0: BCM4360 test.159: msgbuf allocated
+[  997.871295] brcmfmac 0000:03:00.0: BCM4360 test.159: struct wiring done — before pci_pme_capable
+[  998.175189] brcmfmac 0000:03:00.0: BCM4360 test.159: after pci_pme_capable wowl=1
+[  998.479236] brcmfmac 0000:03:00.0: BCM4360 test.160: drvdata set — before brcmf_alloc
+[  998.783230] brcmfmac 0000:03:00.0: BCM4360 test.160: brcmf_alloc complete — wiphy allocated
+[  999.087185] brcmfmac 0000:03:00.0: BCM4360 test.160: OTP read bypassed — OTP not needed
+[  999.392115] brcmfmac 0000:03:00.0: BCM4360 test.160: before prepare_fw_request
+[  999.695124] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[  999.695132] brcmfmac 0000:03:00.0: BCM4360 test.160: firmware request prepared
+[  999.999234] brcmfmac: BCM4360 test.160: early return before brcmf_fw_get_firmwares
+[ 1000.304213] brcmfmac: brcmf_pcie_probe: failed 14e4:43a0
+[ 1000.304463] brcmfmac: BCM4360 test.160: pci_register_driver returned ret=0
+[ 1000.304521] brcmfmac: BCM4360 test.155: after brcmf_pcie_register() err=0
+[ 1000.354580] brcmfmac: BCM4360 test.155: post-PCI sync (skipping USB)
+[ 1000.354614] brcmfmac: BCM4360 test.156: after brcmf_core_init() err=0
+=== dmesg stream end: Mon 20 Apr 09:46:45 BST 2026 ===

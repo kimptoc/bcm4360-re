@@ -1,10 +1,77 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.159 SUCCESS — test.160 READY TO RUN)
+## Current state (2026-04-20, POST test.160 SUCCESS — DECISION POINT before test.161)
 
-### CODE STATE: test.160 source prepared, REBUILT, ready for insmod
+### CODE STATE: test.160 ran cleanly. Considering scope of test.161 carefully.
 
-**test.159 ran cleanly — all 22 markers appeared; clean rmmod (details below).**
+**test.160 key log entries (dmesg):**
+```
+test.160: module_init entry — brcmf_alloc + OTP bypass + prepare_fw_request
+(probe chain through SBR, chip_attach, BusMaster/ASPM, reginfo, allocs/wiring)
+test.160: drvdata set — before brcmf_alloc
+test.160: brcmf_alloc complete — wiphy allocated
+test.160: OTP read bypassed — OTP not needed
+test.160: before prepare_fw_request
+brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+test.160: firmware request prepared
+test.160: early return before brcmf_fw_get_firmwares
+```
+
+**Key findings:**
+- brcmf_alloc succeeded — wiphy allocated, cfg80211 ops set.
+- prepare_fw_request populated the firmware name `brcm/brcmfmac4360-pcie` (chip rev 3).
+- DevSta post-test: fully clean (CorrErr- NonFatalErr- FatalErr- UnsupReq-).
+- Clean rmmod, machine stable.
+- Firmware file exists at `/lib/firmware/brcm/brcmfmac4360-pcie.bin` (442 KB).
+
+**Probe path CONFIRMED SAFE (tests 158→160):**
+- Module init → SDIO register (no-op) → PCI register
+- Probe: SBR → chip_attach (which halts ARM internally via test.145 path)
+- BusMaster clear + ASPM disable (config-space only)
+- PCIE2 core get + reginfo selection (default for rev=1)
+- Allocations (pcie_bus_dev, settings dummy, bus, msgbuf)
+- Struct wiring + pci_pme_capable (wowl=1) + dev_set_drvdata
+- brcmf_alloc (wiphy_new + cfg80211 ops)
+- OTP read bypass (BCM4360 has OTP but we skip)
+- brcmf_pcie_prepare_fw_request
+
+### ⚠️ test.161 — DANGER ZONE: firmware download path
+
+**Why pause here:**
+- `brcmf_fw_get_firmwares()` kicks off an async firmware request.
+- Its completion callback is `brcmf_pcie_setup()`, which does the REAL work:
+  firmware download to TCM via BAR2, NVRAM placement, ring buffer setup,
+  ARM release (bcm4360_skip_arm controls whether to actually release), IRQ enable.
+- This is where ALL the earlier phase-5.2 crashes originated (MCE on firmware
+  hang, wild MMIO from booted firmware, D11 PHY wait, etc.).
+- A single jump to "full firmware download + ARM release" will be too wide —
+  we'd bundle firmware-load + setup + release in one step, losing bisection value.
+
+**Proposed test.161 (narrow discriminator):**
+- Invoke `brcmf_fw_get_firmwares()` but with a replaced callback that only logs
+  the firmware size and immediately returns `-ENODEV` (skips setup).
+- Rationale: async firmware request is pure VFS + request_firmware — should be
+  safe. Prior tests (103+) already requested firmware successfully.
+- OR simpler: just re-enable the call and let it run to brcmf_pcie_setup entry,
+  add very early marker, and early-return inside brcmf_pcie_setup before any
+  BAR2 writes.
+
+**Pre-test PCIe state (2026-04-20 ~09:46):**
+- `BusMaster-`, `ASPM Disabled`, `MAbort-`, `LnkSta 2.5GT/s Width x1`.
+- DevSta fully clean (all error flags -).
+
+**Build status:** test.160 is the current built .ko. Any test.161 changes need rebuild.
+
+**Test command (if approved by user):**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+---
+
+## Previous state (2026-04-20, POST test.159 SUCCESS — test.160 ready)
+
+### CODE STATE: test.159 ran cleanly — all 22 markers appeared; clean rmmod
 
 **test.159 key log entries (dmesg):**
 ```
