@@ -1,10 +1,66 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.158 SUCCESS — test.159 READY TO RUN)
+## Current state (2026-04-20, POST test.159 SUCCESS — preparing test.160)
 
-### CODE STATE: test.159 source prepared, REBUILT, ready for insmod
+### CODE STATE: test.159 ran cleanly — all 22 markers appeared; clean rmmod
 
-**test.158 ran cleanly — all markers appeared, no crash, clean rmmod (details below).**
+**test.159 key log entries (dmesg):**
+```
+test.159: module_init entry — reginfo + allocs + wiring slice
+test.159: brcmf_pcie_register() entry → pci_register_driver returned ret=0
+[probe chain through SBR, chip_attach, BusMaster/ASPM as test.158]
+test.159: before PCIE2 core/reginfo setup
+test.159: reginfo selected (pcie2 rev=1)
+test.159: pcie_bus_dev allocated
+test.159: settings allocated (BCM4360 dummy path)
+test.159: bus allocated
+test.159: msgbuf allocated
+test.159: struct wiring done — before pci_pme_capable
+test.159: after pci_pme_capable wowl=1
+test.159: drvdata set — before early return
+test.159: early return after allocs/wiring — before brcmf_alloc
+```
+
+**Key findings:**
+- PCIE2 core rev=1 (uses brcmf_reginfo_default — not rev≥64).
+- All 4 allocations succeeded: pcie_bus_dev, settings (dummy), bus, msgbuf.
+- pci_pme_capable returned wowl=1 (D3hot wake capable).
+- DevSta post-test: CorrErr- NonFatalErr- FatalErr- UnsupReq- (FULLY CLEAN — all flags cleared).
+- Clean rmmod, machine stable.
+
+**Post-test PCIe state (2026-04-20 ~09:42):**
+- `BusMaster-`, `ASPM Disabled`, `MAbort-`, `LnkSta 2.5GT/s Width x1`.
+- DevSta fully clean (all error flags -).
+
+### test.160 plan — ADD brcmf_alloc + OTP bypass + prepare_fw_request
+
+**Rationale:**
+- Next probe steps: brcmf_alloc (wiphy_new + ops) → OTP read (bypassed) → prepare_fw_request.
+- brcmf_alloc is pure memory: cfg80211 ops alloc + wiphy_new + pointer wiring.
+- prepare_fw_request builds a firmware request struct (no hardware access).
+- Existing test.155 early return at `brcmf_fw_get_firmwares` is the natural stopping point.
+
+**test.160 scope:**
+- Remove test.159 early return.
+- Add msleep(300) + markers around: before brcmf_alloc, after brcmf_alloc, OTP bypass
+  markers, before prepare_fw_request, after prepare_fw_request.
+- KEEP test.155 early return before brcmf_fw_get_firmwares (that's the next boundary).
+- Update module_init / register markers to test.160.
+
+**Expected outcomes:**
+- Clean run through brcmf_alloc + OTP bypass + prepare_fw_request to the test.155 early return.
+- If crash: per-marker sleeps identify which step (likely kernel memory helpers).
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+---
+
+## Previous state (2026-04-20, POST test.158 SUCCESS — test.159 ready)
+
+### CODE STATE: test.158 ran cleanly — all markers appeared, no crash, clean rmmod
 
 **test.158 key log entries (from dmesg snapshot):**
 ```
