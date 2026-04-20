@@ -1,6 +1,46 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.176 — host resetintr SUCCESS)
+## Current state (2026-04-20, PRE test.177 — NVRAM BAR2 write discriminator)
+
+### PRE-TEST.177 checkpoint
+
+Implemented test.177 as the next boundary after test.176's success:
+1. Keep the full 442233-byte chunked BAR2 firmware write.
+2. Keep the proven-safe `msleep(100)` after `fw write complete`.
+3. Keep host-side `resetintr = get_unaligned_le32(fw->data)` and log it.
+4. Add only the NVRAM BAR2 write using a bounded iowrite32 loop at
+   `rambase + ramsize - nvram_len`.
+5. Release `fw`/`nvram` and return `-ENODEV`.
+6. Still skip post-write ARM probing, device-side resetintr use, NVRAM
+   marker/readback, TCM dump, and ARM release.
+
+Build status: OK via kernel kbuild. Existing warning only:
+`brcmf_pcie_write_ram32` is defined but unused. BTF generation is skipped
+because `vmlinux` is unavailable.
+
+`strings brcmfmac.ko` confirms these markers are present:
+- `BCM4360 test.177: host resetintr=0x%08x before NVRAM`
+- `BCM4360 test.177: pre-NVRAM write address=0x%x len=%u naddr=%px`
+- `BCM4360 test.177: post-NVRAM write done (%u bytes)`
+- `BCM4360 test.177: released fw/nvram after NVRAM write; returning -ENODEV`
+
+Before running: commit, push, and `sync` this PRE-test.177 checkpoint. Then run
+only stage0:
+`sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+
+Expected interpretation:
+- Survives: NVRAM BAR2 write is safe after sleeping dwell; next test should add
+  the NVRAM marker/readback boundary.
+- Freezes before `pre-NVRAM write`: the host resetintr-to-NVRAM gap or logging
+  is unexpectedly unsafe.
+- Freezes after `pre-NVRAM write` but before `post-NVRAM write done`: the NVRAM
+  BAR2 iowrite loop is the isolated unsafe operation.
+- Freezes after `post-NVRAM write done`: NVRAM write completed but post-write
+  return/unwind timing needs isolation.
+
+---
+
+## Previous state (2026-04-20, POST test.176 — host resetintr SUCCESS)
 
 ### TEST.176 RESULT — host resetintr extraction after safe sleep survives
 

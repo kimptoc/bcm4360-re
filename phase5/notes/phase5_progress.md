@@ -786,3 +786,21 @@ Interpretation:
   boundary should be the NVRAM marker/readback.
 - If it freezes, the NVRAM write is the newly isolated unsafe BAR2 operation;
   then reduce write granularity/delays or quiesce/reset before NVRAM.
+
+## Phase 5.4: PRE test.177
+
+test.177 is implemented as the NVRAM BAR2-write discriminator. It preserves the
+safe sequence from test.176: full chunked BAR2 firmware write, `msleep(100)`,
+and host-side resetintr extraction. It then writes only the NVRAM blob to BAR2
+using a bounded iowrite32 loop, releases `fw`/`nvram`, and returns `-ENODEV`.
+
+This intentionally still skips post-write ARM probing, device-side resetintr
+use, NVRAM marker/readback, TCM dump, and ARM release. If it survives, the next
+boundary should be the NVRAM marker/readback. If it freezes after
+`pre-NVRAM write` and before `post-NVRAM write done`, the NVRAM BAR2 write is
+the isolated unsafe operation.
+
+Build status: OK via kernel kbuild. The only warning is the pre-existing unused
+`brcmf_pcie_write_ram32` helper, and BTF is skipped because `vmlinux` is
+unavailable. `brcmfmac.ko` contains the `test.177` host resetintr, pre-NVRAM,
+post-NVRAM, and early-return markers.

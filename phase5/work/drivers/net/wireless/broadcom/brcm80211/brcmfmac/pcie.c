@@ -734,7 +734,7 @@ static void brcmf_pcie_probe_armcr4_state(struct brcmf_pciedev_info *devinfo,
 	}
 
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-	pr_emerg("BCM4360 test.176: %s ARM CR4 IOCTL=0x%08x RESET_CTL=0x%08x CPUHALT=%s\n",
+	pr_emerg("BCM4360 test.177: %s ARM CR4 IOCTL=0x%08x RESET_CTL=0x%08x CPUHALT=%s\n",
 		 tag, ioctl, rstctl, (ioctl & 0x20) ? "YES" : "NO");
 }
 
@@ -1910,7 +1910,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		mdelay(50);
 
 		/* test.167: re-halt ARM CR4 via the public chip API. */
-		pr_emerg("BCM4360 test.176: re-halting ARM CR4 via brcmf_chip_set_passive\n");
+		pr_emerg("BCM4360 test.177: re-halting ARM CR4 via brcmf_chip_set_passive\n");
 		mdelay(50);
 		brcmf_chip_set_passive(devinfo->ci);
 		mdelay(100);	/* settle */
@@ -1919,20 +1919,20 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		brcmf_pcie_probe_armcr4_state(devinfo, "post-halt");
 		mdelay(50);
 
-		pr_emerg("BCM4360 test.176: starting chunked fw write, total_words=%u (%zu bytes) tail=%u wbase=%px\n",
+		pr_emerg("BCM4360 test.177: starting chunked fw write, total_words=%u (%zu bytes) tail=%u wbase=%px\n",
 			 total_words, fw->size, tail, wbase);
 		mdelay(50);
 
 		for (i = 0; i < total_words; i++) {
 			iowrite32(le32_to_cpu(src32[i]), wbase + i * 4);
 			if ((i + 1) % chunk_words == 0) {
-				pr_emerg("BCM4360 test.176: wrote %u words (%u bytes)\n",
+				pr_emerg("BCM4360 test.177: wrote %u words (%u bytes)\n",
 					 i + 1, (i + 1) * 4);
 				mdelay(50);
 			}
 		}
 
-		pr_emerg("BCM4360 test.176: all %u words written, before tail (tail=%u)\n",
+		pr_emerg("BCM4360 test.177: all %u words written, before tail (tail=%u)\n",
 			 total_words, tail);
 		mdelay(50);
 
@@ -1942,26 +1942,65 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			memcpy(&tmp, (const u8 *)fw->data + (fw->size & ~3u),
 			       tail);
 			iowrite32(tmp, wbase + (fw->size & ~3u));
-			pr_emerg("BCM4360 test.176: tail %u bytes written at offset %zu\n",
+			pr_emerg("BCM4360 test.177: tail %u bytes written at offset %zu\n",
 				 tail, fw->size & ~3u);
 			mdelay(50);
 		}
 
-		pr_emerg("BCM4360 test.176: fw write complete (%zu bytes)\n",
+		pr_emerg("BCM4360 test.177: fw write complete (%zu bytes)\n",
 			 fw->size);
-		/* test.176: test.175 proved msleep(100) survives. Add only
-		 * host-memory resetintr extraction before the same early return;
-		 * still no post-write device MMIO or NVRAM write.
+		/* test.177: test.176 proved host resetintr extraction survives
+		 * after msleep(100). Add only the NVRAM BAR2 write before the
+		 * same early return; still no device-side resetintr use,
+		 * NVRAM readback, or ARM release.
 		 */
-		pr_emerg("BCM4360 test.176: before post-fw msleep(100)\n");
+		pr_emerg("BCM4360 test.177: before post-fw msleep(100)\n");
 		msleep(100);
-		pr_emerg("BCM4360 test.176: after post-fw msleep(100)\n");
+		pr_emerg("BCM4360 test.177: after post-fw msleep(100)\n");
 		resetintr = get_unaligned_le32(fw->data);
-		pr_emerg("BCM4360 test.176: host resetintr=0x%08x before release\n",
+		pr_emerg("BCM4360 test.177: host resetintr=0x%08x before NVRAM\n",
 			 resetintr);
+
+		if (nvram) {
+			void __iomem *naddr;
+			const __le32 *nsrc32 = (const __le32 *)nvram;
+			u32 nwords = nvram_len / 4;
+			u32 ntail = nvram_len & 3;
+			u32 nchunk = 1024;	/* 4 KB breadcrumbs */
+			u32 j;
+
+			address = devinfo->ci->rambase + devinfo->ci->ramsize -
+				  nvram_len;
+			naddr = devinfo->tcm + address;
+			pr_emerg("BCM4360 test.177: pre-NVRAM write address=0x%x len=%u naddr=%px\n",
+				 address, nvram_len, naddr);
+
+			for (j = 0; j < nwords; j++) {
+				iowrite32(le32_to_cpu(nsrc32[j]),
+					  naddr + j * 4);
+				if ((j + 1) % nchunk == 0) {
+					pr_emerg("BCM4360 test.177: NVRAM wrote %u words (%u bytes)\n",
+						 j + 1, (j + 1) * 4);
+					mdelay(50);
+				}
+			}
+			if (ntail) {
+				u32 tmp = 0;
+
+				memcpy(&tmp,
+				       (const u8 *)nvram + (nvram_len & ~3u),
+				       ntail);
+				iowrite32(tmp, naddr + (nvram_len & ~3u));
+			}
+			pr_emerg("BCM4360 test.177: post-NVRAM write done (%u bytes)\n",
+				 nvram_len);
+		} else {
+			pr_emerg("BCM4360 test.177: no NVRAM loaded before early return\n");
+		}
+
 		release_firmware(fw);
 		brcmf_fw_nvram_free(nvram);
-		pr_emerg("BCM4360 test.176: released fw/nvram after host resetintr; returning -ENODEV\n");
+		pr_emerg("BCM4360 test.177: released fw/nvram after NVRAM write; returning -ENODEV\n");
 		return -ENODEV;
 	} else {
 		brcmf_pcie_copy_mem_todev(devinfo, devinfo->ci->rambase,
@@ -1970,14 +2009,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 	resetintr = get_unaligned_le32(fw->data);
 	release_firmware(fw);
-	pr_emerg("BCM4360 test.176: after release_firmware resetintr=0x%08x\n",
+	pr_emerg("BCM4360 test.177: after release_firmware resetintr=0x%08x\n",
 		 resetintr);
 	mdelay(50);
 
 	if (nvram) {
 		address = devinfo->ci->rambase + devinfo->ci->ramsize -
 			  nvram_len;
-		pr_emerg("BCM4360 test.176: pre-NVRAM write address=0x%x len=%u tcm=%px\n",
+		pr_emerg("BCM4360 test.177: pre-NVRAM write address=0x%x len=%u tcm=%px\n",
 			 address, nvram_len, devinfo->tcm);
 		mdelay(50);
 
@@ -1997,7 +2036,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				iowrite32(le32_to_cpu(nsrc32[j]),
 					  naddr + j * 4);
 				if ((j + 1) % nchunk == 0) {
-					pr_emerg("BCM4360 test.176: NVRAM wrote %u words (%u bytes)\n",
+					pr_emerg("BCM4360 test.177: NVRAM wrote %u words (%u bytes)\n",
 						 j + 1, (j + 1) * 4);
 					mdelay(50);
 				}
@@ -2010,7 +2049,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				       ntail);
 				iowrite32(tmp, naddr + (nvram_len & ~3u));
 			}
-			pr_emerg("BCM4360 test.176: post-NVRAM write done (%u bytes)\n",
+			pr_emerg("BCM4360 test.177: post-NVRAM write done (%u bytes)\n",
 				 nvram_len);
 			mdelay(50);
 		}
@@ -4271,19 +4310,19 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.158: ASPM disabled; LnkCtl before=0x%04x after=0x%04x ASPM-bits-after=0x%x\n",
 			  lnkctl_before, lnkctl_after, lnkctl_after & PCI_EXP_LNKCTL_ASPMC);
-		msleep(300); /* test.176: flush before root-port ASPM/CLKPM work */
+		msleep(300); /* test.177: flush before root-port ASPM/CLKPM work */
 
-		/* test.176 keeps the root-port LnkCtl logging from test.172 for
+		/* test.177 keeps the root-port LnkCtl logging from test.172 for
 		 * comparability. test.172 showed root-port ASPM/CLKPM was already
-		 * off, so the main discriminator is now immediate return after
-		 * fw write completion in brcmf_pcie_download_fw_nvram().
+		 * off, so the main discriminator is now NVRAM BAR2 write after
+		 * the safe sleep/resetintr sequence in brcmf_pcie_download_fw_nvram().
 		 */
 		bridge = pci_upstream_bridge(pdev);
 		if (bridge) {
 			pcie_capability_read_word(bridge, PCI_EXP_LNKCTL,
 						  &rp_lnkctl_before);
 			dev_emerg(&pdev->dev,
-				  "BCM4360 test.176: root port %s LnkCtl before=0x%04x ASPM=0x%x CLKREQ=%s — disabling L0s/L1/CLKPM\n",
+				  "BCM4360 test.177: root port %s LnkCtl before=0x%04x ASPM=0x%x CLKREQ=%s — disabling L0s/L1/CLKPM\n",
 				  pci_name(bridge), rp_lnkctl_before,
 				  rp_lnkctl_before & PCI_EXP_LNKCTL_ASPMC,
 				  rp_lnkctl_before & PCI_EXP_LNKCTL_CLKREQ_EN ? "on" : "off");
@@ -4292,20 +4331,20 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 			pci_disable_link_state(bridge, PCIE_LINK_STATE_L0S |
 					       PCIE_LINK_STATE_L1 |
 					       PCIE_LINK_STATE_CLKPM);
-			pr_emerg("BCM4360 test.176: root-port pci_disable_link_state returned — reading LnkCtl\n");
+			pr_emerg("BCM4360 test.177: root-port pci_disable_link_state returned — reading LnkCtl\n");
 			msleep(300);
 
 			pcie_capability_read_word(bridge, PCI_EXP_LNKCTL,
 						  &rp_lnkctl_after);
 			dev_emerg(&pdev->dev,
-				  "BCM4360 test.176: root port %s LnkCtl after=0x%04x ASPM=0x%x CLKREQ=%s\n",
+				  "BCM4360 test.177: root port %s LnkCtl after=0x%04x ASPM=0x%x CLKREQ=%s\n",
 				  pci_name(bridge), rp_lnkctl_after,
 				  rp_lnkctl_after & PCI_EXP_LNKCTL_ASPMC,
 				  rp_lnkctl_after & PCI_EXP_LNKCTL_CLKREQ_EN ? "on" : "off");
 			msleep(300);
 		} else {
 			dev_emerg(&pdev->dev,
-				  "BCM4360 test.176: no upstream bridge found; root-port ASPM/CLKPM disable skipped\n");
+				  "BCM4360 test.177: no upstream bridge found; root-port ASPM/CLKPM disable skipped\n");
 			msleep(300);
 		}
 
@@ -4714,19 +4753,19 @@ static struct pci_driver brcmf_pciedrvr = {
  * after chip_attach() has initialized the PCIe-to-backplane bridge. */
 void brcmf_pcie_early_arm_halt(void)
 {
-	pr_emerg("BCM4360 test.176: module_init entry — immediate return after complete BAR2 fw write\n");
+	pr_emerg("BCM4360 test.177: module_init entry — NVRAM BAR2 write after safe sleep/resetintr\n");
 }
 
 int brcmf_pcie_register(void)
 {
 	int ret;
 
-	pr_emerg("BCM4360 test.176: brcmf_pcie_register() entry\n");
+	pr_emerg("BCM4360 test.177: brcmf_pcie_register() entry\n");
 	msleep(300); /* flush marker before pci_register_driver */
-	pr_emerg("BCM4360 test.176: before pci_register_driver\n");
+	pr_emerg("BCM4360 test.177: before pci_register_driver\n");
 	msleep(300); /* flush — if crash here, it's in pci_register_driver kernel code */
 	ret = pci_register_driver(&brcmf_pciedrvr);
-	pr_emerg("BCM4360 test.176: pci_register_driver returned ret=%d\n", ret);
+	pr_emerg("BCM4360 test.177: pci_register_driver returned ret=%d\n", ret);
 	return ret;
 }
 
