@@ -1,0 +1,20 @@
+=== test.163: step into brcmf_pcie_download_fw_nvram (442KB BAR2 fw + NVRAM write) — stage=0 ===
+Date: Mon 20 Apr 10:22:25 BST 2026
+
+Stage 0: skip_arm=1 — test.162 scope + download_fw_nvram: enter_download_state (read-only) + BAR2 ioread32 probe + 442KB iowrite32 fw + NVRAM write + TCM verify dump; returns -ENODEV.
+(test.163: test.162 flow + brcmf_pcie_download_fw_nvram executes; first BAR2 writes; skip_arm=1 returns -ENODEV after clean download; 300ms per marker)
+
+=== Pre-test BAR0 MMIO guard ===
+BAR0 MMIO UR/I/O error (6ms) — device alive; SBR in probe should fix. Proceeding.
+
+=== Pre-test PCIe state ===
+(lspci not available)
+
+=== Pre-test root port (00:1c.2) state ===
+
+=== Flushing to disk ===
+Flush complete.
+
+=== Loading brcmfmac (bcm4360_reset_stage=0, bcm4360_skip_arm=1) --- test.163 ===
+insmod returned rc=0
+Waiting 90s for firmware init (streaming to test.163.stage0.stream)...

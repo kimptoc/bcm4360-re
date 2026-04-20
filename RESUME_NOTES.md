@@ -1,6 +1,90 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.163 — REBUILT, ready for insmod)
+## Current state (2026-04-20, POST test.163 CRASH — machine rebooted, no SMC reset)
+
+### RESULT: test.163 CRASHED during the 442KB BAR2 iowrite32 (copy_mem_todev)
+
+**Last markers captured (stream + journal-b-minus-1 agree):**
+```
+test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)
+test.142: enter_download_state — confirming ARM CR4 reset state
+test.142: ARM CR4 state RESET_CTL=0x00000000 IN_RESET=NO/BAD IOCTL=0x0001 CPUHALT=NO FGC=NO CLK=YES
+BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffcab302600000
+test.138: pre-BAR2-ioread32 (tcm=ffffcab302600000)
+test.138: post-BAR2-ioread32 = 0x024d4304 (real value — BAR2 accessible)
+<no further log — machine died, hard reboot required>
+```
+
+**Post-crash state (2026-04-20 ~10:26):**
+- Hard reboot performed; NO SMC reset.
+- Device enumerates cleanly (BAR0=0xb0600000, BAR2=0xb0400000).
+- Control I/O-/Mem-/BusMaster- and BARs [disabled] as expected (no driver bound).
+- MAbort-, link clean.
+- brcmfmac not loaded.
+
+**Logs preserved:**
+- `phase5/logs/test.163.stage0` — harness stage 0 log
+- `phase5/logs/test.163.stage0.stream` — live dmesg stream
+- `phase5/logs/test.163.journalctl.txt` — full prior-boot journal (brcmf + bcm4360)
+
+### Crash analysis
+
+1. **BAR2 is alive just before the crash** — the ioread32 at offset 0 returns
+   0x024d4304 (real TCM contents), so BAR2 mapping is valid.
+2. **copy_mem_todev starts writing 442,233 bytes (110,558 × iowrite32)** —
+   no breadcrumb inside the loop, so crash is somewhere in those writes.
+   No further log lands before the machine dies.
+3. **ARM CR4 state reading is UNRELIABLE in test.142** — the current code does:
+   ```
+   brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
+   reset_ctl = brcmf_pcie_read_reg32(devinfo, 0x1800);
+   ```
+   `select_core` sets BAR0 window to CR4 `core->base`, but RESET_CTL lives at
+   **wrapbase + BCMA_RESET_CTL (0x800)**, not base + 0x1800. So RESET_CTL=0 is
+   a bogus read — we cannot trust it to mean "ARM is running". test.145 used
+   the BCMA-aware `brcmf_chip_set_passive` → `brcmf_chip_disable_arm` path
+   which writes wrapbase correctly.
+4. **So the ARM might in fact be halted** from test.145. Cause of the crash is
+   not proven to be runaway ARM firmware.
+
+### Open questions for test.164
+
+a. Is the ARM actually halted at download time? — need a correct wrapbase read.
+b. Is BAR2 silently going away mid-copy (link drop, bridge error)?
+c. Is there a timing/throughput issue with 110K sequential uncached writes?
+d. Does splitting the copy into smaller chunks with breadcrumbs survive long
+   enough to pinpoint the failing offset?
+
+### Plan for test.164 (NOT YET IMPLEMENTED — CODE NOT REBUILT)
+
+**Goal:** pinpoint where in the 442KB write the crash occurs, and verify ARM
+halt state via correct register path.
+
+**Proposed changes:**
+1. Fix test.142 to read RESET_CTL via the BCMA-aware chip ops (same path as
+   `brcmf_chip_disable_arm`), OR via the wrapbase window selection, so the
+   reported halt state is accurate.
+2. Add chunked breadcrumbs to the 442KB copy_mem_todev slice:
+   - Log BAR0 window/CC probe every 16KB (or every N writes).
+   - Record byte offset so we know exactly where the crash lands.
+3. Keep `bcm4360_skip_arm=1` so no ARM release is attempted.
+4. Keep the test.163 post-download fail-path bypass.
+
+**Risk:** This is still a hardware-contact test and may crash again. The
+breadcrumbs should narrow the failure to an offset range, letting us decide
+whether to try tiny chunks, delays, or an alternative transfer approach.
+
+### Pre-test checklist (NOT READY YET)
+
+- [ ] Implement test.164 changes in pcie.c
+- [ ] Build (`make -C phase5/work`)
+- [ ] Verify .ko contains test.164 markers
+- [ ] Re-check PCIe state of 03:00.0
+- [ ] Commit + push plan before insmod
+
+---
+
+## Previous state (2026-04-20, PRE test.163 — REBUILT, ready for insmod)
 
 ### CODE STATE: test.163 implemented — setup callback now enters brcmf_pcie_download_fw_nvram
 
