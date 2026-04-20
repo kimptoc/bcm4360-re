@@ -1,6 +1,109 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.168 CRASH — machine rebooted + SMC reset)
+## Current state (2026-04-20, POST test.169 — DUAL BREAKTHROUGH; rebooted + SMC reset)
+
+### TEST.169 RESULT — TWO MAJOR FINDINGS
+
+**Finding 1: probe-address mismatch RESOLVED.**
+```
+post-145    loW IOCTL=0x00000001 RESET_CTL=0x0  |  hiW IOCTL=0x00000021 RESET_CTL=0x0
+setup-entry loW IOCTL=0x00000001 RESET_CTL=0x0  |  hiW IOCTL=0x00000021 RESET_CTL=0x0
+pre-attach   ... same loW=0x01/0 ... hiW=0x21/0
+post-attach  ... same loW=0x01/0 ... hiW=0x21/0
+post-raminfo ... same loW=0x01/0 ... hiW=0x21/0
+pre-download ... same loW=0x01/0 ... hiW=0x21/0
+pre-halt     ... same loW=0x01/0 ... hiW=0x21/0
+post-halt    ... same loW=0x01/0 ... hiW=0x21/0
+post-write   ... same loW=0x01/0 ... hiW=0x21/0
+```
+hiW (BAR0 window=base+0x100000, offsets 0x408/0x800) sees IOCTL bit 0x20 set =
+**CPUHALT=1** consistently. loW (base+0x1000) reads a different register that
+shows CLK=1 only. **Conclusion:** BCM4360 ARM CR4 wrapper is at the canonical
+BCMA AI offset (`base + 0x100000`), NOT at `base + 0x1000`. test.142/146/167/168
+loW probes were reading the wrong register. ARM CR4 has actually been halted
+correctly by `brcmf_chip_set_passive` since test.145 the entire time.
+
+**Finding 2: 442KB fw write COMPLETED for the first time across tests 163–169.**
+All 110558 words + 1 tail byte iowrite32'd; "fw write complete" logged at 12:25:06.
+ARM CR4 hiW view = CPUHALT=1 *after* the write — write did not un-halt CR4.
+
+→ **The "ARM running garbage" theory is dead.** ARM was halted throughout
+  every prior crash. The 163–168 mid-write crashes were a different cause —
+  likely intermittent (maybe timing/MMIO ordering, possibly async PCIe
+  completion variance). The added dual-view probes inserted small MMIO
+  read pauses across the path which may have had a quietening effect.
+
+**Crash now happens AFTER "fw write complete" and BEFORE any post-write log.**
+No NVRAM-loaded marker, no TCM verify dump, no ramsize-4 marker, no
+pre-ARM clk_ctl_st marker. → Crash is in the brief code window:
+  `mdelay(100)` → `get_unaligned_le32(fw->data)` → `release_firmware(fw)` →
+  `if (nvram) { copy_mem_todev(NVRAM); ... }` → `read_ram32(ramsize-4)`.
+NVRAM `copy_mem_todev` is the most likely site (next host→TCM bulk write,
+and the only one of these calls that does substantial MMIO).
+
+### POST-TEST PCIe STATE (2026-04-20, reboot + SMC reset — NOW)
+- `lspci -vvv -s 03:00.0`: `Mem+ BusMaster+`, `MAbort-`, `<MAbort-`,
+  `LnkSta 2.5GT/s x1`, `CommClk+`, sticky `CorrErr+ UnsupReq+ AuxPwr+`.
+- `lsmod | grep brcm` → empty. `ls /sys/fs/pstore/` → empty (no new oops).
+- Module not yet rebuilt for test.170 (NOT yet rebuilt after edits).
+
+### PLAN FOR TEST.170 — LOCALIZE POST-FW CRASH + DROP loW probe
+**Goal:** Pinpoint which post-fw step crashes the host. Read-only diagnostics
+plus existing chunked-write pattern for NVRAM.
+
+**Code changes (all inside `brcmf_pcie_download_fw_nvram` after line 1960):**
+1. After `mdelay(100)` after "fw write complete" → log
+   `BCM4360 test.170: post-mdelay100`.
+2. After `get_unaligned_le32` and `release_firmware` → log
+   `BCM4360 test.170: after release_firmware resetintr=0x%08x`.
+3. Inside the `if (nvram)` block before `copy_mem_todev` → log
+   `BCM4360 test.170: pre-NVRAM write address=0x%x len=%u`.
+4. Replace the NVRAM `copy_mem_todev` with a chunked iowrite32 loop
+   identical in shape to the 442KB writer (4 KB or 8 KB chunks with
+   per-chunk breadcrumbs + 50 ms `mdelay` between chunks). NVRAM is
+   small (a few KB) so this is at most a few breadcrumbs.
+5. After NVRAM write → log
+   `BCM4360 test.170: post-NVRAM write done`.
+6. After `brcmf_pcie_read_ram32(ramsize-4)` → keep existing
+   "NVRAM marker" log; nothing new here.
+
+**Other changes:**
+- Drop the loW probe from the dual-view helper (it reads garbage and
+  doubles MMIO traffic). Just print the hiW view as the canonical view.
+- Keep all the setup-path probe call sites; they're a useful sanity
+  check that ARM stays halted.
+- Bump banner test.169 → test.170 across pcie.c and test-staged-reset.sh.
+
+**Risk review:** all additions are read-only OR mirror the proven 442KB
+chunked write pattern. NVRAM writes were doing the same loop in 1 shot
+before — chunking just adds breadcrumbs. Crash blast-radius unchanged.
+
+### HYPOTHESIS for test.170
+Expect to see `post-mdelay100` and `after release_firmware` (host-only
+work). The crash candidate set narrows to one of:
+- `pre-NVRAM write` printed but no `wrote N bytes` chunk → crash in the
+  *first* NVRAM iowrite32 (likely TCM-side address fault or PCIe abort).
+- Some chunks printed, then a hang → crash mid-NVRAM-write (less likely;
+  fw-write was 442KB without crashing in test.169).
+- All chunks + `post-NVRAM write done` printed, then hang → crash in
+  the post-NVRAM `read_ram32` or the BCM4360-block reads of clk_ctl_st.
+
+Ideally the 4 KB-or-so NVRAM writes complete and we get our first ever
+"NVRAM marker at ramsize-4" line — confirming end-to-end FW + NVRAM
+load against a halted ARM. Then we'd need to start releasing ARM.
+
+### PRE-TEST.170 CHECKLIST
+- [x] Save test.169 journal to `phase5/logs/test.169.journalctl.txt`
+- [x] PCIe state checked: clean
+- [ ] Edit pcie.c per plan above
+- [ ] Bump banners test.169 → test.170 in pcie.c, test-staged-reset.sh
+- [ ] Build with `make -C phase5/work`
+- [ ] Commit + push pre-test state + `sync`
+- [ ] Run `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+
+---
+
+## Previous state (2026-04-20, POST test.168 CRASH — machine rebooted + SMC reset)
 
 ### TEST.168 RESULT — ALL 6 PROBES SHOW CPUHALT=0 / RESET_CTL=0
 

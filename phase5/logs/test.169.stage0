@@ -1,0 +1,20 @@
+=== test.169: dual-wrapbase ARM CR4 probes (base+0x1000 vs base+0x100000) + post-145 probe inside buscore_reset — stage=0 ===
+Date: Mon 20 Apr 12:24:52 BST 2026
+
+Stage 0: skip_arm=1 — test.162 scope + download_fw_nvram: enter_download_state (read-only) + BAR2 ioread32 probe + 442KB iowrite32 fw + NVRAM write + TCM verify dump; returns -ENODEV.
+(test.169: dual-view probe — loW=BAR0@base+0x1000/offset 0x1408,0x1800 [test.168] AND hiW=BAR0@base+0x100000/offset 0x408,0x800 [BCMA AI canonical]. Adds post-145 probe in buscore_reset. 7 probes total: post-145, setup-entry, pre-attach, post-attach, post-raminfo, pre-download, pre-halt/post-halt/pre-write/post-write inside download_fw_nvram)
+
+=== Pre-test BAR0 MMIO guard ===
+BAR0 MMIO UR/I/O error (7ms) — device alive; SBR in probe should fix. Proceeding.
+
+=== Pre-test PCIe state ===
+(lspci not available)
+
+=== Pre-test root port (00:1c.2) state ===
+
+=== Flushing to disk ===
+Flush complete.
+
+=== Loading brcmfmac (bcm4360_reset_stage=0, bcm4360_skip_arm=1) --- test.169 ===
+insmod returned rc=0
+Waiting 90s for firmware init (streaming to test.169.stage0.stream)...
