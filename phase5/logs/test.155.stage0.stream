@@ -1,0 +1,13 @@
+=== dmesg stream start: Mon 20 Apr 08:52:11 BST 2026 ===
+[ 1740.532867] brcmfmac: BCM4360 test.154: module_init entry (no BAR0 MMIO)
+[ 1740.532949] brcmfmac: BCM4360 test.154: before brcmf_core_init()
+[ 1740.532981] brcmfmac: BCM4360 test.154: brcmf_core_init() entry
+[ 1740.533009] brcmfmac: BCM4360 test.154: before brcmf_sdio_register()
+[ 1740.533039] brcmfmac: BCM4360 test.154: after brcmf_sdio_register() err=0
+[ 1740.584955] brcmfmac: BCM4360 test.154: post-SDIO sync (before PCI)
+[ 1740.584994] brcmfmac: BCM4360 test.154: before brcmf_pcie_register()
+[ 1740.585024] brcmfmac: BCM4360 test.154: brcmf_pcie_register() entry
+[ 1740.585054] brcmfmac: BCM4360 test.154: skipping brcmf_dbg in brcmf_pcie_register
+[ 1740.585103] brcmfmac: BCM4360 test.154: after skipped brcmf_dbg, before pci_register_driver
+[ 1740.586935] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=00000000f06893fe)
+[ 1740.586996] brcmfmac: BCM4360 test.127: probe entry (vendor=14e4 device=43a0)

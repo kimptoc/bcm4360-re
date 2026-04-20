@@ -1,34 +1,48 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.155 — full probe up to fw_get_firmwares; early return before firmware request)
+## Current state (2026-04-20, POST test.155 CRASH — preparing test.156)
 
-### CODE STATE: test.155 source prepared, rebuilt, NEED TO COMMIT AND PUSH
+### CODE STATE: test.156 source prepared, rebuilt, committed
 
-**test.155 change: full probe through ARM halt + resource allocs; early return BEFORE brcmf_fw_get_firmwares()**
-- `brcmf_pcie_probe()` runs SBR → chip_attach → ARM CR4 halt → BusMaster clear → ASPM disable
-  → reginfo setup → pcie_bus_dev alloc → settings alloc → bus alloc → msgbuf alloc
-  → brcmf_alloc → OTP read → fwreq prepare → THEN early return before fw_get_firmwares.
-- Early return: `pr_emerg("BCM4360 test.155: before brcmf_fw_get_firmwares — early return\n"); ret = -ENODEV; goto fail_brcmf;`
-- `fail_brcmf` label handles cleanup of brcmf_alloc + all allocations.
+**test.155 CRASH ANALYSIS:**
+- test.155 RAN but CRASHED — machine required SMC reset to recover.
+- Stream log (`phase5/logs/test.155.stage0.stream`) only has 13 lines, cut short by crash.
+- Stream interpretation (KEY INSIGHT): the test.154 module_init markers in the stream
+  are **residual ring-buffer messages** from the earlier test.154 run, captured by
+  `dmesg -wk` before `dmesg -C` cleared the buffer. The actual test.155 binary ran.
+  - Confirmed by `strings brcmfmac.ko | grep "module_init entry"` → shows test.155 marker.
+  - .ko built at 08:51:00, sources modified at 08:49:56, test started at 08:52:11.
+- The probe entry markers (test.128/test.127 at uptime 1740.586xxx) ARE from test.155.
+- Crash happened SOMEWHERE in test.155 probe after probe entry. The crash was catastrophic
+  (MCE or NMI) — the dmesg subprocess was killed before it could flush subsequent ring
+  buffer entries to the stream file.
+- Pre-test BAR0 MMIO guard showed "UR/I/O error (6ms)" — endpoint returning UR (normal
+  when no driver bound, device not power-on initialized). Script proceeded correctly.
+- **Root cause unknown**: crash could be in SBR, chip_attach, or ARM halt MMIO writes.
+  test.154 showed SBR+chip_attach safe, so ARM halt is the most likely suspect.
+  However, PCIe state may also have been worse than after test.154's clean run.
 
-**Purpose:**
-- test.154 SUCCESS: chip_attach + early return after chip_attach was safe (all markers appeared,
-  chip fully enumerated — BCM4360 chip ID 0x15034360, RAM 640KB).
-- test.155 covers the remaining probe segment: ARM halt, resource allocs, OTP read, fwreq prepare.
-- This segment includes the ARM CR4 reset (IOCTL=CPUHALT|FGC|CLK + RESET_CTL=1) which
-  stops the BCM4360 ARM from executing firmware. This is potentially risky.
+**test.155 was too wide a step.** It bundled ARM halt + BusMaster/ASPM + reginfo +
+allocs + OTP + fwreq in one jump. A crash can only be attributed to "somewhere in that span."
+
+**test.156: ARM halt ONLY — narrow the bisection.**
+- `brcmf_pcie_probe()` runs SBR → chip_attach → ARM halt MMIO writes → early return.
+- Early return added INSIDE the BCM4360 ARM halt if-block, right after RESET_CTL write
+  and IOCTL_before/IOCTL_fgc/RESET_CTL diagnostic log (test.142), before BusMaster clear.
+- All test.142 ARM halt markers remain; new test.156 early return marker added.
+- `fail` label used (same as chip_attach path) — minimal cleanup, safe.
 
 **Hypothesis:**
-- MODERATE RISK — ARM halt involves BAR0 MMIO writes via brcmf_pcie_write_reg32() to ARM
-  wrapper registers (0x1408, 0x1800). Post-SBR ARM should be in reset already, but writing
-  to wrapper regs could trigger unexpected behavior.
-- OTP read also does BAR0 MMIO via SPROM/OTP path.
-- If NO crash: ARM halt + all allocs + OTP + fwreq prepare all safe. Next test: allow fw_get_firmwares.
-- If crash: narrow between chip_attach-done and early-return; ARM halt is the prime suspect.
+- ARM halt MMIO writes (brcmf_pcie_select_core → brcmf_pcie_write_reg32 to 0x1408, 0x1800)
+  on a chip that just completed chip_attach should be safe — chip_attach already mapped
+  the BAR0 window to the ARM core (brcmf_pcie_select_core does this).
+- If NO crash, `test.142: ARM CR4 reset: IOCTL_before=... RESET_CTL=...` appears + `test.156 early return`: ARM halt is safe; next test: BusMaster/ASPM + rest of allocs.
+- If crash: ARM halt MMIO write (0x1408 or 0x1800) is the crash trigger.
 
-**Pre-test PCIe state (2026-04-20, post-test.154 clean run):**
-- Endpoint `03:00.0`: `MAbort-`, `Status: Cap+ DevSta: CorrErr+` — clean.
-- No driver bound; no brcm modules loaded.
+**Pre-test PCIe state (post-crash + SMC reset, 2026-04-20 ~09:XX):**
+- Endpoint `03:00.0`: `MAbort-`, `CommClk+`, `LnkSta: Speed 2.5GT/s Width x1` — CLEAN after SMC reset.
+- `DevSta: CorrErr+ UnsupReq+` — UnsupReq+ is expected (from pre-test guard reads), not dangerous.
+- No brcm modules loaded.
 
 **Test command:**
 ```
@@ -37,10 +51,10 @@ sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 Stage1 remains forbidden.
 
 **Interpretation matrix:**
-- No crash, `test.155: before brcmf_fw_get_firmwares` + `post-PCI sync` appear: all safe; enable fw_get_firmwares next (test.156, WAIT_SECS=35 for async callback).
-- Crash after `chip_attach returned successfully` but before ARM halt markers: crash in ARM halt MMIO writes.
-- Crash after ARM halt markers but before `test.155: before brcmf_fw_get_firmwares`: crash in OTP/fwreq alloc.
-- `test.155: before brcmf_fw_get_firmwares` seen + crash: crash in fail_brcmf cleanup path (unlikely).
+- No crash, `test.142: ARM CR4 reset` marker appears + `test.156: early return after ARM halt`: ARM halt safe; next test covers BusMaster/ASPM + allocs + OTP + fwreq.
+- Crash before `test.155: before brcmf_chip_attach`: crash in probe setup or SBR (unexpected — same as test.154/153).
+- Crash after `chip_attach returned successfully` but before `test.142: ARM CR4 reset`: crash in brcmf_pcie_select_core() for ARM core (BAR0 window change).
+- Crash during `test.142: ARM CR4 reset` block: crash in IOCTL or RESET_CTL MMIO write.
 
 ---
 

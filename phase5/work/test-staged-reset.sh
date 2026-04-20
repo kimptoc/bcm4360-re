@@ -17,18 +17,18 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.155.stage${STAGE}"
+LOG="$LOG_DIR/test.156.stage${STAGE}"
 
-echo "=== test.155: fw_get_firmwares discriminator — before firmware request — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.156: ARM halt discriminator — early return after ARM halt, before BusMaster/ASPM — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: skip_arm=1 — module_init/register markers; no ARM release if probe reaches firmware path." | tee -a "$LOG" ;;
+    0) echo "Stage 0: skip_arm=1 — module_init/register markers; early return after ARM halt MMIO writes." | tee -a "$LOG" ;;
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.155: full SBR + chip_attach + ARM halt + allocs; early return before fw_get_firmwares)" | tee -a "$LOG"
+echo "(test.156: SBR + chip_attach + ARM halt MMIO writes; early return before BusMaster/ASPM)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -105,7 +105,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=15  # test.155: SBR 510ms + chip_attach + ARM halt; 15s is enough
+    WAIT_SECS=15  # test.156: SBR 510ms + chip_attach + ARM halt; 15s is enough
 else
     SKIP_ARM=0
     WAIT_SECS=35
