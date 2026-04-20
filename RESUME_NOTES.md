@@ -1,5 +1,40 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.186c (2026-04-20, staged) — per-kick mailboxint attribution
+
+### Hypothesis
+test.186a saw `mailboxint` flip bit 0 (0x1) after kicking all three
+H2D channels, but bit 0 is outside `int_fn0` (0x0300) and
+`int_d2h_db` (0x10000+). Most likely explanation: our H2D_MAILBOX_0
+write latched locally into bit 0 of the doorbell-reflect side of the
+register. test.186c disambiguates by (a) W1C-clearing `mailboxint` to
+a known 0x0 before kicking, and (b) reading `mailboxint` after each
+individual kick so we can attribute any asserted bit to the specific
+channel that set it.
+
+### Prediction
+- After W1C clear: `mailboxint` reads 0x00000000.
+- After H2D_MAILBOX_0 kick: bit 0 appears (0x00000001). Confirms
+  the echo theory.
+- After H2D_MAILBOX_1 kick: probably no new bits (mailbox-1 is
+  typically a separate latch or no-op from host side).
+- After SBMBX kick: probably no new bits (SBMBX is config-space
+  sideband, separate signal path).
+- Post-kick dwells: everything else matches test.186a (D11 still in
+  reset, NVRAM marker unchanged, 64 TCM probes UNCHANGED).
+
+Any deviation — e.g. bit 0 not appearing after mailbox_0, or D2H
+bits (0x10000+) asserting, or FN0 bits (0x0300) asserting — would
+be significant new information about firmware state.
+
+### Run command
+```
+sudo ./phase5/work/test-staged-reset.sh 0
+```
+PCIe pre-test: MAbort-, LnkSta x1 2.5GT/s — clean.
+
+---
+
 ## POST-TEST.186a (2026-04-20) — firmware ignores all three host doorbells
 
 Captured artifacts:

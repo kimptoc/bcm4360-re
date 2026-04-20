@@ -17,18 +17,18 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.186.stage${STAGE}"
+LOG="$LOG_DIR/test.186c.stage${STAGE}"
 
-echo "=== test.186a: H2D mailbox kick after passive dwell — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.186c: mailboxint-clear + per-kick probe — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: skip_arm=1 — same passive flow as test.185 (enter_download_state, 442KB fw + 228B NVRAM write, brcmf_chip_set_active, dwell at 500/1500/3000ms with D11+CR4+CC+TCM probes). After 3000ms dwell: ring H2D_MAILBOX_0 (BAR0+0x140) + H2D_MAILBOX_1 (BAR0+0x144) + SBMBX (PCI config 0x98), then post-kick dwells at 500ms and 2000ms with full D11+CR4+CC+mailboxint+TCM diff. BusMaster remains cleared throughout. Returns -ENODEV." | tee -a "$LOG" ;;
+    0) echo "Stage 0: skip_arm=1 — same passive flow as test.185 then kick sequence as test.186a, but BEFORE kicking: W1C-clear mailboxint (write 0xffffffff, read back), then read mailboxint AFTER each individual kick (H2D_MAILBOX_0, H2D_MAILBOX_1, SBMBX) to attribute any asserted bits to a specific channel. Post-kick dwells at 500ms and 2000ms with full D11+CR4+CC+mailboxint+TCM diff. BusMaster remains cleared throughout. Returns -ENODEV." | tee -a "$LOG" ;;
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.186a: test.185 showed fw idles after one pmucontrol bit-9 write, D11 held in reset, 56 TCM probes UNCHANGED. This run reuses the test.185 passive flow, then after the 3000ms dwell rings all three H2D channels (H2D_MAILBOX_0, H2D_MAILBOX_1/HostReady, SBMBX) to test whether fw is stalled waiting for a host doorbell. Post-kick dwells at 500/2000ms capture any response. BusMaster still cleared. Returns -ENODEV.)" | tee -a "$LOG"
+echo "(test.186c: test.186a saw mailboxint=0x1 post-kick but bit 0 is outside int_fn0/int_d2h_db. Disambiguate: clear mailboxint (W1C 0xffffffff) first, then sample after each of the three kicks to attribute bit sources precisely. All other observations identical to test.186a. Returns -ENODEV.)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -113,14 +113,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=45  # test.186: post-release TCM sampling (up to 3 s in-module dwell)
+    WAIT_SECS=45  # test.186c: post-release TCM sampling (up to 3 s in-module dwell)
 else
     SKIP_ARM=0
     WAIT_SECS=60
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.186 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.186c ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.
