@@ -1,6 +1,89 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-19 23:18 BST, PRE test.148 — PCIe clean; ready to run stage0)
+## Current state (2026-04-20, PRE test.149 — early-return discriminator; PCIe clean after SMC reset)
+
+### CODE STATE: test.149 source prepared, rebuilt, committed, and pushed
+
+**test.149 change: early-return discriminator in brcmf_core_init()**
+- No BAR0 MMIO, BAR2 MMIO, PCI config, or pre-probe mitigation.
+- `brcmf_core_init()` now:
+  - Logs `BCM4360 test.149: brcmf_core_init() entry`
+  - Delays 50ms (`mdelay(50)`)
+  - Logs `BCM4360 test.149: pre-return sync (no registrations)`
+  - Returns 0 immediately — SDIO, USB, and PCI registrations are skipped entirely
+- `brcmfmac_module_init()` logs:
+  - `BCM4360 test.149: before brcmf_core_init()`
+  - `BCM4360 test.149: after brcmf_core_init() err=0`
+- `brcmf_pcie_early_arm_halt()` still logs:
+  - `BCM4360 test.149: module_init entry (no BAR0 MMIO)`
+
+**Purpose (two questions answered by one test):**
+1. Does the crash go away? → Yes: bus registration (SDIO/USB/PCI) or probe is the trigger.
+2. Does the `pre-return sync` marker appear? → If only `entry` survives, the crash is async HW coinciding with module load; printk-persistence-loss between consecutive emerg calls is ruled out.
+
+**Hypothesis:**
+- Expect no crash (early return should be safe).
+- Expect both `entry` and `pre-return sync` to appear, confirming printk persistence is not the problem.
+- If still crashes: stop narrowing source markers; pivot to netconsole/serial for persistence-proof logging or investigate async HW (ACPI, SMI, another driver triggering on module load).
+
+**Build required before running:**
+```
+make -C /nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
+```
+
+**Pre-test PCIe state (post-SMC reset, 2026-04-20):**
+- Root port `00:1c.2`: secondary/subordinate `03/03`, `CommClk+`, `DLActive+`, `MAbort-` (clean).
+- Endpoint `03:00.0`: present `14e4:43a0` rev `03`, BAR0 `b0600000` size `32K`, BAR2 `b0400000` size `2M`, `MAbort-`, AER `UESta` clear.
+- `DevSta: CorrErr+ UnsupReq+` persists from prior UR guard runs (expected).
+- No bcma/wl/brcmfmac modules loaded; no driver bound to 03:00.0.
+
+**Test command after rebuild/commit/push:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+Stage1 remains forbidden.
+
+**Interpretation matrix:**
+- No crash, both markers appear: registration/probe is the trigger; next test adds SDIO registration only.
+- No crash, only `entry` appears: async HW coinciding; the 50ms delay likely absorbed the event without crash.
+- Crash with only `entry`: async HW crash between consecutive pr_emerg — pivot to serial/netconsole.
+- Crash with both markers: registration skip is not enough; something else at module-init level crashes.
+
+---
+
+## Previous state (2026-04-19 23:18 BST → 2026-04-20 POST test.148 crash; SMC reset complete)
+
+### CODE/LOG STATE: test.148 ran and crashed after brcmf_core_init() entry, before brcmf_sdio_register() marker
+
+**Repository state:**
+- Branch: `main`
+- Untracked after reboot: `phase5/logs/test.148.stage0`, `phase5/logs/test.148.stage0.stream`
+
+**test.148 stream log captured:**
+```
+brcmfmac: loading out-of-tree module taints kernel.
+brcmfmac: BCM4360 test.148: module_init entry (no BAR0 MMIO)
+brcmfmac: BCM4360 test.148: before brcmf_core_init()
+brcmfmac: BCM4360 test.148: brcmf_core_init() entry
+```
+
+**Missing markers:**
+- `BCM4360 test.148: before brcmf_sdio_register()` — immediately the next line (core.c:1544)
+- `BCM4360 test.148: before brcmf_pcie_register()`
+- All subsequent markers
+
+**Key finding:** `brcmf_core_init() entry` (line 1543) and `before brcmf_sdio_register()` (line 1544) are consecutive `pr_emerg` calls with no code between them. Missing the second despite the first surviving means either:
+- Printk persistence loss: crash during `brcmf_sdio_register()` was so fast the preceding marker didn't flush to the stream reader.
+- Async HW crash between two consecutive C statements (very fast hardware event).
+
+**Post-SMC PCIe state (2026-04-20):**
+- Root port `00:1c.2`: `DLActive+`, `CommClk+`, `MAbort-`, bus `03/03` — clean.
+- Endpoint `03:00.0`: present, `MAbort-`, AER clear, `DevSta: CorrErr+ UnsupReq+` (expected from UR guard).
+- No driver bound to 03:00.0; no bcma/wl/brcm modules loaded.
+
+---
+
+## Previous state (2026-04-19 23:18 BST, PRE test.148 — PCIe clean; ready to run stage0)
 
 ### CODE STATE: test.148 source prepared, rebuilt, committed, and pushed
 

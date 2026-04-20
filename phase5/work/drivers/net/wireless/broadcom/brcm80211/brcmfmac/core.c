@@ -1540,24 +1540,9 @@ int __init brcmf_core_init(void)
 {
 	int err;
 
-	pr_emerg("BCM4360 test.148: brcmf_core_init() entry\n");
-	pr_emerg("BCM4360 test.148: before brcmf_sdio_register()\n");
-	err = brcmf_sdio_register();
-	pr_emerg("BCM4360 test.148: after brcmf_sdio_register() err=%d\n", err);
-	if (err)
-		return err;
-
-	pr_emerg("BCM4360 test.148: before brcmf_usb_register()\n");
-	err = brcmf_usb_register();
-	pr_emerg("BCM4360 test.148: after brcmf_usb_register() err=%d\n", err);
-	if (err)
-		goto error_usb_register;
-
-	pr_emerg("BCM4360 test.148: before brcmf_pcie_register()\n");
-	err = brcmf_pcie_register();
-	pr_emerg("BCM4360 test.148: after brcmf_pcie_register() err=%d\n", err);
-	if (err)
-		goto error_pcie_register;
+	pr_emerg("BCM4360 test.149: brcmf_core_init() entry\n");
+	mdelay(50);
+	pr_emerg("BCM4360 test.149: pre-return sync (no registrations)\n");
 	return 0;
 
 error_pcie_register:
