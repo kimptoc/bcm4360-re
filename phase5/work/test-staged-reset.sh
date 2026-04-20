@@ -17,18 +17,18 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.186b.stage${STAGE}"
+LOG="$LOG_DIR/test.186d.stage${STAGE}"
 
-echo "=== test.186b: brief BusMaster-on window — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.186d: BusMaster ON before set_active — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: skip_arm=1 — same passive flow as test.185/186a/186c through the 3s dwell, then: (a) MMIO guard read, (b) pci_set_master, (c) sample mailboxint + CR4 + D11 at BM-on+50ms and BM-on+100ms, (d) MMIO guard read, (e) pci_clear_master, (f) MMIO guard read, (g) post-BM dwells at 500ms and 2000ms with full D11+CR4+CC+mailboxint+TCM diff. Window limited to ~100ms to mitigate Phase-4B-era BusMaster-on crashes. Returns -ENODEV." | tee -a "$LOG" ;;
+    0) echo "Stage 0: skip_arm=1 — enable BusMaster BEFORE brcmf_chip_set_active (firmware's first DMA needs it). Probe CR4/D11 at post-set_active 20ms/100ms, then dwell 500/1500/3000ms sampling TCM[0x0..0x1c], wide-TCM, tail-TCM (incl. sharedram slot at ramsize-8), NVRAM marker at ramsize-4, CC backplane regs, mailboxint. Clean up with final mailboxint sample + pci_clear_master + MMIO guard. Returns -ENODEV." | tee -a "$LOG" ;;
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.186b: doorbell theory ruled out by 186a/186c. Discriminate DMA-stall vs exception/panic loop by briefly enabling BusMaster — if firmware is DMA-stalled it should complete startup DMA and produce visible change (TCM writes, D11 release, sharedram marker replacing 0xffc70038). If no change, exception-loop becomes leading hypothesis.)" | tee -a "$LOG"
+echo "(test.186d: test.186b enabled BusMaster 3s after set_active — too late; firmware's first DMA had already failed. test.64/65-era pcie.c comments (~L2725/L4033) state BusMaster MUST be on before set_active so PCIe2 DMA init succeeds. test.186d applies that requirement. DMA-stall is still the live hypothesis — if firmware now completes startup DMA we expect TCM writes, D11 RESET_CTL clearing, sharedram marker replacing 0xffc70038.)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -113,14 +113,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=45  # test.186c: post-release TCM sampling (up to 3 s in-module dwell)
+    WAIT_SECS=45  # test.186d: in-module dwell is ~3s after set_active; leave generous slack
 else
     SKIP_ARM=0
     WAIT_SECS=60
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.186c ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.186d ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.

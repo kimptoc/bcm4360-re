@@ -721,7 +721,7 @@ static void brcmf_pcie_probe_armcr4_state(struct brcmf_pciedev_info *devinfo,
 	/* test.169 confirmed: BCM4360 ARM CR4 wrapbase is core->base + 0x100000
 	 * (canonical BCMA AI layout); the previous low-window probe at +0x1000
 	 * read a different register (CLK only). Use the high window exclusively.
-	 * test.186b adds IOSTATUS (0x40c) to expose firmware-visible wrapper bits. */
+	 * test.186d adds IOSTATUS (0x40c) to expose firmware-visible wrapper bits. */
 	arm_core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_ARM_CR4);
 	if (arm_core) {
 		pci_read_config_dword(devinfo->pdev, BRCMF_PCIE_BAR0_WINDOW,
@@ -736,12 +736,12 @@ static void brcmf_pcie_probe_armcr4_state(struct brcmf_pciedev_info *devinfo,
 	}
 
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-	pr_emerg("BCM4360 test.186b: %s ARM CR4 IOCTL=0x%08x IOSTATUS=0x%08x RESET_CTL=0x%08x CPUHALT=%s\n",
+	pr_emerg("BCM4360 test.186d: %s ARM CR4 IOCTL=0x%08x IOSTATUS=0x%08x RESET_CTL=0x%08x CPUHALT=%s\n",
 		 tag, ioctl, iostat, rstctl, (ioctl & 0x20) ? "YES" : "NO");
 }
 
 
-/* test.186b: read-only probe of D11 (BCMA_CORE_80211) wrapper.
+/* test.186d: read-only probe of D11 (BCMA_CORE_80211) wrapper.
  *
  * D11 is the 802.11 MAC/PHY core. Firmware bringing up wifi has to reset
  * and enable D11 via its wrapper registers. If firmware reaches the point
@@ -770,12 +770,12 @@ static void brcmf_pcie_probe_d11_state(struct brcmf_pciedev_info *devinfo,
 	}
 
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-	pr_emerg("BCM4360 test.186b: %s D11 IOCTL=0x%08x IOSTATUS=0x%08x RESET_CTL=0x%08x\n",
+	pr_emerg("BCM4360 test.186d: %s D11 IOCTL=0x%08x IOSTATUS=0x%08x RESET_CTL=0x%08x\n",
 		 tag, ioctl, iostat, rstctl);
 }
 
 
-/* test.186b: snapshot ChipCommon backplane registers that firmware would
+/* test.186d: snapshot ChipCommon backplane registers that firmware would
  * typically manipulate during early init, plus pmutimer as a monotonic
  * "is the PMU clocked?" signal. Purely diagnostic; no writes.
  */
@@ -1967,9 +1967,9 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		u32 i;
 		u32 pre_tcm[8] = {0};	/* image-header window TCM[0x0..0x1c] */
 		u32 pre_marker = 0;	/* NVRAM marker at ramsize-4 */
-		u32 pre_wide[40] = {0};	/* test.186b: 16-KB grid across 640-KB TCM */
-		u32 pre_tail[16] = {0};	/* test.186b: last 64 B of TCM */
-		u32 pre_bp[BRCMF_BP_REG_COUNT] = {0};	/* test.186b: backplane regs */
+		u32 pre_wide[40] = {0};	/* test.186d: 16-KB grid across 640-KB TCM */
+		u32 pre_tail[16] = {0};	/* test.186d: last 64 B of TCM */
+		u32 pre_bp[BRCMF_BP_REG_COUNT] = {0};	/* test.186d: backplane regs */
 		static const u32 wide_offsets[40] = {
 			0x00000, 0x04000, 0x08000, 0x0c000,
 			0x10000, 0x14000, 0x18000, 0x1c000,
@@ -1989,7 +1989,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		mdelay(50);
 
 		/* test.167: re-halt ARM CR4 via the public chip API. */
-		pr_emerg("BCM4360 test.186b: re-halting ARM CR4 via brcmf_chip_set_passive\n");
+		pr_emerg("BCM4360 test.186d: re-halting ARM CR4 via brcmf_chip_set_passive\n");
 		mdelay(50);
 		brcmf_chip_set_passive(devinfo->ci);
 		mdelay(100);	/* settle */
@@ -1998,20 +1998,20 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		brcmf_pcie_probe_armcr4_state(devinfo, "post-halt");
 		mdelay(50);
 
-		pr_emerg("BCM4360 test.186b: starting chunked fw write, total_words=%u (%zu bytes) tail=%u wbase=%px\n",
+		pr_emerg("BCM4360 test.186d: starting chunked fw write, total_words=%u (%zu bytes) tail=%u wbase=%px\n",
 			 total_words, fw->size, tail, wbase);
 		mdelay(50);
 
 		for (i = 0; i < total_words; i++) {
 			iowrite32(le32_to_cpu(src32[i]), wbase + i * 4);
 			if ((i + 1) % chunk_words == 0) {
-				pr_emerg("BCM4360 test.186b: wrote %u words (%u bytes)\n",
+				pr_emerg("BCM4360 test.186d: wrote %u words (%u bytes)\n",
 					 i + 1, (i + 1) * 4);
 				mdelay(50);
 			}
 		}
 
-		pr_emerg("BCM4360 test.186b: all %u words written, before tail (tail=%u)\n",
+		pr_emerg("BCM4360 test.186d: all %u words written, before tail (tail=%u)\n",
 			 total_words, tail);
 		mdelay(50);
 
@@ -2021,14 +2021,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			memcpy(&tmp, (const u8 *)fw->data + (fw->size & ~3u),
 			       tail);
 			iowrite32(tmp, wbase + (fw->size & ~3u));
-			pr_emerg("BCM4360 test.186b: tail %u bytes written at offset %zu\n",
+			pr_emerg("BCM4360 test.186d: tail %u bytes written at offset %zu\n",
 				 tail, fw->size & ~3u);
 			mdelay(50);
 		}
 
-		pr_emerg("BCM4360 test.186b: fw write complete (%zu bytes)\n",
+		pr_emerg("BCM4360 test.186d: fw write complete (%zu bytes)\n",
 			 fw->size);
-		/* test.186b: test.181 proved brcmf_chip_set_active(ci, resetintr)
+		/* test.186d: test.181 proved brcmf_chip_set_active(ci, resetintr)
 		 * succeeds on BCM4360 — ARM CR4 IOCTL 0x21 → 0x01 (CPUHALT YES→NO),
 		 * host stable for 30 s. Now extend the post-release observation to
 		 * detect firmware-originated TCM writes: snapshot TCM[0x0..0x1c]
@@ -2037,11 +2037,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 * Still no sharedram polling and no advance into normal attach; we
 		 * release fw/nvram and return -ENODEV.
 		 */
-		pr_emerg("BCM4360 test.186b: before post-fw msleep(100)\n");
+		pr_emerg("BCM4360 test.186d: before post-fw msleep(100)\n");
 		msleep(100);
-		pr_emerg("BCM4360 test.186b: after post-fw msleep(100)\n");
+		pr_emerg("BCM4360 test.186d: after post-fw msleep(100)\n");
 		resetintr = get_unaligned_le32(fw->data);
-		pr_emerg("BCM4360 test.186b: host resetintr=0x%08x before NVRAM\n",
+		pr_emerg("BCM4360 test.186d: host resetintr=0x%08x before NVRAM\n",
 			 resetintr);
 
 		if (nvram) {
@@ -2055,14 +2055,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			address = devinfo->ci->rambase + devinfo->ci->ramsize -
 				  nvram_len;
 			naddr = devinfo->tcm + address;
-			pr_emerg("BCM4360 test.186b: pre-NVRAM write address=0x%x len=%u naddr=%px\n",
+			pr_emerg("BCM4360 test.186d: pre-NVRAM write address=0x%x len=%u naddr=%px\n",
 				 address, nvram_len, naddr);
 
 			for (j = 0; j < nwords; j++) {
 				iowrite32(le32_to_cpu(nsrc32[j]),
 					  naddr + j * 4);
 				if ((j + 1) % nchunk == 0) {
-					pr_emerg("BCM4360 test.186b: NVRAM wrote %u words (%u bytes)\n",
+					pr_emerg("BCM4360 test.186d: NVRAM wrote %u words (%u bytes)\n",
 						 j + 1, (j + 1) * 4);
 					mdelay(50);
 				}
@@ -2075,23 +2075,23 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				       ntail);
 				iowrite32(tmp, naddr + (nvram_len & ~3u));
 			}
-			pr_emerg("BCM4360 test.186b: post-NVRAM write done (%u bytes)\n",
+			pr_emerg("BCM4360 test.186d: post-NVRAM write done (%u bytes)\n",
 				 nvram_len);
 			sharedram_addr_written =
 				brcmf_pcie_read_ram32(devinfo,
 						       devinfo->ci->ramsize - 4);
 			pre_marker = sharedram_addr_written;
-			pr_emerg("BCM4360 test.186b: NVRAM marker at ramsize-4 = 0x%08x (pre-release snapshot)\n",
+			pr_emerg("BCM4360 test.186d: NVRAM marker at ramsize-4 = 0x%08x (pre-release snapshot)\n",
 				 sharedram_addr_written);
 			for (j = 0; j < 8; j++) {
 				u32 offset = j * 4;
 				u32 val = brcmf_pcie_read_ram32(devinfo, offset);
 
 				pre_tcm[j] = val;
-				pr_emerg("BCM4360 test.186b: TCM[0x%04x]=0x%08x (pre-release snapshot)\n",
+				pr_emerg("BCM4360 test.186d: TCM[0x%04x]=0x%08x (pre-release snapshot)\n",
 					 offset, val);
 			}
-			/* test.186b: 16-KB wide grid across the full 640-KB TCM.
+			/* test.186d: 16-KB wide grid across the full 640-KB TCM.
 			 * test.184 saw all 32 sample points unchanged at 3 s —
 			 * if firmware is rewriting *any* 16-KB block of the image
 			 * we'll now see it. Every probe point is inside ramsize
@@ -2105,10 +2105,10 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				u32 val = brcmf_pcie_read_ram32(devinfo, offset);
 
 				pre_wide[j] = val;
-				pr_emerg("BCM4360 test.186b: wide-TCM[0x%05x]=0x%08x (pre-release snapshot)\n",
+				pr_emerg("BCM4360 test.186d: wide-TCM[0x%05x]=0x%08x (pre-release snapshot)\n",
 					 offset, val);
 			}
-			/* test.186b: last 64 bytes of TCM cover the sharedram
+			/* test.186d: last 64 bytes of TCM cover the sharedram
 			 * address slot (upstream convention: ramsize - 8) and
 			 * other potential firmware handshake fields adjacent
 			 * to the NVRAM marker at ramsize - 4.
@@ -2118,10 +2118,10 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				u32 val = brcmf_pcie_read_ram32(devinfo, offset);
 
 				pre_tail[j] = val;
-				pr_emerg("BCM4360 test.186b: tail-TCM[0x%05x]=0x%08x (pre-release snapshot)\n",
+				pr_emerg("BCM4360 test.186d: tail-TCM[0x%05x]=0x%08x (pre-release snapshot)\n",
 					 offset, val);
 			}
-			/* test.186b: backplane-register snapshot via ChipCommon.
+			/* test.186d: backplane-register snapshot via ChipCommon.
 			 * pmutimer ticks at ILP clock (~32 kHz) so a positive
 			 * delta between pre-release and dwell reads directly
 			 * confirms the PMU is alive independent of any firmware
@@ -2130,10 +2130,10 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			 */
 			brcmf_pcie_sample_backplane(devinfo, pre_bp);
 			for (j = 0; j < BRCMF_BP_REG_COUNT; j++)
-				pr_emerg("BCM4360 test.186b: CC-%s=0x%08x (pre-release snapshot)\n",
+				pr_emerg("BCM4360 test.186d: CC-%s=0x%08x (pre-release snapshot)\n",
 					 brcmf_bp_reg_names[j], pre_bp[j]);
 		} else {
-			pr_emerg("BCM4360 test.186b: no NVRAM loaded before early return\n");
+			pr_emerg("BCM4360 test.186d: no NVRAM loaded before early return\n");
 		}
 
 		{
@@ -2142,14 +2142,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			imem_core = brcmf_chip_get_core(devinfo->ci,
 							BCMA_CORE_INTERNAL_MEM);
 			if (imem_core) {
-				pr_emerg("BCM4360 test.186b: pre-resetcore INTERNAL_MEM core->base=0x%08x rev=%u\n",
+				pr_emerg("BCM4360 test.186d: pre-resetcore INTERNAL_MEM core->base=0x%08x rev=%u\n",
 					 imem_core->base, imem_core->rev);
 				mdelay(50);
 				brcmf_chip_resetcore(imem_core, 0, 0, 0);
 				mdelay(50);
-				pr_emerg("BCM4360 test.186b: post-resetcore INTERNAL_MEM complete\n");
+				pr_emerg("BCM4360 test.186d: post-resetcore INTERNAL_MEM complete\n");
 			} else {
-				pr_emerg("BCM4360 test.186b: INTERNAL_MEM core not found — resetcore skipped (expected on BCM4360)\n");
+				pr_emerg("BCM4360 test.186d: INTERNAL_MEM core not found — resetcore skipped (expected on BCM4360)\n");
 			}
 		}
 
@@ -2165,12 +2165,49 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			brcmf_pcie_probe_d11_state(devinfo,
 						   "pre-set-active");
 			mdelay(50);
-			pr_emerg("BCM4360 test.186b: calling brcmf_chip_set_active resetintr=0x%08x (BusMaster stays cleared)\n",
+
+			/* test.186d: enable BusMaster BEFORE set_active so
+			 * firmware's first DMA can complete. test.64/65-era
+			 * comments (lines ~2725-2742, ~4033-4037) established
+			 * that without BusMaster the firmware DMA init fails
+			 * every ~3 s. MMIO guard before and after. */
+			{
+				u16 cmd_pre_bm, cmd_post_bm;
+				u32 mmio_guard;
+
+				mmio_guard = brcmf_pcie_read_reg32(devinfo,
+						devinfo->reginfo->mailboxint);
+				pci_read_config_word(devinfo->pdev,
+						     PCI_COMMAND,
+						     &cmd_pre_bm);
+				pr_emerg("BCM4360 test.186d: pre-BM PCI_COMMAND=0x%04x BM=%s MMIO guard mailboxint=0x%08x\n",
+					 cmd_pre_bm,
+					 (cmd_pre_bm & PCI_COMMAND_MASTER) ?
+						"ON" : "OFF",
+					 mmio_guard);
+
+				pci_set_master(devinfo->pdev);
+				pci_read_config_word(devinfo->pdev,
+						     PCI_COMMAND,
+						     &cmd_post_bm);
+				pr_emerg("BCM4360 test.186d: pci_set_master done; PCI_COMMAND=0x%04x BM=%s (before set_active)\n",
+					 cmd_post_bm,
+					 (cmd_post_bm & PCI_COMMAND_MASTER) ?
+						"ON" : "OFF");
+
+				mmio_guard = brcmf_pcie_read_reg32(devinfo,
+						devinfo->reginfo->mailboxint);
+				pr_emerg("BCM4360 test.186d: post-BM-on MMIO guard mailboxint=0x%08x (endpoint still responsive)\n",
+					 mmio_guard);
+			}
+
+			mdelay(20);
+			pr_emerg("BCM4360 test.186d: calling brcmf_chip_set_active resetintr=0x%08x (BusMaster ENABLED — DMA-stall discriminator)\n",
 				 resetintr);
-			mdelay(50);
+			mdelay(30);
 			sa_rc = brcmf_chip_set_active(devinfo->ci,
 						      resetintr);
-			pr_emerg("BCM4360 test.186b: brcmf_chip_set_active returned %s\n",
+			pr_emerg("BCM4360 test.186d: brcmf_chip_set_active returned %s\n",
 				 sa_rc ? "true" : "false");
 			mdelay(20);
 			brcmf_pcie_probe_armcr4_state(devinfo,
@@ -2183,7 +2220,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			brcmf_pcie_probe_d11_state(devinfo,
 						   "post-set-active-100ms");
 
-			/* test.186b: extended post-release observation.
+			/* test.186d: extended post-release observation.
 			 * Re-read TCM[0x0..0x1c] and the NVRAM marker at each
 			 * dwell stage and diff against the pre-release snapshot
 			 * to detect firmware-originated writes.
@@ -2201,7 +2238,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 				marker_now = brcmf_pcie_read_ram32(devinfo,
 						devinfo->ci->ramsize - 4);
-				pr_emerg("BCM4360 test.186b: dwell-%ums NVRAM marker=0x%08x (was 0x%08x) %s\n",
+				pr_emerg("BCM4360 test.186d: dwell-%ums NVRAM marker=0x%08x (was 0x%08x) %s\n",
 					 dwell_labels_ms[d], marker_now,
 					 pre_marker,
 					 marker_now == pre_marker ?
@@ -2212,7 +2249,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					u32 val = brcmf_pcie_read_ram32(devinfo,
 									offset);
 
-					pr_emerg("BCM4360 test.186b: dwell-%ums TCM[0x%04x]=0x%08x (was 0x%08x) %s\n",
+					pr_emerg("BCM4360 test.186d: dwell-%ums TCM[0x%04x]=0x%08x (was 0x%08x) %s\n",
 						 dwell_labels_ms[d], offset,
 						 val, pre_tcm[j],
 						 val == pre_tcm[j] ?
@@ -2225,7 +2262,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					u32 val = brcmf_pcie_read_ram32(devinfo,
 									offset);
 
-					pr_emerg("BCM4360 test.186b: dwell-%ums wide-TCM[0x%05x]=0x%08x (was 0x%08x) %s\n",
+					pr_emerg("BCM4360 test.186d: dwell-%ums wide-TCM[0x%05x]=0x%08x (was 0x%08x) %s\n",
 						 dwell_labels_ms[d], offset,
 						 val, pre_wide[j],
 						 val == pre_wide[j] ?
@@ -2239,7 +2276,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					u32 val = brcmf_pcie_read_ram32(devinfo,
 									offset);
 
-					pr_emerg("BCM4360 test.186b: dwell-%ums tail-TCM[0x%05x]=0x%08x (was 0x%08x) %s\n",
+					pr_emerg("BCM4360 test.186d: dwell-%ums tail-TCM[0x%05x]=0x%08x (was 0x%08x) %s\n",
 						 dwell_labels_ms[d], offset,
 						 val, pre_tail[j],
 						 val == pre_tail[j] ?
@@ -2254,7 +2291,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 								    bp_now);
 					for (j = 0; j < BRCMF_BP_REG_COUNT;
 					     j++)
-						pr_emerg("BCM4360 test.186b: dwell-%ums CC-%s=0x%08x (was 0x%08x) %s\n",
+						pr_emerg("BCM4360 test.186d: dwell-%ums CC-%s=0x%08x (was 0x%08x) %s\n",
 							 dwell_labels_ms[d],
 							 brcmf_bp_reg_names[j],
 							 bp_now[j], pre_bp[j],
@@ -2266,190 +2303,40 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			}
 		}
 
-		/* test.186a: H2D mailbox kick after passive observation.
-		 *
-		 * test.185 showed firmware idles after one pmucontrol bit-9
-		 * write and never touches D11 or TCM. Candidate stall: fw is
-		 * waiting for a host doorbell. Kick all three channels:
-		 *   - H2D_MAILBOX_0 (PCIE2 core BAR0+0x140) — generic doorbell
-		 *   - H2D_MAILBOX_1 (PCIE2 core BAR0+0x144) — HostReady doorbell
-		 *   - SBMBX (PCI config space 0x98)         — sideband mailbox
-		 * All three are pure MMIO/config-space writes: no BusMaster
-		 * required, no shared-info parse needed, no DMA. Then dwell
-		 * +500ms and +2000ms with full D11+CR4+CC+mailboxint+TCM
-		 * probes. If firmware was waiting on *any* of these signals
-		 * we expect a visible response (D11 RESET_CTL clearing,
-		 * mailboxint asserting, or new TCM writes).
+		/* test.186d: set_active ran with BusMaster ENABLED (set
+		 * above before the call). The dwell loop already sampled
+		 * CR4/D11/TCM/NVRAM/CC at 500/1500/3000 ms. Sample
+		 * mailboxint one final time, then pci_clear_master before
+		 * returning -ENODEV so the chip is in a safe state.
 		 */
 		{
-			u16 cmd_pre, cmd_on, cmd_cleared;
-			u32 mbint_pre, mbint_on_50, mbint_on_100;
-			u32 bar0_guard_pre, bar0_guard_post_on, bar0_guard_post_clear;
-			static const u32 post_bm_labels_ms[] = { 500, 2000 };
-			static const u32 post_bm_increments_ms[] = { 500, 1500 };
-			u32 k;
-			u32 j;
+			u32 mbint_final;
+			u16 cmd_post_clear;
+			u32 mmio_guard_post;
 
-			/* test.186b: brief BusMaster-on window after 3s dwell
-			 * to discriminate DMA-stall vs exception/panic loop.
-			 * Phase-4B crashed with BusMaster on for full attach;
-			 * here we keep the window to ~100 ms total and sample
-			 * MMIO before/after to guard against endpoint wedge.
-			 */
 			brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
-			mbint_pre = brcmf_pcie_read_reg32(devinfo,
+			mbint_final = brcmf_pcie_read_reg32(devinfo,
 					devinfo->reginfo->mailboxint);
-			pci_read_config_word(devinfo->pdev, PCI_COMMAND,
-					     &cmd_pre);
-			pr_emerg("BCM4360 test.186b: pre-BM PCI_COMMAND=0x%04x BM=%s mailboxint=0x%08x\n",
-				 cmd_pre,
-				 (cmd_pre & PCI_COMMAND_MASTER) ? "ON" : "OFF",
-				 mbint_pre);
-
-			bar0_guard_pre = brcmf_pcie_read_reg32(devinfo,
-					devinfo->reginfo->mailboxint);
-			pr_emerg("BCM4360 test.186b: pre-BM MMIO guard mailboxint=0x%08x (endpoint responsive before BM-on)\n",
-				 bar0_guard_pre);
-
-			pci_set_master(devinfo->pdev);
-			pci_read_config_word(devinfo->pdev, PCI_COMMAND,
-					     &cmd_on);
-			pr_emerg("BCM4360 test.186b: BM-on PCI_COMMAND=0x%04x BM=%s\n",
-				 cmd_on,
-				 (cmd_on & PCI_COMMAND_MASTER) ? "ON" : "OFF");
-
-			msleep(50);
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
-			mbint_on_50 = brcmf_pcie_read_reg32(devinfo,
-					devinfo->reginfo->mailboxint);
-			pr_emerg("BCM4360 test.186b: BM-on+50ms PCIE2 mailboxint=0x%08x (pre-BM was 0x%08x) %s\n",
-				 mbint_on_50, mbint_pre,
-				 mbint_on_50 == mbint_pre ?
-					"UNCHANGED" : "CHANGED");
-			brcmf_pcie_probe_armcr4_state(devinfo, "BM-on+50ms");
-			brcmf_pcie_probe_d11_state(devinfo, "BM-on+50ms");
-
-			msleep(50);
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
-			mbint_on_100 = brcmf_pcie_read_reg32(devinfo,
-					devinfo->reginfo->mailboxint);
-			pr_emerg("BCM4360 test.186b: BM-on+100ms PCIE2 mailboxint=0x%08x (pre-BM was 0x%08x) %s\n",
-				 mbint_on_100, mbint_pre,
-				 mbint_on_100 == mbint_pre ?
-					"UNCHANGED" : "CHANGED");
-			brcmf_pcie_probe_armcr4_state(devinfo, "BM-on+100ms");
-			brcmf_pcie_probe_d11_state(devinfo, "BM-on+100ms");
-
-			bar0_guard_post_on = brcmf_pcie_read_reg32(devinfo,
-					devinfo->reginfo->mailboxint);
-			pr_emerg("BCM4360 test.186b: post-BM-on MMIO guard mailboxint=0x%08x (endpoint still responsive)\n",
-				 bar0_guard_post_on);
+			pr_emerg("BCM4360 test.186d: final PCIE2 mailboxint=0x%08x (D2H bits would be 0x10000+, FN0 bits 0x0100/0x0200)\n",
+				 mbint_final);
 
 			pci_clear_master(devinfo->pdev);
 			pci_read_config_word(devinfo->pdev, PCI_COMMAND,
-					     &cmd_cleared);
-			pr_emerg("BCM4360 test.186b: BM-cleared PCI_COMMAND=0x%04x BM=%s\n",
-				 cmd_cleared,
-				 (cmd_cleared & PCI_COMMAND_MASTER) ?
+					     &cmd_post_clear);
+			pr_emerg("BCM4360 test.186d: pci_clear_master done; PCI_COMMAND=0x%04x BM=%s\n",
+				 cmd_post_clear,
+				 (cmd_post_clear & PCI_COMMAND_MASTER) ?
 					"ON" : "OFF");
 
-			bar0_guard_post_clear = brcmf_pcie_read_reg32(devinfo,
+			mmio_guard_post = brcmf_pcie_read_reg32(devinfo,
 					devinfo->reginfo->mailboxint);
-			pr_emerg("BCM4360 test.186b: post-BM-clear MMIO guard mailboxint=0x%08x (endpoint alive after BM-off)\n",
-				 bar0_guard_post_clear);
-
-			for (k = 0; k < ARRAY_SIZE(post_bm_labels_ms); k++) {
-				char tag[32];
-				u32 marker_now, mbint_now;
-
-				msleep(post_bm_increments_ms[k]);
-				snprintf(tag, sizeof(tag),
-					 "post-BM-%ums",
-					 post_bm_labels_ms[k]);
-
-				brcmf_pcie_probe_armcr4_state(devinfo, tag);
-				brcmf_pcie_probe_d11_state(devinfo, tag);
-
-				brcmf_pcie_select_core(devinfo,
-						       BCMA_CORE_PCIE2);
-				mbint_now = brcmf_pcie_read_reg32(devinfo,
-						devinfo->reginfo->mailboxint);
-				pr_emerg("BCM4360 test.186b: %s PCIE2 mailboxint=0x%08x (pre-BM was 0x%08x) %s\n",
-					 tag, mbint_now, mbint_pre,
-					 mbint_now == mbint_pre ?
-						"UNCHANGED" : "CHANGED");
-
-				marker_now = brcmf_pcie_read_ram32(devinfo,
-						devinfo->ci->ramsize - 4);
-				pr_emerg("BCM4360 test.186b: %s NVRAM marker=0x%08x (was 0x%08x) %s\n",
-					 tag, marker_now, pre_marker,
-					 marker_now == pre_marker ?
-						"UNCHANGED" : "CHANGED");
-
-				for (j = 0; j < 8; j++) {
-					u32 offset = j * 4;
-					u32 val = brcmf_pcie_read_ram32(devinfo,
-									offset);
-
-					pr_emerg("BCM4360 test.186b: %s TCM[0x%04x]=0x%08x (was 0x%08x) %s\n",
-						 tag, offset, val,
-						 pre_tcm[j],
-						 val == pre_tcm[j] ?
-							"UNCHANGED" :
-							"CHANGED");
-				}
-
-				for (j = 0; j < ARRAY_SIZE(wide_offsets);
-				     j++) {
-					u32 offset = wide_offsets[j];
-					u32 val = brcmf_pcie_read_ram32(devinfo,
-									offset);
-
-					pr_emerg("BCM4360 test.186b: %s wide-TCM[0x%05x]=0x%08x (was 0x%08x) %s\n",
-						 tag, offset, val,
-						 pre_wide[j],
-						 val == pre_wide[j] ?
-							"UNCHANGED" :
-							"CHANGED");
-				}
-
-				for (j = 0; j < ARRAY_SIZE(pre_tail); j++) {
-					u32 offset = devinfo->ci->ramsize -
-						     64 + j * 4;
-					u32 val = brcmf_pcie_read_ram32(devinfo,
-									offset);
-
-					pr_emerg("BCM4360 test.186b: %s tail-TCM[0x%05x]=0x%08x (was 0x%08x) %s\n",
-						 tag, offset, val,
-						 pre_tail[j],
-						 val == pre_tail[j] ?
-							"UNCHANGED" :
-							"CHANGED");
-				}
-
-				{
-					u32 bp_now[BRCMF_BP_REG_COUNT];
-
-					brcmf_pcie_sample_backplane(devinfo,
-								    bp_now);
-					for (j = 0; j < BRCMF_BP_REG_COUNT;
-					     j++)
-						pr_emerg("BCM4360 test.186b: %s CC-%s=0x%08x (was 0x%08x) %s\n",
-							 tag,
-							 brcmf_bp_reg_names[j],
-							 bp_now[j],
-							 pre_bp[j],
-							 bp_now[j] ==
-							 pre_bp[j] ?
-								"UNCHANGED" :
-								"CHANGED");
-				}
-			}
+			pr_emerg("BCM4360 test.186d: post-BM-clear MMIO guard mailboxint=0x%08x (endpoint alive after BM-off)\n",
+				 mmio_guard_post);
 		}
 
 		release_firmware(fw);
 		brcmf_fw_nvram_free(nvram);
-		pr_emerg("BCM4360 test.186b: released fw/nvram after BusMaster-on window + post-BM sampling; returning -ENODEV\n");
+		pr_emerg("BCM4360 test.186d: released fw/nvram after BM-before-set_active + dwell + BM-clear; returning -ENODEV\n");
 		return -ENODEV;
 	} else {
 		brcmf_pcie_copy_mem_todev(devinfo, devinfo->ci->rambase,
@@ -2458,14 +2345,14 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 	resetintr = get_unaligned_le32(fw->data);
 	release_firmware(fw);
-	pr_emerg("BCM4360 test.186b: after release_firmware resetintr=0x%08x\n",
+	pr_emerg("BCM4360 test.186d: after release_firmware resetintr=0x%08x\n",
 		 resetintr);
 	mdelay(50);
 
 	if (nvram) {
 		address = devinfo->ci->rambase + devinfo->ci->ramsize -
 			  nvram_len;
-		pr_emerg("BCM4360 test.186b: pre-NVRAM write address=0x%x len=%u tcm=%px\n",
+		pr_emerg("BCM4360 test.186d: pre-NVRAM write address=0x%x len=%u tcm=%px\n",
 			 address, nvram_len, devinfo->tcm);
 		mdelay(50);
 
@@ -2485,7 +2372,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				iowrite32(le32_to_cpu(nsrc32[j]),
 					  naddr + j * 4);
 				if ((j + 1) % nchunk == 0) {
-					pr_emerg("BCM4360 test.186b: NVRAM wrote %u words (%u bytes)\n",
+					pr_emerg("BCM4360 test.186d: NVRAM wrote %u words (%u bytes)\n",
 						 j + 1, (j + 1) * 4);
 					mdelay(50);
 				}
@@ -2498,7 +2385,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				       ntail);
 				iowrite32(tmp, naddr + (nvram_len & ~3u));
 			}
-			pr_emerg("BCM4360 test.186b: post-NVRAM write done (%u bytes)\n",
+			pr_emerg("BCM4360 test.186d: post-NVRAM write done (%u bytes)\n",
 				 nvram_len);
 			mdelay(50);
 		}
@@ -4759,9 +4646,9 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.158: ASPM disabled; LnkCtl before=0x%04x after=0x%04x ASPM-bits-after=0x%x\n",
 			  lnkctl_before, lnkctl_after, lnkctl_after & PCI_EXP_LNKCTL_ASPMC);
-		msleep(300); /* test.186b: flush before root-port ASPM/CLKPM work */
+		msleep(300); /* test.186d: flush before root-port ASPM/CLKPM work */
 
-		/* test.186b keeps the root-port LnkCtl logging from test.172 for
+		/* test.186d keeps the root-port LnkCtl logging from test.172 for
 		 * comparability. test.172 showed root-port ASPM/CLKPM was already
 		 * off, so the main discriminator is now extended post-release TCM
 		 * sampling (firmware-originated write detection) in
@@ -4772,7 +4659,7 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 			pcie_capability_read_word(bridge, PCI_EXP_LNKCTL,
 						  &rp_lnkctl_before);
 			dev_emerg(&pdev->dev,
-				  "BCM4360 test.186b: root port %s LnkCtl before=0x%04x ASPM=0x%x CLKREQ=%s — disabling L0s/L1/CLKPM\n",
+				  "BCM4360 test.186d: root port %s LnkCtl before=0x%04x ASPM=0x%x CLKREQ=%s — disabling L0s/L1/CLKPM\n",
 				  pci_name(bridge), rp_lnkctl_before,
 				  rp_lnkctl_before & PCI_EXP_LNKCTL_ASPMC,
 				  rp_lnkctl_before & PCI_EXP_LNKCTL_CLKREQ_EN ? "on" : "off");
@@ -4781,20 +4668,20 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 			pci_disable_link_state(bridge, PCIE_LINK_STATE_L0S |
 					       PCIE_LINK_STATE_L1 |
 					       PCIE_LINK_STATE_CLKPM);
-			pr_emerg("BCM4360 test.186b: root-port pci_disable_link_state returned — reading LnkCtl\n");
+			pr_emerg("BCM4360 test.186d: root-port pci_disable_link_state returned — reading LnkCtl\n");
 			msleep(300);
 
 			pcie_capability_read_word(bridge, PCI_EXP_LNKCTL,
 						  &rp_lnkctl_after);
 			dev_emerg(&pdev->dev,
-				  "BCM4360 test.186b: root port %s LnkCtl after=0x%04x ASPM=0x%x CLKREQ=%s\n",
+				  "BCM4360 test.186d: root port %s LnkCtl after=0x%04x ASPM=0x%x CLKREQ=%s\n",
 				  pci_name(bridge), rp_lnkctl_after,
 				  rp_lnkctl_after & PCI_EXP_LNKCTL_ASPMC,
 				  rp_lnkctl_after & PCI_EXP_LNKCTL_CLKREQ_EN ? "on" : "off");
 			msleep(300);
 		} else {
 			dev_emerg(&pdev->dev,
-				  "BCM4360 test.186b: no upstream bridge found; root-port ASPM/CLKPM disable skipped\n");
+				  "BCM4360 test.186d: no upstream bridge found; root-port ASPM/CLKPM disable skipped\n");
 			msleep(300);
 		}
 
@@ -5203,19 +5090,19 @@ static struct pci_driver brcmf_pciedrvr = {
  * after chip_attach() has initialized the PCIe-to-backplane bridge. */
 void brcmf_pcie_early_arm_halt(void)
 {
-	pr_emerg("BCM4360 test.186b: module_init entry — extended post-release TCM sampling\n");
+	pr_emerg("BCM4360 test.186d: module_init entry — extended post-release TCM sampling\n");
 }
 
 int brcmf_pcie_register(void)
 {
 	int ret;
 
-	pr_emerg("BCM4360 test.186b: brcmf_pcie_register() entry\n");
+	pr_emerg("BCM4360 test.186d: brcmf_pcie_register() entry\n");
 	msleep(300); /* flush marker before pci_register_driver */
-	pr_emerg("BCM4360 test.186b: before pci_register_driver\n");
+	pr_emerg("BCM4360 test.186d: before pci_register_driver\n");
 	msleep(300); /* flush — if crash here, it's in pci_register_driver kernel code */
 	ret = pci_register_driver(&brcmf_pciedrvr);
-	pr_emerg("BCM4360 test.186b: pci_register_driver returned ret=%d\n", ret);
+	pr_emerg("BCM4360 test.186d: pci_register_driver returned ret=%d\n", ret);
 	return ret;
 }
 

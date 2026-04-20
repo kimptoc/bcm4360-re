@@ -1,5 +1,80 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.186d (2026-04-20, staged) — BusMaster on BEFORE set_active
+
+### Hypothesis
+test.64/65-era comments in pcie.c (lines 2725-2742 and 4033-4037)
+establish that firmware's first action at startup is a PCIe DMA that
+fails silently if BusMaster is off, causing a crash-restart loop
+every ~3s. test.186b enabled BusMaster 3 s too late. This test
+enables it *before* `brcmf_chip_set_active`, so firmware's first
+DMA has a chance of succeeding.
+
+### Prediction
+- **If DMA-stall:** within the 3 s post-set_active window we expect
+  at least one of — (a) any TCM write (any of 56 probed offsets
+  CHANGED), (b) D11 RESET_CTL transitioning to 0x00, (c) sharedram
+  pointer replacing our 0xffc70038 NVRAM marker, (d) mailboxint
+  asserting a D2H bit (0x10000..0x800000), (e) more than one
+  pmucontrol bit flipping over time.
+- **If exception-loop:** the same test.186b post-BM baseline
+  (D11 in reset, TCM unchanged, one pmucontrol bit-9 flip,
+  pmutimer monotonic, otherwise silent). This would then fully
+  rule out the DMA-stall hypothesis and make exception-loop the
+  leading candidate.
+
+### Risk
+Phase-4B crashed the host with BusMaster on + full attach (msgbuf
+rings set up, so firmware DMA targeted real structures). This test
+does NOT set up rings — it stays in the skip_arm=1 / -ENODEV early
+return path. Shared RAM contains only our firmware image and NVRAM;
+any DMA pointer firmware reads from it is effectively garbage, which
+the IOMMU (device is in group 8) will block. That should translate
+the failure mode from "host MCE" to "firmware DMA-error retry".
+
+Mitigations: (a) MMIO guard reads before and after set_active,
+(b) total post-set_active observation ≤ 3 s, (c) `pci_clear_master`
+before module return regardless of outcome.
+
+### Run command
+```
+sudo ./phase5/work/test-staged-reset.sh 0
+```
+PCIe pre-test: verify no MAbort+ on `lspci -vvv -s 03:00.0`.
+
+---
+
+## AMENDMENT to POST-TEST.186b (2026-04-20) — interpretation corrected; DMA-stall NOT falsified
+
+On re-reading `pcie.c` around line 4020 the test.64/65-era comment
+(from an earlier phase of this investigation) states:
+
+> Enable BusMaster on BCM4360 endpoint BEFORE ARM release. …
+> Without BusMaster the firmware cannot DMA to host memory — its
+> PCIe2 DMA init fails every ~3s causing the periodic crash events
+> we observed in test.58-63.
+
+test.186b enabled BusMaster **3 seconds after `brcmf_chip_set_active`**,
+by which time firmware's first DMA attempt had already failed.
+Turning BusMaster on later cannot un-stick firmware that is already
+in its DMA-failure / retry / panic loop. So 186b's "no response"
+result is consistent with DMA-stall, not evidence against it.
+
+The correct test is **test.186d**: `pci_set_master` *before* the
+existing `brcmf_chip_set_active` call, keep skip_arm=1 + -ENODEV
+early return, observe the same sample grid. If firmware now
+progresses (TCM writes / D11 wrapper releasing / sharedram marker
+replacing 0xffc70038 / D2H mailboxint bits asserting) → DMA-stall
+confirmed. If still no change → exception-loop hypothesis
+strengthens. `pci_clear_master` before module return, IOMMU group 8
+gives secondary protection against any stray DMA.
+
+The body of POST-TEST.186b below still describes the actual measured
+signals (which remain valid as data); only the interpretation
+—"DMA-stall effectively falsified"— is retracted.
+
+---
+
 ## POST-TEST.186b (2026-04-20) — BusMaster enable does not unstick firmware; exception-loop is the leading hypothesis
 
 Captured artifacts:

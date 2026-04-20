@@ -128,16 +128,37 @@ hard-crash sessions (tests 149–157).
   panic loop very early** (after the one pmucontrol bit-9 write); CPU
   is running but not touching anything observable over MMIO.
 
-**Next boundary:** shift from "what might firmware be waiting on?" to
-"what is firmware's actual state right now?". Two complementary
-probes:
-1. **wl-trace diff** (read-only, lowest risk): compare `phase5/logs/wl-trace`
-   MMIO sequence for the post-set_active region against our own path to
-   identify missing host steps.
-2. **Re-halt + inspect** (low risk, requires small driver change):
-   after the 3-s dwell, re-assert CPUHALT in CR4 IOCTL, read CR4
-   wrapper status + TCM panic-log area to look for breadcrumbs left
-   by a panic handler.
+**test.186b interpretation CORRECTED:** on re-reading `pcie.c`
+around lines 2725-2742 / 4033-4037, test.64/65-era comments
+establish that firmware needs BusMaster ON *before* `brcmf_chip_set_active`
+so its first PCIe DMA succeeds; otherwise firmware enters a
+crash-restart loop every ~3 s. test.186b turned BusMaster on
+3 s after set_active — by then firmware was already stuck and
+no amount of late BusMaster enable could rescue it. **DMA-stall
+is NOT falsified; 186b's null result is consistent with it.**
+
+**Next boundary:** test.186d — same skip_arm=1 / -ENODEV path as
+test.186b, but `pci_set_master` executes immediately *before*
+`brcmf_chip_set_active`. Sample at the same dwell grid (500/1500/3000 ms).
+
+If firmware now progresses visibly (TCM writes, D11 release, sharedram
+marker replacing 0xffc70038, D2H mailboxint) → DMA-stall confirmed;
+firmware is alive and needs BusMaster. If no visible change → exception-loop
+hypothesis strengthens and the next step becomes re-halt + inspect
+(read CR4 wrapper fault registers + TCM panic-log area).
+
+Risk: Phase-4B crashed host with BusMaster + full attach; the msgbuf
+ring setup was the likely crash trigger. This test skips rings, keeps
+the -ENODEV early return, relies on IOMMU group 8 to block any stray
+DMA with a garbage pointer. Mitigations: MMIO guards, ≤ 3 s observation,
+`pci_clear_master` before return.
+
+**Alternative / lower-priority probe (if 186d null):** wl-trace diff
+was considered — `phase5/logs/wl-trace` turned out to be from a
+*failed* wl load (wl driver incompatible with 6.12 kernel — warn_thunk
+regression), so no useful MMIO sequence is captured. Path B would be
+re-halt + inspect CR4 wrapper fault registers + TCM panic-log area
+for breadcrumbs left by a firmware panic handler.
 
 **Re-entering the old 5.2 investigation:** once the probe-path restore is
 complete (i.e. firmware download and ARM release can run without host crash),
