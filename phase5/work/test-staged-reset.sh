@@ -17,18 +17,18 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.177.stage${STAGE}"
+LOG="$LOG_DIR/test.178.stage${STAGE}"
 
-echo "=== test.177: NVRAM BAR2 write after safe sleep/resetintr — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.178: NVRAM marker readback after safe NVRAM write — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: skip_arm=1 — download_fw_nvram: enter_download_state (read-only) + BAR2 ioread32 probe + 442KB iowrite32 fw; sleeps 100 ms, reads host resetintr from fw->data, writes NVRAM to BAR2, releases fw/NVRAM, returns -ENODEV." | tee -a "$LOG" ;;
+    0) echo "Stage 0: skip_arm=1 — download_fw_nvram: enter_download_state (read-only) + BAR2 ioread32 probe + 442KB iowrite32 fw; sleeps 100 ms, reads host resetintr from fw->data, writes NVRAM to BAR2, reads the ramsize-4 NVRAM marker, releases fw/NVRAM, returns -ENODEV." | tee -a "$LOG" ;;
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.177: test.176 proved host resetintr extraction after safe msleep(100) survives. This run adds only the NVRAM BAR2 write before release/return. Still no post-write ARM probe, device resetintr use, NVRAM marker readback, TCM dump, or ARM release.)" | tee -a "$LOG"
+echo "(test.178: test.177 proved the NVRAM BAR2 write survives. This run adds only the ramsize-4 NVRAM marker readback before release/return. Still no post-write ARM probe, device resetintr use, TCM dump, or ARM release.)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -113,14 +113,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=30  # test.177: NVRAM BAR2 write after safe sleep/resetintr discriminator
+    WAIT_SECS=30  # test.178: NVRAM marker readback after safe NVRAM write discriminator
 else
     SKIP_ARM=0
     WAIT_SECS=60
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.177 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.178 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.

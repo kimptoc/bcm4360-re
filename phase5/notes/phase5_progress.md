@@ -833,3 +833,21 @@ Recommended test.178: preserve the test.177 sequence through
 `brcmf_pcie_read_ram32(devinfo, devinfo->ci->ramsize - 4)` with a breadcrumb,
 release `fw`/`nvram`, and return `-ENODEV`. Continue to skip post-write ARM
 probing, device-side resetintr use, TCM dump, and ARM release.
+
+## Phase 5.4: PRE test.178
+
+test.178 is implemented as the NVRAM marker-readback discriminator. It preserves
+the safe test.177 sequence through the NVRAM BAR2 write, then reads only the
+`ramsize - 4` marker with `brcmf_pcie_read_ram32()`, releases `fw`/`nvram`, and
+returns `-ENODEV`.
+
+This intentionally still skips post-write ARM probing, device-side resetintr
+use, broader TCM dumps, and ARM release. If it survives, the next boundary can
+add a small TCM verify dump or begin isolating device-side resetintr /
+exit-download-state work. If it freezes before the marker value is logged, the
+BAR2 readback from `ramsize - 4` is the isolated unsafe operation.
+
+Build status: OK via kernel kbuild. The only warning is the pre-existing unused
+`brcmf_pcie_write_ram32` helper, and BTF is skipped because `vmlinux` is
+unavailable. `brcmfmac.ko` contains the `test.178` post-NVRAM, marker-readback,
+and early-return markers.
