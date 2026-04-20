@@ -85,13 +85,23 @@ hard-crash sessions (tests 149–157).
   survives. Firmware is alive and performed a small amount of
   early init, then idles. Most likely wedged at an early wait
   point (host handshake, resource availability).
+- **test.185 BOUNDARY RESULT:** 40-point 16-KB TCM grid + CR4 IOSTATUS
+  + D11 wrapper probe. All 40 wide-TCM + 16 tail-TCM + 8 image-header
+  TCM points UNCHANGED through 3 s. CR4 IOSTATUS=0x0 uninformative.
+  **D11 wrapper held in reset (RESET_CTL=0x01) from cold, and firmware
+  never touches it in 3 s** — IOCTL=0x07, IOSTATUS=0x00, RESET_CTL=0x01
+  identical from pre-halt through dwell-3000ms. pmucontrol bit-9 flip
+  and pmutimer tick rate reproduce test.184 exactly. Firmware is alive
+  but stalled BEFORE D11 bring-up and BEFORE any TCM writes.
 
-**Next boundary:** confirm whether firmware has written elsewhere
-in TCM beyond the 32-sample grid — wider scan (every 16 KB across
-640 KB = 40 probe points) and expanded backplane coverage (ARM CR4
-wrapper IOSTATUS + D11 wrapper) via test.185. Still BusMaster-off.
-Defer any host-handshake / BusMaster-enabled probes until passive
-observation is exhausted.
+**Next boundary:** passive probing has reached its limit — we know
+firmware is alive, has flipped one PMU bit, and is then idle without
+touching D11 or any TCM byte. The remaining candidate stall points
+(mailbox wait, DMA wait) cannot be observed passively. Next experiment
+set (test.186a/b): (a) poke the PCIe2 H2D mailbox from the host via
+MMIO only, still BusMaster-off, observe D11 + TCM; (b) if (a) is null,
+enable BusMaster for a 1-2 s observation window without the full
+attach path, observe. Both still return -ENODEV.
 
 **Re-entering the old 5.2 investigation:** once the probe-path restore is
 complete (i.e. firmware download and ARM release can run without host crash),

@@ -1,5 +1,114 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.185 (2026-04-20) — D11 held in reset; firmware stalled in earliest init
+
+Captured artifacts:
+- `phase5/logs/test.185.stage0`
+- `phase5/logs/test.185.stage0.stream`
+- `phase5/logs/test.185.journalctl.txt`
+
+Result: **clean run, host stable, -ENODEV returned. Firmware baseline
+(pmutimer ticks, pmucontrol bit 9 set once) reproduces from test.184.
+D11 wrapper probe shows the D11 core is held in reset (RESET_CTL=0x01)
+and firmware NEVER takes it out of reset in 3 s. All 40 wide-TCM probe
+points + all 16 tail points UNCHANGED.** Hypothesis (c) from PRE-TEST
+confirmed: firmware is stalled in earliest init, before any D11 bring-up
+and before any TCM writes.
+
+### D11 wrapper — held in reset across every probe
+
+```
+pre-halt              D11 IOCTL=0x07 IOSTATUS=0x00 RESET_CTL=0x01
+pre-set-active        D11 IOCTL=0x07 IOSTATUS=0x00 RESET_CTL=0x01
+post-set-active-20ms  D11 IOCTL=0x07 IOSTATUS=0x00 RESET_CTL=0x01
+post-set-active-100ms D11 IOCTL=0x07 IOSTATUS=0x00 RESET_CTL=0x01
+post-set-active-500ms D11 IOCTL=0x07 IOSTATUS=0x00 RESET_CTL=0x01
+post-set-active-1500ms D11 IOCTL=0x07 IOSTATUS=0x00 RESET_CTL=0x01
+post-set-active-3000ms D11 IOCTL=0x07 IOSTATUS=0x00 RESET_CTL=0x01
+```
+
+Three things to note:
+1. D11 RESET_CTL bit 0 is asserted — D11 core in reset from cold
+   (chip-default). Firmware has not deasserted reset.
+2. D11 IOCTL=0x07 (fclk_en | fclk_force_on | ioctl_bit2) — also the
+   chip-default wrapper state before firmware touches it.
+3. Values are identical pre-halt and at 3000 ms → firmware did not
+   even touch the D11 wrapper in 3 s.
+
+**Conclusion**: firmware never reached the phase where it brings D11
+out of reset. This is very early in the init sequence.
+
+### ARM CR4 — IOSTATUS stays zero
+
+CR4 IOCTL drops 0x21 → 0x01 (CPUHALT released) as expected.
+CR4 IOSTATUS=0x00 at every probe (pre-halt / pre-set-active / 20 ms /
+100 ms / 500 ms / 1500 ms / 3000 ms). New visibility but no useful
+signal from IOSTATUS on this core.
+
+### TCM — 40 wide points + 16 tail points + 8 image-header points all UNCHANGED
+
+Every sampled word from 0x00000 to 0x9c000 (every 16 KB) plus the last
+64 bytes (NVRAM region) reads the same value pre-release and at 3000 ms.
+Firmware has not written any of 56 sampled TCM words in 3 s.
+
+### Backplane — same deltas as test.184
+
+```
+pre-release:   CC-pmucontrol=0x01770181  CC-pmutimer=0x0d7f584d
+dwell-500ms:   CC-pmucontrol=0x01770381  CC-pmutimer=0x0d7fb28b  Δ=0x5a3e / 500 ms → ~46 kHz
+dwell-1500ms:  CC-pmucontrol=0x01770381  CC-pmutimer=0x0d803b93
+dwell-3000ms:  CC-pmucontrol=0x01770381  CC-pmutimer=0x0d810b0c  Δ=0x1b2bf / 3000 ms → ~37 kHz
+```
+
+pmucontrol bit 9 flips exactly once within 500 ms (same single write
+as test.184). pmutimer ticks monotonically — confirms we're not in a
+wedge where MMIO is dead; we really are observing firmware that is
+alive but stuck.
+
+### What this narrows down
+
+We now have three facts:
+1. ARM CR4 is released and the core is executing instructions
+   (pmucontrol bit 9 was written by *something* after release).
+2. Firmware completes at least one CC register write in < 500 ms,
+   then idles for the remaining 2.5 s (pmucontrol steady, no further
+   CC writes, no TCM writes, no D11 wrapper touch).
+3. Firmware is stalled at a point that is **before** D11 bring-up
+   and **before** any TCM initialisation.
+
+The most likely explanation: firmware's very early startup writes a
+single PMU bit (bit 9 of pmucontrol — commonly part of xtal-freq
+select) and then waits. Two candidate wait points:
+- waiting for host-side PCIe2 mailbox handshake, which we never send
+  because we return -ENODEV (Phase-4B path);
+- waiting for BusMaster to be enabled so it can fetch a resource
+  from host DMA (we cleared BusMaster to survive past test.134's
+  crash).
+
+### Next boundary (test.186)
+
+Two complementary probes, in order of least-risky first:
+
+1. **test.186a — lightweight host doorbell without BusMaster.**
+   Write to the PCIe2 H2D mailbox address from the host (MMIO write
+   only, no host-side DMA required). If firmware was waiting on a
+   mailbox it should respond with a TCM / D11 / pmucontrol change
+   within a few hundred ms. BusMaster still cleared; still early
+   return.
+
+2. **test.186b — BusMaster ON for a brief window, observe, then OFF.**
+   If mailbox alone doesn't unstick firmware, re-enable BusMaster
+   for a 1-2 s observation window. Phase-4B crashed with BusMaster
+   enabled + full attach path; this narrow experiment keeps the
+   attach path absent (still -ENODEV) so firmware would only have
+   the chance to initiate DMA, not to complete a full sharedram
+   handshake. If the host survives and TCM/D11 start moving, we've
+   identified DMA as the stall point.
+
+(Current task list ends at #30 — these two become tasks #31/#32.)
+
+---
+
 ## PRE-TEST.185 (2026-04-20, staged) — widen TCM scan + D11 wrapper probe
 
 ### Hypothesis
