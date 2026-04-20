@@ -1,6 +1,114 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.167 CRASH — machine rebooted + SMC reset)
+## Current state (2026-04-20, POST test.168 CRASH — machine rebooted + SMC reset)
+
+### TEST.168 RESULT — ALL 6 PROBES SHOW CPUHALT=0 / RESET_CTL=0
+
+**Captured markers from `journalctl -k -b -1`** (saved to
+`phase5/logs/test.168.journalctl.txt`):
+```
+test.168: setup-entry   ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 (IN_RESET=NO)
+test.168: pre-attach    ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 (IN_RESET=NO)
+test.168: post-attach   ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 (IN_RESET=NO)
+test.168: post-raminfo  ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 (IN_RESET=NO)
+test.168: pre-download  ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 (IN_RESET=NO)
+test.142: RESET_CTL=0 IOCTL=0x0001 CPUHALT=NO FGC=NO CLK=YES   (enter_download_state)
+test.168: pre-halt      ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 (IN_RESET=NO)
+test.168: re-halting ARM CR4 via brcmf_chip_set_passive
+test.168: post-halt     ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 (IN_RESET=NO)   <-- halt call NOT visible
+test.168: starting chunked fw write
+test.168: wrote 4096 words ... test.168: wrote 98304 words (393216 bytes)
+<CRASH at 98304 words — same pattern as test.164/165/166>
+```
+
+**Two major observations:**
+
+1. **CPUHALT is clear at EVERY probe point** — IOCTL=0x0001 (CLK=1, CPUHALT=0, FGC=0)
+   from the very first probe (`setup-entry`, which runs as soon as the async
+   fw-request callback fires). So by the time the callback fires, ARM CR4 is already
+   un-halted — or never was halted at a register the probe can see.
+2. **The pre-halt / set_passive / post-halt triple is a no-op as seen by the probe** —
+   pre-halt=0x0001/0, set_passive runs, post-halt=0x0001/0. The probe sees ZERO state
+   change from set_passive. Either (a) set_passive's MMIO writes target a different
+   address than our probe reads from, or (b) the chip hardware ignored the writes,
+   or (c) some side-effect immediately reverted them.
+
+**Probe-address discrepancy hypothesis (high priority to verify in test.169):**
+- Our probe: BAR0 window = `core->base` (0x18002000 for CR4), reads offsets 0x1408
+  (IOCTL) and 0x1800 (RESET_CTL). Implicitly assumes the CR4 wrapper registers
+  are at `core->base + 0x1000`.
+- `brcmf_chip_set_passive` → `brcmf_chip_disable_arm` → `brcmf_chip_resetcore`
+  writes IOCTL/RESET_CTL at `cpu->wrapbase + BCMA_IOCTL (0x408)` and
+  `cpu->wrapbase + BCMA_RESET_CTL (0x800)`. `wrapbase` is populated by
+  the BCMA erom scan and is **not** necessarily `core->base + 0x1000`.
+- Historical note: test.142 (commit 743c86d) wrote RESET_CTL=1 at BAR0+0x1800
+  (window=core->base) and read back 0x1 → the probe offsets *did* move RESET_CTL
+  for that one write. That means either (i) wrapbase really IS at base+0x1000 on
+  BCM4360 CR4, OR (ii) the 0x1800 MMIO hit some separate register that happened
+  to also read as 1 after a write of 1 (unlikely for RESET_CTL-shaped behaviour).
+
+**Crash repeats the pattern:** last breadcrumb 98304 words (393216 B) at 11:57:40.
+test.164/165/166/168 all crashed at ~340–400 KB into the 442 KB write. Offsets
+are not identical but are tightly clustered — consistent with ARM executing
+partially-written garbage that asynchronously breaks the host link. Host hang,
+no pstore oops.
+
+### POST-TEST PCIe STATE (2026-04-20, reboot + SMC reset — NOW)
+
+- `git status`: clean main at `91b61fc`; untracked test.168 stage0 / stream logs.
+- Module not re-built yet post-reboot; need `make -C phase5/work` before any
+  additional `insmod`.
+- `lspci` not yet re-checked for this boot (pre-test-169 checklist).
+
+### PLAN FOR TEST.169 — RESOLVE PROBE-ADDRESS VS set_passive DISCREPANCY
+
+**Goal:** Determine whether `brcmf_chip_set_passive` actually halts CR4 at the
+register address *we think it does*. Two independent diagnostics, both read-only.
+
+**Change A: add an immediate-post-set_passive probe inside buscore_reset**
+(tag `test.169: post-145` — runs 1 line after test.145's `brcmf_chip_set_passive(chip)`).
+This is the narrowest possible time window after a halt call; if CPUHALT is ever
+going to read as 1, it will read as 1 here.
+
+**Change B: in the probe helper, additionally read IOCTL/RESET_CTL using chip.c's
+authoritative path** — `ci->ops->read32(ci->ctx, cpu->wrapbase + BCMA_IOCTL)` and
+`... + BCMA_RESET_CTL`. Log both (probe-addr view + chip.c view) side-by-side.
+If the two views disagree, we have a definitive address mismatch.
+
+**Hypothesis matrix for test.169:**
+| post-145 probe-view | post-145 chip.c-view | Interpretation                     |
+|---------------------|----------------------|------------------------------------|
+| CPUHALT=1           | CPUHALT=1            | set_passive worked; un-halt happens *between* test.145 and setup-entry — narrow the gap with more probes |
+| CPUHALT=0           | CPUHALT=1            | probe address is wrong; real halt is holding, crash theory needs revisiting |
+| CPUHALT=0           | CPUHALT=0            | set_passive does not in fact halt CR4 on BCM4360; need a manual halt sequence (as test.142 did at probe time) |
+| CPUHALT=1           | CPUHALT=0            | extremely unlikely — chip.c's own read sees no halt but the probe does |
+
+**Risk review:** both changes are read-only. No new writes. Blast-radius identical
+to test.168. Keep the re-halt call in download_fw_nvram unchanged so we still
+get the pre-halt/post-halt data point.
+
+**Kept unchanged from test.168:** chunked 16 KB/50 ms fw write, NVRAM write,
+TCM verify dump, `-ENODEV` early return, `bcm4360_skip_arm=1` default, 6 setup-path
+probes.
+
+### PRE-TEST.169 CHECKLIST
+
+- [x] Save test.168 journal to `phase5/logs/test.168.journalctl.txt`
+- [ ] Edit pcie.c: add `post-145` probe inside buscore_reset; extend probe helper
+      to log chip.c ops-view alongside probe-view
+- [ ] Bump test.168 → test.169 in module_init banners, register banners,
+      download_fw_nvram log lines, and `test-staged-reset.sh`
+- [ ] `make -C phase5/work` → expect clean build; `strings brcmfmac.ko | grep
+      test.169` confirms new format strings present
+- [ ] Check `sudo lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'` is
+      clean after SMC reset; `lsmod | grep brcm` empty
+- [ ] `sync` after committing pre-test state; push to origin
+- [ ] Run `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+- [ ] Machine likely crashes again mid-fw-write; same recovery flow.
+
+---
+
+## Previous state (2026-04-20, POST test.167 CRASH — machine rebooted + SMC reset)
 
 ### TEST.167 RESULT — setup callback crashed BEFORE any fw-write code
 
