@@ -113,12 +113,18 @@ Plus keep the existing pre-write probe inside `download_fw_nvram` (tag
 ### PRE-TEST.168 CHECKLIST
 
 - [x] Save test.167 journal to phase5/logs/test.167.journalctl.txt
-- [ ] Commit + push test.167 logs and this post-crash analysis
-- [ ] Implement test.168 probe helper + 6 call sites in pcie.c
-- [ ] Bump module_init + register banners to test.168
-- [ ] Bump `test-staged-reset.sh` log prefix test.167 → test.168
-- [ ] Build OK (kbuild), verify .ko contains all 6 test.168 call-site tags via strings
-- [ ] Re-verify PCIe 03:00.0 state (MAbort-, CommClk+, brcmfmac unloaded) right before insmod
+- [x] Commit + push test.167 logs and this post-crash analysis (commit `de73d72`)
+- [x] Implement test.168 probe helper + 5 new call sites in pcie.c (setup-entry,
+      pre-attach, post-attach, post-raminfo, pre-download) — plus the existing
+      pre-halt/post-halt/pre-write/post-write probes inside download_fw_nvram
+- [x] Bump module_init + register banners + download_fw_nvram log lines to test.168
+- [x] Bump `test-staged-reset.sh` log prefix test.167 → test.168
+- [x] Build OK (kbuild, 1 unrelated warning). `strings brcmfmac.ko` shows 14
+      test.168 format strings + all 5 new probe-site tags (setup-entry,
+      pre-attach, post-attach, post-raminfo, pre-download)
+- [x] PCIe 03:00.0: `Mem+ BusMaster+ MAbort- <MAbort-`, `LnkSta 2.5GT/s x1`,
+      `CommClk+`, sticky `CorrErr+ UnsupReq+` from test.167 crash (harmless).
+      `lsmod | grep brcm` empty. Safe to insmod.
 - [ ] Commit + push pre-test state + `sync`
 - [ ] Run `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
 

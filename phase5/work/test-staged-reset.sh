@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.167.stage${STAGE}"
+LOG="$LOG_DIR/test.168.stage${STAGE}"
 
-echo "=== test.167: re-halt ARM CR4 (brcmf_chip_set_passive) before 442KB BAR2 fw write — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.168: 6x ARM CR4 RESET_CTL probes across brcmf_pcie_setup + re-halt before 442KB BAR2 fw write — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -28,7 +28,7 @@ case "$STAGE" in
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.167: test.166 flow + pre-fw-write re-halt of ARM CR4 via brcmf_chip_set_passive; pre-halt/post-halt/post-write RESET_CTL reads)" | tee -a "$LOG"
+echo "(test.168: adds read-only ARM CR4 RESET_CTL probes at setup-entry, pre-attach, post-attach, post-raminfo, pre-download + keeps test.167 pre-halt/post-halt/pre-write/post-write inside download_fw_nvram)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -105,14 +105,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=90  # test.167: test.166 flow + halt/settle (~200ms) — still fits in 90s budget
+    WAIT_SECS=90  # test.168: test.167 flow + 6 probes (~100ms added) — still fits in 90s budget
 else
     SKIP_ARM=0
     WAIT_SECS=60
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.167 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.168 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.

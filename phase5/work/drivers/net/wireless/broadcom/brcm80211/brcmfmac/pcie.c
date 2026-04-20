@@ -694,6 +694,29 @@ brcmf_pcie_select_core(struct brcmf_pciedev_info *devinfo, u16 coreid)
 }
 
 
+/* test.168: read-only probe of ARM CR4 IOCTL/RESET_CTL via BAR0 window switch.
+ * Logs IOCTL (core->base + 0x1408) and RESET_CTL (core->base + 0x1800) along
+ * with a caller-supplied tag. Restores BAR0 window to CHIPCOMMON afterwards.
+ * Used to map the exact stage in brcmf_pcie_setup where ARM transitions from
+ * halted (RESET_CTL=0x1) to running (0x0). test.166 established that ARM is
+ * running by the time fw-write starts; test.167 crashed even earlier (inside
+ * setup before reaching download_fw_nvram). This helper is purely diagnostic.
+ */
+static void brcmf_pcie_probe_armcr4_state(struct brcmf_pciedev_info *devinfo,
+					  const char *tag)
+{
+	u32 ioctl_v, rstctl_v;
+
+	brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
+	ioctl_v  = brcmf_pcie_read_reg32(devinfo, 0x1408);
+	rstctl_v = brcmf_pcie_read_reg32(devinfo, 0x1800);
+	brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+	pr_emerg("BCM4360 test.168: %s ARM CR4 IOCTL=0x%08x RESET_CTL=0x%08x (IN_RESET=%s)\n",
+		 tag, ioctl_v, rstctl_v,
+		 (rstctl_v & 1) ? "YES" : "NO");
+}
+
+
 static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 {
 	struct brcmf_core *core;
@@ -1868,13 +1891,13 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		pre_ioctl  = brcmf_pcie_read_reg32(devinfo, 0x1408);
 		pre_rstctl = brcmf_pcie_read_reg32(devinfo, 0x1800);
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-		pr_emerg("BCM4360 test.167: pre-halt ARM CR4 IOCTL=0x%08x RESET_CTL=0x%08x (IN_RESET=%s)\n",
+		pr_emerg("BCM4360 test.168: pre-halt ARM CR4 IOCTL=0x%08x RESET_CTL=0x%08x (IN_RESET=%s)\n",
 			 pre_ioctl, pre_rstctl,
 			 (pre_rstctl & 1) ? "YES" : "NO");
 		mdelay(50);
 
 		/* test.167: re-halt ARM CR4 via the public chip API. */
-		pr_emerg("BCM4360 test.167: re-halting ARM CR4 via brcmf_chip_set_passive\n");
+		pr_emerg("BCM4360 test.168: re-halting ARM CR4 via brcmf_chip_set_passive\n");
 		mdelay(50);
 		brcmf_chip_set_passive(devinfo->ci);
 		mdelay(100);	/* settle */
@@ -1884,25 +1907,25 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		posthalt_ioctl  = brcmf_pcie_read_reg32(devinfo, 0x1408);
 		posthalt_rstctl = brcmf_pcie_read_reg32(devinfo, 0x1800);
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-		pr_emerg("BCM4360 test.167: post-halt ARM CR4 IOCTL=0x%08x RESET_CTL=0x%08x (IN_RESET=%s)\n",
+		pr_emerg("BCM4360 test.168: post-halt ARM CR4 IOCTL=0x%08x RESET_CTL=0x%08x (IN_RESET=%s)\n",
 			 posthalt_ioctl, posthalt_rstctl,
 			 (posthalt_rstctl & 1) ? "YES" : "NO");
 		mdelay(50);
 
-		pr_emerg("BCM4360 test.167: starting chunked fw write, total_words=%u (%zu bytes) tail=%u wbase=%px\n",
+		pr_emerg("BCM4360 test.168: starting chunked fw write, total_words=%u (%zu bytes) tail=%u wbase=%px\n",
 			 total_words, fw->size, tail, wbase);
 		mdelay(50);
 
 		for (i = 0; i < total_words; i++) {
 			iowrite32(le32_to_cpu(src32[i]), wbase + i * 4);
 			if ((i + 1) % chunk_words == 0) {
-				pr_emerg("BCM4360 test.167: wrote %u words (%u bytes)\n",
+				pr_emerg("BCM4360 test.168: wrote %u words (%u bytes)\n",
 					 i + 1, (i + 1) * 4);
 				mdelay(50);
 			}
 		}
 
-		pr_emerg("BCM4360 test.167: all %u words written, before tail (tail=%u)\n",
+		pr_emerg("BCM4360 test.168: all %u words written, before tail (tail=%u)\n",
 			 total_words, tail);
 		mdelay(50);
 
@@ -1912,7 +1935,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			memcpy(&tmp, (const u8 *)fw->data + (fw->size & ~3u),
 			       tail);
 			iowrite32(tmp, wbase + (fw->size & ~3u));
-			pr_emerg("BCM4360 test.167: tail %u bytes written at offset %zu\n",
+			pr_emerg("BCM4360 test.168: tail %u bytes written at offset %zu\n",
 				 tail, fw->size & ~3u);
 			mdelay(50);
 		}
@@ -1922,11 +1945,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		post_ioctl  = brcmf_pcie_read_reg32(devinfo, 0x1408);
 		post_rstctl = brcmf_pcie_read_reg32(devinfo, 0x1800);
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-		pr_emerg("BCM4360 test.167: post-write ARM CR4 IOCTL=0x%08x RESET_CTL=0x%08x (IN_RESET=%s)\n",
+		pr_emerg("BCM4360 test.168: post-write ARM CR4 IOCTL=0x%08x RESET_CTL=0x%08x (IN_RESET=%s)\n",
 			 post_ioctl, post_rstctl,
 			 (post_rstctl & 1) ? "YES" : "NO");
 
-		pr_emerg("BCM4360 test.167: fw write complete (%zu bytes)\n",
+		pr_emerg("BCM4360 test.168: fw write complete (%zu bytes)\n",
 			 fw->size);
 		mdelay(100);
 	} else {
@@ -3725,15 +3748,18 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 	devinfo = pcie_bus_dev->devinfo;
 
 	pr_emerg("BCM4360 test.162: brcmf_pcie_setup CALLBACK INVOKED ret=%d\n", ret);
+	brcmf_pcie_probe_armcr4_state(devinfo, "setup-entry");
 	msleep(300);
 
 	/* check firmware loading result */
 	if (ret)
 		goto fail;
 
+	brcmf_pcie_probe_armcr4_state(devinfo, "pre-attach");
 	pr_emerg("BCM4360 test.128: before brcmf_pcie_attach\n");
 	brcmf_pcie_attach(devinfo);
 	pr_emerg("BCM4360 test.128: after brcmf_pcie_attach\n");
+	brcmf_pcie_probe_armcr4_state(devinfo, "post-attach");
 	mdelay(300); /* test.134: force journal flush before next risky op */
 
 	/* test.134: bisect crash site — pure memory ops, no MMIO */
@@ -3760,6 +3786,7 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 		goto fail;
 	}
 	pr_emerg("BCM4360 test.130: after brcmf_chip_get_raminfo\n");
+	brcmf_pcie_probe_armcr4_state(devinfo, "post-raminfo");
 	mdelay(300);
 
 	/* Some of the firmwares have the size of the memory of the device
@@ -3779,6 +3806,7 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 	 * this was the crash trigger. Testing without it for test.135.
 	 */
 
+	brcmf_pcie_probe_armcr4_state(devinfo, "pre-download");
 	pr_emerg("BCM4360 test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)\n");
 	mdelay(300);
 	ret = brcmf_pcie_download_fw_nvram(devinfo, fw, nvram, nvram_len);
@@ -4596,19 +4624,19 @@ static struct pci_driver brcmf_pciedrvr = {
  * after chip_attach() has initialized the PCIe-to-backplane bridge. */
 void brcmf_pcie_early_arm_halt(void)
 {
-	pr_emerg("BCM4360 test.167: module_init entry — re-halt ARM CR4 before 442KB BAR2 fw write\n");
+	pr_emerg("BCM4360 test.168: module_init entry — 6x read-only ARM CR4 RESET_CTL probes across brcmf_pcie_setup\n");
 }
 
 int brcmf_pcie_register(void)
 {
 	int ret;
 
-	pr_emerg("BCM4360 test.167: brcmf_pcie_register() entry\n");
+	pr_emerg("BCM4360 test.168: brcmf_pcie_register() entry\n");
 	msleep(300); /* flush marker before pci_register_driver */
-	pr_emerg("BCM4360 test.167: before pci_register_driver\n");
+	pr_emerg("BCM4360 test.168: before pci_register_driver\n");
 	msleep(300); /* flush — if crash here, it's in pci_register_driver kernel code */
 	ret = pci_register_driver(&brcmf_pciedrvr);
-	pr_emerg("BCM4360 test.167: pci_register_driver returned ret=%d\n", ret);
+	pr_emerg("BCM4360 test.168: pci_register_driver returned ret=%d\n", ret);
 	return ret;
 }
 
