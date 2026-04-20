@@ -1,0 +1,906 @@
+=== dmesg stream start: Mon 20 Apr 22:06:14 BST 2026 ===
+[ 9987.953775] brcmfmac: BCM4360 test.186d: module_init entry — extended post-release TCM sampling
+[ 9987.953869] brcmfmac: BCM4360 test.156: before brcmf_core_init()
+[ 9987.953899] brcmfmac: BCM4360 test.155: brcmf_core_init() entry
+[ 9987.953927] brcmfmac: BCM4360 test.155: before brcmf_sdio_register()
+[ 9987.955733] brcmfmac: BCM4360 test.155: after brcmf_sdio_register() err=0
+[ 9988.007653] brcmfmac: BCM4360 test.155: post-SDIO sync (before PCI)
+[ 9988.009419] brcmfmac: BCM4360 test.155: before brcmf_pcie_register()
+[ 9988.011163] brcmfmac: BCM4360 test.186d: brcmf_pcie_register() entry
+[ 9988.316456] brcmfmac: BCM4360 test.186d: before pci_register_driver
+[ 9989.108488] pcieport 0000:00:1c.2: Enabling MPC IRBNCE
+[ 9989.108494] pcieport 0000:00:1c.2: Intel PCH root port ACS workaround enabled
+[ 9989.108625] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=00000000640ff85a)
+[ 9989.412341] brcmfmac: BCM4360 test.158: probe entry flush done — proceeding
+[ 9989.716422] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+[ 9989.716473] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+[ 9989.716583] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+[ 9990.229406] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+[ 9990.229479] brcmfmac: BCM4360 test.158: before brcmf_chip_attach
+[ 9990.532434] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcf5983e00000
+[ 9990.532446] brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+[ 9990.583309] brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+[ 9990.583736] brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+[ 9990.583776] brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+[ 9990.585761] brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+[ 9990.587854] brcmfmac 0000:03:00.0: BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)
+[ 9990.589853] brcmfmac 0000:03:00.0: BCM4360 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0
+[ 9990.591807] brcmfmac: BCM4360 test.186d: post-145 ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[ 9990.593745] brcmfmac: brcmf_chip_recognition: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+[ 9990.596031] brcmfmac: brcmf_chip_recognition: BCM4360 test.125: after reset, before get_raminfo
+[ 9990.598080] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[ 9990.600029] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[ 9990.601907] brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+[ 9990.908402] brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+[ 9990.908504] brcmfmac: BCM4360 test.158: about to pci_clear_master (config-space write)
+[ 9991.212396] brcmfmac 0000:03:00.0: BCM4360 test.158: BusMaster cleared after chip_attach
+[ 9991.516237] brcmfmac: BCM4360 test.158: about to read LnkCtl before ASPM disable
+[ 9991.820290] brcmfmac: BCM4360 test.158: LnkCtl read before=0x0140 — disabling ASPM
+[ 9992.124212] brcmfmac: BCM4360 test.158: pci_disable_link_state returned — reading LnkCtl
+[ 9992.428347] brcmfmac 0000:03:00.0: BCM4360 test.158: ASPM disabled; LnkCtl before=0x0140 after=0x0140 ASPM-bits-after=0x0
+[ 9992.732196] brcmfmac 0000:03:00.0: BCM4360 test.186d: root port 0000:00:1c.2 LnkCtl before=0x0040 ASPM=0x0 CLKREQ=off — disabling L0s/L1/CLKPM
+[ 9993.036252] brcmfmac: BCM4360 test.186d: root-port pci_disable_link_state returned — reading LnkCtl
+[ 9993.341247] brcmfmac 0000:03:00.0: BCM4360 test.186d: root port 0000:00:1c.2 LnkCtl after=0x0040 ASPM=0x0 CLKREQ=off
+[ 9993.949130] brcmfmac 0000:03:00.0: BCM4360 test.159: before PCIE2 core/reginfo setup
+[ 9994.252207] brcmfmac 0000:03:00.0: BCM4360 test.159: reginfo selected (pcie2 rev=1)
+[ 9994.556139] brcmfmac 0000:03:00.0: BCM4360 test.159: pcie_bus_dev allocated
+[ 9994.860153] brcmfmac 0000:03:00.0: BCM4360 test.159: settings allocated (BCM4360 dummy path)
+[ 9995.165135] brcmfmac 0000:03:00.0: BCM4360 test.159: bus allocated
+[ 9995.468210] brcmfmac 0000:03:00.0: BCM4360 test.159: msgbuf allocated
+[ 9995.773116] brcmfmac 0000:03:00.0: BCM4360 test.159: struct wiring done — before pci_pme_capable
+[ 9996.076074] brcmfmac 0000:03:00.0: BCM4360 test.159: after pci_pme_capable wowl=1
+[ 9996.381047] brcmfmac 0000:03:00.0: BCM4360 test.160: drvdata set — before brcmf_alloc
+[ 9996.684047] brcmfmac 0000:03:00.0: BCM4360 test.160: brcmf_alloc complete — wiphy allocated
+[ 9996.988109] brcmfmac 0000:03:00.0: BCM4360 test.160: OTP read bypassed — OTP not needed
+[ 9997.292055] brcmfmac 0000:03:00.0: BCM4360 test.160: before prepare_fw_request
+[ 9997.597000] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[ 9997.597007] brcmfmac 0000:03:00.0: BCM4360 test.160: firmware request prepared
+[ 9997.900990] brcmfmac: BCM4360 test.161: calling brcmf_fw_get_firmwares — async callback expected
+[ 9998.203951] brcmfmac 0000:03:00.0: BCM4360 test.161: brcmf_fw_get_firmwares returned 0 (async/success; callback will fire)
+[ 9998.206061] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+[ 9998.206088] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+[ 9998.206090] brcmfmac: BCM4360 test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0
+[ 9998.206138] brcmfmac: BCM4360 test.186d: setup-entry ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[ 9998.507945] brcmfmac: BCM4360 test.186d: pre-attach ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[ 9998.508022] brcmfmac: BCM4360 test.186d: pci_register_driver returned ret=0
+[ 9998.508032] brcmfmac: BCM4360 test.128: before brcmf_pcie_attach
+[ 9998.508080] brcmfmac: BCM4360 test.155: after brcmf_pcie_register() err=0
+[ 9998.508120] brcmfmac: BCM4360 test.128: brcmf_pcie_attach ENTRY
+[ 9998.514481] brcmfmac: BCM4360 test.129: brcmf_pcie_attach bypassed for BCM4360
+[ 9998.517567] brcmfmac: BCM4360 test.128: after brcmf_pcie_attach
+[ 9998.520606] brcmfmac: BCM4360 test.186d: post-attach ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[ 9998.561354] brcmfmac: BCM4360 test.155: post-PCI sync (skipping USB)
+[ 9998.561406] brcmfmac: BCM4360 test.156: after brcmf_core_init() err=0
+[ 9998.823749] brcmfmac: BCM4360 test.134: post-attach before fw-ptr-extract
+[ 9999.123815] brcmfmac: BCM4360 test.134: after kfree(fwreq)
+[ 9999.423887] brcmfmac: BCM4360 test.130: before brcmf_chip_get_raminfo
+[ 9999.723959] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[ 9999.724047] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[ 9999.724102] brcmfmac: BCM4360 test.130: after brcmf_chip_get_raminfo
+[ 9999.724162] brcmfmac: BCM4360 test.186d: post-raminfo ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[10000.027409] brcmfmac: BCM4360 test.130: after brcmf_pcie_adjust_ramsize
+[10000.327487] brcmfmac: BCM4360 test.186d: pre-download ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[10000.327544] brcmfmac: BCM4360 test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)
+[10000.627619] brcmfmac: BCM4360 test.142: enter_download_state — confirming ARM CR4 reset state
+[10000.627669] brcmfmac: BCM4360 test.142: ARM CR4 state RESET_CTL=0x00000000 IN_RESET=NO/BAD IOCTL=0x0001 CPUHALT=NO FGC=NO CLK=YES
+[10000.927759] brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffcf5983e00000
+[10000.927765] brcmfmac 0000:03:00.0: BCM4360 test.138: pre-BAR2-ioread32 (tcm=ffffcf5983e00000)
+[10001.227851] brcmfmac 0000:03:00.0: BCM4360 test.138: post-BAR2-ioread32 = 0xb80ef000 (real value — BAR2 accessible)
+[10001.527956] brcmfmac: BCM4360 test.186d: pre-halt ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[10001.528047] brcmfmac: BCM4360 test.186d: pre-halt D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[10001.578112] brcmfmac: BCM4360 test.186d: re-halting ARM CR4 via brcmf_chip_set_passive
+[10001.729422] brcmfmac: BCM4360 test.186d: post-halt ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[10001.779522] brcmfmac: BCM4360 test.186d: starting chunked fw write, total_words=110558 (442233 bytes) tail=1 wbase=ffffcf5983e00000
+[10001.831819] brcmfmac: BCM4360 test.186d: wrote 4096 words (16384 bytes)
+[10001.884076] brcmfmac: BCM4360 test.186d: wrote 8192 words (32768 bytes)
+[10001.936332] brcmfmac: BCM4360 test.186d: wrote 12288 words (49152 bytes)
+[10001.988590] brcmfmac: BCM4360 test.186d: wrote 16384 words (65536 bytes)
+[10002.040873] brcmfmac: BCM4360 test.186d: wrote 20480 words (81920 bytes)
+[10002.093128] brcmfmac: BCM4360 test.186d: wrote 24576 words (98304 bytes)
+[10002.145378] brcmfmac: BCM4360 test.186d: wrote 28672 words (114688 bytes)
+[10002.197631] brcmfmac: BCM4360 test.186d: wrote 32768 words (131072 bytes)
+[10002.249887] brcmfmac: BCM4360 test.186d: wrote 36864 words (147456 bytes)
+[10002.302144] brcmfmac: BCM4360 test.186d: wrote 40960 words (163840 bytes)
+[10002.354401] brcmfmac: BCM4360 test.186d: wrote 45056 words (180224 bytes)
+[10002.406655] brcmfmac: BCM4360 test.186d: wrote 49152 words (196608 bytes)
+[10002.458911] brcmfmac: BCM4360 test.186d: wrote 53248 words (212992 bytes)
+[10002.511171] brcmfmac: BCM4360 test.186d: wrote 57344 words (229376 bytes)
+[10002.563435] brcmfmac: BCM4360 test.186d: wrote 61440 words (245760 bytes)
+[10002.615707] brcmfmac: BCM4360 test.186d: wrote 65536 words (262144 bytes)
+[10002.667963] brcmfmac: BCM4360 test.186d: wrote 69632 words (278528 bytes)
+[10002.720218] brcmfmac: BCM4360 test.186d: wrote 73728 words (294912 bytes)
+[10002.772478] brcmfmac: BCM4360 test.186d: wrote 77824 words (311296 bytes)
+[10002.824737] brcmfmac: BCM4360 test.186d: wrote 81920 words (327680 bytes)
+[10002.877018] brcmfmac: BCM4360 test.186d: wrote 86016 words (344064 bytes)
+[10002.929274] brcmfmac: BCM4360 test.186d: wrote 90112 words (360448 bytes)
+[10002.981525] brcmfmac: BCM4360 test.186d: wrote 94208 words (376832 bytes)
+[10003.033782] brcmfmac: BCM4360 test.186d: wrote 98304 words (393216 bytes)
+[10003.086039] brcmfmac: BCM4360 test.186d: wrote 102400 words (409600 bytes)
+[10003.138296] brcmfmac: BCM4360 test.186d: wrote 106496 words (425984 bytes)
+[10003.190532] brcmfmac: BCM4360 test.186d: all 110558 words written, before tail (tail=1)
+[10003.240574] brcmfmac: BCM4360 test.186d: tail 1 bytes written at offset 442232
+[10003.290612] brcmfmac: BCM4360 test.186d: fw write complete (442233 bytes)
+[10003.290647] brcmfmac: BCM4360 test.186d: before post-fw msleep(100)
+[10003.395794] brcmfmac: BCM4360 test.186d: after post-fw msleep(100)
+[10003.395851] brcmfmac: BCM4360 test.186d: host resetintr=0xb80ef000 before NVRAM
+[10003.395889] brcmfmac: BCM4360 test.186d: pre-NVRAM write address=0x9ff1c len=228 naddr=ffffcf5983e9ff1c
+[10003.395974] brcmfmac: BCM4360 test.186d: post-NVRAM write done (228 bytes)
+[10003.398264] brcmfmac: BCM4360 test.186d: NVRAM marker at ramsize-4 = 0xffc70038 (pre-release snapshot)
+[10003.400401] brcmfmac: BCM4360 test.186d: TCM[0x0000]=0xb80ef000 (pre-release snapshot)
+[10003.402498] brcmfmac: BCM4360 test.186d: TCM[0x0004]=0xb82ef000 (pre-release snapshot)
+[10003.404533] brcmfmac: BCM4360 test.186d: TCM[0x0008]=0xb839f000 (pre-release snapshot)
+[10003.406505] brcmfmac: BCM4360 test.186d: TCM[0x000c]=0xb844f000 (pre-release snapshot)
+[10003.408466] brcmfmac: BCM4360 test.186d: TCM[0x0010]=0xb852f000 (pre-release snapshot)
+[10003.410395] brcmfmac: BCM4360 test.186d: TCM[0x0014]=0xb860f000 (pre-release snapshot)
+[10003.412300] brcmfmac: BCM4360 test.186d: TCM[0x0018]=0xb86ef000 (pre-release snapshot)
+[10003.414332] brcmfmac: BCM4360 test.186d: TCM[0x001c]=0xb87cf000 (pre-release snapshot)
+[10003.417296] brcmfmac: BCM4360 test.186d: wide-TCM[0x00000]=0xb80ef000 (pre-release snapshot)
+[10003.417303] brcmfmac: BCM4360 test.186d: wide-TCM[0x04000]=0x2c004798 (pre-release snapshot)
+[10003.417305] brcmfmac: BCM4360 test.186d: wide-TCM[0x08000]=0x44460902 (pre-release snapshot)
+[10003.417315] brcmfmac: BCM4360 test.186d: wide-TCM[0x0c000]=0x46984616 (pre-release snapshot)
+[10003.417474] brcmfmac: BCM4360 test.186d: wide-TCM[0x10000]=0x46324639 (pre-release snapshot)
+[10003.417478] brcmfmac: BCM4360 test.186d: wide-TCM[0x14000]=0x459868e3 (pre-release snapshot)
+[10003.417572] brcmfmac: BCM4360 test.186d: wide-TCM[0x18000]=0x42ab317c (pre-release snapshot)
+[10003.417575] brcmfmac: BCM4360 test.186d: wide-TCM[0x1c000]=0x480ffd17 (pre-release snapshot)
+[10003.417667] brcmfmac: BCM4360 test.186d: wide-TCM[0x20000]=0xa84af8f3 (pre-release snapshot)
+[10003.417670] brcmfmac: BCM4360 test.186d: wide-TCM[0x24000]=0x2b027973 (pre-release snapshot)
+[10003.417766] brcmfmac: BCM4360 test.186d: wide-TCM[0x28000]=0x1129f640 (pre-release snapshot)
+[10003.417769] brcmfmac: BCM4360 test.186d: wide-TCM[0x2c000]=0xf0084643 (pre-release snapshot)
+[10003.422408] brcmfmac: BCM4360 test.186d: wide-TCM[0x30000]=0xf996f7fe (pre-release snapshot)
+[10003.422412] brcmfmac: BCM4360 test.186d: wide-TCM[0x34000]=0xf0002800 (pre-release snapshot)
+[10003.426926] brcmfmac: BCM4360 test.186d: wide-TCM[0x38000]=0x2bff2269 (pre-release snapshot)
+[10003.426930] brcmfmac: BCM4360 test.186d: wide-TCM[0x3c000]=0xb004f8d4 (pre-release snapshot)
+[10003.426938] brcmfmac: BCM4360 test.186d: wide-TCM[0x40000]=0x34333231 (pre-release snapshot)
+[10003.426941] brcmfmac: BCM4360 test.186d: wide-TCM[0x44000]=0x00040160 (pre-release snapshot)
+[10003.426944] brcmfmac: BCM4360 test.186d: wide-TCM[0x48000]=0x0a776f6c (pre-release snapshot)
+[10003.426946] brcmfmac: BCM4360 test.186d: wide-TCM[0x4c000]=0x000a7825 (pre-release snapshot)
+[10003.426949] brcmfmac: BCM4360 test.186d: wide-TCM[0x50000]=0x0004eeb8 (pre-release snapshot)
+[10003.426952] brcmfmac: BCM4360 test.186d: wide-TCM[0x54000]=0x203a6425 (pre-release snapshot)
+[10003.426955] brcmfmac: BCM4360 test.186d: wide-TCM[0x58000]=0x5f6f7370 (pre-release snapshot)
+[10003.426958] brcmfmac: BCM4360 test.186d: wide-TCM[0x5c000]=0x0034005b (pre-release snapshot)
+[10003.426961] brcmfmac: BCM4360 test.186d: wide-TCM[0x60000]=0x06000972 (pre-release snapshot)
+[10003.426964] brcmfmac: BCM4360 test.186d: wide-TCM[0x64000]=0x4808b920 (pre-release snapshot)
+[10003.426967] brcmfmac: BCM4360 test.186d: wide-TCM[0x68000]=0x25003088 (pre-release snapshot)
+[10003.426970] brcmfmac: BCM4360 test.186d: wide-TCM[0x6c000]=0x008964f8 (pre-release snapshot)
+[10003.426974] brcmfmac: BCM4360 test.186d: wide-TCM[0x70000]=0xc0c900e3 (pre-release snapshot)
+[10003.426977] brcmfmac: BCM4360 test.186d: wide-TCM[0x74000]=0x20e84158 (pre-release snapshot)
+[10003.426979] brcmfmac: BCM4360 test.186d: wide-TCM[0x78000]=0xcc9ce141 (pre-release snapshot)
+[10003.426982] brcmfmac: BCM4360 test.186d: wide-TCM[0x7c000]=0x401ae2a0 (pre-release snapshot)
+[10003.426985] brcmfmac: BCM4360 test.186d: wide-TCM[0x80000]=0x981353fa (pre-release snapshot)
+[10003.426988] brcmfmac: BCM4360 test.186d: wide-TCM[0x84000]=0x8effc98d (pre-release snapshot)
+[10003.426991] brcmfmac: BCM4360 test.186d: wide-TCM[0x88000]=0x77d733bb (pre-release snapshot)
+[10003.426993] brcmfmac: BCM4360 test.186d: wide-TCM[0x8c000]=0x35c5fec3 (pre-release snapshot)
+[10003.426996] brcmfmac: BCM4360 test.186d: wide-TCM[0x90000]=0xa4270be1 (pre-release snapshot)
+[10003.426999] brcmfmac: BCM4360 test.186d: wide-TCM[0x94000]=0x464c65ed (pre-release snapshot)
+[10003.427003] brcmfmac: BCM4360 test.186d: wide-TCM[0x98000]=0x00000000 (pre-release snapshot)
+[10003.427007] brcmfmac: BCM4360 test.186d: wide-TCM[0x9c000]=0x5354414b (pre-release snapshot)
+[10003.427010] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffc0]=0x7600303d (pre-release snapshot)
+[10003.427013] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffc4]=0x69646e65 (pre-release snapshot)
+[10003.427015] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffc8]=0x78303d64 (pre-release snapshot)
+[10003.427018] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffcc]=0x34653431 (pre-release snapshot)
+[10003.427021] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffd0]=0x76656400 (pre-release snapshot)
+[10003.427024] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffd4]=0x303d6469 (pre-release snapshot)
+[10003.427027] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffd8]=0x61333478 (pre-release snapshot)
+[10003.427030] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffdc]=0x74780030 (pre-release snapshot)
+[10003.427034] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffe0]=0x72666c61 (pre-release snapshot)
+[10003.427039] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffe4]=0x343d7165 (pre-release snapshot)
+[10003.427042] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffe8]=0x30303030 (pre-release snapshot)
+[10003.427045] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffec]=0x32616100 (pre-release snapshot)
+[10003.427047] brcmfmac: BCM4360 test.186d: tail-TCM[0x9fff0]=0x00373d67 (pre-release snapshot)
+[10003.427050] brcmfmac: BCM4360 test.186d: tail-TCM[0x9fff4]=0x67356161 (pre-release snapshot)
+[10003.427053] brcmfmac: BCM4360 test.186d: tail-TCM[0x9fff8]=0x0000373d (pre-release snapshot)
+[10003.427056] brcmfmac: BCM4360 test.186d: tail-TCM[0x9fffc]=0xffc70038 (pre-release snapshot)
+[10003.427078] brcmfmac: BCM4360 test.186d: CC-clk_ctl_st=0x00050040 (pre-release snapshot)
+[10003.427080] brcmfmac: BCM4360 test.186d: CC-pmucontrol=0x01770181 (pre-release snapshot)
+[10003.427081] brcmfmac: BCM4360 test.186d: CC-pmustatus=0x0000002a (pre-release snapshot)
+[10003.427083] brcmfmac: BCM4360 test.186d: CC-res_state=0x0000013b (pre-release snapshot)
+[10003.427090] brcmfmac: BCM4360 test.186d: CC-pmutimer=0x1371ab93 (pre-release snapshot)
+[10003.427091] brcmfmac: BCM4360 test.186d: CC-min_res_mask=0x0000013b (pre-release snapshot)
+[10003.427092] brcmfmac: BCM4360 test.186d: CC-max_res_mask=0x0000013f (pre-release snapshot)
+[10003.427093] brcmfmac: BCM4360 test.186d: CC-pmuwatchdog=0x00000000 (pre-release snapshot)
+[10003.427095] brcmfmac: BCM4360 test.186d: INTERNAL_MEM core not found — resetcore skipped (expected on BCM4360)
+[10003.427107] brcmfmac: BCM4360 test.186d: pre-set-active ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[10003.427123] brcmfmac: BCM4360 test.186d: pre-set-active D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[10003.477134] brcmfmac: BCM4360 test.186d: pre-BM PCI_COMMAND=0x0002 BM=OFF MMIO guard mailboxint=0x00000000
+[10003.512184] brcmfmac: BCM4360 test.186d: pci_set_master done; PCI_COMMAND=0x0006 BM=ON (before set_active)
+[10003.512189] brcmfmac: BCM4360 test.186d: post-BM-on MMIO guard mailboxint=0x00000000 (endpoint still responsive)
+[10003.532200] brcmfmac: BCM4360 test.186d: calling brcmf_chip_set_active resetintr=0xb80ef000 (BusMaster ENABLED — DMA-stall discriminator)
+[10003.562326] brcmfmac 0000:03:00.0: BCM4360 test.65 activate: rstvec=0xb80ef000 to TCM[0]; CMD=0x0006 (BusMaster preserved)
+[10003.562677] brcmfmac: BCM4360 test.186d: brcmf_chip_set_active returned true
+[10003.582750] brcmfmac: BCM4360 test.186d: post-set-active-20ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[10003.582825] brcmfmac: BCM4360 test.186d: post-set-active-20ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[10003.664048] brcmfmac: BCM4360 test.186d: post-set-active-100ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[10003.664116] brcmfmac: BCM4360 test.186d: post-set-active-100ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[10004.067771] brcmfmac: BCM4360 test.186d: post-set-active-500ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[10004.067855] brcmfmac: BCM4360 test.186d: post-set-active-500ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[10004.067910] brcmfmac: BCM4360 test.186d: dwell-500ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+[10004.067958] brcmfmac: BCM4360 test.186d: dwell-500ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[10004.069145] brcmfmac: BCM4360 test.186d: dwell-500ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[10004.070270] brcmfmac: BCM4360 test.186d: dwell-500ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[10004.071357] brcmfmac: BCM4360 test.186d: dwell-500ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[10004.072473] brcmfmac: BCM4360 test.186d: dwell-500ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[10004.073679] brcmfmac: BCM4360 test.186d: dwell-500ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[10004.074878] brcmfmac: BCM4360 test.186d: dwell-500ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[10004.076088] brcmfmac: BCM4360 test.186d: dwell-500ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[10004.077214] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x00000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[10004.078355] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x04000]=0x2c004798 (was 0x2c004798) UNCHANGED
+[10004.079892] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x08000]=0x44460902 (was 0x44460902) UNCHANGED
+[10004.081502] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x0c000]=0x46984616 (was 0x46984616) UNCHANGED
+[10004.082762] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x10000]=0x46324639 (was 0x46324639) UNCHANGED
+[10004.082767] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x14000]=0x459868e3 (was 0x459868e3) UNCHANGED
+[10004.082771] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x18000]=0x42ab317c (was 0x42ab317c) UNCHANGED
+[10004.086588] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x1c000]=0x480ffd17 (was 0x480ffd17) UNCHANGED
+[10004.086592] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x20000]=0xa84af8f3 (was 0xa84af8f3) UNCHANGED
+[10004.089275] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x24000]=0x2b027973 (was 0x2b027973) UNCHANGED
+[10004.089279] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x28000]=0x1129f640 (was 0x1129f640) UNCHANGED
+[10004.092028] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x2c000]=0xf0084643 (was 0xf0084643) UNCHANGED
+[10004.093244] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x30000]=0xf996f7fe (was 0xf996f7fe) UNCHANGED
+[10004.094422] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x34000]=0xf0002800 (was 0xf0002800) UNCHANGED
+[10004.095608] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x38000]=0x2bff2269 (was 0x2bff2269) UNCHANGED
+[10004.096819] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x3c000]=0xb004f8d4 (was 0xb004f8d4) UNCHANGED
+[10004.098056] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x40000]=0x34333231 (was 0x34333231) UNCHANGED
+[10004.099674] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x44000]=0x00040160 (was 0x00040160) UNCHANGED
+[10004.101306] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x48000]=0x0a776f6c (was 0x0a776f6c) UNCHANGED
+[10004.102858] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x4c000]=0x000a7825 (was 0x000a7825) UNCHANGED
+[10004.104156] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x50000]=0x0004eeb8 (was 0x0004eeb8) UNCHANGED
+[10004.105359] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x54000]=0x203a6425 (was 0x203a6425) UNCHANGED
+[10004.106578] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x58000]=0x5f6f7370 (was 0x5f6f7370) UNCHANGED
+[10004.107802] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x5c000]=0x0034005b (was 0x0034005b) UNCHANGED
+[10004.109031] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x60000]=0x06000972 (was 0x06000972) UNCHANGED
+[10004.110223] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x64000]=0x4808b920 (was 0x4808b920) UNCHANGED
+[10004.111421] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x68000]=0x25003088 (was 0x25003088) UNCHANGED
+[10004.112641] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x6c000]=0x008964f8 (was 0x008964f8) UNCHANGED
+[10004.113857] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x70000]=0xc0c900e3 (was 0xc0c900e3) UNCHANGED
+[10004.115358] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x74000]=0x20e84158 (was 0x20e84158) UNCHANGED
+[10004.116886] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x78000]=0xcc9ce141 (was 0xcc9ce141) UNCHANGED
+[10004.118292] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x7c000]=0x401ae2a0 (was 0x401ae2a0) UNCHANGED
+[10004.119474] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x80000]=0x981353fa (was 0x981353fa) UNCHANGED
+[10004.120622] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x84000]=0x8effc98d (was 0x8effc98d) UNCHANGED
+[10004.121809] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x88000]=0x77d733bb (was 0x77d733bb) UNCHANGED
+[10004.123031] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x8c000]=0x35c5fec3 (was 0x35c5fec3) UNCHANGED
+[10004.124281] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x90000]=0xa4270be1 (was 0xa4270be1) UNCHANGED
+[10004.125554] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x94000]=0x464c65ed (was 0x464c65ed) UNCHANGED
+[10004.126782] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x98000]=0x00000000 (was 0x00000000) UNCHANGED
+[10004.127955] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x9c000]=0x5354414b (was 0x5354414b) UNCHANGED
+[10004.129131] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffc0]=0x7600303d (was 0x7600303d) UNCHANGED
+[10004.130386] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffc4]=0x69646e65 (was 0x69646e65) UNCHANGED
+[10004.131796] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffc8]=0x78303d64 (was 0x78303d64) UNCHANGED
+[10004.133241] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffcc]=0x34653431 (was 0x34653431) UNCHANGED
+[10004.134583] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffd0]=0x76656400 (was 0x76656400) UNCHANGED
+[10004.135925] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffd4]=0x303d6469 (was 0x303d6469) UNCHANGED
+[10004.137308] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffd8]=0x61333478 (was 0x61333478) UNCHANGED
+[10004.138760] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffdc]=0x74780030 (was 0x74780030) UNCHANGED
+[10004.140242] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffe0]=0x72666c61 (was 0x72666c61) UNCHANGED
+[10004.141448] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffe4]=0x343d7165 (was 0x343d7165) UNCHANGED
+[10004.142641] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffe8]=0x30303030 (was 0x30303030) UNCHANGED
+[10004.143813] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffec]=0x32616100 (was 0x32616100) UNCHANGED
+[10004.144981] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9fff0]=0x00373d67 (was 0x00373d67) UNCHANGED
+[10004.146178] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9fff4]=0x67356161 (was 0x67356161) UNCHANGED
+[10004.147598] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9fff8]=0x0000373d (was 0x0000373d) UNCHANGED
+[10004.148982] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9fffc]=0xffc70038 (was 0xffc70038) UNCHANGED
+[10004.150212] brcmfmac: BCM4360 test.186d: dwell-500ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[10004.151372] brcmfmac: BCM4360 test.186d: dwell-500ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[10004.152540] brcmfmac: BCM4360 test.186d: dwell-500ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[10004.153732] brcmfmac: BCM4360 test.186d: dwell-500ms CC-res_state=0x0000013b (was 0x0000013b) UNCHANGED
+[10004.154981] brcmfmac: BCM4360 test.186d: dwell-500ms CC-pmutimer=0x1372079e (was 0x1371ab93) CHANGED
+[10004.156317] brcmfmac: BCM4360 test.186d: dwell-500ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[10004.157609] brcmfmac: BCM4360 test.186d: dwell-500ms CC-max_res_mask=0x0000013f (was 0x0000013f) UNCHANGED
+[10004.157612] brcmfmac: BCM4360 test.186d: dwell-500ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[10005.203807] brcmfmac: BCM4360 test.186d: post-set-active-1500ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[10005.203893] brcmfmac: BCM4360 test.186d: post-set-active-1500ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[10005.203948] brcmfmac: BCM4360 test.186d: dwell-1500ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+[10005.203996] brcmfmac: BCM4360 test.186d: dwell-1500ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[10005.205333] brcmfmac: BCM4360 test.186d: dwell-1500ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[10005.206704] brcmfmac: BCM4360 test.186d: dwell-1500ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[10005.208066] brcmfmac: BCM4360 test.186d: dwell-1500ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[10005.209385] brcmfmac: BCM4360 test.186d: dwell-1500ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[10005.210668] brcmfmac: BCM4360 test.186d: dwell-1500ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[10005.211937] brcmfmac: BCM4360 test.186d: dwell-1500ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[10005.213239] brcmfmac: BCM4360 test.186d: dwell-1500ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[10005.214548] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x00000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[10005.215883] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x04000]=0x2c004798 (was 0x2c004798) UNCHANGED
+[10005.217190] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x08000]=0x44460902 (was 0x44460902) UNCHANGED
+[10005.218496] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x0c000]=0x46984616 (was 0x46984616) UNCHANGED
+[10005.219755] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x10000]=0x46324639 (was 0x46324639) UNCHANGED
+[10005.221029] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x14000]=0x459868e3 (was 0x459868e3) UNCHANGED
+[10005.222294] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x18000]=0x42ab317c (was 0x42ab317c) UNCHANGED
+[10005.223601] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x1c000]=0x480ffd17 (was 0x480ffd17) UNCHANGED
+[10005.224919] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x20000]=0xa84af8f3 (was 0xa84af8f3) UNCHANGED
+[10005.226215] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x24000]=0x2b027973 (was 0x2b027973) UNCHANGED
+[10005.227491] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x28000]=0x1129f640 (was 0x1129f640) UNCHANGED
+[10005.228756] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x2c000]=0xf0084643 (was 0xf0084643) UNCHANGED
+[10005.230145] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x30000]=0xf996f7fe (was 0xf996f7fe) UNCHANGED
+[10005.231588] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x34000]=0xf0002800 (was 0xf0002800) UNCHANGED
+[10005.232979] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x38000]=0x2bff2269 (was 0x2bff2269) UNCHANGED
+[10005.234275] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x3c000]=0xb004f8d4 (was 0xb004f8d4) UNCHANGED
+[10005.235552] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x40000]=0x34333231 (was 0x34333231) UNCHANGED
+[10005.236813] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x44000]=0x00040160 (was 0x00040160) UNCHANGED
+[10005.238083] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x48000]=0x0a776f6c (was 0x0a776f6c) UNCHANGED
+[10005.239367] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x4c000]=0x000a7825 (was 0x000a7825) UNCHANGED
+[10005.240687] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x50000]=0x0004eeb8 (was 0x0004eeb8) UNCHANGED
+[10005.241989] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x54000]=0x203a6425 (was 0x203a6425) UNCHANGED
+[10005.243273] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x58000]=0x5f6f7370 (was 0x5f6f7370) UNCHANGED
+[10005.244524] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x5c000]=0x0034005b (was 0x0034005b) UNCHANGED
+[10005.245798] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x60000]=0x06000972 (was 0x06000972) UNCHANGED
+[10005.247092] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x64000]=0x4808b920 (was 0x4808b920) UNCHANGED
+[10005.248399] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x68000]=0x25003088 (was 0x25003088) UNCHANGED
+[10005.249682] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x6c000]=0x008964f8 (was 0x008964f8) UNCHANGED
+[10005.250979] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x70000]=0xc0c900e3 (was 0xc0c900e3) UNCHANGED
+[10005.252216] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x74000]=0x20e84158 (was 0x20e84158) UNCHANGED
+[10005.253467] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x78000]=0xcc9ce141 (was 0xcc9ce141) UNCHANGED
+[10005.254695] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x7c000]=0x401ae2a0 (was 0x401ae2a0) UNCHANGED
+[10005.255959] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x80000]=0x981353fa (was 0x981353fa) UNCHANGED
+[10005.257228] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x84000]=0x8effc98d (was 0x8effc98d) UNCHANGED
+[10005.258537] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x88000]=0x77d733bb (was 0x77d733bb) UNCHANGED
+[10005.259802] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x8c000]=0x35c5fec3 (was 0x35c5fec3) UNCHANGED
+[10005.261025] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x90000]=0xa4270be1 (was 0xa4270be1) UNCHANGED
+[10005.262240] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x94000]=0x464c65ed (was 0x464c65ed) UNCHANGED
+[10005.263492] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x98000]=0x00000000 (was 0x00000000) UNCHANGED
+[10005.264765] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x9c000]=0x5354414b (was 0x5354414b) UNCHANGED
+[10005.265952] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffc0]=0x7600303d (was 0x7600303d) UNCHANGED
+[10005.267141] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffc4]=0x69646e65 (was 0x69646e65) UNCHANGED
+[10005.268294] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffc8]=0x78303d64 (was 0x78303d64) UNCHANGED
+[10005.269447] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffcc]=0x34653431 (was 0x34653431) UNCHANGED
+[10005.270589] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffd0]=0x76656400 (was 0x76656400) UNCHANGED
+[10005.271773] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffd4]=0x303d6469 (was 0x303d6469) UNCHANGED
+[10005.272966] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffd8]=0x61333478 (was 0x61333478) UNCHANGED
+[10005.274186] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffdc]=0x74780030 (was 0x74780030) UNCHANGED
+[10005.275393] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffe0]=0x72666c61 (was 0x72666c61) UNCHANGED
+[10005.276597] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffe4]=0x343d7165 (was 0x343d7165) UNCHANGED
+[10005.277778] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffe8]=0x30303030 (was 0x30303030) UNCHANGED
+[10005.278948] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffec]=0x32616100 (was 0x32616100) UNCHANGED
+[10005.280150] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9fff0]=0x00373d67 (was 0x00373d67) UNCHANGED
+[10005.281371] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9fff4]=0x67356161 (was 0x67356161) UNCHANGED
+[10005.282599] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9fff8]=0x0000373d (was 0x0000373d) UNCHANGED
+[10005.283849] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9fffc]=0xffc70038 (was 0xffc70038) UNCHANGED
+[10005.285032] brcmfmac: BCM4360 test.186d: dwell-1500ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[10005.286189] brcmfmac: BCM4360 test.186d: dwell-1500ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[10005.287369] brcmfmac: BCM4360 test.186d: dwell-1500ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[10005.288565] brcmfmac: BCM4360 test.186d: dwell-1500ms CC-res_state=0x0000013b (was 0x0000013b) UNCHANGED
+[10005.289801] brcmfmac: BCM4360 test.186d: dwell-1500ms CC-pmutimer=0x1372980f (was 0x1371ab93) CHANGED
+[10005.291035] brcmfmac: BCM4360 test.186d: dwell-1500ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[10005.292267] brcmfmac: BCM4360 test.186d: dwell-1500ms CC-max_res_mask=0x0000013f (was 0x0000013f) UNCHANGED
+[10005.293454] brcmfmac: BCM4360 test.186d: dwell-1500ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[10006.803597] brcmfmac: BCM4360 test.186d: post-set-active-3000ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[10006.803678] brcmfmac: BCM4360 test.186d: post-set-active-3000ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[10006.803733] brcmfmac: BCM4360 test.186d: dwell-3000ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+[10006.803781] brcmfmac: BCM4360 test.186d: dwell-3000ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[10006.805144] brcmfmac: BCM4360 test.186d: dwell-3000ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[10006.806559] brcmfmac: BCM4360 test.186d: dwell-3000ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[10006.807910] brcmfmac: BCM4360 test.186d: dwell-3000ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[10006.809245] brcmfmac: BCM4360 test.186d: dwell-3000ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[10006.810528] brcmfmac: BCM4360 test.186d: dwell-3000ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[10006.811795] brcmfmac: BCM4360 test.186d: dwell-3000ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[10006.813039] brcmfmac: BCM4360 test.186d: dwell-3000ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[10006.814341] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x00000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[10006.815635] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x04000]=0x2c004798 (was 0x2c004798) UNCHANGED
+[10006.817175] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x08000]=0x44460902 (was 0x44460902) UNCHANGED
+[10006.818860] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x0c000]=0x46984616 (was 0x46984616) UNCHANGED
+[10006.820476] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x10000]=0x46324639 (was 0x46324639) UNCHANGED
+[10006.821821] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x14000]=0x459868e3 (was 0x459868e3) UNCHANGED
+[10006.821826] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x18000]=0x42ab317c (was 0x42ab317c) UNCHANGED
+[10006.821830] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x1c000]=0x480ffd17 (was 0x480ffd17) UNCHANGED
+[10006.821834] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x20000]=0xa84af8f3 (was 0xa84af8f3) UNCHANGED
+[10006.821842] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x24000]=0x2b027973 (was 0x2b027973) UNCHANGED
+[10006.822063] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x28000]=0x1129f640 (was 0x1129f640) UNCHANGED
+[10006.822067] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x2c000]=0xf0084643 (was 0xf0084643) UNCHANGED
+[10006.822176] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x30000]=0xf996f7fe (was 0xf996f7fe) UNCHANGED
+[10006.822180] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x34000]=0xf0002800 (was 0xf0002800) UNCHANGED
+[10006.822287] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x38000]=0x2bff2269 (was 0x2bff2269) UNCHANGED
+[10006.822330] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x3c000]=0xb004f8d4 (was 0xb004f8d4) UNCHANGED
+[10006.822334] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x40000]=0x34333231 (was 0x34333231) UNCHANGED
+[10006.825234] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x44000]=0x00040160 (was 0x00040160) UNCHANGED
+[10006.825239] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x48000]=0x0a776f6c (was 0x0a776f6c) UNCHANGED
+[10006.828107] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x4c000]=0x000a7825 (was 0x000a7825) UNCHANGED
+[10006.828111] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x50000]=0x0004eeb8 (was 0x0004eeb8) UNCHANGED
+[10006.828116] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x54000]=0x203a6425 (was 0x203a6425) UNCHANGED
+[10006.828120] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x58000]=0x5f6f7370 (was 0x5f6f7370) UNCHANGED
+[10006.828127] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x5c000]=0x0034005b (was 0x0034005b) UNCHANGED
+[10006.828131] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x60000]=0x06000972 (was 0x06000972) UNCHANGED
+[10006.828135] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x64000]=0x4808b920 (was 0x4808b920) UNCHANGED
+[10006.828139] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x68000]=0x25003088 (was 0x25003088) UNCHANGED
+[10006.828143] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x6c000]=0x008964f8 (was 0x008964f8) UNCHANGED
+[10006.828151] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x70000]=0xc0c900e3 (was 0xc0c900e3) UNCHANGED
+[10006.828154] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x74000]=0x20e84158 (was 0x20e84158) UNCHANGED
+[10006.828158] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x78000]=0xcc9ce141 (was 0xcc9ce141) UNCHANGED
+[10006.828162] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x7c000]=0x401ae2a0 (was 0x401ae2a0) UNCHANGED
+[10006.828167] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x80000]=0x981353fa (was 0x981353fa) UNCHANGED
+[10006.828174] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x84000]=0x8effc98d (was 0x8effc98d) UNCHANGED
+[10006.828177] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x88000]=0x77d733bb (was 0x77d733bb) UNCHANGED
+[10006.828180] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x8c000]=0x35c5fec3 (was 0x35c5fec3) UNCHANGED
+[10006.828184] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x90000]=0xa4270be1 (was 0xa4270be1) UNCHANGED
+[10006.828187] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x94000]=0x464c65ed (was 0x464c65ed) UNCHANGED
+[10006.828191] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x98000]=0x00000000 (was 0x00000000) UNCHANGED
+[10006.828198] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x9c000]=0x5354414b (was 0x5354414b) UNCHANGED
+[10006.828202] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffc0]=0x7600303d (was 0x7600303d) UNCHANGED
+[10006.828205] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffc4]=0x69646e65 (was 0x69646e65) UNCHANGED
+[10006.828208] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffc8]=0x78303d64 (was 0x78303d64) UNCHANGED
+[10006.828212] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffcc]=0x34653431 (was 0x34653431) UNCHANGED
+[10006.828221] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffd0]=0x76656400 (was 0x76656400) UNCHANGED
+[10006.828225] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffd4]=0x303d6469 (was 0x303d6469) UNCHANGED
+[10006.828228] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffd8]=0x61333478 (was 0x61333478) UNCHANGED
+[10006.828231] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffdc]=0x74780030 (was 0x74780030) UNCHANGED
+[10006.828235] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffe0]=0x72666c61 (was 0x72666c61) UNCHANGED
+[10006.828239] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffe4]=0x343d7165 (was 0x343d7165) UNCHANGED
+[10006.828247] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffe8]=0x30303030 (was 0x30303030) UNCHANGED
+[10006.828250] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffec]=0x32616100 (was 0x32616100) UNCHANGED
+[10006.828253] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9fff0]=0x00373d67 (was 0x00373d67) UNCHANGED
+[10006.828257] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9fff4]=0x67356161 (was 0x67356161) UNCHANGED
+[10006.828260] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9fff8]=0x0000373d (was 0x0000373d) UNCHANGED
+[10006.828264] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9fffc]=0xffc70038 (was 0xffc70038) UNCHANGED
+[10006.828287] brcmfmac: BCM4360 test.186d: dwell-3000ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[10006.828289] brcmfmac: BCM4360 test.186d: dwell-3000ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[10006.828292] brcmfmac: BCM4360 test.186d: dwell-3000ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[10006.828294] brcmfmac: BCM4360 test.186d: dwell-3000ms CC-res_state=0x0000013b (was 0x0000013b) UNCHANGED
+[10006.828296] brcmfmac: BCM4360 test.186d: dwell-3000ms CC-pmutimer=0x13735c7b (was 0x1371ab93) CHANGED
+[10006.828297] brcmfmac: BCM4360 test.186d: dwell-3000ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[10006.828299] brcmfmac: BCM4360 test.186d: dwell-3000ms CC-max_res_mask=0x0000013f (was 0x0000013f) UNCHANGED
+[10006.828301] brcmfmac: BCM4360 test.186d: dwell-3000ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[10006.828309] brcmfmac: BCM4360 test.186d: final PCIE2 mailboxint=0x00000000 (D2H bits would be 0x10000+, FN0 bits 0x0100/0x0200)
+[10006.828316] brcmfmac: BCM4360 test.186d: pci_clear_master done; PCI_COMMAND=0x0002 BM=OFF
+[10006.828320] brcmfmac: BCM4360 test.186d: post-BM-clear MMIO guard mailboxint=0x00000000 (endpoint alive after BM-off)
+[10006.828616] brcmfmac: BCM4360 test.186d: released fw/nvram after BM-before-set_active + dwell + BM-clear; returning -ENODEV
+[10006.828620] brcmfmac: BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+[10007.131620] brcmfmac: BCM4360 test.163: fw released; returning from setup (state still DOWN)
+[10049.425035] brcmfmac: BCM4360 test.161: remove() short-circuit — state=0 != UP; skipping MMIO cleanup
+[10049.738965] brcmfmac: BCM4360 test.161: remove() short-circuit complete
+[11242.546079] pcieport 0000:00:1c.0: Enabling MPC IRBNCE
+[11242.546088] pcieport 0000:00:1c.0: Intel PCH root port ACS workaround enabled
+[11242.565096] pcieport 0000:00:1c.1: Enabling MPC IRBNCE
+[11242.565104] pcieport 0000:00:1c.1: Intel PCH root port ACS workaround enabled
+[11242.642186] pcieport 0000:00:1c.2: Enabling MPC IRBNCE
+[11242.642194] pcieport 0000:00:1c.2: Intel PCH root port ACS workaround enabled
+[11252.029892] wlp0s20u2: disconnect from AP 60:83:e7:3f:8a:fb for new auth to 60:83:e7:3f:8a:8b
+[11253.122479] wlp0s20u2: authenticate with 60:83:e7:3f:8a:8b (local address=2c:30:33:a7:29:5a)
+[11253.122487] wlp0s20u2: send auth to 60:83:e7:3f:8a:8b (try 1/3)
+[11253.125862] wlp0s20u2: authenticated
+[11253.127571] wlp0s20u2: associate with 60:83:e7:3f:8a:8b (try 1/3)
+[11253.147605] wlp0s20u2: RX ReassocResp from 60:83:e7:3f:8a:8b (capab=0x1511 status=0 aid=5)
+[11253.149481] wlp0s20u2: associated
+[11253.188946] wlp0s20u2: Limiting TX power to 20 (23 - 3) dBm as advertised by 60:83:e7:3f:8a:8b
+[15486.979011] brcmfmac: BCM4360 test.186d: module_init entry — extended post-release TCM sampling
+[15486.979104] brcmfmac: BCM4360 test.156: before brcmf_core_init()
+[15486.979157] brcmfmac: BCM4360 test.155: brcmf_core_init() entry
+[15486.979200] brcmfmac: BCM4360 test.155: before brcmf_sdio_register()
+[15486.980973] brcmfmac: BCM4360 test.155: after brcmf_sdio_register() err=0
+[15487.032677] brcmfmac: BCM4360 test.155: post-SDIO sync (before PCI)
+[15487.034342] brcmfmac: BCM4360 test.155: before brcmf_pcie_register()
+[15487.036008] brcmfmac: BCM4360 test.186d: brcmf_pcie_register() entry
+[15487.342228] brcmfmac: BCM4360 test.186d: before pci_register_driver
+[15487.646240] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=00000000e7e24e9b)
+[15487.950156] brcmfmac: BCM4360 test.158: probe entry flush done — proceeding
+[15488.254096] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+[15488.254175] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+[15488.254313] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+[15488.767233] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+[15488.767348] brcmfmac: BCM4360 test.158: before brcmf_chip_attach
+[15489.070479] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcf5984800000
+[15489.070502] brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+[15489.121187] brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+[15489.121930] brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+[15489.122098] brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+[15489.127295] brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+[15489.131093] brcmfmac 0000:03:00.0: BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)
+[15489.132995] brcmfmac 0000:03:00.0: BCM4360 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0
+[15489.134685] brcmfmac: BCM4360 test.186d: post-145 ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[15489.136371] brcmfmac: brcmf_chip_recognition: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+[15489.138064] brcmfmac: brcmf_chip_recognition: BCM4360 test.125: after reset, before get_raminfo
+[15489.139752] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[15489.141427] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[15489.143390] brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+[15489.446057] brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+[15489.446129] brcmfmac: BCM4360 test.158: about to pci_clear_master (config-space write)
+[15489.750141] brcmfmac 0000:03:00.0: BCM4360 test.158: BusMaster cleared after chip_attach
+[15490.054017] brcmfmac: BCM4360 test.158: about to read LnkCtl before ASPM disable
+[15490.358023] brcmfmac: BCM4360 test.158: LnkCtl read before=0x0140 — disabling ASPM
+[15490.662133] brcmfmac: BCM4360 test.158: pci_disable_link_state returned — reading LnkCtl
+[15490.965989] brcmfmac 0000:03:00.0: BCM4360 test.158: ASPM disabled; LnkCtl before=0x0140 after=0x0140 ASPM-bits-after=0x0
+[15491.270042] brcmfmac 0000:03:00.0: BCM4360 test.186d: root port 0000:00:1c.2 LnkCtl before=0x0040 ASPM=0x0 CLKREQ=off — disabling L0s/L1/CLKPM
+[15491.574059] brcmfmac: BCM4360 test.186d: root-port pci_disable_link_state returned — reading LnkCtl
+[15491.877911] brcmfmac 0000:03:00.0: BCM4360 test.186d: root port 0000:00:1c.2 LnkCtl after=0x0040 ASPM=0x0 CLKREQ=off
+[15492.485960] brcmfmac 0000:03:00.0: BCM4360 test.159: before PCIE2 core/reginfo setup
+[15492.789941] brcmfmac 0000:03:00.0: BCM4360 test.159: reginfo selected (pcie2 rev=1)
+[15493.094941] brcmfmac 0000:03:00.0: BCM4360 test.159: pcie_bus_dev allocated
+[15493.397835] brcmfmac 0000:03:00.0: BCM4360 test.159: settings allocated (BCM4360 dummy path)
+[15493.701869] brcmfmac 0000:03:00.0: BCM4360 test.159: bus allocated
+[15494.005997] brcmfmac 0000:03:00.0: BCM4360 test.159: msgbuf allocated
+[15494.309844] brcmfmac 0000:03:00.0: BCM4360 test.159: struct wiring done — before pci_pme_capable
+[15494.613826] brcmfmac 0000:03:00.0: BCM4360 test.159: after pci_pme_capable wowl=1
+[15494.917908] brcmfmac 0000:03:00.0: BCM4360 test.160: drvdata set — before brcmf_alloc
+[15495.221773] brcmfmac 0000:03:00.0: BCM4360 test.160: brcmf_alloc complete — wiphy allocated
+[15495.525854] brcmfmac 0000:03:00.0: BCM4360 test.160: OTP read bypassed — OTP not needed
+[15495.829773] brcmfmac 0000:03:00.0: BCM4360 test.160: before prepare_fw_request
+[15496.133812] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[15496.133822] brcmfmac 0000:03:00.0: BCM4360 test.160: firmware request prepared
+[15496.437789] brcmfmac: BCM4360 test.161: calling brcmf_fw_get_firmwares — async callback expected
+[15496.741705] brcmfmac 0000:03:00.0: BCM4360 test.161: brcmf_fw_get_firmwares returned 0 (async/success; callback will fire)
+[15496.743834] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+[15496.743859] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+[15496.743862] brcmfmac: BCM4360 test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0
+[15496.743917] brcmfmac: BCM4360 test.186d: setup-entry ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[15497.045729] brcmfmac: BCM4360 test.186d: pre-attach ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[15497.045820] brcmfmac: BCM4360 test.186d: pci_register_driver returned ret=0
+[15497.045911] brcmfmac: BCM4360 test.128: before brcmf_pcie_attach
+[15497.046009] brcmfmac: BCM4360 test.155: after brcmf_pcie_register() err=0
+[15497.046092] brcmfmac: BCM4360 test.128: brcmf_pcie_attach ENTRY
+[15497.055337] brcmfmac: BCM4360 test.129: brcmf_pcie_attach bypassed for BCM4360
+[15497.059855] brcmfmac: BCM4360 test.128: after brcmf_pcie_attach
+[15497.064395] brcmfmac: BCM4360 test.186d: post-attach ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[15497.100773] brcmfmac: BCM4360 test.155: post-PCI sync (skipping USB)
+[15497.103491] brcmfmac: BCM4360 test.156: after brcmf_core_init() err=0
+[15497.369146] brcmfmac: BCM4360 test.134: post-attach before fw-ptr-extract
+[15497.669220] brcmfmac: BCM4360 test.134: after kfree(fwreq)
+[15497.969291] brcmfmac: BCM4360 test.130: before brcmf_chip_get_raminfo
+[15498.269376] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[15498.269441] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[15498.269484] brcmfmac: BCM4360 test.130: after brcmf_chip_get_raminfo
+[15498.269532] brcmfmac: BCM4360 test.186d: post-raminfo ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[15498.571569] brcmfmac: BCM4360 test.130: after brcmf_pcie_adjust_ramsize
+[15498.871659] brcmfmac: BCM4360 test.186d: pre-download ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[15498.871734] brcmfmac: BCM4360 test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)
+[15499.171804] brcmfmac: BCM4360 test.142: enter_download_state — confirming ARM CR4 reset state
+[15499.171861] brcmfmac: BCM4360 test.142: ARM CR4 state RESET_CTL=0x00000000 IN_RESET=NO/BAD IOCTL=0x0001 CPUHALT=NO FGC=NO CLK=YES
+[15499.471963] brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffcf5984800000
+[15499.471969] brcmfmac 0000:03:00.0: BCM4360 test.138: pre-BAR2-ioread32 (tcm=ffffcf5984800000)
+[15499.772058] brcmfmac 0000:03:00.0: BCM4360 test.138: post-BAR2-ioread32 = 0xb80ef000 (real value — BAR2 accessible)
+[15500.072169] brcmfmac: BCM4360 test.186d: pre-halt ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[15500.072250] brcmfmac: BCM4360 test.186d: pre-halt D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[15500.122305] brcmfmac: BCM4360 test.186d: re-halting ARM CR4 via brcmf_chip_set_passive
+[15500.273672] brcmfmac: BCM4360 test.186d: post-halt ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[15500.323792] brcmfmac: BCM4360 test.186d: starting chunked fw write, total_words=110558 (442233 bytes) tail=1 wbase=ffffcf5984800000
+[15500.376090] brcmfmac: BCM4360 test.186d: wrote 4096 words (16384 bytes)
+[15500.428362] brcmfmac: BCM4360 test.186d: wrote 8192 words (32768 bytes)
+[15500.482475] brcmfmac: BCM4360 test.186d: wrote 12288 words (49152 bytes)
+[15500.536650] brcmfmac: BCM4360 test.186d: wrote 16384 words (65536 bytes)
+[15500.588921] brcmfmac: BCM4360 test.186d: wrote 20480 words (81920 bytes)
+[15500.641190] brcmfmac: BCM4360 test.186d: wrote 24576 words (98304 bytes)
+[15500.693458] brcmfmac: BCM4360 test.186d: wrote 28672 words (114688 bytes)
+[15500.745722] brcmfmac: BCM4360 test.186d: wrote 32768 words (131072 bytes)
+[15500.799908] brcmfmac: BCM4360 test.186d: wrote 36864 words (147456 bytes)
+[15500.854445] brcmfmac: BCM4360 test.186d: wrote 40960 words (163840 bytes)
+[15500.906736] brcmfmac: BCM4360 test.186d: wrote 45056 words (180224 bytes)
+[15500.959019] brcmfmac: BCM4360 test.186d: wrote 49152 words (196608 bytes)
+[15501.011297] brcmfmac: BCM4360 test.186d: wrote 53248 words (212992 bytes)
+[15501.065562] brcmfmac: BCM4360 test.186d: wrote 57344 words (229376 bytes)
+[15501.119867] brcmfmac: BCM4360 test.186d: wrote 61440 words (245760 bytes)
+[15501.174149] brcmfmac: BCM4360 test.186d: wrote 65536 words (262144 bytes)
+[15501.228488] brcmfmac: BCM4360 test.186d: wrote 69632 words (278528 bytes)
+[15501.280757] brcmfmac: BCM4360 test.186d: wrote 73728 words (294912 bytes)
+[15501.333029] brcmfmac: BCM4360 test.186d: wrote 77824 words (311296 bytes)
+[15501.385323] brcmfmac: BCM4360 test.186d: wrote 81920 words (327680 bytes)
+[15501.437591] brcmfmac: BCM4360 test.186d: wrote 86016 words (344064 bytes)
+[15501.489865] brcmfmac: BCM4360 test.186d: wrote 90112 words (360448 bytes)
+[15501.542137] brcmfmac: BCM4360 test.186d: wrote 94208 words (376832 bytes)
+[15501.594412] brcmfmac: BCM4360 test.186d: wrote 98304 words (393216 bytes)
+[15501.648732] brcmfmac: BCM4360 test.186d: wrote 102400 words (409600 bytes)
+[15501.703238] brcmfmac: BCM4360 test.186d: wrote 106496 words (425984 bytes)
+[15501.758541] brcmfmac: BCM4360 test.186d: all 110558 words written, before tail (tail=1)
+[15501.808600] brcmfmac: BCM4360 test.186d: tail 1 bytes written at offset 442232
+[15501.858659] brcmfmac: BCM4360 test.186d: fw write complete (442233 bytes)
+[15501.858704] brcmfmac: BCM4360 test.186d: before post-fw msleep(100)
+[15501.965516] brcmfmac: BCM4360 test.186d: after post-fw msleep(100)
+[15501.967792] brcmfmac: BCM4360 test.186d: host resetintr=0xb80ef000 before NVRAM
+[15501.969861] brcmfmac: BCM4360 test.186d: pre-NVRAM write address=0x9ff1c len=228 naddr=ffffcf598489ff1c
+[15501.971980] brcmfmac: BCM4360 test.186d: post-NVRAM write done (228 bytes)
+[15501.974068] brcmfmac: BCM4360 test.186d: NVRAM marker at ramsize-4 = 0xffc70038 (pre-release snapshot)
+[15501.976171] brcmfmac: BCM4360 test.186d: TCM[0x0000]=0xb80ef000 (pre-release snapshot)
+[15501.978248] brcmfmac: BCM4360 test.186d: TCM[0x0004]=0xb82ef000 (pre-release snapshot)
+[15501.980301] brcmfmac: BCM4360 test.186d: TCM[0x0008]=0xb839f000 (pre-release snapshot)
+[15501.982380] brcmfmac: BCM4360 test.186d: TCM[0x000c]=0xb844f000 (pre-release snapshot)
+[15501.984399] brcmfmac: BCM4360 test.186d: TCM[0x0010]=0xb852f000 (pre-release snapshot)
+[15501.986348] brcmfmac: BCM4360 test.186d: TCM[0x0014]=0xb860f000 (pre-release snapshot)
+[15501.988326] brcmfmac: BCM4360 test.186d: TCM[0x0018]=0xb86ef000 (pre-release snapshot)
+[15501.990291] brcmfmac: BCM4360 test.186d: TCM[0x001c]=0xb87cf000 (pre-release snapshot)
+[15501.992210] brcmfmac: BCM4360 test.186d: wide-TCM[0x00000]=0xb80ef000 (pre-release snapshot)
+[15501.994071] brcmfmac: BCM4360 test.186d: wide-TCM[0x04000]=0x2c004798 (pre-release snapshot)
+[15501.995902] brcmfmac: BCM4360 test.186d: wide-TCM[0x08000]=0x44460902 (pre-release snapshot)
+[15501.997729] brcmfmac: BCM4360 test.186d: wide-TCM[0x0c000]=0x46984616 (pre-release snapshot)
+[15501.999549] brcmfmac: BCM4360 test.186d: wide-TCM[0x10000]=0x46324639 (pre-release snapshot)
+[15502.001313] brcmfmac: BCM4360 test.186d: wide-TCM[0x14000]=0x459868e3 (pre-release snapshot)
+[15502.003054] brcmfmac: BCM4360 test.186d: wide-TCM[0x18000]=0x42ab317c (pre-release snapshot)
+[15502.004805] brcmfmac: BCM4360 test.186d: wide-TCM[0x1c000]=0x480ffd17 (pre-release snapshot)
+[15502.006512] brcmfmac: BCM4360 test.186d: wide-TCM[0x20000]=0xa84af8f3 (pre-release snapshot)
+[15502.008203] brcmfmac: BCM4360 test.186d: wide-TCM[0x24000]=0x2b027973 (pre-release snapshot)
+[15502.009877] brcmfmac: BCM4360 test.186d: wide-TCM[0x28000]=0x1129f640 (pre-release snapshot)
+[15502.011494] brcmfmac: BCM4360 test.186d: wide-TCM[0x2c000]=0xf0084643 (pre-release snapshot)
+[15502.013078] brcmfmac: BCM4360 test.186d: wide-TCM[0x30000]=0xf996f7fe (pre-release snapshot)
+[15502.014649] brcmfmac: BCM4360 test.186d: wide-TCM[0x34000]=0xf0002800 (pre-release snapshot)
+[15502.016186] brcmfmac: BCM4360 test.186d: wide-TCM[0x38000]=0x2bff2269 (pre-release snapshot)
+[15502.017714] brcmfmac: BCM4360 test.186d: wide-TCM[0x3c000]=0xb004f8d4 (pre-release snapshot)
+[15502.019187] brcmfmac: BCM4360 test.186d: wide-TCM[0x40000]=0x34333231 (pre-release snapshot)
+[15502.020624] brcmfmac: BCM4360 test.186d: wide-TCM[0x44000]=0x00040160 (pre-release snapshot)
+[15502.022052] brcmfmac: BCM4360 test.186d: wide-TCM[0x48000]=0x0a776f6c (pre-release snapshot)
+[15502.023479] brcmfmac: BCM4360 test.186d: wide-TCM[0x4c000]=0x000a7825 (pre-release snapshot)
+[15502.024896] brcmfmac: BCM4360 test.186d: wide-TCM[0x50000]=0x0004eeb8 (pre-release snapshot)
+[15502.026277] brcmfmac: BCM4360 test.186d: wide-TCM[0x54000]=0x203a6425 (pre-release snapshot)
+[15502.027603] brcmfmac: BCM4360 test.186d: wide-TCM[0x58000]=0x5f6f7370 (pre-release snapshot)
+[15502.028883] brcmfmac: BCM4360 test.186d: wide-TCM[0x5c000]=0x0034005b (pre-release snapshot)
+[15502.030118] brcmfmac: BCM4360 test.186d: wide-TCM[0x60000]=0x06000972 (pre-release snapshot)
+[15502.031313] brcmfmac: BCM4360 test.186d: wide-TCM[0x64000]=0x4808b920 (pre-release snapshot)
+[15502.032466] brcmfmac: BCM4360 test.186d: wide-TCM[0x68000]=0x25003088 (pre-release snapshot)
+[15502.033619] brcmfmac: BCM4360 test.186d: wide-TCM[0x6c000]=0x008964f8 (pre-release snapshot)
+[15502.034743] brcmfmac: BCM4360 test.186d: wide-TCM[0x70000]=0xc0c900e3 (pre-release snapshot)
+[15502.035801] brcmfmac: BCM4360 test.186d: wide-TCM[0x74000]=0x20e84158 (pre-release snapshot)
+[15502.036805] brcmfmac: BCM4360 test.186d: wide-TCM[0x78000]=0xcc9ce141 (pre-release snapshot)
+[15502.037833] brcmfmac: BCM4360 test.186d: wide-TCM[0x7c000]=0x401ae2a0 (pre-release snapshot)
+[15502.038871] brcmfmac: BCM4360 test.186d: wide-TCM[0x80000]=0x981353fa (pre-release snapshot)
+[15502.039876] brcmfmac: BCM4360 test.186d: wide-TCM[0x84000]=0x8effc98d (pre-release snapshot)
+[15502.040841] brcmfmac: BCM4360 test.186d: wide-TCM[0x88000]=0x77d733bb (pre-release snapshot)
+[15502.041789] brcmfmac: BCM4360 test.186d: wide-TCM[0x8c000]=0x35c5fec3 (pre-release snapshot)
+[15502.042733] brcmfmac: BCM4360 test.186d: wide-TCM[0x90000]=0xa4270be1 (pre-release snapshot)
+[15502.043658] brcmfmac: BCM4360 test.186d: wide-TCM[0x94000]=0x464c65ed (pre-release snapshot)
+[15502.044552] brcmfmac: BCM4360 test.186d: wide-TCM[0x98000]=0x00000000 (pre-release snapshot)
+[15502.045430] brcmfmac: BCM4360 test.186d: wide-TCM[0x9c000]=0x5354414b (pre-release snapshot)
+[15502.046295] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffc0]=0x7600303d (pre-release snapshot)
+[15502.047146] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffc4]=0x69646e65 (pre-release snapshot)
+[15502.047986] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffc8]=0x78303d64 (pre-release snapshot)
+[15502.048835] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffcc]=0x34653431 (pre-release snapshot)
+[15502.049723] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffd0]=0x76656400 (pre-release snapshot)
+[15502.050704] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffd4]=0x303d6469 (pre-release snapshot)
+[15502.051662] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffd8]=0x61333478 (pre-release snapshot)
+[15502.052554] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffdc]=0x74780030 (pre-release snapshot)
+[15502.053434] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffe0]=0x72666c61 (pre-release snapshot)
+[15502.054357] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffe4]=0x343d7165 (pre-release snapshot)
+[15502.055376] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffe8]=0x30303030 (pre-release snapshot)
+[15502.056335] brcmfmac: BCM4360 test.186d: tail-TCM[0x9ffec]=0x32616100 (pre-release snapshot)
+[15502.056339] brcmfmac: BCM4360 test.186d: tail-TCM[0x9fff0]=0x00373d67 (pre-release snapshot)
+[15502.056342] brcmfmac: BCM4360 test.186d: tail-TCM[0x9fff4]=0x67356161 (pre-release snapshot)
+[15502.056345] brcmfmac: BCM4360 test.186d: tail-TCM[0x9fff8]=0x0000373d (pre-release snapshot)
+[15502.056347] brcmfmac: BCM4360 test.186d: tail-TCM[0x9fffc]=0xffc70038 (pre-release snapshot)
+[15502.056348] brcmfmac: BCM4360 test.187: resetintr offset 0xef000 out of TCM range (ramsize=0xa0000), skipping
+[15502.056366] brcmfmac: BCM4360 test.186d: CC-clk_ctl_st=0x00050040 (pre-release snapshot)
+[15502.062653] brcmfmac: BCM4360 test.186d: CC-pmucontrol=0x01770181 (pre-release snapshot)
+[15502.062655] brcmfmac: BCM4360 test.186d: CC-pmustatus=0x0000002a (pre-release snapshot)
+[15502.062656] brcmfmac: BCM4360 test.186d: CC-res_state=0x0000013b (pre-release snapshot)
+[15502.062656] brcmfmac: BCM4360 test.186d: CC-pmutimer=0x1e19b6ba (pre-release snapshot)
+[15502.062657] brcmfmac: BCM4360 test.186d: CC-min_res_mask=0x0000013b (pre-release snapshot)
+[15502.062658] brcmfmac: BCM4360 test.186d: CC-max_res_mask=0x0000013f (pre-release snapshot)
+[15502.062658] brcmfmac: BCM4360 test.186d: CC-pmuwatchdog=0x00000000 (pre-release snapshot)
+[15502.062660] brcmfmac: BCM4360 test.186d: INTERNAL_MEM core not found — resetcore skipped (expected on BCM4360)
+[15502.062672] brcmfmac: BCM4360 test.186d: pre-set-active ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[15502.062684] brcmfmac: BCM4360 test.186d: pre-set-active D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[15502.122204] brcmfmac: BCM4360 test.186d: pre-BM PCI_COMMAND=0x0002 BM=OFF MMIO guard mailboxint=0x00000000
+[15502.122262] brcmfmac: BCM4360 test.186d: pci_set_master done; PCI_COMMAND=0x0006 BM=ON (before set_active)
+[15502.122311] brcmfmac: BCM4360 test.186d: post-BM-on MMIO guard mailboxint=0x00000000 (endpoint still responsive)
+[15502.142361] brcmfmac: BCM4360 test.186d: calling brcmf_chip_set_active resetintr=0xb80ef000 (BusMaster ENABLED — DMA-stall discriminator)
+[15502.173455] brcmfmac 0000:03:00.0: BCM4360 test.65 activate: rstvec=0xb80ef000 to TCM[0]; CMD=0x0006 (BusMaster preserved)
+[15502.173778] brcmfmac: BCM4360 test.186d: brcmf_chip_set_active returned true
+[15502.194983] brcmfmac: BCM4360 test.186d: post-set-active-20ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[15502.196083] brcmfmac: BCM4360 test.186d: post-set-active-20ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[15502.277216] brcmfmac: BCM4360 test.186d: post-set-active-100ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[15502.277296] brcmfmac: BCM4360 test.186d: post-set-active-100ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[15502.677454] brcmfmac: BCM4360 test.186d: post-set-active-500ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[15502.677681] brcmfmac: BCM4360 test.186d: post-set-active-500ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[15502.677852] brcmfmac: BCM4360 test.186d: dwell-500ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+[15502.677995] brcmfmac: BCM4360 test.186d: dwell-500ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[15502.680378] brcmfmac: BCM4360 test.186d: dwell-500ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[15502.681685] brcmfmac: BCM4360 test.186d: dwell-500ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[15502.682884] brcmfmac: BCM4360 test.186d: dwell-500ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[15502.684113] brcmfmac: BCM4360 test.186d: dwell-500ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[15502.685401] brcmfmac: BCM4360 test.186d: dwell-500ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[15502.686594] brcmfmac: BCM4360 test.186d: dwell-500ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[15502.687776] brcmfmac: BCM4360 test.186d: dwell-500ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[15502.688990] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x00000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[15502.690217] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x04000]=0x2c004798 (was 0x2c004798) UNCHANGED
+[15502.691452] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x08000]=0x44460902 (was 0x44460902) UNCHANGED
+[15502.692685] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x0c000]=0x46984616 (was 0x46984616) UNCHANGED
+[15502.694058] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x10000]=0x46324639 (was 0x46324639) UNCHANGED
+[15502.695308] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x14000]=0x459868e3 (was 0x459868e3) UNCHANGED
+[15502.696619] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x18000]=0x42ab317c (was 0x42ab317c) UNCHANGED
+[15502.697863] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x1c000]=0x480ffd17 (was 0x480ffd17) UNCHANGED
+[15502.699127] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x20000]=0xa84af8f3 (was 0xa84af8f3) UNCHANGED
+[15502.700410] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x24000]=0x2b027973 (was 0x2b027973) UNCHANGED
+[15502.701690] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x28000]=0x1129f640 (was 0x1129f640) UNCHANGED
+[15502.702980] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x2c000]=0xf0084643 (was 0xf0084643) UNCHANGED
+[15502.704245] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x30000]=0xf996f7fe (was 0xf996f7fe) UNCHANGED
+[15502.705570] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x34000]=0xf0002800 (was 0xf0002800) UNCHANGED
+[15502.706879] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x38000]=0x2bff2269 (was 0x2bff2269) UNCHANGED
+[15502.708203] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x3c000]=0xb004f8d4 (was 0xb004f8d4) UNCHANGED
+[15502.709510] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x40000]=0x34333231 (was 0x34333231) UNCHANGED
+[15502.710928] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x44000]=0x00040160 (was 0x00040160) UNCHANGED
+[15502.712296] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x48000]=0x0a776f6c (was 0x0a776f6c) UNCHANGED
+[15502.713688] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x4c000]=0x000a7825 (was 0x000a7825) UNCHANGED
+[15502.715080] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x50000]=0x0004eeb8 (was 0x0004eeb8) UNCHANGED
+[15502.716436] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x54000]=0x203a6425 (was 0x203a6425) UNCHANGED
+[15502.717811] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x58000]=0x5f6f7370 (was 0x5f6f7370) UNCHANGED
+[15502.719166] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x5c000]=0x0034005b (was 0x0034005b) UNCHANGED
+[15502.720478] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x60000]=0x06000972 (was 0x06000972) UNCHANGED
+[15502.721856] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x64000]=0x4808b920 (was 0x4808b920) UNCHANGED
+[15502.723232] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x68000]=0x25003088 (was 0x25003088) UNCHANGED
+[15502.724587] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x6c000]=0x008964f8 (was 0x008964f8) UNCHANGED
+[15502.725947] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x70000]=0xc0c900e3 (was 0xc0c900e3) UNCHANGED
+[15502.727334] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x74000]=0x20e84158 (was 0x20e84158) UNCHANGED
+[15502.728733] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x78000]=0xcc9ce141 (was 0xcc9ce141) UNCHANGED
+[15502.730082] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x7c000]=0x401ae2a0 (was 0x401ae2a0) UNCHANGED
+[15502.731485] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x80000]=0x981353fa (was 0x981353fa) UNCHANGED
+[15502.732866] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x84000]=0x8effc98d (was 0x8effc98d) UNCHANGED
+[15502.734251] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x88000]=0x77d733bb (was 0x77d733bb) UNCHANGED
+[15502.735585] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x8c000]=0x35c5fec3 (was 0x35c5fec3) UNCHANGED
+[15502.736877] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x90000]=0xa4270be1 (was 0xa4270be1) UNCHANGED
+[15502.738183] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x94000]=0x464c65ed (was 0x464c65ed) UNCHANGED
+[15502.739488] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x98000]=0x00000000 (was 0x00000000) UNCHANGED
+[15502.740766] brcmfmac: BCM4360 test.186d: dwell-500ms wide-TCM[0x9c000]=0x5354414b (was 0x5354414b) UNCHANGED
+[15502.742025] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffc0]=0x7600303d (was 0x7600303d) UNCHANGED
+[15502.743315] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffc4]=0x69646e65 (was 0x69646e65) UNCHANGED
+[15502.744518] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffc8]=0x78303d64 (was 0x78303d64) UNCHANGED
+[15502.745723] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffcc]=0x34653431 (was 0x34653431) UNCHANGED
+[15502.746921] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffd0]=0x76656400 (was 0x76656400) UNCHANGED
+[15502.748136] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffd4]=0x303d6469 (was 0x303d6469) UNCHANGED
+[15502.749351] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffd8]=0x61333478 (was 0x61333478) UNCHANGED
+[15502.750599] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffdc]=0x74780030 (was 0x74780030) UNCHANGED
+[15502.751778] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffe0]=0x72666c61 (was 0x72666c61) UNCHANGED
+[15502.752956] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffe4]=0x343d7165 (was 0x343d7165) UNCHANGED
+[15502.754133] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffe8]=0x30303030 (was 0x30303030) UNCHANGED
+[15502.755374] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9ffec]=0x32616100 (was 0x32616100) UNCHANGED
+[15502.756603] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9fff0]=0x00373d67 (was 0x00373d67) UNCHANGED
+[15502.757810] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9fff4]=0x67356161 (was 0x67356161) UNCHANGED
+[15502.759103] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9fff8]=0x0000373d (was 0x0000373d) UNCHANGED
+[15502.760385] brcmfmac: BCM4360 test.186d: dwell-500ms tail-TCM[0x9fffc]=0xffc70038 (was 0xffc70038) UNCHANGED
+[15502.761623] brcmfmac: BCM4360 test.187: dwell-500ms resetintr offset 0xef000 out of range, skipping
+[15502.762876] brcmfmac: BCM4360 test.186d: dwell-500ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[15502.764080] brcmfmac: BCM4360 test.186d: dwell-500ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[15502.765336] brcmfmac: BCM4360 test.186d: dwell-500ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[15502.766592] brcmfmac: BCM4360 test.186d: dwell-500ms CC-res_state=0x0000013b (was 0x0000013b) UNCHANGED
+[15502.767857] brcmfmac: BCM4360 test.186d: dwell-500ms CC-pmutimer=0x1e1a10b1 (was 0x1e19b6ba) CHANGED
+[15502.769047] brcmfmac: BCM4360 test.186d: dwell-500ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[15502.770236] brcmfmac: BCM4360 test.186d: dwell-500ms CC-max_res_mask=0x0000013f (was 0x0000013f) UNCHANGED
+[15502.771483] brcmfmac: BCM4360 test.186d: dwell-500ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[15503.781449] brcmfmac: BCM4360 test.186d: post-set-active-1500ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[15503.781549] brcmfmac: BCM4360 test.186d: post-set-active-1500ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[15503.781624] brcmfmac: BCM4360 test.186d: dwell-1500ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+[15503.781698] brcmfmac: BCM4360 test.186d: dwell-1500ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[15503.783178] brcmfmac: BCM4360 test.186d: dwell-1500ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[15503.784667] brcmfmac: BCM4360 test.186d: dwell-1500ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[15503.786045] brcmfmac: BCM4360 test.186d: dwell-1500ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[15503.787364] brcmfmac: BCM4360 test.186d: dwell-1500ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[15503.788715] brcmfmac: BCM4360 test.186d: dwell-1500ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[15503.790094] brcmfmac: BCM4360 test.186d: dwell-1500ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[15503.791435] brcmfmac: BCM4360 test.186d: dwell-1500ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[15503.792764] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x00000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[15503.794061] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x04000]=0x2c004798 (was 0x2c004798) UNCHANGED
+[15503.795357] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x08000]=0x44460902 (was 0x44460902) UNCHANGED
+[15503.796638] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x0c000]=0x46984616 (was 0x46984616) UNCHANGED
+[15503.797956] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x10000]=0x46324639 (was 0x46324639) UNCHANGED
+[15503.799358] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x14000]=0x459868e3 (was 0x459868e3) UNCHANGED
+[15503.800780] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x18000]=0x42ab317c (was 0x42ab317c) UNCHANGED
+[15503.802207] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x1c000]=0x480ffd17 (was 0x480ffd17) UNCHANGED
+[15503.803854] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x20000]=0xa84af8f3 (was 0xa84af8f3) UNCHANGED
+[15503.805655] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x24000]=0x2b027973 (was 0x2b027973) UNCHANGED
+[15503.807464] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x28000]=0x1129f640 (was 0x1129f640) UNCHANGED
+[15503.809275] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x2c000]=0xf0084643 (was 0xf0084643) UNCHANGED
+[15503.811031] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x30000]=0xf996f7fe (was 0xf996f7fe) UNCHANGED
+[15503.812752] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x34000]=0xf0002800 (was 0xf0002800) UNCHANGED
+[15503.814503] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x38000]=0x2bff2269 (was 0x2bff2269) UNCHANGED
+[15503.816235] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x3c000]=0xb004f8d4 (was 0xb004f8d4) UNCHANGED
+[15503.818021] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x40000]=0x34333231 (was 0x34333231) UNCHANGED
+[15503.818029] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x44000]=0x00040160 (was 0x00040160) UNCHANGED
+[15503.818034] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x48000]=0x0a776f6c (was 0x0a776f6c) UNCHANGED
+[15503.818039] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x4c000]=0x000a7825 (was 0x000a7825) UNCHANGED
+[15503.818043] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x50000]=0x0004eeb8 (was 0x0004eeb8) UNCHANGED
+[15503.818048] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x54000]=0x203a6425 (was 0x203a6425) UNCHANGED
+[15503.818052] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x58000]=0x5f6f7370 (was 0x5f6f7370) UNCHANGED
+[15503.818056] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x5c000]=0x0034005b (was 0x0034005b) UNCHANGED
+[15503.818060] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x60000]=0x06000972 (was 0x06000972) UNCHANGED
+[15503.818065] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x64000]=0x4808b920 (was 0x4808b920) UNCHANGED
+[15503.818069] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x68000]=0x25003088 (was 0x25003088) UNCHANGED
+[15503.818073] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x6c000]=0x008964f8 (was 0x008964f8) UNCHANGED
+[15503.818077] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x70000]=0xc0c900e3 (was 0xc0c900e3) UNCHANGED
+[15503.818081] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x74000]=0x20e84158 (was 0x20e84158) UNCHANGED
+[15503.818085] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x78000]=0xcc9ce141 (was 0xcc9ce141) UNCHANGED
+[15503.818088] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x7c000]=0x401ae2a0 (was 0x401ae2a0) UNCHANGED
+[15503.818092] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x80000]=0x981353fa (was 0x981353fa) UNCHANGED
+[15503.818096] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x84000]=0x8effc98d (was 0x8effc98d) UNCHANGED
+[15503.818099] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x88000]=0x77d733bb (was 0x77d733bb) UNCHANGED
+[15503.818103] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x8c000]=0x35c5fec3 (was 0x35c5fec3) UNCHANGED
+[15503.818107] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x90000]=0xa4270be1 (was 0xa4270be1) UNCHANGED
+[15503.818110] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x94000]=0x464c65ed (was 0x464c65ed) UNCHANGED
+[15503.818114] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x98000]=0x00000000 (was 0x00000000) UNCHANGED
+[15503.818117] brcmfmac: BCM4360 test.186d: dwell-1500ms wide-TCM[0x9c000]=0x5354414b (was 0x5354414b) UNCHANGED
+[15503.818121] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffc0]=0x7600303d (was 0x7600303d) UNCHANGED
+[15503.818124] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffc4]=0x69646e65 (was 0x69646e65) UNCHANGED
+[15503.818128] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffc8]=0x78303d64 (was 0x78303d64) UNCHANGED
+[15503.818131] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffcc]=0x34653431 (was 0x34653431) UNCHANGED
+[15503.818135] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffd0]=0x76656400 (was 0x76656400) UNCHANGED
+[15503.818139] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffd4]=0x303d6469 (was 0x303d6469) UNCHANGED
+[15503.818143] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffd8]=0x61333478 (was 0x61333478) UNCHANGED
+[15503.818146] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffdc]=0x74780030 (was 0x74780030) UNCHANGED
+[15503.818150] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffe0]=0x72666c61 (was 0x72666c61) UNCHANGED
+[15503.818153] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffe4]=0x343d7165 (was 0x343d7165) UNCHANGED
+[15503.818157] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffe8]=0x30303030 (was 0x30303030) UNCHANGED
+[15503.818160] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9ffec]=0x32616100 (was 0x32616100) UNCHANGED
+[15503.818164] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9fff0]=0x00373d67 (was 0x00373d67) UNCHANGED
+[15503.818167] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9fff4]=0x67356161 (was 0x67356161) UNCHANGED
+[15503.818171] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9fff8]=0x0000373d (was 0x0000373d) UNCHANGED
+[15503.818174] brcmfmac: BCM4360 test.186d: dwell-1500ms tail-TCM[0x9fffc]=0xffc70038 (was 0xffc70038) UNCHANGED
+[15503.818176] brcmfmac: BCM4360 test.187: dwell-1500ms resetintr offset 0xef000 out of range, skipping
+[15503.818196] brcmfmac: BCM4360 test.186d: dwell-1500ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[15503.818199] brcmfmac: BCM4360 test.186d: dwell-1500ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[15503.818201] brcmfmac: BCM4360 test.186d: dwell-1500ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[15503.818203] brcmfmac: BCM4360 test.186d: dwell-1500ms CC-res_state=0x0000013b (was 0x0000013b) UNCHANGED
+[15503.818205] brcmfmac: BCM4360 test.186d: dwell-1500ms CC-pmutimer=0x1e1a971a (was 0x1e19b6ba) CHANGED
+[15503.818207] brcmfmac: BCM4360 test.186d: dwell-1500ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[15503.818209] brcmfmac: BCM4360 test.186d: dwell-1500ms CC-max_res_mask=0x0000013f (was 0x0000013f) UNCHANGED
+[15503.818211] brcmfmac: BCM4360 test.186d: dwell-1500ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[15505.381360] brcmfmac: BCM4360 test.186d: post-set-active-3000ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[15505.381462] brcmfmac: BCM4360 test.186d: post-set-active-3000ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[15505.381526] brcmfmac: BCM4360 test.186d: dwell-3000ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+[15505.381581] brcmfmac: BCM4360 test.186d: dwell-3000ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[15505.382985] brcmfmac: BCM4360 test.186d: dwell-3000ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[15505.384383] brcmfmac: BCM4360 test.186d: dwell-3000ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[15505.385710] brcmfmac: BCM4360 test.186d: dwell-3000ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[15505.387007] brcmfmac: BCM4360 test.186d: dwell-3000ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[15505.388293] brcmfmac: BCM4360 test.186d: dwell-3000ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[15505.389598] brcmfmac: BCM4360 test.186d: dwell-3000ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[15505.390930] brcmfmac: BCM4360 test.186d: dwell-3000ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[15505.392308] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x00000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[15505.393674] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x04000]=0x2c004798 (was 0x2c004798) UNCHANGED
+[15505.394984] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x08000]=0x44460902 (was 0x44460902) UNCHANGED
+[15505.396348] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x0c000]=0x46984616 (was 0x46984616) UNCHANGED
+[15505.396354] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x10000]=0x46324639 (was 0x46324639) UNCHANGED
+[15505.396358] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x14000]=0x459868e3 (was 0x459868e3) UNCHANGED
+[15505.396361] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x18000]=0x42ab317c (was 0x42ab317c) UNCHANGED
+[15505.396364] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x1c000]=0x480ffd17 (was 0x480ffd17) UNCHANGED
+[15505.396367] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x20000]=0xa84af8f3 (was 0xa84af8f3) UNCHANGED
+[15505.396370] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x24000]=0x2b027973 (was 0x2b027973) UNCHANGED
+[15505.396373] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x28000]=0x1129f640 (was 0x1129f640) UNCHANGED
+[15505.396376] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x2c000]=0xf0084643 (was 0xf0084643) UNCHANGED
+[15505.396379] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x30000]=0xf996f7fe (was 0xf996f7fe) UNCHANGED
+[15505.396383] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x34000]=0xf0002800 (was 0xf0002800) UNCHANGED
+[15505.396386] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x38000]=0x2bff2269 (was 0x2bff2269) UNCHANGED
+[15505.396389] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x3c000]=0xb004f8d4 (was 0xb004f8d4) UNCHANGED
+[15505.409854] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x40000]=0x34333231 (was 0x34333231) UNCHANGED
+[15505.409857] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x44000]=0x00040160 (was 0x00040160) UNCHANGED
+[15505.409860] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x48000]=0x0a776f6c (was 0x0a776f6c) UNCHANGED
+[15505.409863] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x4c000]=0x000a7825 (was 0x000a7825) UNCHANGED
+[15505.409866] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x50000]=0x0004eeb8 (was 0x0004eeb8) UNCHANGED
+[15505.409869] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x54000]=0x203a6425 (was 0x203a6425) UNCHANGED
+[15505.409872] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x58000]=0x5f6f7370 (was 0x5f6f7370) UNCHANGED
+[15505.409875] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x5c000]=0x0034005b (was 0x0034005b) UNCHANGED
+[15505.409878] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x60000]=0x06000972 (was 0x06000972) UNCHANGED
+[15505.421836] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x64000]=0x4808b920 (was 0x4808b920) UNCHANGED
+[15505.423177] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x68000]=0x25003088 (was 0x25003088) UNCHANGED
+[15505.424545] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x6c000]=0x008964f8 (was 0x008964f8) UNCHANGED
+[15505.425896] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x70000]=0xc0c900e3 (was 0xc0c900e3) UNCHANGED
+[15505.427250] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x74000]=0x20e84158 (was 0x20e84158) UNCHANGED
+[15505.428576] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x78000]=0xcc9ce141 (was 0xcc9ce141) UNCHANGED
+[15505.429901] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x7c000]=0x401ae2a0 (was 0x401ae2a0) UNCHANGED
+[15505.431226] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x80000]=0x981353fa (was 0x981353fa) UNCHANGED
+[15505.432576] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x84000]=0x8effc98d (was 0x8effc98d) UNCHANGED
+[15505.433941] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x88000]=0x77d733bb (was 0x77d733bb) UNCHANGED
+[15505.435301] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x8c000]=0x35c5fec3 (was 0x35c5fec3) UNCHANGED
+[15505.436600] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x90000]=0xa4270be1 (was 0xa4270be1) UNCHANGED
+[15505.437901] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x94000]=0x464c65ed (was 0x464c65ed) UNCHANGED
+[15505.439209] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x98000]=0x00000000 (was 0x00000000) UNCHANGED
+[15505.440701] brcmfmac: BCM4360 test.186d: dwell-3000ms wide-TCM[0x9c000]=0x5354414b (was 0x5354414b) UNCHANGED
+[15505.442060] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffc0]=0x7600303d (was 0x7600303d) UNCHANGED
+[15505.443451] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffc4]=0x69646e65 (was 0x69646e65) UNCHANGED
+[15505.444892] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffc8]=0x78303d64 (was 0x78303d64) UNCHANGED
+[15505.444898] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffcc]=0x34653431 (was 0x34653431) UNCHANGED
+[15505.444902] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffd0]=0x76656400 (was 0x76656400) UNCHANGED
+[15505.444905] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffd4]=0x303d6469 (was 0x303d6469) UNCHANGED
+[15505.444908] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffd8]=0x61333478 (was 0x61333478) UNCHANGED
+[15505.444912] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffdc]=0x74780030 (was 0x74780030) UNCHANGED
+[15505.444915] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffe0]=0x72666c61 (was 0x72666c61) UNCHANGED
+[15505.444919] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffe4]=0x343d7165 (was 0x343d7165) UNCHANGED
+[15505.444922] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffe8]=0x30303030 (was 0x30303030) UNCHANGED
+[15505.444925] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9ffec]=0x32616100 (was 0x32616100) UNCHANGED
+[15505.444928] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9fff0]=0x00373d67 (was 0x00373d67) UNCHANGED
+[15505.444932] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9fff4]=0x67356161 (was 0x67356161) UNCHANGED
+[15505.444935] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9fff8]=0x0000373d (was 0x0000373d) UNCHANGED
+[15505.444939] brcmfmac: BCM4360 test.186d: dwell-3000ms tail-TCM[0x9fffc]=0xffc70038 (was 0xffc70038) UNCHANGED
+[15505.444941] brcmfmac: BCM4360 test.187: dwell-3000ms resetintr offset 0xef000 out of range, skipping
+[15505.444959] brcmfmac: BCM4360 test.186d: dwell-3000ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[15505.444962] brcmfmac: BCM4360 test.186d: dwell-3000ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[15505.444964] brcmfmac: BCM4360 test.186d: dwell-3000ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[15505.444965] brcmfmac: BCM4360 test.186d: dwell-3000ms CC-res_state=0x0000013b (was 0x0000013b) UNCHANGED
+[15505.444967] brcmfmac: BCM4360 test.186d: dwell-3000ms CC-pmutimer=0x1e1b663f (was 0x1e19b6ba) CHANGED
+[15505.444969] brcmfmac: BCM4360 test.186d: dwell-3000ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[15505.444972] brcmfmac: BCM4360 test.186d: dwell-3000ms CC-max_res_mask=0x0000013f (was 0x0000013f) UNCHANGED
+[15505.444974] brcmfmac: BCM4360 test.186d: dwell-3000ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[15505.444980] brcmfmac: BCM4360 test.186d: final PCIE2 mailboxint=0x00000000 (D2H bits would be 0x10000+, FN0 bits 0x0100/0x0200)
+[15505.444986] brcmfmac: BCM4360 test.186d: pci_clear_master done; PCI_COMMAND=0x0002 BM=OFF
+[15505.444989] brcmfmac: BCM4360 test.186d: post-BM-clear MMIO guard mailboxint=0x00000000 (endpoint alive after BM-off)
+[15505.445130] brcmfmac: BCM4360 test.186d: released fw/nvram after BM-before-set_active + dwell + BM-clear; returning -ENODEV
+[15505.476000] brcmfmac: BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+[15505.781401] brcmfmac: BCM4360 test.163: fw released; returning from setup (state still DOWN)
+=== dmesg stream end: Mon 20 Apr 22:07:14 BST 2026 ===

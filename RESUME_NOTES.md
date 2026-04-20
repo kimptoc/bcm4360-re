@@ -9214,3 +9214,35 @@ Expected interpretation:
   completed BAR2 firmware write remains the leading hypothesis.
 - Reaches `post-idle-loop` then freezes on resetintr: PCIE2 resetintr read is
   the next boundary.
+
+
+## PRE-TEST.188 STATE — 2026-04-20 22:22
+
+**Hypothesis:** The D11 core is not being properly brought out of reset or enabled during firmware initialization. The firmware hangs in si_attach's D11 core bring-up because prerequisite checks (clock/power/reset-state/interrupt routing) are missing.
+
+**Test design:** Path B from phase5_progress.md - D11 prerequisite checks, step 1: D11 core BCMA state probe.
+
+**Implementation:**
+1. Add probes to read D11 core wrapper registers (IOCTL, IOST, RESET_CTL) via chip.c bus ops
+2. Sample at ARM-release time (immediately after `brcmf_chip_set_active`)
+3. Sample again at T+200ms to see if firmware changes D11 core state before freezing
+4. Compare with expected state from proprietary `wl` driver reset trace
+
+**Expected outcomes:**
+- If D11 core is in reset (RESET_CTL bit 0 set): firmware cannot proceed with D11 initialization
+- If D11 core is out of reset but IOCTL/IOST show unexpected state: clock/power/interrupt issues
+- If D11 core state changes between samples: firmware is attempting D11 bring-up but hitting a different blocker
+
+**Code changes needed:**
+- Add `brcmf_chip_get_d11_state()` function to read D11 core wrapper registers
+- Insert probes at appropriate points in `brcmf_pcie_download_fw_nvram()` or `brcmf_pcie_setup()`
+- Log D11 state alongside existing ARM CR4 probes
+
+**Risk assessment:** Read-only probes; minimal risk beyond existing test framework.
+
+**Next steps after test.188:**
+1. If D11 is in reset: investigate why `brcmf_chip_set_active` doesn't release D11 reset
+2. If D11 is out of reset but IOCTL/IOST wrong: check clock request registers and PMU resources
+3. If D11 state changes: firmware is progressing further than expected; need finer-grained probes
+
+---
