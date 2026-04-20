@@ -1,32 +1,30 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.151 — SDIO+PCI registration; PCIe clean after reboot)
+## Current state (2026-04-20, PRE test.152 — probe early-return discriminator; PCIe clean)
 
-### CODE STATE: test.151 source prepared, rebuilt, committed, and pushed
+### CODE STATE: test.152 source prepared, rebuilt, committed, and pushed
 
-**test.151 change: SDIO + PCI registration (USB skipped)**
-- No BAR0 MMIO, BAR2 MMIO, or pre-probe mitigation.
-- `brcmf_core_init()` now:
-  - Calls `brcmf_sdio_register()` (safe, confirmed by test.150)
-  - Calls `brcmf_pcie_register()` — PCI driver re-introduced
-  - 50ms delay then `post-PCI sync` marker
-  - Returns 0 — USB skipped
-- `brcmf_core_exit()` still guards on `_was_registered` flags (no hang on rmmod).
-- `dmesg -wk` kill fixed: now uses `kill -9` (SIGTERM was ignored, causing 7-minute hang).
+**test.152 change: probe early-return before SBR (no HW access)**
+- `brcmf_pcie_probe()` returns `-ENODEV` immediately after `devinfo` alloc,
+  BEFORE `pci_save_state()` or `PCI_BRIDGE_CTL_BUS_RESET` writes.
+- 50ms delay added after SDIO registration (before PCI) to ensure SDIO markers
+  survive in journald before PCI probe runs.
+- All markers updated to test.152.
 
 **Purpose:**
-- test.150 proved SDIO registration safe (no crash, all markers, clean rmmod).
-- test.151 re-introduces `brcmf_pcie_register()` — historically the crash window (tests 146-148).
-- If crash: PCI registration (or its probe side-effects) is the trigger; investigate pcie.c.
-- If safe: add USB or add full probe path next.
+- test.151 CRASHED: `pci_register_driver()` → `brcmf_pcie_probe()` triggers hard freeze.
+- journalctl -b -1 confirmed: only 3 markers survived; SDIO markers lost (hard freeze,
+  not kernel panic — no panic output captured).
+- test.152 confirms whether the crash is in the SBR block specifically, or elsewhere in probe.
 
 **Hypothesis:**
-- Expect crash — tests 146-148 all crashed in or around `brcmf_pcie_register()`.
-- If no crash: the PCI registration itself is safe and the crash was in probe.
+- Expect NO crash — probe entry without hardware access should be safe.
+- If no crash: SBR (`PCI_BRIDGE_CTL_BUS_RESET` to bridge) is the crash trigger.
+- If crash: something in probe entry itself crashes (probe called from irq context? unlikely).
 
-**Pre-test PCIe state (2026-04-20, post-reboot):**
-- Root port `00:1c.2`: `DLActive+`, `CommClk+`, `MAbort-`, bus `03/03` — clean.
-- Endpoint `03:00.0`: present, `MAbort-`, AER `UESta` clear.
+**Pre-test PCIe state (2026-04-20, post-SMC-reset):**
+- Root port `00:1c.2`: `DLActive+`, `CommClk+`, `MAbort-`, `BridgeCtl: >Reset-` — clean.
+- Endpoint `03:00.0`: `MAbort-`, `DevSta: CorrErr+ UnsupReq+` (expected from UR guard).
 - No driver bound; no brcm modules loaded.
 
 **Test command:**
@@ -36,10 +34,39 @@ sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 Stage1 remains forbidden.
 
 **Interpretation matrix:**
-- Crash before `brcmf_pcie_register()` marker: crash moved earlier than PCI — unexpected.
-- Crash after `before brcmf_pcie_register()` but before `after` marker: crash inside `brcmf_pcie_register()` body; examine pcie.c instrumentation markers.
-- No crash, `post-PCI sync` appears: `pci_register_driver()` returned safely; crash was in probe path. Next: allow probe to proceed (re-examine stage0 probe markers).
-- No crash: confirm rmmod cleans up without hang (registration guards + kill -9 fix).
+- No crash, `PROBE ENTRY` appears, `post-PCI sync` appears: probe entry safe; SBR is next suspect. Next test: add SBR read-only ops (pci_save_state, pci_read_config_word).
+- No crash, `PROBE ENTRY` missing: probe not called (unexpected) or marker lost.
+- Crash before `PROBE ENTRY` marker: something in probe entry itself crashes (very unlikely).
+- Crash after `before brcmf_pcie_register()` but `PROBE ENTRY` missing: crash in `pci_register_driver()` itself before probe (extremely unlikely).
+
+---
+
+## Previous state (2026-04-20, POST test.151 CRASH — PCI probe confirmed crash trigger)
+
+### CODE/LOG STATE: test.151 crashed — only 3 markers in journalctl -b -1
+
+**test.151 stream log captured (2 markers only):**
+```
+brcmfmac: BCM4360 test.151: module_init entry (no BAR0 MMIO)
+brcmfmac: BCM4360 test.151: before brcmf_core_init()
+```
+
+**journalctl -b -1 captured (3 markers):**
+```
+brcmfmac: BCM4360 test.151: module_init entry (no BAR0 MMIO)
+brcmfmac: BCM4360 test.151: before brcmf_core_init()
+brcmfmac: BCM4360 test.151: brcmf_core_init() entry
+```
+
+**Key findings:**
+- Hard freeze confirmed: no kernel panic output in journalctl (SMC reset required).
+- SDIO markers (from line 1553+) completely absent — hard freeze froze journald before
+  it could flush ring buffer entries past `brcmf_core_init() entry`.
+- SDIO itself is NOT the crash trigger (confirmed safe in test.150).
+- PCI probe IS the crash trigger: adding `brcmf_pcie_register()` → `pci_register_driver()`
+  → `brcmf_pcie_probe()` causes the machine to hard-freeze.
+- The freeze happened fast enough that the ring buffer lost the SDIO markers,
+  indicating the freeze occurred within milliseconds of `brcmf_core_init() entry`.
 
 **Pre-test PCIe state (2026-04-20):**
 - Root port `00:1c.2`: `DLActive+`, `CommClk+`, `MAbort-`, bus `03/03` — clean.
