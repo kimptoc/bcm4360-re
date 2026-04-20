@@ -1,6 +1,55 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.163 CRASH — machine rebooted, no SMC reset)
+## Current state (2026-04-20, PRE test.164 — REBUILT, ready for insmod)
+
+### CODE STATE: test.164 implemented — chunked 442KB fw write with per-16KB breadcrumbs
+
+**What test.164 changes vs test.163:**
+- In `brcmf_pcie_download_fw_nvram`, the BCM4360 path no longer calls
+  `brcmf_pcie_copy_mem_todev` for the firmware copy. Instead it runs an
+  inline 32-bit iowrite32 loop (same write pattern as copy_mem_todev) that
+  emits a `pr_emerg` breadcrumb every 16KB (every 4096 words) + `mdelay(50)`
+  to ensure the line reaches the console before the next chunk starts.
+- 442233 bytes / 16384 ≈ 27 breadcrumbs before the tail.
+- NVRAM write, TCM dump, and -ENODEV return all unchanged from test.163.
+- Module_init / pcie_register banners updated from test.163 → test.164.
+
+**Hypothesis for test.164:**
+- If the crash is triggered by a specific word offset (say, the first one that
+  touches a bad region of TCM), the last-surviving breadcrumb pins it to a
+  16KB band. We expect to see either:
+    (a) all 27 breadcrumbs + the "fw write complete" line → crash is later
+        (NVRAM write or readback), OR
+    (b) crash after breadcrumb N → failure lies in words 4096·N .. 4096·(N+1).
+- If (a), we keep narrowing by moving the breakpoint forward.
+- If (b), the offset lets us decide whether to try smaller chunks, delays,
+  or suspect a specific TCM region (e.g., near the top where NVRAM lands).
+
+**Not addressed in test.164 (keep on list):**
+- test.142 still reads RESET_CTL at core->base+0x1800 which is the wrong
+  register. We still don't have a reliable ARM-halt check at download time.
+  Will fix later (likely test.165) with a proper wrapbase-based read.
+
+**Pre-test PCIe state (2026-04-20 ~10:30):**
+- 03:00.0: Control Mem- BusMaster- (no driver bound — normal).
+- DevSta: CorrErr- NonFatalErr- FatalErr- UnsupReq- (clean).
+- MAbort-, LnkSta 2.5GT/s Width x1, LnkCtl ASPM Disabled CommClk-.
+
+**Build status:** REBUILT; .ko contains test.164 markers (module_init,
+chunked-write breadcrumbs, etc.). No build warnings of concern.
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+**Note:** NO SMC reset was done after the test.163 crash. Device enumerates
+cleanly, so we proceed. If test.164 also crashes, may need to try SMC reset
+before further attempts.
+
+---
+
+## Previous state (2026-04-20, POST test.163 CRASH — machine rebooted, no SMC reset)
 
 ### RESULT: test.163 CRASHED during the 442KB BAR2 iowrite32 (copy_mem_todev)
 

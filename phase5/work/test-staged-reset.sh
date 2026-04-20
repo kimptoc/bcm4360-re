@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.163.stage${STAGE}"
+LOG="$LOG_DIR/test.164.stage${STAGE}"
 
-echo "=== test.163: step into brcmf_pcie_download_fw_nvram (442KB BAR2 fw + NVRAM write) — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.164: chunked 442KB BAR2 fw write with per-16KB breadcrumbs — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -28,7 +28,7 @@ case "$STAGE" in
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.163: test.162 flow + brcmf_pcie_download_fw_nvram executes; first BAR2 writes; skip_arm=1 returns -ENODEV after clean download; 300ms per marker)" | tee -a "$LOG"
+echo "(test.164: test.162 flow + brcmf_pcie_download_fw_nvram executes; first BAR2 writes; skip_arm=1 returns -ENODEV after clean download; 300ms per marker)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -105,14 +105,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=90  # test.163: test.162 load + download_fw_nvram (442KB iowrite32 + NVRAM + verify); +20s headroom
+    WAIT_SECS=90  # test.164: test.162 load + download_fw_nvram (442KB iowrite32 + NVRAM + verify); +20s headroom
 else
     SKIP_ARM=0
     WAIT_SECS=60
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.163 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.164 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.
