@@ -1,5 +1,45 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.185 (2026-04-20, staged) — widen TCM scan + D11 wrapper probe
+
+### Hypothesis
+Firmware is running (test.184 proved it via pmutimer ticks and one
+pmucontrol bit flip) but we cannot see it touching TCM in the 32
+points we sample. Either (a) firmware writes somewhere outside those
+probes, (b) firmware never reaches the point of writing to TCM, or
+(c) firmware is stalled waiting on an external event (host doorbell,
+D11 bring-up, etc.).
+
+test.185 widens the TCM sampling to a 16-KB grid across the full
+640-KB TCM (40 probe points) and adds a D11 (BCMA_CORE_80211) wrapper
+probe alongside the ARM CR4 probe at every sample point (pre-halt,
+pre-set-active, +20 ms, +100 ms, +500 ms, +1500 ms, +3000 ms). CR4
+probe also gains IOSTATUS (0x40c) for wrapper visibility. BusMaster
+stays cleared; still returns -ENODEV.
+
+### Prediction
+- pmutimer continues to tick; pmucontrol stays at 0x01770381 (the
+  test.184 value) — baseline firmware side-effect reproduces.
+- ARM CR4 IOSTATUS reveals a non-zero value that changes across
+  dwells, giving a second observable besides CPUHALT.
+- D11 IOCTL/RESET_CTL: either (a) all-zero and unchanged → firmware
+  hasn't reached D11 bring-up, or (b) changes → firmware has started
+  taking D11 out of reset (major milestone).
+- Wide-TCM grid: at least one of the 40 points changes if firmware
+  is actually rewriting any 16-KB block of the image. If all 40 stay
+  UNCHANGED (our expectation given test.184's 32-point null result)
+  we can definitively say firmware is not touching TCM at all in 3 s.
+
+### Run command
+```
+sudo ./phase5/work/test-staged-reset.sh 0
+```
+
+Expected HW: PCIe link stays up, host survives, -ENODEV returned from
+insmod. LnkSta stays at x1 2.5GT/s; no MAbort+.
+
+---
+
 ## Current state (2026-04-20, POST test.184 — pmutimer ticking, firmware flipped pmucontrol bit 9 once)
 
 ### TEST.184 RESULT — firmware IS doing early init; one backplane bit moved
