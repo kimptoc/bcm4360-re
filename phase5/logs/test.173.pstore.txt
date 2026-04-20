@@ -1,0 +1,94 @@
+===== dmesg-efi_pstore-177666760701001 =====
+Oops#1 Part1
+<4>[  588.913028]  kfifo_buf sbs snd_hwdep sbshc industrialio rtc_cmos snd_pcm thunderbolt cec tiny_power_button intel_gtt i2c_algo_bit snd_timer ac snd mei_me video button mei wmi soundcore xt_conntrack nf_conntrack nf_defrag_ipv6 nf_defrag_ipv4 ip6t_rpfilter ipt_rpfilter xt_pkttype xt_LOG nf_log_syslog xt_tcpudp nft_compat x_tables nf_tables libcrc32c sch_fq_codel msr loop kvm_intel kvm irqbypass atkbd libps2 serio vivaldi_fmap nfnetlink efivarfs dmi_sysfs autofs4 ext4 crc32c_generic crc16 mbcache jbd2 sd_mod ahci libahci libata crc32c_intel scsi_mod xhci_pci xhci_hcd scsi_common dm_mod dax
+<4>[  588.932702] CR2: 0000000000000000
+<4>[  588.934597] ---[ end trace 0000000000000000 ]---
+===== dmesg-efi_pstore-177666760702001 =====
+Oops#1 Part2
+<4>[  588.877702] RSP: 002b:00007ffd67ef1408 EFLAGS: 00000206 ORIG_RAX: 00000000000000b0
+<4>[  588.877705] RAX: ffffffffffffffda RBX: 0000562bfba34710 RCX: 00007fb58ed2411b
+<4>[  588.877706] RDX: 0000000000000000 RSI: 0000000000000800 RDI: 0000562bfba34778
+<4>[  588.877708] RBP: 00007ffd67ef1430 R08: 0000000000000000 R09: 0000000000000000
+<4>[  588.877709] R10: 0000000000000000 R11: 0000000000000206 R12: 0000000000000000
+<4>[  588.877711] R13: 00007ffd67ef1680 R14: 0000000000000000 R15: 00007ffd67ef1688
+<4>[  588.877714]  </TASK>
+<4>[  588.877715] Modules linked in: brcmfmac(O-) brcmutil ccm af_packet btusb btrtl btintel btbcm btmtk bluetooth ecdh_generic ecc mt76x2u mt76x2_common mt76x02_usb mt76_usb mt76x02_lib mt76 mac80211 input_leds joydev hid_apple cfg80211 uas mousedev hid_generic usbhid usb_storage bcm5974 rfkill hid libarc4 apple_mfi_fastcharge snd_hda_codec_hdmi ofpart cmdlinepart spi_nor intel_rapl_msr nls_iso8859_1 mtd nls_cp437 intel_rapl_common vfat x86_pkg_temp_thermal fat intel_powerclamp spi_intel_platform iTCO_wdt intel_pmc_bxt coretemp watchdog spi_intel mac_hid crct10dif_pclmul evdev i915 crc32_pclmul polyval_clmulni mei_pxp mei_hdcp polyval_generic ghash_clmulni_intel applesmc sha512_ssse3 sha256_ssse3 sha1_ssse3 aesni_intel gf128mul crypto_simd cryptd rapl intel_cstate intel_uncore snd_hda_codec_cirrus snd_hda_codec_generic efi_pstore led_class i2c_i801 snd_hda_intel i2c_smbus i2c_mux lpc_ich snd_intel_dspcfg drm_buddy ttm snd_intel_sdw_acpi snd_hda_codec acpi_als drm_display_helper snd_hda_core industrialio_triggered_buffer
+===== dmesg-efi_pstore-177666760703001 =====
+Oops#1 Part3
+<4>[  588.870519] Hardware name: Apple Inc. MacBookPro11,1/Mac-189A3D4F975D5FFC, BIOS 478.0.0.0.0 01/13/2023
+<4>[  588.872135] RIP: 0010:pci_unregister_driver+0x3a/0xb0
+<4>[  588.873756] Code: 54 49 89 fc 48 83 c7 68 55 4d 8d bc 24 f8 00 00 00 49 81 c4 00 01 00 00 53 e8 62 78 1f 00 4c 89 ff e8 5a 6a 61 00 49 8b 1c 24 <48> 8b 2b 49 39 dc 74 51 49 be 00 01 00 00 00 00 ad de 48 89 df 49
+<4>[  588.877597] RSP: 0018:ffffd41e47177e68 EFLAGS: 00010246
+<4>[  588.877602] RAX: 0000000000000000 RBX: 0000000000000000 RCX: 0000000000000027
+<4>[  588.877604] RDX: 0000000000000001 RSI: 0000000000000001 RDI: ffffffffc18f01d8
+<4>[  588.877605] RBP: ffffd41e47177ea0 R08: 0000000000000000 R09: ffffd41e47177ce8
+<4>[  588.877607] R10: ffffffffb9f0d1e8 R11: 0000000000000003 R12: ffffffffc18f01e0
+<4>[  588.877608] R13: 00000000000000b0 R14: ffff8d7942170000 R15: ffffffffc18f01d8
+<4>[  588.877610] FS:  00007fb58efd7740(0000) GS:ffff8d7aa7380000(0000) knlGS:0000000000000000
+<4>[  588.877613] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+<4>[  588.877614] CR2: 0000000000000000 CR3: 000000017f4a4002 CR4: 00000000001726f0
+<4>[  588.877617] Call Trace:
+<4>[  588.877619]  <TASK>
+<4>[  588.877625]  brcmfmac_module_exit+0xd/0x30 [brcmfmac]
+<4>[  588.877667]  __do_sys_delete_module+0x1b8/0x320
+<4>[  588.877673]  do_syscall_64+0xb7/0x200
+<4>[  588.877679]  entry_SYSCALL_64_after_hwframe+0x77/0x7f
+<4>[  588.877683] RIP: 0033:0x7fb58ed2411b
+<4>[  588.877699] Code: 73 01 c3 48 8b 0d 0d 4d 0d 00 f7 d8 64 89 01 48 83 c8 ff c3 66 2e 0f 1f 84 00 00 00 00 00 90 f3 0f 1e fa b8 b0 00 00 00 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 8b 0d dd 4c 0d 00 f7 d8 64 89 01 48
+===== dmesg-efi_pstore-177666760704001 =====
+Oops#1 Part4
+<4>[  588.865873] Call Trace:
+<4>[  588.865875]  <TASK>
+<4>[  588.865878]  pci_unregister_driver+0x2e/0xb0
+<4>[  588.865884]  brcmfmac_module_exit+0xd/0x30 [brcmfmac]
+<4>[  588.865911]  __do_sys_delete_module+0x1b8/0x320
+<4>[  588.865916]  do_syscall_64+0xb7/0x200
+<4>[  588.865919]  entry_SYSCALL_64_after_hwframe+0x77/0x7f
+<4>[  588.865922] RIP: 0033:0x7fb58ed2411b
+<4>[  588.865935] Code: 73 01 c3 48 8b 0d 0d 4d 0d 00 f7 d8 64 89 01 48 83 c8 ff c3 66 2e 0f 1f 84 00 00 00 00 00 90 f3 0f 1e fa b8 b0 00 00 00 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 8b 0d dd 4c 0d 00 f7 d8 64 89 01 48
+<4>[  588.865936] RSP: 002b:00007ffd67ef1408 EFLAGS: 00000206 ORIG_RAX: 00000000000000b0
+<4>[  588.865938] RAX: ffffffffffffffda RBX: 0000562bfba34710 RCX: 00007fb58ed2411b
+<4>[  588.865939] RDX: 0000000000000000 RSI: 0000000000000800 RDI: 0000562bfba34778
+<4>[  588.865941] RBP: 00007ffd67ef1430 R08: 0000000000000000 R09: 0000000000000000
+<4>[  588.865942] R10: 0000000000000000 R11: 0000000000000206 R12: 0000000000000000
+<4>[  588.865943] R13: 00007ffd67ef1680 R14: 0000000000000000 R15: 00007ffd67ef1688
+<4>[  588.865945]  </TASK>
+<4>[  588.865946] ---[ end trace 0000000000000000 ]---
+<1>[  588.865949] BUG: kernel NULL pointer dereference, address: 0000000000000000
+<1>[  588.865982] #PF: supervisor read access in kernel mode
+<1>[  588.866007] #PF: error_code(0x0000) - not-present page
+<6>[  588.866028] PGD 0 P4D 0 
+<4>[  588.866040] Oops: Oops: 0000 [#1] PREEMPT SMP PTI
+<4>[  588.867490] CPU: 3 UID: 0 PID: 16154 Comm: rmmod Tainted: G        W  O       6.12.80 #1-NixOS
+<4>[  588.869005] Tainted: [W]=WARN, [O]=OOT_MODULE
+===== dmesg-efi_pstore-177666760705001 =====
+Oops#1 Part5
+<4>[  588.865850] CPU: 3 UID: 0 PID: 16154 Comm: rmmod Tainted: G           O       6.12.80 #1-NixOS
+<4>[  588.865853] Tainted: [O]=OOT_MODULE
+<4>[  588.865854] Hardware name: Apple Inc. MacBookPro11,1/Mac-189A3D4F975D5FFC, BIOS 478.0.0.0.0 01/13/2023
+<4>[  588.865856] RIP: 0010:driver_unregister+0x3e/0x50
+<4>[  588.865858] Code: bf 88 00 00 00 48 85 ff 74 12 48 8b 73 68 e8 99 be bc ff 48 89 df 5b e9 10 d6 ff ff 90 48 c7 c7 a8 c1 67 b9 e8 33 3f 77 ff 90 <0f> 0b 90 90 5b c3 cc cc cc cc 0f 1f 84 00 00 00 00 00 90 90 90 90
+<4>[  588.865860] RSP: 0018:ffffd41e47177e58 EFLAGS: 00010282
+<4>[  588.865862] RAX: 0000000000000000 RBX: ffffffffc18f0148 RCX: 0000000000000027
+<4>[  588.865863] RDX: ffff8d7aa73a3ac8 RSI: 0000000000000001 RDI: ffff8d7aa73a3ac0
+<4>[  588.865865] RBP: ffffd41e47177ea0 R08: 0000000000000000 R09: ffffd41e47177ce8
+<4>[  588.865866] R10: ffffffffb9f0d1e8 R11: 0000000000000003 R12: ffffffffc18f01e0
+<4>[  588.865867] R13: 00000000000000b0 R14: ffff8d7942170000 R15: ffffffffc18f01d8
+<4>[  588.865868] FS:  00007fb58efd7740(0000) GS:ffff8d7aa7380000(0000) knlGS:0000000000000000
+<4>[  588.865870] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+<4>[  588.865871] CR2: 0000562bfba407e8 CR3: 000000017f4a4002 CR4: 00000000001726f0
+===== dmesg-efi_pstore-177666760706001 =====
+Oops#1 Part6
+<4>[  588.865752] Modules linked in: brcmfmac(O-) brcmutil ccm af_packet btusb btrtl btintel btbcm btmtk bluetooth ecdh_generic ecc mt76x2u mt76x2_common mt76x02_usb mt76_usb mt76x02_lib mt76 mac80211 input_leds joydev hid_apple cfg80211 uas mousedev hid_generic usbhid usb_storage bcm5974 rfkill hid libarc4 apple_mfi_fastcharge snd_hda_codec_hdmi ofpart cmdlinepart spi_nor intel_rapl_msr nls_iso8859_1 mtd nls_cp437 intel_rapl_common vfat x86_pkg_temp_thermal fat intel_powerclamp spi_intel_platform iTCO_wdt intel_pmc_bxt coretemp watchdog spi_intel mac_hid crct10dif_pclmul evdev i915 crc32_pclmul polyval_clmulni mei_pxp mei_hdcp polyval_generic ghash_clmulni_intel applesmc sha512_ssse3 sha256_ssse3 sha1_ssse3 aesni_intel gf128mul crypto_simd cryptd rapl intel_cstate intel_uncore snd_hda_codec_cirrus snd_hda_codec_generic efi_pstore led_class i2c_i801 snd_hda_intel i2c_smbus i2c_mux lpc_ich snd_intel_dspcfg drm_buddy ttm snd_intel_sdw_acpi snd_hda_codec acpi_als drm_display_helper snd_hda_core industrialio_triggered_buffer
+<4>[  588.865810]  kfifo_buf sbs snd_hwdep sbshc industrialio rtc_cmos snd_pcm thunderbolt cec tiny_power_button intel_gtt i2c_algo_bit snd_timer ac snd mei_me video button mei wmi soundcore xt_conntrack nf_conntrack nf_defrag_ipv6 nf_defrag_ipv4 ip6t_rpfilter ipt_rpfilter xt_pkttype xt_LOG nf_log_syslog xt_tcpudp nft_compat x_tables nf_tables libcrc32c sch_fq_codel msr loop kvm_intel kvm irqbypass atkbd libps2 serio vivaldi_fmap nfnetlink efivarfs dmi_sysfs autofs4 ext4 crc32c_generic crc16 mbcache jbd2 sd_mod ahci libahci libata crc32c_intel scsi_mod xhci_pci xhci_hcd scsi_common dm_mod dax
+===== dmesg-efi_pstore-177666760707001 =====
+Oops#1 Part7
+<4>[  297.800073] brcmfmac: loading out-of-tree module taints kernel.
+<0>[  297.808957] brcmfmac: BCM4360 test.149: module_init entry (no BAR0 MMIO)
+<0>[  297.809073] brcmfmac: BCM4360 test.149: before brcmf_core_init()
+<0>[  297.809135] brcmfmac: BCM4360 test.149: brcmf_core_init() entry
+<0>[  297.859186] brcmfmac: BCM4360 test.149: pre-return sync (no registrations)
+<0>[  297.859219] brcmfmac: BCM4360 test.149: after brcmf_core_init() err=0
+<4>[  588.865730] ------------[ cut here ]------------
+<4>[  588.865733] Unexpected driver unregister!
+<4>[  588.865746] WARNING: CPU: 3 PID: 16154 at drivers/base/driver.c:270 driver_unregister+0x3e/0x50

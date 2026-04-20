@@ -1,5 +1,94 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## Current state (2026-04-20, POST test.173 — rebooted + SMC reset)
+
+### TEST.173 RESULT — no-MMIO post-write idle loop still freezes
+
+Captured artifacts:
+- `phase5/logs/test.173.stage0`
+- `phase5/logs/test.173.stage0.stream` (post-crash reboot stream only)
+- `phase5/logs/test.173.journalctl.txt` (authoritative previous-boot journal)
+- `phase5/logs/test.173.pstore.txt` (old EFI pstore entries; appears to be test.149-era
+  rmmod/unregister noise, not this crash)
+
+test.173 completed the same full BAR2 firmware write:
+- `all 110558 words written, before tail (tail=1)`
+- `tail 1 bytes written at offset 442232`
+- `post-write ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES`
+- `fw write complete (442233 bytes)`
+
+The no-device-MMIO idle loop then logged:
+- `idle-0 before/after no-MMIO mdelay(10)`
+- `idle-1 before/after no-MMIO mdelay(10)`
+- ...
+- `idle-7 before/after no-MMIO mdelay(10)`
+- `idle-8 before no-MMIO mdelay(10)` was the last persisted marker.
+
+No `idle-8 after`, no `idle-9`, no `post-idle-loop`, no resetintr read, no NVRAM
+write, no MCE, no panic, and no PCIe/AER error were captured before the host
+froze. SMC reset was required.
+
+### Interpretation
+
+The BAR0 ARM CR4 probes in tests 171/172 are not required to trigger the
+post-write crash. test.173 removed device MMIO from the idle loop and still
+froze in the same broad window: after a complete 442233-byte BAR2 firmware
+write, while ARM CR4 was still halted, before resetintr/NVRAM/readback work.
+
+The current best bound is approximately 80-90 ms after `fw write complete` in
+test.173, with similar timing to test.172 and later than test.171. That supports
+an asynchronous post-write chip/host event more than a specific BAR0 probe side
+effect. Endpoint/root-port ASPM/CLKPM remains weak as a primary explanation
+because test.172 showed root-port `LnkCtl=0x0040` during the run.
+
+### Current HW state after SMC reset
+
+- Endpoint 03:00.0 is visible: `Mem+ BusMaster+`, BAR0=b0600000, BAR2=b0400000,
+  `<MAbort-`, link 2.5GT/s x1. Sticky `CorrErr+ UnsupReq+ AuxPwr+` remain.
+- Root port 00:1c.2 is visible: bus 03/03, memory window b0400000-b06fffff,
+  bridge `MAbort-`, secondary `<MAbort-`, link 2.5GT/s x1.
+- `lsmod | rg '^brcm|^bcma'` is empty; only external USB Wi-Fi stack modules
+  (`mac80211`, `cfg80211`, mt76 users) are loaded.
+- Note: after reboot, config space naturally shows endpoint/root-port ASPM
+  enabled again. The test code disables/checks those during module load.
+
+### Recommended next step — PRE test.174
+
+Do **not** run another hardware test until this note and the test.173 artifacts
+are committed and pushed.
+
+Best next discriminator: keep the full firmware write but remove the post-write
+idle wait entirely, and immediately early-return after the `fw write complete`
+breadcrumb (before the ARM CR4 post-write probe, before any idle delay, before
+resetintr, before NVRAM). This answers whether the freeze is caused simply by
+leaving the device alive after the completed write, or by the driver remaining
+inside `download_fw_nvram` long enough for the async event to fire.
+
+Suggested test.174 shape:
+1. Relabel breadcrumbs to `test.174`.
+2. Keep endpoint/root-port link-state logging and the existing chunked firmware
+   write unchanged for comparability.
+3. After tail-byte write and `fw write complete`, immediately:
+   - `release_firmware(fw)` if needed for leak hygiene,
+   - skip post-write ARM CR4 probe,
+   - skip all idle delays,
+   - skip resetintr/NVRAM/readback,
+   - return `-ENODEV` in the BCM4360 `bcm4360_skip_arm=1` path.
+4. Keep stage0 only.
+
+Expected interpretation:
+- Clean `-ENODEV` unwind + rmmod succeeds: the crash needs post-write dwell
+  time; next test can progressively add `mdelay(1/5/10/20/50)` before return to
+  find the safe budget or add a chip quiesce/reset immediately after write.
+- Freeze even with immediate return: the completed firmware image in TCM triggers
+  an asynchronous event regardless of driver dwell; next step should be a
+  post-write chip/PCIe quiesce before returning (for example bus-master already
+  clear, then function/secondary-bus reset or core reset sequence).
+- Clean return but freeze later during module unload: focus on remove/unregister
+  path state after a completed write.
+
+---
+
 ## Current state (2026-04-20, POST test.169 — DUAL BREAKTHROUGH; rebooted + SMC reset)
 
 ### TEST.169 RESULT — TWO MAJOR FINDINGS

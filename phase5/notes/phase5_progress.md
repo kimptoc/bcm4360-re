@@ -633,3 +633,29 @@ Run only stage0 next. Interpret survival to `post-idle-loop` as evidence that
 the BAR0 ARM probes were contributing to the crash; interpret another freeze
 inside the no-MMIO loop as evidence for an asynchronous post-write chip/host
 event.
+
+## Phase 5.4: Current state (2026-04-20, POST test.173)
+
+test.173 ruled out the BAR0 ARM CR4 probes as a necessary trigger for the
+post-write freeze. The run completed the full 442233 byte BAR2 firmware write,
+confirmed ARM CR4 still halted at `post-write`, then entered a no-device-MMIO
+10 x 10 ms idle loop. The previous-boot journal persisted through `idle-7
+after no-MMIO mdelay(10)` and `idle-8 before no-MMIO mdelay(10)`, then the host
+hard-froze before `idle-8 after`, `idle-9`, `post-idle-loop`, resetintr, or
+NVRAM.
+
+Artifacts are saved as `test.173.stage0`, `test.173.stage0.stream`,
+`test.173.journalctl.txt`, and `test.173.pstore.txt`. The pstore file appears
+to contain older test.149-era unregister/rmmod records, not the test.173 freeze.
+
+Current conclusion: the active failure is an asynchronous post-firmware-write
+chip/host event that fires roughly 80-90 ms after the completed BAR2 write while
+ARM is still halted. It is not tied to NVRAM, resetintr, BAR0 idle probes, or
+root-port ASPM/CLKPM in the current evidence.
+
+Recommended test.174: immediately return from the BCM4360 skip-arm path after
+`fw write complete`, with no post-write ARM probe, no idle delay, no resetintr,
+and no NVRAM/readback. A clean unwind would prove the crash needs post-write
+dwell time and would justify a follow-up timing sweep or immediate chip quiesce
+step. A freeze despite immediate return would mean the completed firmware image
+itself starts an asynchronous failure even without driver dwell.
