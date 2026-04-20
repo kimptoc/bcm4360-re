@@ -104,6 +104,32 @@ inform the exception-loop vs missing-prerequisite question).
 
 ---
 
+## PRE-TEST.187 (2026-04-20) — TCM instruction snapshot around resetintr + firmware integrity check
+
+### Hypothesis
+If firmware is stuck in an exception loop after `brcmf_chip_set_active`, the instructions at the resetintr vector (0xb80ef000) will remain unchanged across the dwell period. If firmware modifies its own code (self-modifying), we will see changes in the sampled region. Additionally, firmware image integrity will be verified by comparing sampled TCM regions with the original firmware data to detect corruption during download.
+
+### Probe A: TCM instruction snapshot
+- Sample 256 bytes at offset resetintr - 0xb8000000 (0xef000) before and after set_active, and at dwell times (500/1500/3000 ms).
+- If offset out of TCM range, log warning and skip.
+
+### Probe D: Firmware integrity check
+- Compare sampled wide-TCM grid values with original firmware data; any mismatch indicates corruption during download.
+
+### Expected outcomes
+- No changes in resetintr region → supports exception-loop hypothesis.
+- Changes in resetintr region → firmware is writing to its own code (unlikely).
+- Corruption in firmware image → download path issue.
+- No corruption → firmware image intact.
+
+### Risk
+Read-only probes; no additional risk beyond existing test.186d (BusMaster ON before set_active, skip_arm=1, -ENODEV return).
+
+### Run command
+```
+sudo ./phase5/work/test-staged-reset.sh 0
+```
+
 ## PRE-TEST.186d (2026-04-20, staged) — BusMaster on BEFORE set_active
 
 ### Hypothesis

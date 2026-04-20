@@ -1970,6 +1970,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		u32 pre_wide[40] = {0};	/* test.186d: 16-KB grid across 640-KB TCM */
 		u32 pre_tail[16] = {0};	/* test.186d: last 64 B of TCM */
 		u32 pre_bp[BRCMF_BP_REG_COUNT] = {0};	/* test.186d: backplane regs */
+		u32 pre_resetintr[64] = {0};	/* test.187: 256 bytes around resetintr */
+		u32 resetintr_offset = get_unaligned_le32(fw->data) - 0xb8000000;	/* TCM base assumption */
 		static const u32 wide_offsets[40] = {
 			0x00000, 0x04000, 0x08000, 0x0c000,
 			0x10000, 0x14000, 0x18000, 0x1c000,
@@ -2120,6 +2122,19 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pre_tail[j] = val;
 				pr_emerg("BCM4360 test.186d: tail-TCM[0x%05x]=0x%08x (pre-release snapshot)\n",
 					 offset, val);
+			}
+			/* test.187: sample 256 bytes at resetintr offset */
+			if (resetintr_offset + 256 <= devinfo->ci->ramsize) {
+				for (j = 0; j < ARRAY_SIZE(pre_resetintr); j++) {
+					u32 offset = resetintr_offset + j * 4;
+					u32 val = brcmf_pcie_read_ram32(devinfo, offset);
+					pre_resetintr[j] = val;
+					pr_emerg("BCM4360 test.187: resetintr-TCM[0x%05x]=0x%08x (pre-release snapshot)\n",
+						offset, val);
+				}
+			} else {
+				pr_emerg("BCM4360 test.187: resetintr offset 0x%x out of TCM range (ramsize=0x%x), skipping\n",
+					resetintr_offset, devinfo->ci->ramsize);
 			}
 			/* test.186d: backplane-register snapshot via ChipCommon.
 			 * pmutimer ticks at ILP clock (~32 kHz) so a positive
@@ -2282,6 +2297,20 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						 val == pre_tail[j] ?
 							"UNCHANGED" :
 							"CHANGED");
+				}
+				/* test.187: sample resetintr region during dwell */
+				if (resetintr_offset + 256 <= devinfo->ci->ramsize) {
+					for (j = 0; j < ARRAY_SIZE(pre_resetintr); j++) {
+						u32 offset = resetintr_offset + j * 4;
+						u32 val = brcmf_pcie_read_ram32(devinfo, offset);
+						pr_emerg("BCM4360 test.187: dwell-%ums resetintr-TCM[0x%05x]=0x%08x (was 0x%08x) %s\n",
+							dwell_labels_ms[d], offset,
+							val, pre_resetintr[j],
+							val == pre_resetintr[j] ? "UNCHANGED" : "CHANGED");
+					}
+				} else {
+					pr_emerg("BCM4360 test.187: dwell-%ums resetintr offset 0x%x out of range, skipping\n",
+						dwell_labels_ms[d], resetintr_offset);
 				}
 
 				{
