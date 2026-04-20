@@ -134,31 +134,48 @@ establish that firmware needs BusMaster ON *before* `brcmf_chip_set_active`
 so its first PCIe DMA succeeds; otherwise firmware enters a
 crash-restart loop every ~3 s. test.186b turned BusMaster on
 3 s after set_active — by then firmware was already stuck and
-no amount of late BusMaster enable could rescue it. **DMA-stall
-is NOT falsified; 186b's null result is consistent with it.**
+no amount of late BusMaster enable could rescue it. DMA-stall
+was NOT falsified by 186b alone — test.186d re-ran the probe with
+BusMaster on *before* set_active to resolve the ambiguity.
 
-**Next boundary:** test.186d — same skip_arm=1 / -ENODEV path as
-test.186b, but `pci_set_master` executes immediately *before*
-`brcmf_chip_set_active`. Sample at the same dwell grid (500/1500/3000 ms).
+- **test.186d NULL RESULT (DMA-stall falsified):** `pci_set_master`
+  ran immediately before `brcmf_chip_set_active`, so firmware held
+  BusMaster through its full startup window. `brcmf_chip_set_active`
+  returned true; ARM CR4 transitioned CPUHALT=YES → NO. **All other
+  signals are byte-for-byte identical to test.186b's passive baseline:**
+  D11 still in reset, 56 TCM sample points UNCHANGED through 3 s,
+  NVRAM marker still `0xffc70038`, mailboxint stayed at 0 (no D2H
+  or FN0 bits), CC backplane regs matched 186b (one pmucontrol
+  bit-9 flip, monotonic pmutimer). Host stable, final
+  `pci_clear_master` left endpoint responsive (post-BM-clear MMIO
+  guard OK). **BusMaster ON vs OFF during set_active makes no
+  behavioural difference — DMA-stall hypothesis is refuted.**
 
-If firmware now progresses visibly (TCM writes, D11 release, sharedram
-marker replacing 0xffc70038, D2H mailboxint) → DMA-stall confirmed;
-firmware is alive and needs BusMaster. If no visible change → exception-loop
-hypothesis strengthens and the next step becomes re-halt + inspect
-(read CR4 wrapper fault registers + TCM panic-log area).
+**Leading hypothesis now:** firmware ARM is running but in an
+**exception / spin loop** that produces no observable MMIO or TCM
+effect. Either it faults immediately after the jump to `resetintr`
+and loops silently in an exception vector, or it polls for a
+prerequisite (register write, PMU resource, specific shared-RAM word)
+that `brcmf_chip_set_active` does not satisfy on this chip.
 
-Risk: Phase-4B crashed host with BusMaster + full attach; the msgbuf
-ring setup was the likely crash trigger. This test skips rings, keeps
-the -ENODEV early return, relies on IOMMU group 8 to block any stray
-DMA with a garbage pointer. Mitigations: MMIO guards, ≤ 3 s observation,
-`pci_clear_master` before return.
+**Next boundary:** test.187 — TCM instruction-region snapshot around
+`resetintr` (0xb80ef000 → TCM offset 0xef000) combined with fine-grain
+(20 ms) sampling of D11 mac_ctl and the CR4 wrapper during the 3 s
+post-set_active dwell. Two questions:
+  (1) does the reset-vector region get mutated by firmware (hint at
+      self-modification / panic-handler writes)?
+  (2) does any transient firmware MMIO activity get missed by the
+      coarse 500/1500/3000 ms grid?
+If both negative: escalate to re-halt + CR4-wrapper fault-register
+inspection + TCM panic-log area scan.
 
-**Alternative / lower-priority probe (if 186d null):** wl-trace diff
-was considered — `phase5/logs/wl-trace` turned out to be from a
-*failed* wl load (wl driver incompatible with 6.12 kernel — warn_thunk
-regression), so no useful MMIO sequence is captured. Path B would be
-re-halt + inspect CR4 wrapper fault registers + TCM panic-log area
-for breadcrumbs left by a firmware panic handler.
+**Parallel path (clean-room):** study the proprietary `wl` driver's
+reset sequence to identify register writes between our
+`brcmf_chip_set_active` and the observably-working Broadcom reset —
+candidates include additional PMU resource requests, D11 wrapper
+pre-release prep, or a shared-RAM handshake slot not currently
+populated. Any findings must be documented as observed behaviour
+and re-implemented clean, never transcribed from disassembly.
 
 **Re-entering the old 5.2 investigation:** once the probe-path restore is
 complete (i.e. firmware download and ARM release can run without host crash),

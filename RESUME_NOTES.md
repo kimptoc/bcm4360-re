@@ -1,5 +1,109 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.186d (2026-04-20) — BusMaster ON before set_active made no difference; DMA-stall falsified; exception/spin-loop is the leading hypothesis
+
+Captured artifacts:
+- `phase5/logs/test.186d.stage0`
+- `phase5/logs/test.186d.stage0.stream`
+- `phase5/logs/test.186d.journalctl.txt` (449 lines)
+
+Result: **clean run, host stable, returned -ENODEV as designed.**
+`pci_set_master` executed BEFORE `brcmf_chip_set_active`
+(PCI_COMMAND 0x0002 → 0x0006, BM bit set). MMIO guards before and
+after both BM-on and BM-clear all succeeded. `brcmf_chip_set_active`
+returned true in ~30 ms; `pci_clear_master` at the end left the
+device responsive (post-BM-clear MMIO guard read succeeded).
+
+### Observed behaviour (BusMaster-ON window from set_active through 3 s dwell)
+
+| Signal                  | Pre-set-active         | Post-set-active 20 ms / 100 ms / 500 ms / 1500 ms / 3000 ms |
+|-------------------------|------------------------|--------------------------------------------------------------|
+| ARM CR4 IOCTL           | 0x21 (CPUHALT=YES)     | 0x01 (CPUHALT=NO) at every sample                           |
+| ARM CR4 IOSTATUS        | 0                      | 0                                                            |
+| ARM CR4 RESET_CTL       | 0                      | 0                                                            |
+| D11 IOCTL               | 0x07                   | 0x07                                                         |
+| D11 RESET_CTL           | 0x01 (IN RESET)        | 0x01                                                         |
+| NVRAM marker @ rs-4     | 0xffc70038             | 0xffc70038 (UNCHANGED)                                       |
+| TCM[0..0x1c]            | snapshot               | UNCHANGED at every offset, every sample                       |
+| wide-TCM (0..0x9c000)   | snapshot               | UNCHANGED                                                    |
+| tail-TCM (last 64 B)    | snapshot               | UNCHANGED                                                    |
+| PCIE2 mailboxint        | 0x0                    | 0x0 (no D2H, no FN0 bits)                                    |
+| CC clk_ctl_st           | 0x00050040             | 0x00050040                                                   |
+| CC pmucontrol           | 0x01770181             | 0x01770381 (bit 9 flipped once → the test.184 one-shot)      |
+| CC pmustatus            | 0x0000002a             | 0x0000002a                                                   |
+| CC pmutimer             | monotonic              | monotonic (advances each sample, PMU alive)                  |
+| CC res_state / res_mask | stable                 | stable                                                       |
+
+### Interpretation — DMA-stall hypothesis falsified
+
+This result is **byte-for-byte identical** to test.186b's passive
+baseline. The *only* relevant difference between 186b and 186d is
+that 186d held BusMaster ON through `brcmf_chip_set_active` and the
+whole 3 s dwell, exactly as the test.64/65-era comments prescribed.
+
+If firmware's first action were a PCIe DMA that failed without
+BusMaster (the DMA-stall hypothesis), we would expect 186d to produce
+at least *one* forward-progress signal: a TCM write, a D11 release,
+an mbox bit, or at minimum an overwrite of the 0xffc70038 sharedram
+marker slot. None of these occurred. BusMaster ON/OFF during the
+critical window is behaviourally equivalent from firmware's point of
+view. DMA-stall is no longer a credible explanation for the `brcmfmac`
+failure on BCM4360. The periodic ~3 s crash cycle the test.64/65
+comments blamed on missing BusMaster was almost certainly a *different*
+failure mode specific to the Phase-4 full-attach path (msgbuf rings,
+live DMA) and not relevant here.
+
+### What the ARM is doing
+
+The ARM came out of halt (CR4 IOCTL bit 0x20 cleared by set_active)
+and ran for ≥ 3 s with zero visible effect. Possible explanations,
+in rough order of likelihood:
+
+1. **Exception / spin-loop** — ARM hits a fault immediately after the
+   first jump to `resetintr` (0xb80ef000) and enters an exception
+   handler that either loops silently or spins on a fault condition
+   that never clears. The firmware image may be validly loaded but
+   dependent on a setup step `brcmf_chip_set_active` does not perform.
+2. **Prerequisite poll** — firmware polls a specific register or
+   memory word waiting for a host-driven "go" signal we haven't
+   asserted. Candidates: host-driven mailbox beyond MAILBOX_0/1,
+   a specific shared-RAM word the upstream-driver writes that we
+   don't, a PMU resource not requested.
+3. **Clock / PLL mismatch** — test.185+ keep the stock BBPLL
+   configuration, but the proprietary Broadcom reset sequence may
+   touch specific PMU resources before releasing the ARM. Our
+   pmucontrol bit-9 flip happens; the rest of the PMU is quiet.
+
+### Next probe candidates (in priority order)
+
+A. **TCM instruction snapshot around `resetintr`** — read TCM at
+   0xb80ef000 (rebased to TCM offset 0xef000) for ~256 bytes before
+   and after set_active, and at dwell times. If the bytes are
+   identical, either the ARM isn't fetching from there or it's not
+   writing anywhere observable. Cheap, read-only, safe.
+
+B. **Sample D11 mac_ctl + a few PMU resource bits repeatedly during
+   the 3 s dwell** at finer granularity (every 20 ms) to catch any
+   transient firmware action.
+
+C. **Compare the `brcmf_chip_set_active` path with the original
+   Broadcom `wl` reset sequence** (via code archaeology of the
+   upstream brcmfmac vs proprietary wl driver cross-compiled for
+   a testable kernel) to find any register write we're missing.
+   This is the clean-room-safe approach: observe the proprietary
+   driver's register writes, document the behaviour, re-implement.
+
+D. **Check whether firmware image integrity survives the download
+   path** — snapshot TCM[resetintr..resetintr+64] pre- and
+   post-`brcmf_chip_set_active` to catch firmware self-modifying the
+   reset vector region or any corruption introduced by the proprietary
+   download helper.
+
+Recommended first step: **A + D together** (cheap, additive, both
+inform the exception-loop vs missing-prerequisite question).
+
+---
+
 ## PRE-TEST.186d (2026-04-20, staged) — BusMaster on BEFORE set_active
 
 ### Hypothesis
