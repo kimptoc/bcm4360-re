@@ -1,6 +1,77 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.174 — immediate return SUCCESS)
+## Current state (2026-04-20, POST test.175 — msleep dwell SUCCESS)
+
+### TEST.175 RESULT — `msleep(100)` after fw write survives
+
+Captured artifacts:
+- `phase5/logs/test.175.stage0`
+- `phase5/logs/test.175.stage0.stream`
+
+Result: **SUCCESS / no crash.** test.175 completed the full 442233-byte BAR2
+firmware write, slept for 100 ms after `fw write complete` with no device MMIO,
+released `fw`/`nvram`, returned `-ENODEV`, waited the harness's 30 seconds, and
+cleaned up `brcmfmac` without freezing.
+
+Key persisted markers:
+```
+BCM4360 test.175: all 110558 words written, before tail (tail=1)
+BCM4360 test.175: tail 1 bytes written at offset 442232
+BCM4360 test.175: fw write complete (442233 bytes)
+BCM4360 test.175: before post-fw msleep(100)
+BCM4360 test.175: after post-fw msleep(100)
+BCM4360 test.175: released fw/nvram after msleep; returning -ENODEV
+BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+BCM4360 test.163: fw released; returning from setup (state still DOWN)
+```
+
+### Interpretation
+
+This is a strong result: the post-write failure in tests 170-173 is not caused
+by elapsed post-write time alone. A sleeping 100 ms dwell after the complete
+firmware write is safe. That makes the old `mdelay(100)` / busy-wait dwell, or
+something that happens after that dwell, the current suspect.
+
+test.174 showed immediate return is safe; test.175 shows sleeping dwell is safe.
+The next discriminator should keep `msleep(100)` and then touch the next
+boundary that tests 170-173 never reached: `resetintr = get_unaligned_le32()`
+from host firmware memory plus `release_firmware(fw)`, still without any device
+MMIO, NVRAM write, readback, or ARM release.
+
+### Current HW state after test.175
+
+- `brcmfmac` is unloaded. `brcmutil` remains loaded from the harness; USB Wi-Fi
+  stack modules remain unrelated.
+- Endpoint 03:00.0 is visible: `Mem+ BusMaster-`, BAR0=b0600000, BAR2=b0400000,
+  `<MAbort-`, link 2.5GT/s x1, endpoint ASPM disabled from the test path.
+- Endpoint AER again shows `CESta Timeout+ AdvNonFatalErr+`; UESta is clear.
+- Root port 00:1c.2 is visible: bus 03/03, memory window b0400000-b06fffff,
+  bridge `MAbort-`, secondary `<MAbort-`, link 2.5GT/s x1, ASPM disabled.
+
+### Recommended next step — PRE test.176
+
+Do **not** run another hardware test until this note and the test.175 artifacts
+are committed, pushed, and synced.
+
+Best next discriminator: keep test.175's safe `msleep(100)`, then add only the
+host-side resetintr extraction and firmware release boundary:
+
+1. After `fw write complete`, `msleep(100)` as test.175 did.
+2. Read `resetintr = get_unaligned_le32(fw->data)` and log it.
+3. `release_firmware(fw)` and `brcmf_fw_nvram_free(nvram)`.
+4. Return `-ENODEV`.
+5. Still skip post-write ARM probe, resetintr device write/use, NVRAM write,
+   readback, and ARM release.
+
+Expected interpretation:
+- Survives: host-side `resetintr` extraction/release is safe; next test should
+  add the NVRAM write after `msleep(100)`.
+- Freezes: surprising, because this is host memory only; inspect for lifetime or
+  scheduling interactions rather than device MMIO.
+
+---
+
+## Previous state (2026-04-20, POST test.174 — immediate return SUCCESS)
 
 ### TEST.174 RESULT — clean unwind after complete fw write
 

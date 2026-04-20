@@ -715,3 +715,20 @@ Build status: OK via kernel kbuild. The only warning is the pre-existing unused
 `brcmf_pcie_write_ram32` helper, and BTF is skipped because `vmlinux` is
 unavailable. `brcmfmac.ko` contains the `test.175` before/after
 `post-fw msleep(100)` markers.
+
+## Phase 5.4: Current state (2026-04-20, POST test.175)
+
+test.175 succeeded. It completed the full 442233 byte BAR2 firmware write,
+logged both sides of `msleep(100)`, released `fw`/`nvram`, returned `-ENODEV`,
+waited 30 seconds in the harness, and unloaded `brcmfmac` without a host freeze.
+
+This narrows the failure again: elapsed post-write time alone is not enough.
+The old failure is now more specifically tied to `mdelay()`/busy-wait dwell or
+to the next boundary after that dwell. Current post-test PCIe state remains
+clean for fatal errors (`MAbort-`, AER UESta clear), with endpoint correctable
+`Timeout+ AdvNonFatalErr+` still present.
+
+Recommended test.176: preserve test.175's `msleep(100)`, then add only
+host-side `resetintr = get_unaligned_le32(fw->data)` plus release of `fw` and
+`nvram`, then return `-ENODEV`. Continue to skip post-write ARM probing, device
+resetintr use, NVRAM write, readback, and ARM release.
