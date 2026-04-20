@@ -6371,3 +6371,104 @@ sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 
 **Module rebuild required** — `make -C /home/kimptoc/bcm4360-re/phase5/work`
 before running.
+
+---
+
+## TEST.170 RESULT — 2026-04-20 13:54 (BREAKTHROUGH on fw-write, crash moves downstream)
+
+### Captured evidence
+- Log: `phase5/logs/test.170.journalctl.txt` (1186 lines, previous boot)
+- Stage0: `phase5/logs/test.170.stage0`
+- Stream: `phase5/logs/test.170.stage0.stream` (post-crash boot only — machine hard-froze)
+
+### Result: fw-write SUCCEEDS, crash in post-write mdelay(100)
+
+Full chunked 442 233 B BAR2 fw write completed cleanly:
+- `starting chunked fw write, total_words=110558 (442233 bytes) tail=1`
+- 26 × 16 KB breadcrumbs all fired (wrote 4096 → 106496 words)
+- `all 110558 words written, before tail (tail=1)` ✓
+- `tail 1 bytes written at offset 442232` ✓
+- `post-write ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES` ✓
+- `fw write complete (442233 bytes)` — 13:54:25
+
+### Crash location: after `fw write complete`, before `post-mdelay100`
+
+Only code between those two `pr_emerg` calls is a single `mdelay(100)` at
+pcie.c:1955. No MCE, no CTO, no panic captured — machine hard-froze (silent
+freeze), required SMC reset to recover.
+
+ARM CR4 probe in "post-write" still showed IOCTL=0x21 (CPUHALT|CLK),
+RESET_CTL=0. So ARM is still nominally halted at the moment the write ended.
+Whatever tears the link down fires during the subsequent 100 ms idle window.
+
+### Interpretation
+
+This is a bigger breakthrough than it looks. All prior "crash mid-write at
+variable byte offset" results (test.164 @ 425984 B, test.165 @ 340992 B)
+can now be reinterpreted:
+
+- Those crashes were NOT a byte-offset watchdog. They correlate with *elapsed
+  wall-clock time* spent inside the fw-write loop (which includes each
+  iteration's `mdelay(50)` breadcrumb pause).
+- test.170's cadence (16 KB / 50 ms) completed the write fast enough to beat
+  the async-event deadline.
+- The async event still fires — it just now fires during the post-write
+  100 ms settle delay instead of mid-write.
+
+Working hypothesis candidates (ranked):
+1. **Root-port ASPM re-entering L1** — endpoint had ASPM disabled (LnkCtl
+   after=0x0140) but the root port may still be negotiating; L1 entry on
+   idle + un-booted fw = malformed TLP → link drop.
+2. **Hidden chip watchdog** — some PMU/resource watchdog fires ~1–2 s after
+   the driver stops polling. test.170 total fw-write elapsed was ~9 s
+   (13:54:23 → 13:54:25) including 26 × mdelay(50) ≈ 1.3 s of idle.
+3. **MCE escalated by iommu=strict** — any bad TLP during the idle gap
+   becomes a hard fault.
+
+### PRE-TEST.171 PLAN — probe inside the post-write idle window
+
+**Goal:** localize the async crash to a specific sub-interval of the 100 ms
+mdelay, and discover whether MMIO activity during idle prevents the crash.
+
+**Code changes (pcie.c, in `brcmf_pcie_download_fw_nvram` right after
+`fw write complete`):**
+
+Replace `mdelay(100)` with a 10-iteration loop:
+```c
+for (i = 0; i < 10; i++) {
+    mdelay(10);
+    brcmf_pcie_probe_armcr4_state(devinfo, "idle-N");
+}
+```
+Each iteration:
+- 10 ms busy wait
+- Read-only ARM CR4 probe (IOCTL/RESET_CTL via BAR0 hi-window)
+- Prints one line with iteration index and ARM state
+
+**Hypothesis:** if the probes keep the PCIe link "busy" (MMIO activity),
+the crash won't fire — confirming that idle ASPM/L1 is the trigger.
+If the crash does fire, we learn which 10 ms sub-window triggers it.
+
+**Interpretation matrix:**
+- Crash at iteration N (0 < N < 10) → async event fires at ~N×10 ms after
+  fw write completes. Narrow further by N.
+- No crash, all 10 iterations log → MMIO activity blocks the async event.
+  Next test: strip ASPM from root port explicitly (pci_disable_link_state
+  on root port, not just endpoint).
+- Crash at iteration 0 → the probe itself (MMIO after write) trips the
+  fault; next test: use a different probe target (e.g. BAR2 ioread32).
+- ARM state flips during the probes (CPUHALT→NO, RESET_CTL→0xffffffff)
+  → ARM auto-resuming; different root cause (chip internal watchdog
+  un-halting ARM after fw write).
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+**Module rebuild required** before the test.
+
+**Pre-test HW state (verified 2026-04-20 14:xx post-SMC-reset):**
+- Endpoint 03:00.0: MAbort- ✓, BusMaster+, Mem+, Region0=b0600000, Region2=b0400000
+- Root port 00:1c.2: secondary=03, subordinate=03, MAbort-, secondary-MAbort-
+

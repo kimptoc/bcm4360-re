@@ -1,0 +1,20 @@
+=== test.170: post-fw-write breadcrumbs + chunked NVRAM iowrite32 (single hi-window CR4 probe) — stage=0 ===
+Date: Mon 20 Apr 13:54:11 BST 2026
+
+Stage 0: skip_arm=1 — test.162 scope + download_fw_nvram: enter_download_state (read-only) + BAR2 ioread32 probe + 442KB iowrite32 fw + NVRAM write + TCM verify dump; returns -ENODEV.
+(test.170: probe collapsed to single hi-window read at base+0x100000 + offsets 0x408/0x800 (test.169 confirmed wrapbase). New post-fw-write breadcrumbs: post-mdelay100, after release_firmware, pre-NVRAM, NVRAM chunked iowrite32 with breadcrumbs, post-NVRAM done — to localize the test.169 post-fw crash site.)
+
+=== Pre-test BAR0 MMIO guard ===
+BAR0 MMIO UR/I/O error (8ms) — device alive; SBR in probe should fix. Proceeding.
+
+=== Pre-test PCIe state ===
+(lspci not available)
+
+=== Pre-test root port (00:1c.2) state ===
+
+=== Flushing to disk ===
+Flush complete.
+
+=== Loading brcmfmac (bcm4360_reset_stage=0, bcm4360_skip_arm=1) --- test.170 ===
+insmod returned rc=0
+Waiting 90s for firmware init (streaming to test.170.stage0.stream)...
