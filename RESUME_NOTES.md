@@ -5825,3 +5825,92 @@ Must halt ARM at the very top of brcmfmac_module_init().
 ```
 sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 ```
+
+---
+
+## TESTS 145–165 — retrospective summary (2026-04-19 → 2026-04-20)
+
+Git log is the primary record from test.144 onward. Key inflection points:
+
+- **test.145–152** — probe-time ARM halt integrated into buscore_reset (after 2nd SBR);
+  discriminator series to prove probe entry is safe.
+- **test.152–154** — early-return discriminators at probe entry / after SBR / after
+  chip_attach: all SUCCESS.
+- **test.155–158** — fw_get_firmwares / duplicate-halt crash isolation. test.158
+  SUCCESS: removing the *duplicate* ARM halt was the sole crash trigger; single
+  buscore_reset halt is correct.
+- **test.159–162** — progressive slicing of setup callback up to adjust_ramsize;
+  all SUCCESS (no HW touch past raminfo).
+- **test.163** — first `brcmf_pcie_download_fw_nvram` attempt via stock
+  `copy_mem_todev` (442KB BAR2 TCM write). **Hard crash → machine reboot.**
+- **test.164** — replaced with inline iowrite32 loop, breadcrumb every 16KB,
+  mdelay(50) between. Reached 425984 / 442233 bytes; crashed in final 16KB
+  window. No MCE/CTO logged → silent machine freeze.
+- **test.165** — tightened breadcrumb to 1KB, mdelay(20) between. Reached
+  340992 / 442233 bytes (333 KB of 432 KB); crashed in next 1KB window.
+
+### Key observation (test.164 vs test.165)
+
+Crashes occur at DIFFERENT byte offsets under different timing:
+- test.164 (16KB/50ms): 425984 bytes written before freeze
+- test.165 (1KB/20ms):  340992 bytes written before freeze
+
+Same iowrite32 loop, same BAR2 target, same firmware data — just different
+printk/mdelay cadence. The crash is NOT tied to a specific byte offset.
+
+Elapsed fw-write wall-clock (test.165): 10:42:44 → 10:42:53 = 9 s for 341 KB.
+Cumulative mdelay alone was ~333 × 20 ms = 6.66 s. So more breadcrumbs →
+slower write → earlier crash by byte count.
+
+### Working hypothesis
+
+Something ASYNCHRONOUS (wall-clock-based) tears down the link during the
+BAR2 fw download. Candidates:
+
+1. **ARM CR4 auto-resume** — test.145 halt may not be sticky; ARM could be
+   re-armed by a clock/reset re-assertion in later probe flow and start
+   executing stale TCM as host overwrites it.
+2. **PCIe link power management** — ASPM / L1 entry mid-download causing
+   malformed TLPs and CTO. Test.133 cleared BusMaster and disabled ASPM on
+   the endpoint, but the root port may still be negotiating L1 state.
+3. **Firmware/hardware watchdog** — some hidden counter in the BCMA wrapper
+   fires after N ms and pulls the link down.
+4. **Printk storm consequences** — unlikely: we'd see a kernel panic in
+   the journal, not a silent freeze.
+
+### HW state (post-crash, 2026-04-20 11:00)
+
+- lspci 03:00.0: MAbort- **CLEAN** (no SMC reset needed) ✓
+- Root port 00:1c.2: hierarchy visible
+- Kernel journal from previous boot captured → `phase5/logs/test.165.journalctl.txt`
+
+### PRE-TEST.166 PLAN — confirm ARM is halted during fw write
+
+Goal: discriminate async-watchdog vs ARM-resume.
+
+**Proposed code changes:**
+1. Immediately before the BAR2 fw-write loop in
+   `brcmf_pcie_download_fw_nvram`, re-assert ARM CR4 halt
+   (IOCTL=0x23, RESET_CTL=1) via BAR0 window switch to ARM_CR4 base
+   (0x18002000). Read back RESET_CTL — log `test.166: pre-write RESET_CTL=...`.
+2. Use test.164-style 16KB breadcrumbs (less async time between writes).
+3. After the write loop (and before the "fw write complete" marker), read
+   RESET_CTL again — log `test.166: post-write RESET_CTL=...`.
+4. Restore BAR0 window to ChipCommon afterwards.
+
+**Interpretation matrix (test.166):**
+- pre-write RESET_CTL=0x0001 (halted) + fw write completes → SUCCESS;
+  hypothesis: need to keep ARM halted; next test attempts full probe-up path.
+- pre-write RESET_CTL=0x0000 (running) → ARM auto-resumed before fw write
+  even though test.145 halted it in buscore_reset. Fix: re-halt here.
+- pre-write=halted + crash mid-write, post-write never appears → either
+  ARM resumed silently during write, OR async watchdog (ASPM/firmware timer).
+- pre-write=halted + crash near same offset as test.164 → watchdog more likely.
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+**Module rebuild required** — `make -C /home/kimptoc/bcm4360-re/phase5/work`
+before running.
