@@ -1,6 +1,99 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.180 — INTERNAL_MEM core absent on BCM4360)
+## Current state (2026-04-20, PRE test.181 — brcmf_chip_set_active isolation)
+
+### PRE-TEST.181 checkpoint
+
+Implemented test.181 as the next boundary after test.180's negative finding:
+1. Keep the full chunked BAR2 firmware write.
+2. Keep `msleep(100)` after `fw write complete`.
+3. Keep host-side resetintr extraction.
+4. Keep the 228-byte NVRAM BAR2 write at `0x9ff1c`.
+5. Keep the `ramsize - 4` NVRAM marker readback.
+6. Keep the 8-word TCM verify dump at offsets `0x0..0x1c`.
+7. Keep the INTERNAL_MEM core lookup (expected NULL on BCM4360).
+8. Add the ARM release:
+   - Read-only probe: `brcmf_pcie_probe_armcr4_state(devinfo, "pre-set-active")`.
+   - `mdelay(50)`.
+   - Emit breadcrumb "calling brcmf_chip_set_active resetintr=0x%08x
+     (BusMaster stays cleared)".
+   - `mdelay(50)`.
+   - Call `brcmf_chip_set_active(devinfo->ci, resetintr)`; log the bool.
+   - `mdelay(20)` then probe with tag `post-set-active-20ms`.
+   - `mdelay(80)` then probe with tag `post-set-active-100ms`.
+9. Release `fw`/`nvram` and return `-ENODEV` (no sharedram polling, no
+   advance into normal attach).
+
+Build status: OK via kernel kbuild. Existing warning only:
+`brcmf_pcie_write_ram32` is defined but unused. BTF generation is skipped
+because `vmlinux` is unavailable.
+
+`strings brcmfmac.ko | grep test.181` confirms the new markers are present:
+- `BCM4360 test.181: calling brcmf_chip_set_active resetintr=0x%08x (BusMaster stays cleared)`
+- `BCM4360 test.181: brcmf_chip_set_active returned %s`
+- `BCM4360 test.181: released fw/nvram after brcmf_chip_set_active probes; returning -ENODEV`
+
+No `test.180` strings remain in the module binary.
+
+Before running: commit, push, and `sync` this PRE-test.181 checkpoint. Then
+run only stage 0:
+`sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+
+### Hypothesis
+
+Firmware is fully in TCM, NVRAM is placed at `ramsize - 4`, and the NVRAM
+marker is 0xffc70038 (non-zero, structurally plausible). The only remaining
+unexecuted step in `brcmf_pcie_exit_download_state` for BCM4360 is
+`brcmf_chip_set_active(ci, resetintr)`, which:
+1. Writes `resetintr` (0xb80ef000) to TCM[0] via the PCIE2 core activate op.
+2. Calls `brcmf_chip_resetcore(arm_cr4, ARMCR4_BCMA_IOCTL_CPUHALT, 0, 0)`,
+   which de-asserts ARM reset with the CPUHALT IOCTL bit cleared — ARM CR4
+   starts executing firmware at the reset vector in TCM[0].
+
+The Phase 4B history shows early attempts to release ARM on BCM4360 crashed
+the host within 100-200 ms. Since then we have added substantial safety:
+endpoint ASPM off, root-port ASPM off, CommClk+, BusMaster cleared, SBR on
+probe, full 442 KB fw + NVRAM + marker all verified. Firmware cannot DMA to
+host because BusMaster is cleared. If the host still freezes on set_active,
+the ARM CR4 takeover itself — not stray DMA or link state — is the cause.
+
+### Interpretation matrix
+
+- Reaches `post-set-active-20ms` with ARM CR4 IOCTL CPUHALT bit clear
+  (CPUHALT=NO, RESET_CTL=0): ARM release is clean and firmware is executing.
+  Next test can extend the dwell and sample TCM sharedram region for the
+  firmware init handshake.
+- Reaches `post-set-active-20ms` with CPUHALT=YES: set_active did not
+  actually un-halt ARM (set_active returned true but CR4 is still halted).
+  Next test probes the ARM CR4 IOCTL register state around the call in more
+  detail, and may add a manual `resetcore` call with explicit bitmasks.
+- Freezes between `calling brcmf_chip_set_active` and `brcmf_chip_set_active
+  returned`: the activate op or the CR4 resetcore itself is the trigger.
+  Next test splits the two: call `chip->ops->activate(...)` directly, probe,
+  then call `brcmf_chip_resetcore(arm_cr4, ARMCR4_BCMA_IOCTL_CPUHALT, 0, 0)`.
+- Freezes between set_active return and `post-set-active-20ms`: ARM runs
+  firmware which almost immediately wedges the host — consistent with Phase
+  4B behavior. Next test either re-halts ARM within the 20 ms window or
+  instruments firmware-side activity via TCM sharedram reads before release.
+- Freezes between `post-set-active-20ms` and `post-set-active-100ms`:
+  firmware survives the first 20 ms and wedges between 20 and 100 ms. Narrow
+  the window further.
+- `brcmf_chip_set_active` returned false (we'd log the false return, then
+  still probe): chip.c treated the CR4 set_active as a no-op. Rare path, but
+  flag it and decide next step from the probe output.
+
+### Pre-test HW state (test.180 post-run, verified 2026-04-20 18:44)
+
+- `brcmfmac` is unloaded. `brcmutil` remains loaded.
+- Endpoint 03:00.0 visible: `Mem+ BusMaster-`, BAR0=b0600000, BAR2=b0400000,
+  `<MAbort-`, link 2.5GT/s x1, endpoint ASPM disabled, CommClk+.
+- Root port 00:1c.2 visible, clean. No dirty state.
+
+Re-run `lspci -vvv -s 03:00.0` in the harness before insmod to confirm.
+
+---
+
+## Previous state (2026-04-20, POST test.180 — INTERNAL_MEM core absent on BCM4360)
 
 ### TEST.180 RESULT — negative result: INTERNAL_MEM core not found
 
