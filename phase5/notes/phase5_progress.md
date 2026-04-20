@@ -879,3 +879,21 @@ then add only a small BAR2 TCM verify dump, preferably 8 words at offsets
 `0x0..0x1c`, release `fw`/`nvram`, and return `-ENODEV`. Continue to skip
 post-write ARM probing, device-side resetintr use, exit-download-state, broad
 TCM dumps, and ARM release.
+
+## Phase 5.4: PRE test.179
+
+test.179 is implemented as the tiny TCM verify discriminator. It preserves the
+safe test.178 sequence through the NVRAM marker readback, then reads only eight
+32-bit words from BAR2 TCM offsets `0x0..0x1c`, releases `fw`/`nvram`, and
+returns `-ENODEV`.
+
+This intentionally still skips post-write ARM probing, device-side resetintr
+use, exit-download-state, broad TCM dumps, and ARM release. If it survives, the
+next boundary can isolate device-side resetintr / exit-download-state work. If
+it freezes during the tiny dump, post-NVRAM BAR2 reads beyond the marker are the
+next unsafe operation.
+
+Build status: OK via kernel kbuild. The only warning is the pre-existing unused
+`brcmf_pcie_write_ram32` helper, and BTF is skipped because `vmlinux` is
+unavailable. `brcmfmac.ko` contains the `test.179` marker-readback, tiny TCM,
+and early-return markers.

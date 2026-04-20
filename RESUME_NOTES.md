@@ -1,6 +1,43 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.178 — NVRAM marker readback SUCCESS)
+## Current state (2026-04-20, PRE test.179 — tiny TCM verify discriminator)
+
+### PRE-TEST.179 checkpoint
+
+Implemented test.179 as the next boundary after test.178's success:
+1. Keep the full chunked BAR2 firmware write.
+2. Keep `msleep(100)` after `fw write complete`.
+3. Keep host-side resetintr extraction.
+4. Keep the 228-byte NVRAM BAR2 write at `0x9ff1c`.
+5. Keep the `ramsize - 4` NVRAM marker readback.
+6. Add only a tiny BAR2 TCM verify dump: eight 32-bit reads at offsets
+   `0x0..0x1c`, logged as `TCM[0x%04x]`.
+7. Release `fw`/`nvram` and return `-ENODEV`.
+8. Still skip post-write ARM probing, device-side resetintr use,
+   exit-download-state, broad TCM dumps, and ARM release.
+
+Build status: OK via kernel kbuild. Existing warning only:
+`brcmf_pcie_write_ram32` is defined but unused. BTF generation is skipped
+because `vmlinux` is unavailable.
+
+`strings brcmfmac.ko` confirms these markers are present:
+- `BCM4360 test.179: NVRAM marker at ramsize-4 = 0x%08x`
+- `BCM4360 test.179: TCM[0x%04x]=0x%08x`
+- `BCM4360 test.179: released fw/nvram after tiny TCM verify; returning -ENODEV`
+
+Before running: commit, push, and `sync` this PRE-test.179 checkpoint. Then run
+only stage0:
+`sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+
+Expected interpretation:
+- Survives: tiny BAR2 TCM readback is safe; next boundary can isolate
+  device-side resetintr / exit-download-state work.
+- Freezes during the tiny dump: post-NVRAM BAR2 reads beyond the marker are the
+  next unsafe operation.
+
+---
+
+## Previous state (2026-04-20, POST test.178 — NVRAM marker readback SUCCESS)
 
 ### TEST.178 RESULT — NVRAM marker readback survives
 
