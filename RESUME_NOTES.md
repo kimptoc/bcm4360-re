@@ -1,6 +1,63 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.161 SUCCESS — ready for test.162)
+## Current state (2026-04-20, PRE test.162 — REBUILT, ready for insmod)
+
+### CODE STATE: test.162 implemented — setup callback runs attach→fw-extract→raminfo→adjust_ramsize, early-return before download
+
+**What test.162 adds over test.161:**
+- Removes the test.161 entry-stub in `brcmf_pcie_setup`.
+- Flow now runs through:
+  1. `brcmf_pcie_attach(devinfo)` — BCM4360 returns immediately (no-op per test.129).
+  2. test.134 post-attach marker + mdelay.
+  3. `fw = fwreq->items[...].binary` etc. — pure memory ops.
+  4. `kfree(fwreq)`.
+  5. `brcmf_chip_get_raminfo` — returns BCM4360 fixed info (rambase=0, ramsize=0xa0000) per test.121.
+  6. `brcmf_pcie_adjust_ramsize` — parses fw header (memory op on fw->data).
+- New BCM4360 early-return BEFORE `brcmf_pcie_download_fw_nvram` (the 442KB
+  BAR2 write + enter_download_state, historically the crash site).
+- Releases fw/nvram/clm/txcap so rmmod short-circuit stays clean.
+
+**Hypothesis for test.162:** All markers should appear cleanly. No BAR2 MMIO
+happens in this slice (BCM4360 attach is no-op; get_raminfo uses fixed info;
+adjust_ramsize is memory-only). Expect:
+```
+test.162: module_init entry
+test.162: brcmf_pcie_register() entry → pci_register_driver returned ret=0
+[probe chain through test.160]
+test.161: calling brcmf_fw_get_firmwares (async)
+test.161: brcmf_fw_get_firmwares returned 0
+test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0
+test.128: before brcmf_pcie_attach → test.129: bypassed for BCM4360 → test.128: after
+test.134: post-attach before fw-ptr-extract
+test.134: after kfree(fwreq)
+test.130: before brcmf_chip_get_raminfo → test.121: fixed info → test.130: after
+test.130: after brcmf_pcie_adjust_ramsize
+test.162: early return BEFORE brcmf_pcie_download_fw_nvram
+test.162: releasing fw (fw=<ptr> size=442233) nvram=<ptr> len=228 clm=0 txcap=0
+test.162: fw released; returning from setup (state still DOWN)
+[rmmod]
+test.161: remove() short-circuit — state=0 != UP; skipping MMIO cleanup
+test.161: remove() short-circuit complete
+```
+
+**Why this is the right slice:** Pure memory ops post-attach, no BAR2 MMIO.
+Confirms we can reach the door of download_fw_nvram without any trouble.
+The NEXT test (test.163) will step INTO download_fw_nvram — the real crash
+frontier.
+
+**Pre-test PCIe state (2026-04-20 ~10:11):**
+- Endpoint 03:00.0: MAbort-, DevSta fully clean, LnkSta 2.5GT/s Width x1.
+
+**Build status:** REBUILT; .ko markers verified (test.162 strings present).
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+---
+
+## Previous state (2026-04-20, POST test.161 SUCCESS — ready for test.162)
 
 ### HUGE MILESTONE: async firmware loader + setup callback + remove short-circuit all clean
 

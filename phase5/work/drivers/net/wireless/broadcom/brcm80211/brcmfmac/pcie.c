@@ -3630,35 +3630,8 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 	pcie_bus_dev = bus->bus_priv.pcie;
 	devinfo = pcie_bus_dev->devinfo;
 
-	pr_emerg("BCM4360 test.161: brcmf_pcie_setup CALLBACK INVOKED ret=%d\n", ret);
+	pr_emerg("BCM4360 test.162: brcmf_pcie_setup CALLBACK INVOKED ret=%d\n", ret);
 	msleep(300);
-
-	/* test.161: BCM4360 early-return — verify async fw callback works, then
-	 * release fw resources without touching any BAR2/TCM MMIO. Probe path
-	 * stops before brcmf_pcie_attach; device stays bound until rmmod, and
-	 * rmmod hits the test.161 guard in brcmf_pcie_remove. */
-	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
-		if (ret == 0 && fwreq) {
-			fw = fwreq->items[BRCMF_PCIE_FW_CODE].binary;
-			pr_emerg("BCM4360 test.161: fw CODE %p size=%zu\n",
-				 fw, fw ? fw->size : 0);
-			pr_emerg("BCM4360 test.161: NVRAM data=%p len=%u\n",
-				 fwreq->items[BRCMF_PCIE_FW_NVRAM].nv_data.data,
-				 fwreq->items[BRCMF_PCIE_FW_NVRAM].nv_data.len);
-			pr_emerg("BCM4360 test.161: CLM=%p TXCAP=%p\n",
-				 fwreq->items[BRCMF_PCIE_FW_CLM].binary,
-				 fwreq->items[BRCMF_PCIE_FW_TXCAP].binary);
-			msleep(300);
-			release_firmware(fwreq->items[BRCMF_PCIE_FW_CODE].binary);
-			release_firmware(fwreq->items[BRCMF_PCIE_FW_CLM].binary);
-			release_firmware(fwreq->items[BRCMF_PCIE_FW_TXCAP].binary);
-			brcmf_fw_nvram_free(fwreq->items[BRCMF_PCIE_FW_NVRAM].nv_data.data);
-		}
-		kfree(fwreq);
-		pr_emerg("BCM4360 test.161: fw released; returning from setup (ret=%d)\n", ret);
-		msleep(300);
-		return;
-	}
 
 	/* check firmware loading result */
 	if (ret)
@@ -3711,6 +3684,30 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 	 * test.134 result: crash happened right after BusMaster re-enable, suggesting
 	 * this was the crash trigger. Testing without it for test.135.
 	 */
+
+	/* test.162: BCM4360 early-return before BAR2 writes begin. Scope
+	 * exercised: brcmf_pcie_attach (no-op for BCM4360), fw-ptr extract,
+	 * kfree(fwreq), brcmf_chip_get_raminfo (fixed info), brcmf_pcie_adjust_ramsize
+	 * (fw-header parse — pure memory). Stops before brcmf_pcie_download_fw_nvram
+	 * which is the first 442KB BAR2 write. Release fw/nvram/clm/txcap so rmmod
+	 * short-circuit path stays clean. */
+	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
+		pr_emerg("BCM4360 test.162: early return BEFORE brcmf_pcie_download_fw_nvram\n");
+		msleep(300);
+		pr_emerg("BCM4360 test.162: releasing fw (fw=%p size=%zu) nvram=%p len=%u clm=%p txcap=%p\n",
+			 fw, fw ? fw->size : 0, nvram, nvram_len,
+			 devinfo->clm_fw, devinfo->txcap_fw);
+		msleep(300);
+		release_firmware(fw);
+		brcmf_fw_nvram_free(nvram);
+		release_firmware(devinfo->clm_fw);
+		devinfo->clm_fw = NULL;
+		release_firmware(devinfo->txcap_fw);
+		devinfo->txcap_fw = NULL;
+		pr_emerg("BCM4360 test.162: fw released; returning from setup (state still DOWN)\n");
+		msleep(300);
+		return;
+	}
 
 	pr_emerg("BCM4360 test.130: before brcmf_pcie_download_fw_nvram\n");
 	mdelay(300);
@@ -4513,19 +4510,19 @@ static struct pci_driver brcmf_pciedrvr = {
  * after chip_attach() has initialized the PCIe-to-backplane bridge. */
 void brcmf_pcie_early_arm_halt(void)
 {
-	pr_emerg("BCM4360 test.161: module_init entry — fw_get_firmwares + setup-callback stub + remove short-circuit\n");
+	pr_emerg("BCM4360 test.162: module_init entry — attach + fw-extract + raminfo + adjust_ramsize; early-return before download_fw_nvram\n");
 }
 
 int brcmf_pcie_register(void)
 {
 	int ret;
 
-	pr_emerg("BCM4360 test.161: brcmf_pcie_register() entry\n");
-	msleep(300); /* test.161: flush marker before pci_register_driver */
-	pr_emerg("BCM4360 test.161: before pci_register_driver\n");
-	msleep(300); /* test.161: flush — if crash here, it's in pci_register_driver kernel code */
+	pr_emerg("BCM4360 test.162: brcmf_pcie_register() entry\n");
+	msleep(300); /* test.162: flush marker before pci_register_driver */
+	pr_emerg("BCM4360 test.162: before pci_register_driver\n");
+	msleep(300); /* test.162: flush — if crash here, it's in pci_register_driver kernel code */
 	ret = pci_register_driver(&brcmf_pciedrvr);
-	pr_emerg("BCM4360 test.161: pci_register_driver returned ret=%d\n", ret);
+	pr_emerg("BCM4360 test.162: pci_register_driver returned ret=%d\n", ret);
 	return ret;
 }
 
