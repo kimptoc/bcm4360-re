@@ -4172,34 +4172,25 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	}
 	dev_set_drvdata(&pdev->dev, bus);
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
-		dev_emerg(&pdev->dev, "BCM4360 test.159: drvdata set — before early return\n");
-		msleep(300); /* test.159: flush before early return */
-
-		/* test.159: early return — reginfo + allocs + wiring discriminator.
-		 * If this runs cleanly, these are safe; test.160 adds brcmf_alloc(). */
-		pr_emerg("BCM4360 test.159: early return after allocs/wiring — before brcmf_alloc\n");
-		ret = -ENODEV;
-		goto fail;
+		dev_emerg(&pdev->dev, "BCM4360 test.160: drvdata set — before brcmf_alloc\n");
+		msleep(300); /* test.160: flush before brcmf_alloc */
 	}
 
-	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
-		dev_emerg(&pdev->dev,
-			  "BCM4360 test.120: before brcmf_alloc\n");
 	ret = brcmf_alloc(&devinfo->pdev->dev, devinfo->settings);
 	if (ret)
 		goto fail_bus;
-	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
 		dev_emerg(&pdev->dev,
-			  "BCM4360 test.120: brcmf_alloc complete\n");
+			  "BCM4360 test.160: brcmf_alloc complete — wiphy allocated\n");
+		msleep(300); /* test.160: flush after brcmf_alloc */
+	}
 
-	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
-		dev_emerg(&pdev->dev,
-			  "BCM4360 test.120: before OTP read\n");
 	/* test.124: bypass OTP read for BCM4360 — known to have OTP */
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
 		dev_emerg(&pdev->dev,
-			  "BCM4360 test.124: OTP read bypassed — OTP not needed\n");
+			  "BCM4360 test.160: OTP read bypassed — OTP not needed\n");
 		ret = 0;
+		msleep(300); /* test.160: flush after OTP bypass */
 	} else {
 		ret = brcmf_pcie_read_otp(devinfo);
 	}
@@ -4207,32 +4198,32 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		brcmf_err(bus, "failed to parse OTP\n");
 		goto fail_brcmf;
 	}
-	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
-		dev_emerg(&pdev->dev,
-			  "BCM4360 test.120: OTP read complete\n");
 
 #ifdef DEBUG
 	/* Set up the fwcon timer */
 	timer_setup(&devinfo->timer, brcmf_pcie_fwcon, 0);
 #endif
 
-	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
 		dev_emerg(&pdev->dev,
-			  "BCM4360 test.120: before prepare_fw_request\n");
+			  "BCM4360 test.160: before prepare_fw_request\n");
+		msleep(300); /* test.160: flush before prepare_fw_request */
+	}
 	fwreq = brcmf_pcie_prepare_fw_request(devinfo);
 	if (!fwreq) {
 		ret = -ENOMEM;
 		goto fail_brcmf;
 	}
-	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
-		dev_emerg(&pdev->dev,
-			  "BCM4360 test.120: firmware request prepared\n");
-
-	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
-		dev_emerg(&pdev->dev,
-			  "BCM4360 test.120: before brcmf_fw_get_firmwares\n");
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
-		pr_emerg("BCM4360 test.155: before brcmf_fw_get_firmwares — early return\n");
+		dev_emerg(&pdev->dev,
+			  "BCM4360 test.160: firmware request prepared\n");
+		msleep(300); /* test.160: flush after prepare_fw_request */
+	}
+
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
+		pr_emerg("BCM4360 test.160: early return before brcmf_fw_get_firmwares\n");
+		msleep(300); /* test.160: flush final marker before early return */
+		kfree(fwreq);
 		ret = -ENODEV;
 		goto fail_brcmf;
 	}
@@ -4466,19 +4457,19 @@ static struct pci_driver brcmf_pciedrvr = {
  * after chip_attach() has initialized the PCIe-to-backplane bridge. */
 void brcmf_pcie_early_arm_halt(void)
 {
-	pr_emerg("BCM4360 test.159: module_init entry — reginfo + allocs + wiring slice\n");
+	pr_emerg("BCM4360 test.160: module_init entry — brcmf_alloc + OTP bypass + prepare_fw_request slice\n");
 }
 
 int brcmf_pcie_register(void)
 {
 	int ret;
 
-	pr_emerg("BCM4360 test.159: brcmf_pcie_register() entry\n");
-	msleep(300); /* test.159: flush marker before pci_register_driver */
-	pr_emerg("BCM4360 test.159: before pci_register_driver\n");
-	msleep(300); /* test.159: flush — if crash here, it's in pci_register_driver kernel code */
+	pr_emerg("BCM4360 test.160: brcmf_pcie_register() entry\n");
+	msleep(300); /* test.160: flush marker before pci_register_driver */
+	pr_emerg("BCM4360 test.160: before pci_register_driver\n");
+	msleep(300); /* test.160: flush — if crash here, it's in pci_register_driver kernel code */
 	ret = pci_register_driver(&brcmf_pciedrvr);
-	pr_emerg("BCM4360 test.159: pci_register_driver returned ret=%d\n", ret);
+	pr_emerg("BCM4360 test.160: pci_register_driver returned ret=%d\n", ret);
 	return ret;
 }
 

@@ -17,18 +17,18 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.159.stage${STAGE}"
+LOG="$LOG_DIR/test.160.stage${STAGE}"
 
-echo "=== test.159: reginfo + allocs + wiring slice (on top of test.158) — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.160: brcmf_alloc + OTP bypass + prepare_fw_request slice — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: skip_arm=1 — test.158 scope + reginfo/allocs/wiring; early return before brcmf_alloc." | tee -a "$LOG" ;;
+    0) echo "Stage 0: skip_arm=1 — test.159 scope + brcmf_alloc/OTP/prepare_fw_request; early return before fw_get_firmwares." | tee -a "$LOG" ;;
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.159: test.158 flow + PCIE2 core/reginfo + pcie_bus_dev/settings/bus/msgbuf kzalloc + wiring + pci_pme_capable + drvdata; early return before brcmf_alloc; 300ms per marker)" | tee -a "$LOG"
+echo "(test.160: test.159 flow + brcmf_alloc (wiphy_new) + OTP bypass + prepare_fw_request; early return before brcmf_fw_get_firmwares; 300ms per marker)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -105,14 +105,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=50  # test.159: 300ms * ~22 sleeps + SBR 510ms + chip_attach; 50s is safe
+    WAIT_SECS=55  # test.160: 300ms * ~26 sleeps + SBR 510ms + chip_attach; 55s is safe
 else
     SKIP_ARM=0
     WAIT_SECS=35
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.159 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.160 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.
