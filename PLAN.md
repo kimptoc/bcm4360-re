@@ -66,11 +66,20 @@ hard-crash sessions (tests 149–157).
   that does not touch the image-header TCM window or the NVRAM slot.
   Next step (test.183) widens the TCM scan to the last 64 bytes + a
   handful of mid-TCM probe points and adds a BAR0 backplane read.
+- **test.183 NEGATIVE RESULT (clean run):** widened scan covers 32
+  TCM sample points — 8 image-header + 8 mid-TCM (0x1000..0x80000) +
+  16 tail-TCM (last 64 B). All UNCHANGED across 500/1500/3000 ms.
+  Host survives. New observation: the last 228 B of TCM hold our
+  own NVRAM text (`vendid=0x14e4 deviceid=0x43a0 xtalfreq=40000
+  aa2g=7 aa5g=7 …`) and firmware has not modified the magic/length
+  word at `ramsize - 4`. Conclusion: firmware is running on ARM
+  CR4 but has not reached NVRAM consumption. Likely wedged in a
+  pre-NVRAM-parser wait loop (PMU/clock/host-handshake).
 
-**Next boundary:** determine whether firmware is doing *any* TCM or
-backplane writes post-release — wide TCM scan (last 64 B + mid-TCM
-samples) plus BAR0 chipcommon/CR4-wrapper sampling (test.183). BusMaster
-still stays cleared.
+**Next boundary:** observe backplane state via BAR0 reads
+(ARM CR4 wrapper status, ChipCommon PMU/watchdog) to discriminate
+"ARM is running but doing no work" vs "ARM is running but only
+touching backplane-local memory" (test.184). Still BusMaster-off.
 
 **Re-entering the old 5.2 investigation:** once the probe-path restore is
 complete (i.e. firmware download and ARM release can run without host crash),

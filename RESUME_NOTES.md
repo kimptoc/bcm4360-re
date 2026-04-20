@@ -1,6 +1,153 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.183 — widened TCM scan: image-header + mid + tail)
+## Current state (2026-04-20, POST test.183 — wider scan: ALL regions UNCHANGED for 3 s; firmware not parsing NVRAM)
+
+### TEST.183 RESULT — clean run; hypothesis (B1) reinforced
+
+Captured artifacts:
+- `phase5/logs/test.183.stage0`
+- `phase5/logs/test.183.stage0.stream`
+- `phase5/logs/test.183.journalctl.txt`
+
+Result: **No TCM writes anywhere in the observed regions for 3 s
+post-release.** ARM CR4 stays running (CPUHALT=NO, RESET_CTL=0 at
+20/100/500/1500/3000 ms). Host survives cleanly, clean rmmod,
+no MCE/AER. This is the widest scan we've done (32 words total) and
+zero of them change — firmware is *not* making any TCM writes in the
+image-header, mid-image, or tail regions for the first 3 s.
+
+### Decisive observations
+
+1. **Image-header TCM[0x0..0x1c]:** 8 words, all UNCHANGED across
+   500/1500/3000 ms. Values match the reset-vector / exception table
+   we wrote with the firmware blob (0xb80ef000, 0xb82ef000, …).
+2. **Mid-TCM probe points** (0x1000, 0x2000, 0x4000, 0x8000, 0x10000,
+   0x20000, 0x40000, 0x80000): all UNCHANGED. Each reads as
+   firmware-image content (looks like Thumb-2 code — e.g.
+   `0x1a806863`, `0xfc8cf7fe`). None touched by firmware.
+3. **Tail-TCM last 64 B** (16 words at 0x9ffc0..0x9fffc): all
+   UNCHANGED. **New finding**: these 64 bytes hold our *own* NVRAM
+   text. Decoding the bytes little-endian:
+   `...=0\0vendid=0xdevice=0x14e4...` etc. — the last 228 B of TCM
+   is exactly the NVRAM we placed at `ramsize - 228 = 0x9ff1c`.
+4. **NVRAM marker at ramsize-4 = 0xffc70038**: this is our *own*
+   write (upstream convention: magic `0xffc70000 | (nvram_len / 4)`;
+   `228 / 4 = 57 = 0x39`... but observed `0x38 = 56` → actually
+   length-in-words is computed somewhere else; regardless, this is
+   the marker brcmfmac writes for the firmware to consume).
+
+### Implication — the upstream "sharedram-address slot" is NVRAM text here
+
+Upstream brcmfmac for msgbuf chips typically reads the shared-memory
+structure pointer from `TCM[ramsize - 4]` after firmware boot
+(firmware clears the magic and writes the sharedram address). For
+BCM4360 with our 228-B NVRAM + 4-B marker layout, `ramsize - 8` and
+the entire last 64 bytes are *occupied by NVRAM variable text*. The
+only word firmware is expected to clear is `ramsize - 4` itself
+(the magic). And that word has not been cleared after 3 s.
+
+**Conclusion**: firmware has not yet parsed and consumed NVRAM. It is
+running ARM code but has not reached the point of clearing the
+magic/length word at `ramsize - 4`.
+
+### What this narrows down
+
+Combined with test.182 (only image-header + marker) and test.181
+(CPUHALT=NO for 30 s), the picture is:
+
+- ARM CR4 is executing firmware code continuously.
+- For at least 3 s of that execution, firmware does not modify any
+  32 sample points across TCM that we observe, including the single
+  word the host uses as a handshake (`ramsize - 4`).
+- Either:
+  (a) firmware is stuck in a very early loop — pre-NVRAM-consumption
+      — waiting on a register, clock, PMU resource, or host handshake
+      that never occurs; OR
+  (b) firmware is executing but only modifies TCM words that our
+      32-sample grid doesn't happen to cover (unlikely — we have
+      good coverage of the main image body and the entire handshake
+      tail); OR
+  (c) firmware is modifying RAM regions outside TCM (e.g. backplane
+      SRAM, D11 SHM, PHY reg tables) — possible if its early init
+      happens entirely in backplane-local memory before touching
+      the host-visible TCM handshake.
+
+Most likely: (a) with a PMU/clock or host-handshake wait, because
+(c) would still eventually require firmware to clear the magic word
+to tell the host it's ready.
+
+### Decoded NVRAM fragment from tail-TCM dump (for reference)
+
+Taking the 16-word tail-TCM dump and expanding little-endian bytes:
+
+```
+0x9ffc0 0x7600303d : "=0\0v"
+0x9ffc4 0x69646e65 : "endi"     \ "vendi"
+0x9ffc8 0x78303d64 : "d=0x"     | "vendid=0x"
+0x9ffcc 0x34653431 : "14e4"     / "vendid=0x14e4"
+0x9ffd0 0x76656400 : "\0dev"
+0x9ffd4 0x303d6469 : "id=0"
+0x9ffd8 0x61333478 : "x43a"
+0x9ffdc 0x74780030 : "0\0xt"    → "deviceid=0x43a" + "0\0"
+0x9ffe0 0x72666c61 : "alfr"
+0x9ffe4 0x343d7165 : "eq=4"
+0x9ffe8 0x30303030 : "0000"     → "xtalfreq=40000"
+0x9ffec 0x32616100 : "\0aa2"
+0x9fff0 0x00373d67 : "g=7\0"    → "aa2g=7"
+0x9fff4 0x67356161 : "aa5g"
+0x9fff8 0x0000373d : "=7\0\0"  → "aa5g=7"
+0x9fffc 0xffc70038 : (magic + length word; NOT text)
+```
+
+This is straight brcmfmac NVRAM ("vendid=0x14e4", "deviceid=0x43a0",
+"xtalfreq=40000", "aa2g=7", "aa5g=7"). Firmware will consume this
+by stepping backward from the magic word. **None of it has been
+touched after 3 s** — so firmware's NVRAM parser has not run.
+
+### Current HW state after test.183
+
+- `brcmfmac` unloaded; `brcmutil` still loaded.
+- Endpoint 03:00.0: `Mem- BusMaster-`, BAR regions `[disabled]`,
+  `<MAbort-`. Clean post-rmmod.
+- Root port 00:1c.2: clean. No AER/MCE.
+
+### Recommended next step — PRE test.184
+
+Firmware is running but has not reached NVRAM consumption. Two
+promising paths:
+
+1. **Backplane observation (non-destructive).** Read live backplane
+   state via BAR0 pre-release and at each dwell. Targets:
+   - ARM CR4 wrapper status / bankidx — to see if firmware is
+     touching its own core-control registers.
+   - ChipCommon PMU status / ChipControl / watchdog timer — these
+     tick or change as firmware runs the backplane.
+   - ARM CR4 core's CPU cycle counter, if exposed — gives proof of
+     "instructions executed" even if ARM is in a tight loop.
+   This stays safely on the BAR0 side, does not touch BusMaster or
+   MSI, and discriminates (a) vs (c).
+
+2. **Minimal host setup, then re-observe TCM.** If backplane shows
+   firmware is running but idle, it may be waiting on a host
+   handshake. A conservative test would:
+   - Enable BusMaster on the endpoint.
+   - Program the PCIe host-to-device window (MailBox / scratchpad
+     regs) to expected boot-ready values *if* we know them; if not,
+     just enable BusMaster and re-run the 3 s TCM scan to see
+     whether magic-word clearance happens simply because firmware
+     can now DMA.
+   Higher risk — this is exactly the territory where Phase-4B used
+   to crash the host. Keep it for after (1).
+
+Start with (1) in test.184: add BAR0 backplane reads at pre-release
+and at the 3000 ms dwell.
+
+Do not run test.184 until PRE-test.184 checkpoint is committed and
+pushed.
+
+---
+
+## Previous state (2026-04-20, PRE test.183 — widened TCM scan: image-header + mid + tail)
 
 ### PRE-TEST.183 checkpoint
 
