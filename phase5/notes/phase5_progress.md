@@ -697,3 +697,21 @@ probe, resetintr, NVRAM write, or readback. If `msleep(100)` survives, the
 freeze is likely tied to busy-wait dwell after BAR2 writes. If it freezes, the
 problem is elapsed post-write time inside the callback, independent of whether
 the delay is busy or sleeping.
+
+## Phase 5.4: PRE test.175
+
+test.175 is implemented as the sleeping-dwell discriminator. It keeps the same
+setup, endpoint/root-port link-state logging, ARM halt checks before the write,
+and chunked 442233 byte BAR2 firmware write. After `fw write complete`, it logs
+before/after `msleep(100)`, then releases `fw` and `nvram` and returns
+`-ENODEV`.
+
+This intentionally still skips post-write ARM probing, resetintr, NVRAM write,
+readback, and ARM release. If test.175 survives, the prior failures point at
+`mdelay()`/busy-wait dwell rather than elapsed time alone. If it freezes during
+the sleep, the problem is post-write elapsed time inside the callback.
+
+Build status: OK via kernel kbuild. The only warning is the pre-existing unused
+`brcmf_pcie_write_ram32` helper, and BTF is skipped because `vmlinux` is
+unavailable. `brcmfmac.ko` contains the `test.175` before/after
+`post-fw msleep(100)` markers.

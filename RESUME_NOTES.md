@@ -49,26 +49,40 @@ whether the old post-write failure is specifically caused by `mdelay()`/busy
 waiting after heavy BAR2 writes, or by the next device MMIO operation after some
 settle time.
 
-### Recommended next step — PRE test.175
+### PRE test.175 — sleeping post-write dwell
 
-Do **not** run another hardware test until this note and the test.174 artifacts
-are committed, pushed, and synced.
+Do **not** run another hardware test until this note and the test.175 code/build
+checkpoint are committed, pushed, and synced.
 
-Best next discriminator: keep test.174's immediate-release/early-return shape,
-but insert a **sleeping** post-write delay before the release/return:
+Implemented test.175 discriminator:
+1. Relabeled active breadcrumbs to `test.175`.
+2. Kept endpoint/root-port link-state logging and the existing chunked 442233 B
+   firmware write unchanged for comparability.
+3. After `fw write complete`, the BCM4360 path now logs before/after a
+   `msleep(100)` with no device MMIO.
+4. It then releases `fw`/`nvram` and returns `-ENODEV` exactly like test.174.
+5. Still skips post-write ARM probe, resetintr read, NVRAM write, readback, and
+   ARM release. Stage0 remains the only intended run.
 
-1. After `fw write complete`, call `msleep(100)` instead of `mdelay(100)`.
-2. Do not perform any post-write ARM probe, resetintr read, NVRAM write, or
-   readback.
-3. Then release `fw`/`nvram` and return `-ENODEV` exactly as test.174 did.
+Hypothesis:
+- `after post-fw msleep(100)` + clean return/unload: the old freeze is likely
+  tied to post-write `mdelay()`/busy-wait dwell or CPU/context starvation after
+  BAR2 writes. Next test can add the resetintr boundary after `msleep(100)`.
+- Freeze before `after post-fw msleep(100)`: the bad condition is elapsed
+  post-write time inside the callback, independent of whether the delay is busy
+  or sleeping. Next step should quiesce/reset the chip immediately after the
+  write before any dwell.
 
-Expected interpretation:
-- `msleep(100)` survives: the old freeze is likely tied to post-write busy-wait
-  dwell (`mdelay`) or CPU/context starvation after BAR2 writes. Next test can
-  try `msleep(100)` followed by resetintr/NVRAM boundary.
-- `msleep(100)` freezes: the bad condition is elapsed post-write time inside
-  the callback, independent of whether the delay is busy or sleeping. Next step
-  should quiesce/reset the chip immediately after the write before any dwell.
+Pre-test checklist:
+- [x] Code changed for `msleep(100)` after `fw write complete`.
+- [x] Build module via kbuild. Result OK; existing warning only:
+  `brcmf_pcie_write_ram32` defined but not used. BTF skipped because `vmlinux`
+  is unavailable.
+- [x] Verified `brcmfmac.ko` contains `test.175`, before/after
+  `post-fw msleep(100)`, and `released fw/nvram after msleep` markers.
+- [x] Commit + push + sync this checkpoint.
+- [ ] Run only stage0:
+  `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
 
 ---
 
