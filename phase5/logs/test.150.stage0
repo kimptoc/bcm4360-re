@@ -1,13 +1,12 @@
 === test.150: brcmf_core_init/brcmf_pcie_register call-site markers — stage=0 ===
-Date: Mon 20 Apr 07:46:47 BST 2026
+Date: Mon 20 Apr 07:57:16 BST 2026
 
 Stage 0: skip_arm=1 — module_init/register markers; no ARM release if probe reaches firmware path.
 (test.150: SDIO-only registration discriminator — calls brcmf_sdio_register() then returns; USB and PCI skipped; 50ms post-SDIO sync marker)
 
 === Pre-test BAR0 MMIO guard ===
-BAR0 MMIO UR/I/O error (6ms) — device alive; SBR in probe should fix. Proceeding.
+BAR0 MMIO UR/I/O error (8ms) — device alive; SBR in probe should fix. Proceeding.
 
-Removing existing brcmfmac...
 === Pre-test PCIe state ===
 (lspci not available)
 
@@ -17,5 +16,17 @@ Removing existing brcmfmac...
 Flush complete.
 
 === Loading brcmfmac (bcm4360_reset_stage=0, bcm4360_skip_arm=1) --- test.150 ===
-insmod returned rc=1
+insmod returned rc=0
 Waiting 12s for firmware init (streaming to test.150.stage0.stream)...
+
+=== dmesg snapshot (kernel ring buffer) ===
+[  129.859712] brcmfmac: loading out-of-tree module taints kernel.
+[  129.866030] brcmfmac: BCM4360 test.150: module_init entry (no BAR0 MMIO)
+[  129.866109] brcmfmac: BCM4360 test.150: before brcmf_core_init()
+[  129.866137] brcmfmac: BCM4360 test.150: brcmf_core_init() entry
+[  129.866163] brcmfmac: BCM4360 test.150: before brcmf_sdio_register()
+[  129.866190] brcmfmac: BCM4360 test.150: after brcmf_sdio_register() err=0
+[  129.918568] brcmfmac: BCM4360 test.150: post-SDIO sync (skipping USB and PCI)
+[  129.918602] brcmfmac: BCM4360 test.150: after brcmf_core_init() err=0
+=== Capture complete ===
+Cleaning up brcmfmac...

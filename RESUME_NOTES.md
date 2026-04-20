@@ -1,43 +1,45 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.150 attempt — rmmod hang; reboot required; test.150 re-run after reboot)
+## Current state (2026-04-20, PRE test.151 — SDIO+PCI registration; PCIe clean after reboot)
 
-### MACHINE STATE: brcmfmac stuck in "Unloading -1" — REBOOT REQUIRED before running test.150
+### CODE STATE: test.151 source prepared, rebuilt, committed, and pushed
 
-### CODE STATE: test.150 source updated with registration guards, rebuilt, committed, and pushed
-
-**test.150 change: SDIO-only registration with registration guards**
-- No BAR0 MMIO, BAR2 MMIO, PCI config, or pre-probe mitigation.
+**test.151 change: SDIO + PCI registration (USB skipped)**
+- No BAR0 MMIO, BAR2 MMIO, or pre-probe mitigation.
 - `brcmf_core_init()` now:
-  - Logs `BCM4360 test.150: brcmf_core_init() entry`
-  - Logs `BCM4360 test.150: before brcmf_sdio_register()`
-  - Calls `brcmf_sdio_register()`; sets `brcmf_sdio_was_registered = true` on success
-  - Logs `BCM4360 test.150: after brcmf_sdio_register() err=%d`
-  - Delays 50ms (`mdelay(50)`)
-  - Logs `BCM4360 test.150: post-SDIO sync (skipping USB and PCI)`
-  - Returns 0 — USB and PCI registrations skipped
-- `brcmf_core_exit()` now guards each exit call on the corresponding `_was_registered` flag.
-  This prevents calling `pci_unregister_driver()` / `sdio_unregister_driver()` on never-registered drivers,
-  which caused the rmmod hang after test.149.
-- `brcmfmac_module_init()` still logs before/after `brcmf_core_init()`.
-- `brcmf_pcie_early_arm_halt()` still logs module_init entry.
-
-**Why test.150 first attempt failed (rmmod hang):**
-- test.149 returned 0 with no registrations; `brcmf_core_exit()` called `brcmf_sdio_exit()`, `brcmf_usb_exit()`, `brcmf_pcie_exit()` unconditionally.
-- Calling `pci_unregister_driver()` (or sdio/usb equivalent) on a never-registered driver caused rmmod to hang indefinitely.
-- `brcmfmac` entered "Unloading -1" state. Machine needs reboot to clear.
-- Fix: registration guard flags added to core.c before test.150 re-run.
+  - Calls `brcmf_sdio_register()` (safe, confirmed by test.150)
+  - Calls `brcmf_pcie_register()` — PCI driver re-introduced
+  - 50ms delay then `post-PCI sync` marker
+  - Returns 0 — USB skipped
+- `brcmf_core_exit()` still guards on `_was_registered` flags (no hang on rmmod).
+- `dmesg -wk` kill fixed: now uses `kill -9` (SIGTERM was ignored, causing 7-minute hang).
 
 **Purpose:**
-- test.149 proved: no crash with zero registrations; printk persistence fine.
-- test.150 isolates SDIO registration as potential crash trigger.
+- test.150 proved SDIO registration safe (no crash, all markers, clean rmmod).
+- test.151 re-introduces `brcmf_pcie_register()` — historically the crash window (tests 146-148).
+- If crash: PCI registration (or its probe side-effects) is the trigger; investigate pcie.c.
+- If safe: add USB or add full probe path next.
 
 **Hypothesis:**
-- Expect no crash (SDIO bus registration should be benign for a PCIe device with no SDIO hardware attached).
-- Expect all markers including `post-SDIO sync` to appear.
-- rmmod should now clean up correctly due to registration guards.
+- Expect crash — tests 146-148 all crashed in or around `brcmf_pcie_register()`.
+- If no crash: the PCI registration itself is safe and the crash was in probe.
 
-**Build status:** Rebuilt with registration guards and test.150 instrumentation.
+**Pre-test PCIe state (2026-04-20, post-reboot):**
+- Root port `00:1c.2`: `DLActive+`, `CommClk+`, `MAbort-`, bus `03/03` — clean.
+- Endpoint `03:00.0`: present, `MAbort-`, AER `UESta` clear.
+- No driver bound; no brcm modules loaded.
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+Stage1 remains forbidden.
+
+**Interpretation matrix:**
+- Crash before `brcmf_pcie_register()` marker: crash moved earlier than PCI — unexpected.
+- Crash after `before brcmf_pcie_register()` but before `after` marker: crash inside `brcmf_pcie_register()` body; examine pcie.c instrumentation markers.
+- No crash, `post-PCI sync` appears: `pci_register_driver()` returned safely; crash was in probe path. Next: allow probe to proceed (re-examine stage0 probe markers).
+- No crash: confirm rmmod cleans up without hang (registration guards + kill -9 fix).
 
 **Pre-test PCIe state (2026-04-20):**
 - Root port `00:1c.2`: `DLActive+`, `CommClk+`, `MAbort-`, bus `03/03` — clean.
@@ -54,6 +56,29 @@ Stage1 remains forbidden.
 - No crash, all markers appear: SDIO safe; add USB next (test.151 = SDIO+USB, skip PCI).
 - Crash before/during `brcmf_sdio_register()`: SDIO init is the trigger; investigate SDIO subsystem.
 - Crash after SDIO but before `post-SDIO sync`: SDIO side effects (async) are the trigger.
+
+---
+
+## Previous state (2026-04-20, POST test.150 SUCCESS — SDIO safe; PCI registration is next)
+
+### CODE/LOG STATE: test.150 ran cleanly — all markers appeared, clean rmmod
+
+**Stream log captured:**
+```
+brcmfmac: BCM4360 test.150: module_init entry (no BAR0 MMIO)
+brcmfmac: BCM4360 test.150: before brcmf_core_init()
+brcmfmac: BCM4360 test.150: brcmf_core_init() entry
+brcmfmac: BCM4360 test.150: before brcmf_sdio_register()
+brcmfmac: BCM4360 test.150: after brcmf_sdio_register() err=0
+brcmfmac: BCM4360 test.150: post-SDIO sync (skipping USB and PCI)  [50ms after SDIO]
+brcmfmac: BCM4360 test.150: after brcmf_core_init() err=0
+```
+
+**Key findings:**
+- SDIO registration is safe — no crash.
+- Registration guards work — rmmod completed cleanly.
+- `dmesg -wk` stuck on SIGTERM (7-minute hang) → fixed to `kill -9` for future tests.
+- PCIe is the next discriminator (historically the crash window in tests 146-148).
 
 ---
 

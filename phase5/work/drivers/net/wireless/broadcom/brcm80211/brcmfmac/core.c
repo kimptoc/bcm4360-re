@@ -1549,16 +1549,27 @@ int __init brcmf_core_init(void)
 	brcmf_usb_was_registered = false;
 	brcmf_pcie_was_registered = false;
 
-	pr_emerg("BCM4360 test.150: brcmf_core_init() entry\n");
-	pr_emerg("BCM4360 test.150: before brcmf_sdio_register()\n");
+	pr_emerg("BCM4360 test.151: brcmf_core_init() entry\n");
+	pr_emerg("BCM4360 test.151: before brcmf_sdio_register()\n");
 	err = brcmf_sdio_register();
-	pr_emerg("BCM4360 test.150: after brcmf_sdio_register() err=%d\n", err);
+	pr_emerg("BCM4360 test.151: after brcmf_sdio_register() err=%d\n", err);
 	if (!err)
 		brcmf_sdio_was_registered = true;
 	else
 		return err;
+
+	pr_emerg("BCM4360 test.151: before brcmf_pcie_register()\n");
+	err = brcmf_pcie_register();
+	pr_emerg("BCM4360 test.151: after brcmf_pcie_register() err=%d\n", err);
+	if (!err)
+		brcmf_pcie_was_registered = true;
+	else {
+		brcmf_sdio_exit();
+		brcmf_sdio_was_registered = false;
+		return err;
+	}
 	mdelay(50);
-	pr_emerg("BCM4360 test.150: post-SDIO sync (skipping USB and PCI)\n");
+	pr_emerg("BCM4360 test.151: post-PCI sync (skipping USB)\n");
 	return 0;
 }
 

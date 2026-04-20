@@ -1,1 +1,10 @@
-=== dmesg stream start: Mon 20 Apr 07:46:48 BST 2026 ===
+=== dmesg stream start: Mon 20 Apr 07:57:16 BST 2026 ===
+[  129.859712] brcmfmac: loading out-of-tree module taints kernel.
+[  129.866030] brcmfmac: BCM4360 test.150: module_init entry (no BAR0 MMIO)
+[  129.866109] brcmfmac: BCM4360 test.150: before brcmf_core_init()
+[  129.866137] brcmfmac: BCM4360 test.150: brcmf_core_init() entry
+[  129.866163] brcmfmac: BCM4360 test.150: before brcmf_sdio_register()
+[  129.866190] brcmfmac: BCM4360 test.150: after brcmf_sdio_register() err=0
+[  129.918568] brcmfmac: BCM4360 test.150: post-SDIO sync (skipping USB and PCI)
+[  129.918602] brcmfmac: BCM4360 test.150: after brcmf_core_init() err=0
+=== dmesg stream end: Mon 20 Apr 08:04:54 BST 2026 ===
