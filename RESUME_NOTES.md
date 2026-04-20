@@ -9273,41 +9273,58 @@ test.187: dwell-3000ms resetintr offset 0xef000 out of range, skipping
 
 ---
 
-## PRE-TEST.188 STATE — 2026-04-20 22:45 (updated per feedback)
+## PRE-TEST.188 STATE — 2026-04-20 23:15 (refined per latest feedback)
 
-**Revised hypothesis:** Firmware runs on CR4 but produces no MMIO/TCM activity → likely faulting before reaching peripheral init (including D11), not stuck in D11 bring-up. The ARM exception/spin-loop hypothesis remains leading.
+**Hypothesis:** Firmware runs on CR4 but produces no MMIO/TCM activity → likely faulting before reaching peripheral init. The ARM exception/spin-loop hypothesis remains leading.
 
-**Test design:** Implement probe D (fw-image integrity check) + fine-grain sampling to catch transient activity.
+**Test design:** Comprehensive probe addressing all feedback concerns:
+1. **Probe D - High-density fw integrity check:** 256 samples across fw region (every ~1.7 KB)
+2. **Two-tier fine-grain sampling:** 0-50 ms (5 ms intervals) + 50-1550 ms (50 ms intervals)
+3. **CR4 fault register probe:** With specific register offsets and interpretation criteria
+4. **Clean removal of test.187 residue:** Remove broken `resetintr_offset` code
 
-**Implementation:**
-1. **Probe D - Firmware integrity check:** Compare TCM readback at 32 evenly spaced offsets within fw region (0..fw->size) with original fw->data
-   - Any mismatch indicates corruption during download
-   - Any change during dwell indicates firmware self-modification
-2. **Fine-grain sampling:** Sample CR4/D11 state every 20 ms for first 200 ms after ARM release
-   - Catch transient writes missed by coarse (500/1500/3000 ms) grid
-   - Use same `brcmf_pcie_probe_armcr4_state()` and `brcmf_pcie_probe_d11_state()` functions
-3. **CR4 wrapper fault registers:** Add probe for CR4 fault/status registers (beyond IOCTL/IOST/RESET_CTL)
-   - If ARM is in exception handler, fault registers should show non-zero values
-4. **Keep existing probes unchanged** for comparability with test.186d/187 baseline
+**Implementation details:**
 
-**Expected outcomes:**
-- If fw-image vs TCM mismatch: download corruption is the root cause
-- If fine-grain sampling shows transient activity: firmware is making brief progress before faulting
-- If CR4 fault registers non-zero: ARM is in exception handler, not idle/spin-loop
-- If all probes match test.186d: firmware is truly idle with no MMIO/TCM activity
+### 1. Fw-region sampling (256 samples)
+- Array size: `fw_sample_offsets[256]`, `pre_fw_sample[256]`
+- Step size: `fw->size / 255` (minimum 4-byte alignment)
+- Compare each TCM readback with `get_unaligned_le32(fw->data + offset)`
+- Log mismatches immediately; track changes during dwell
 
-**Code changes needed:**
-1. Add `brcmf_pcie_sample_fw_region()` function for probe D
-2. Add fine-grain sampling loop (10 x 20ms intervals)
-3. Add CR4 fault register probe (need to identify correct register offsets)
-4. Relabel breadcrumbs to test.188
+### 2. Two-tier fine-grain sampling (40 total samples)
+- **Tier 1 (0-50 ms):** 10 samples at 5 ms intervals → catch immediate faults
+- **Tier 2 (50-1550 ms):** 30 samples at 50 ms intervals → catch mid-dwell transients
+- Use existing `brcmf_pcie_probe_armcr4_state()` and `brcmf_pcie_probe_d11_state()`
+- Log ARM CR4 IOCTL/IOSTATUS/RESET_CTL and D11 wrapper state
 
-**Risk assessment:** Read-only probes; minimal risk beyond existing test framework.
+### 3. CR4 fault register probe
+- **Register offsets to research:** `ARMCR4_REG_FAULT_STATUS`, `ARMCR4_REG_FAULT_ADDR`, `ARMCR4_REG_FAULT_TYPE`
+- **Sources:** upstream `brcmfmac` chip.c/chip.h ARM_CR4 constants
+- **Interpretation criteria:**
+  - `FAULT_STATUS != 0`: Exception active
+  - `FAULT_ADDR != 0`: Fault at specific address
+  - `FAULT_TYPE != 0`: Specific exception type (data abort, prefetch abort, etc.)
+
+### 4. Code cleanup
+- Remove `pre_resetintr[64]` and `resetintr_offset` (test.187 residue)
+- Global replace: `test.186d` → `test.188` in breadcrumbs
+- Ensure all probe labels updated consistently
+
+**Expected outcomes with explicit criteria:**
+
+1. **If fw-image vs TCM mismatch at ANY offset:** Download corruption hypothesis supported
+2. **If fine-grain sampling shows ANY transient activity:** Progress-then-fault hypothesis supported
+3. **If CR4 fault registers ≠ 0:** Exception hypothesis supported (specific bits indicate fault type)
+4. **If all probes null (no mismatch, no transients, no faults):** Exception/spin-loop hypothesis remains (firmware idle with no progress)
+
+**Risk assessment:** Read-only probes; minimal risk. Two-tier sampling adds 40 extra MMIO reads (negligible).
 
 **Next steps after test.188:**
-1. If fw-image mismatch: investigate download path (BAR2 writes, timing, byte order)
-2. If transient activity detected: focus probe window around that activity
-3. If CR4 fault registers active: investigate exception cause (bad jump target, memory fault)
-4. If all null: pursue clean-room cross-reference against proprietary `wl` driver reset sequence
+1. **If download corruption:** Investigate BAR2 write path, timing, byte order
+2. **If transient activity:** Focus probe window around that activity with higher density
+3. **If CR4 fault active:** Decode fault address/type to understand exception cause
+4. **If all null:** Pursue clean-room cross-reference against proprietary `wl` driver reset sequence
+
+**Build note:** Module needs rebuild after pcie.c changes. Use existing kernel build path.
 
 ---
