@@ -93,15 +93,23 @@ hard-crash sessions (tests 149–157).
   identical from pre-halt through dwell-3000ms. pmucontrol bit-9 flip
   and pmutimer tick rate reproduce test.184 exactly. Firmware is alive
   but stalled BEFORE D11 bring-up and BEFORE any TCM writes.
+- **test.186a NULL-RESULT:** rang all three H2D channels
+  (H2D_MAILBOX_0 / H2D_MAILBOX_1 / SBMBX) after the 3000ms dwell.
+  `mailboxint` flipped bit 0 (0x1), but bit 0 is not in either
+  `int_fn0` (0x0300) or `int_d2h_db` (0x10000..0x800000) — most likely
+  our own H2D_MAILBOX_0 write latched locally, not firmware responding.
+  All other signals UNCHANGED: D11 still in reset, NVRAM marker
+  unchanged, 64 TCM probes UNCHANGED, no FN0/D2H bits asserted. Host
+  doorbells do not unstick firmware at this stage. Three candidates
+  remain: (1) fw stalled in exception/panic loop after one PMU write;
+  (2) fw waiting on DMA (disambiguate via BusMaster-window test);
+  (3) fw waiting on D11 wrapper (less likely).
 
-**Next boundary:** passive probing has reached its limit — we know
-firmware is alive, has flipped one PMU bit, and is then idle without
-touching D11 or any TCM byte. The remaining candidate stall points
-(mailbox wait, DMA wait) cannot be observed passively. Next experiment
-set (test.186a/b): (a) poke the PCIe2 H2D mailbox from the host via
-MMIO only, still BusMaster-off, observe D11 + TCM; (b) if (a) is null,
-enable BusMaster for a 1-2 s observation window without the full
-attach path, observe. Both still return -ENODEV.
+**Next boundary:** test.186c (quick disambiguation) — clear `mailboxint`
+before the kick to determine whether bit 0 is our own echo or a lazy
+firmware assert. Then test.186b — brief BusMaster enable window
+(still -ENODEV early return, no full attach) — to discriminate between
+DMA-stall and exception-loop theories.
 
 **Re-entering the old 5.2 investigation:** once the probe-path restore is
 complete (i.e. firmware download and ARM release can run without host crash),

@@ -1,5 +1,114 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.186a (2026-04-20) — firmware ignores all three host doorbells
+
+Captured artifacts:
+- `phase5/logs/test.186.stage0`
+- `phase5/logs/test.186.stage0.stream`
+- `phase5/logs/test.186.journalctl.txt`
+
+Result: **clean run, host stable. `mailboxint` changed 0x0 → 0x1 after
+the kick, but bit 0 is not any of the D2H/FN0 signals brcmfmac cares
+about (D2H bits start at 0x10000, FN0 at 0x100) — most likely our own
+H2D_MAILBOX_0 write latched into the local side of the doorbell
+register, not firmware responding. All other probes UNCHANGED: D11
+RESET_CTL still 0x01, D11 IOCTL/IOSTATUS stable at 0x07/0x00, NVRAM
+marker untouched, all 56 TCM sample points UNCHANGED, no FN0/D2H
+bits asserted.** Firmware is not gated on any host doorbell at this
+point in its startup.
+
+### The one CHANGED signal — and why it's ambiguous
+
+```
+pre-kick  PCIE2 mailboxint = 0x00000000
+post-500ms PCIE2 mailboxint = 0x00000001  (CHANGED)
+post-2000ms PCIE2 mailboxint = 0x00000001  (unchanged from +500ms)
+```
+
+In `brcmf_reginfo_default` the bits brcmfmac's ISR acts on are:
+- `int_fn0  = BRCMF_PCIE_MB_INT_FN0  = 0x0100 | 0x0200 = 0x0300`
+- `int_d2h_db = (D2H0_DB0|D2H0_DB1|...|D2H3_DB1) = 0x10000..0x800000`
+
+Bit 0 (0x1) is **not in either mask**. Bit 0 most likely latches the
+fact that the host issued an H2D to mailbox 0 (chip-internal side of
+the doorbell register). That would explain why it latched immediately
+(within the 500 ms poll) and never cleared — we never explicitly clear
+it. It is **not evidence of firmware response**.
+
+To distinguish conclusively we would need to either (a) clear
+mailboxint before the kick and observe it assert post-kick, or
+(b) kick only *one* of the three channels and see whether mailboxint
+bit 0 still appears when we don't write to mailbox 0.
+
+### What firmware did NOT do
+
+- D11 wrapper: IOCTL=0x07 / IOSTATUS=0x00 / RESET_CTL=0x01 —
+  identical to test.185, identical pre-halt to post-kick-2000ms.
+  Firmware never starts D11 bring-up.
+- Mailboxint D2H/FN0 bits (the bits that would indicate firmware
+  is deliberately signalling host): all zero throughout.
+- NVRAM marker at ramsize-4: still 0xffc70038 (our magic/len). If
+  firmware had reached the sharedram handoff it would have replaced
+  this with the shared-info address. It did not.
+- TCM: 8 image-header + 40 wide-grid + 16 tail = 64 probe points,
+  all UNCHANGED at post-kick +500 ms and +2000 ms.
+- pmucontrol bit 9: still 0x01770381 (the single flip from test.184
+  — no additional flip triggered by our kick).
+
+### What firmware DID do
+
+- Same as test.184/185: flipped pmucontrol bit 9 exactly once within
+  the first 500 ms after ARM release. pmutimer ticks monotonically.
+
+### Interpretation
+
+The doorbell theory is essentially disproved for *this stage* of
+firmware startup. Three complementary channels (generic H2D, HostReady
+H2D, SBMBX config) all produced zero effect on D11, TCM, or the D2H
+signals that firmware would use to acknowledge us. Firmware is *alive*
+but either:
+1. **Stalled in an exception/panic loop very early.** After the one
+   PMU write, the CPU may have hit an undefined instruction or data
+   abort handler and now loops in it without touching memory. This is
+   consistent with: CPU running (pmutimer ticks are hardware-level
+   and unrelated to CPU state, but CPUHALT=NO means the core is
+   definitely not parked), no memory writes, no mailbox traffic.
+2. **Stalled waiting on DMA.** Firmware may need to fetch something
+   from host memory via DMA (e.g., the resetintr vector table, or a
+   shared-memory descriptor). With BusMaster cleared the DMA attempt
+   silently fails; firmware has no way to report that failure over
+   MMIO because its error reporting path is in shared-memory too.
+3. **Stalled waiting on D11.** Firmware may be polling a D11 wrapper
+   bit that requires a clock or reset sequence we haven't performed.
+   Not likely as the dominant theory (firmware normally brings up D11
+   itself after its own PMU/clock init), but possible if D11 init
+   depends on something upstream.
+
+### Next boundary
+
+Two complementary experiments, roughly in increasing risk order:
+
+- **test.186b — brief BusMaster window.** Re-enable BusMaster for a
+  2-3 s observation window with the same passive/kick flow; then
+  disable before return. Watch for D11 bring-up, TCM writes, any
+  change in the D2H mailboxint bits. If firmware was DMA-stalled we
+  should see at least a partial shared-info setup. Phase-4B crashed
+  with BusMaster enabled + full attach path; this experiment keeps
+  the attach path absent (still -ENODEV) so we isolate DMA from
+  interrupt handling. Restores BusMaster-cleared state before the
+  module returns.
+- **test.186c — clear mailboxint pre-kick to disambiguate.** Cheap,
+  no-risk variant of test.186a: write mailboxint = 0xffffffff to clear
+  any latched bits before the kick, then observe post-kick bits. If
+  bit 0 still reappears after a clear + kick, it's our own H2D
+  echo. If it doesn't reappear, firmware may be lazily asserting it.
+
+Plan: run test.186c first (cheap, informative) to nail down the
+mailboxint bit 0 interpretation; then commit to test.186b if 186c
+confirms no firmware response.
+
+---
+
 ## PRE-TEST.186a (2026-04-20, staged) — H2D mailbox kick after passive dwell
 
 ### Hypothesis
