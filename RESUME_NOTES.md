@@ -1,6 +1,80 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.156 CRASH — preparing test.157)
+## Current state (2026-04-20, POST test.157 CRASH PINPOINTED — preparing test.158)
+
+### CODE STATE: NOT yet rebuilt — test.158 plan below; pcie.c unchanged since test.157
+
+**test.157 CRASH ANALYSIS (boot -1, 09:09–09:29):**
+- test.157 RAN cleanly through all markers; crash pinpointed precisely by per-marker msleep(300).
+- `journalctl -k -b -1` captured the complete marker trail through to the wedge detection.
+- Full log: `phase5/logs/test.157.boot-1.journalctl.txt` (1096 lines).
+
+**Last flushed markers (copied verbatim from journalctl):**
+```
+09:28:19 test.145: halting ARM CR4 after second SBR (buscore_reset)
+09:28:19 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0   ← chip_attach's halt
+09:28:19 test.119: brcmf_chip_attach returned successfully
+09:28:19 test.142: ARM CR4 core->base=0x18002000 (for early-reset hardcode)
+09:28:19 test.157: about to select ARM core (BAR0 window change)
+09:28:20 test.157: ARM select_core done — reading IOCTL
+09:28:20 test.157: IOCTL read done (0x0001) — writing CPUHALT|FGC|CLK
+09:28:20 test.157: IOCTL write done — flush-reading IOCTL
+09:28:21 test.157: IOCTL flush done (0x0023) — asserting RESET_CTL
+09:28:21 test.157: RESET_CTL write done — waiting 1ms
+09:28:21 test.157: RESET_CTL readback=0xffffffff IN_RESET=NO/WEDGED — writing in-reset IOCTL
+[CRASH — MCE before next marker]
+```
+
+**Pinpointed root cause:**
+- `brcmf_chip_set_passive()` was ALREADY called inside `buscore_reset` (test.145 path) —
+  ARM was halted cleanly during `chip_attach`.  The test.157 probe-level ARM halt is a
+  **DUPLICATE halt** performed on an already-halted core.
+- The duplicate halt's `RESET_CTL = 1` MMIO write appears to succeed, but the readback
+  returns `0xffffffff` — the BAR0 window to the ARM CR4 core is now **WEDGED** (Unsupported
+  Request / all-ones response).  This is the first time we see the wedge.
+- The **next MMIO write** to the wedged window (the in-reset IOCTL write) triggers an MCE.
+  On this host `iommu=strict` likely escalates the bad MMIO to a hard fault/machine check.
+- Read access after wedge returns UR (no crash).  **Write access after wedge crashes the box.**
+
+**Key takeaway:** `RESET_CTL=1` on the ARM CR4 core disconnects that core's BAR0 window.
+No MMIO to that core is safe after the RESET_CTL assert until reset is released.  But
+releasing requires writing `RESET_CTL=0` — through the same wedged window.  So once wedged,
+you cannot recover via this window.
+
+**Pre-test PCIe state (post-test.157 crash + SMC reset, 2026-04-20 ~09:30):**
+- Endpoint `03:00.0`: `MAbort-`, `CommClk+`, `LnkSta: Speed 2.5GT/s Width x1` — CLEAN.
+- `DevSta: CorrErr+ UnsupReq+ AuxPwr+` (mask states; non-dangerous).
+- `CESta: AdvNonFatalErr+` (masked).
+- `BusMaster+`, `ASPM L0s L1 Enabled`.
+- No brcm modules loaded.
+
+### test.158 plan — REMOVE the duplicate probe-level ARM halt; extend scope to BusMaster/ASPM
+
+**Rationale:**
+- The existing probe-level ARM halt (lines ~4042–4095 of pcie.c) is REDUNDANT — chip_attach
+  already halted the core via buscore_reset→set_passive (test.145 path).
+- Remove the duplicate halt entirely (guard with `#if 0 /* test.158 remove dup halt */`).
+- With the dup halt gone, proceed past it to the next probe steps:
+  - `pci_set_master()` / BusMaster handling
+  - ASPM L1 disable (driver normally does this pre-firmware)
+  - reginfo / aligned DMA alloc preparation (maybe next test)
+- For test.158, ONLY remove dup halt and add a new explicit BusMaster/ASPM slice with markers.
+  Keep per-marker msleep(300) discipline.
+- Early return after BusMaster/ASPM slice — do NOT continue into reginfo/allocs yet.
+
+**Expected outcomes:**
+- If test.158 runs cleanly to "early return after BusMaster/ASPM": duplicate halt theory confirmed.
+- If crash in BusMaster/ASPM slice: per-marker sleep identifies the exact step.
+
+**Test command (unchanged):**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+Stage1 remains forbidden.
+
+---
+
+## Previous state (2026-04-20, POST test.156 CRASH — preparing test.157)
 
 ### CODE STATE: test.157 source prepared — same scope as test.156 + msleep(300) between markers
 

@@ -1,0 +1,196 @@
+=== dmesg stream start: Mon 20 Apr 09:28:17 BST 2026 ===
+[    0.000000] Linux version 6.12.80 (nixbld@localhost) (gcc (GCC) 14.3.0, GNU ld (GNU Binutils) 2.44) #1-NixOS SMP PREEMPT_DYNAMIC Thu Apr  2 11:09:54 UTC 2026
+[    0.000000] Command line: initrd=\EFI\nixos\v6bc83nw2h5x85106qkcr1v1qyi1ax7g-initrd-linux-6.12.80-initrd.efi init=/nix/store/vkf1lapdlnhabmi02h61l7cspmbfwbfd-nixos-system-nixos-25.11.9067.54170c54449e/init pci=noaer intel_iommu=on iommu=strict loglevel=4 lsm=landlock,yama,bpf
+[    0.000000] BIOS-provided physical RAM map:
+[    0.000000] BIOS-e820: [mem 0x0000000000000000-0x0000000000057fff] usable
+[    0.000000] BIOS-e820: [mem 0x0000000000058000-0x0000000000058fff] reserved
+[    0.000000] BIOS-e820: [mem 0x0000000000059000-0x000000000008efff] usable
+[    0.000000] BIOS-e820: [mem 0x000000000008f000-0x000000000008ffff] reserved
+[    0.000000] BIOS-e820: [mem 0x0000000000090000-0x000000000009ffff] usable
+[    0.000000] BIOS-e820: [mem 0x00000000000a0000-0x00000000000bffff] reserved
+[    0.000000] BIOS-e820: [mem 0x0000000000100000-0x000000008ad0ffff] usable
+[    0.000000] BIOS-e820: [mem 0x000000008ad10000-0x000000008ad52fff] ACPI NVS
+[    0.000000] BIOS-e820: [mem 0x000000008ad53000-0x000000008ad5cfff] usable
+[    0.000000] BIOS-e820: [mem 0x000000008ad5d000-0x000000008ad8efff] ACPI data
+[    0.000000] BIOS-e820: [mem 0x000000008ad8f000-0x000000008ae38fff] usable
+[    0.000000] BIOS-e820: [mem 0x000000008ae39000-0x000000008ae8efff] reserved
+[    0.000000] BIOS-e820: [mem 0x000000008ae8f000-0x000000008aed1fff] usable
+[    0.000000] BIOS-e820: [mem 0x000000008aed2000-0x000000008aefefff] reserved
+[    0.000000] BIOS-e820: [mem 0x000000008aeff000-0x000000008af83fff] usable
+[    0.000000] BIOS-e820: [mem 0x000000008af84000-0x000000008afeffff] reserved
+[    0.000000] BIOS-e820: [mem 0x000000008aff0000-0x000000008affffff] usable
+[    0.000000] BIOS-e820: [mem 0x000000008b000000-0x000000008f9fffff] reserved
+[    0.000000] BIOS-e820: [mem 0x00000000e00f8000-0x00000000e00f8fff] reserved
+[    0.000000] BIOS-e820: [mem 0x00000000fed1c000-0x00000000fed1ffff] reserved
+[    0.000000] BIOS-e820: [mem 0x00000000ffe10000-0x00000000ffe3ffff] reserved
+[    0.000000] BIOS-e820: [mem 0x0000000100000000-0x000000026f5fffff] usable
+[    0.000000] NX (Execute Disable) protection: active
+[    0.000000] APIC: Static calls initialized
+[    0.000000] e820: update [mem 0x75f29190-0x75f391cf] usable ==> usable
+[    0.000000] e820: update [mem 0x75f27810-0x75f27cd2] usable ==> usable
+[    0.000000] extended physical RAM map:
+[    0.000000] reserve setup_data: [mem 0x0000000000000000-0x0000000000057fff] usable
+[    0.000000] reserve setup_data: [mem 0x0000000000058000-0x0000000000058fff] reserved
+[    0.000000] reserve setup_data: [mem 0x0000000000059000-0x000000000008efff] usable
+[    0.000000] reserve setup_data: [mem 0x000000000008f000-0x000000000008ffff] reserved
+[    0.000000] reserve setup_data: [mem 0x0000000000090000-0x000000000009ffff] usable
+[    0.000000] reserve setup_data: [mem 0x00000000000a0000-0x00000000000bffff] reserved
+[    0.000000] reserve setup_data: [mem 0x0000000000100000-0x0000000075f2780f] usable
+[    0.000000] reserve setup_data: [mem 0x0000000075f27810-0x0000000075f27cd2] usable
+[    0.000000] reserve setup_data: [mem 0x0000000075f27cd3-0x0000000075f2918f] usable
+[    0.000000] reserve setup_data: [mem 0x0000000075f29190-0x0000000075f391cf] usable
+[    0.000000] reserve setup_data: [mem 0x0000000075f391d0-0x000000008ad0ffff] usable
+[    0.000000] reserve setup_data: [mem 0x000000008ad10000-0x000000008ad52fff] ACPI NVS
+[    0.000000] reserve setup_data: [mem 0x000000008ad53000-0x000000008ad5cfff] usable
+[    0.000000] reserve setup_data: [mem 0x000000008ad5d000-0x000000008ad8efff] ACPI data
+[    0.000000] reserve setup_data: [mem 0x000000008ad8f000-0x000000008ae38fff] usable
+[    0.000000] reserve setup_data: [mem 0x000000008ae39000-0x000000008ae8efff] reserved
+[    0.000000] reserve setup_data: [mem 0x000000008ae8f000-0x000000008aed1fff] usable
+[    0.000000] reserve setup_data: [mem 0x000000008aed2000-0x000000008aefefff] reserved
+[    0.000000] reserve setup_data: [mem 0x000000008aeff000-0x000000008af83fff] usable
+[    0.000000] reserve setup_data: [mem 0x000000008af84000-0x000000008afeffff] reserved
+[    0.000000] reserve setup_data: [mem 0x000000008aff0000-0x000000008affffff] usable
+[    0.000000] reserve setup_data: [mem 0x000000008b000000-0x000000008f9fffff] reserved
+[    0.000000] reserve setup_data: [mem 0x00000000e00f8000-0x00000000e00f8fff] reserved
+[    0.000000] reserve setup_data: [mem 0x00000000fed1c000-0x00000000fed1ffff] reserved
+[    0.000000] reserve setup_data: [mem 0x00000000ffe10000-0x00000000ffe3ffff] reserved
+[    0.000000] reserve setup_data: [mem 0x0000000100000000-0x000000026f5fffff] usable
+[    0.000000] efi: EFI v1.1 by Apple
+[    0.000000] efi: ACPI=0x8ad8e000 ACPI 2.0=0x8ad8e014 SMBIOS=0x8ad11000 RNG=0x8ad61f90 INITRD=0x75f53f90 
+[    0.000000] random: crng init done
+[    0.000000] efi: Not removing mem284: MMIO range=[0xe00f8000-0xe00f8fff] (4KB) from e820 map
+[    0.000000] efi: Not removing mem285: MMIO range=[0xfed1c000-0xfed1ffff] (16KB) from e820 map
+[    0.000000] efi: Not removing mem286: MMIO range=[0xffe10000-0xffe3ffff] (192KB) from e820 map
+[    0.000000] [Firmware Bug]: Corrupted DMI table, offset 2189 (only 40 entries processed)
+[    0.000000] SMBIOS 2.4 present.
+[    0.000000] DMI: Apple Inc. MacBookPro11,1/Mac-189A3D4F975D5FFC, BIOS 478.0.0.0.0 01/13/2023
+[    0.000000] DMI: Memory slots populated: 2/2
+[    0.000000] tsc: Fast TSC calibration using PIT
+[    0.000000] tsc: Detected 2599.949 MHz processor
+[    0.000085] e820: update [mem 0x00000000-0x00000fff] usable ==> reserved
+[    0.000088] e820: remove [mem 0x000a0000-0x000fffff] usable
+[    0.000101] last_pfn = 0x26f600 max_arch_pfn = 0x400000000
+[    0.000106] MTRR map: 5 entries (4 fixed + 1 variable; max 24), built from 10 variable MTRRs
+[    0.000108] x86/PAT: Configuration [0-7]: WB  WC  UC- UC  WB  WP  UC- WT  
+[    0.000398] last_pfn = 0x8b000 max_arch_pfn = 0x400000000
+[    0.016640] Using GB pages for direct mapping
+[    0.017589] Secure boot disabled
+[    0.017590] RAMDISK: [mem 0x71371000-0x72d3ffff]
+[    0.017595] ACPI: Early table checksum verification disabled
+[    0.017598] ACPI: RSDP 0x000000008AD8E014 000024 (v02 APPLE )
+[    0.017602] ACPI: XSDT 0x000000008AD8E1C0 0000A4 (v01 APPLE  Apple00  00000000      01000013)
+[    0.017609] ACPI: FACP 0x000000008AD8C000 0000F4 (v05 APPLE  Apple00  00000000 Loki 0000005F)
+[    0.017615] ACPI: DSDT 0x000000008AD7F000 007681 (v03 APPLE  MacBookP 00110001 INTL 20100915)
+[    0.017618] ACPI: FACS 0x000000008AD18000 000040
+[    0.017621] ACPI: FACS 0x000000008AD18000 000040
+[    0.017624] ACPI: HPET 0x000000008AD8B000 000038 (v01 APPLE  Apple00  00000001 Loki 0000005F)
+[    0.017628] ACPI: APIC 0x000000008AD8A000 0000BC (v02 APPLE  Apple00  00000001 Loki 0000005F)
+[    0.017631] ACPI: SBST 0x000000008AD88000 000030 (v01 APPLE  Apple00  00000001 Loki 0000005F)
+[    0.017635] ACPI: ECDT 0x000000008AD87000 000053 (v01 APPLE  Apple00  00000001 Loki 0000005F)
+[    0.017638] ACPI: SSDT 0x000000008AD7E000 00010B (v01 APPLE  SataAhci 00001000 INTL 20100915)
+[    0.017642] ACPI: SSDT 0x000000008AD7D000 000024 (v01 APPLE  SmcDppt  00001000 INTL 20100915)
+[    0.017645] ACPI: SSDT 0x000000008AD7A000 000FE9 (v01 APPLE  SDUsbLpt 00001000 INTL 20100915)
+[    0.017649] ACPI: SSDT 0x000000008AD76000 000032 (v01 APPLE  SsdtS3   00001000 INTL 20100915)
+[    0.017652] ACPI: SSDT 0x000000008AD73000 0028B2 (v01 APPLE  PcieTbt  00001000 INTL 20100915)
+[    0.017656] ACPI: SSDT 0x000000008AD66000 0000B8 (v01 APPLE  Sdxc     00001000 INTL 20100915)
+[    0.017659] ACPI: SSDT 0x000000008AD65000 0003E0 (v01 APPLE  SaHdaCdc 00001000 INTL 20100915)
+[    0.017663] ACPI: SSDT 0x000000008AD64000 000594 (v01 PmRef  Cpu0Ist  00003000 INTL 20100915)
+[    0.017666] ACPI: SSDT 0x000000008AD63000 000B83 (v01 PmRef  CpuPm    00003000 INTL 20100915)
+[    0.017670] ACPI: DMAR 0x000000008AD62000 000088 (v01 APPLE  HSW      00000001 AAPL 00000001)
+[    0.017673] ACPI: MCFG 0x000000008AD89000 00003C (v01 APPLE  Apple00  00000001 Loki 0000005F)
+[    0.017676] ACPI: Reserving FACP table memory at [mem 0x8ad8c000-0x8ad8c0f3]
+[    0.017678] ACPI: Reserving DSDT table memory at [mem 0x8ad7f000-0x8ad86680]
+[    0.017679] ACPI: Reserving FACS table memory at [mem 0x8ad18000-0x8ad1803f]
+[    0.017680] ACPI: Reserving FACS table memory at [mem 0x8ad18000-0x8ad1803f]
+[    0.017680] ACPI: Reserving HPET table memory at [mem 0x8ad8b000-0x8ad8b037]
+[    0.017681] ACPI: Reserving APIC table memory at [mem 0x8ad8a000-0x8ad8a0bb]
+[    0.017682] ACPI: Reserving SBST table memory at [mem 0x8ad88000-0x8ad8802f]
+[    0.017683] ACPI: Reserving ECDT table memory at [mem 0x8ad87000-0x8ad87052]
+[    0.017684] ACPI: Reserving SSDT table memory at [mem 0x8ad7e000-0x8ad7e10a]
+[    0.017685] ACPI: Reserving SSDT table memory at [mem 0x8ad7d000-0x8ad7d023]
+[    0.017686] ACPI: Reserving SSDT table memory at [mem 0x8ad7a000-0x8ad7afe8]
+[    0.017687] ACPI: Reserving SSDT table memory at [mem 0x8ad76000-0x8ad76031]
+[    0.017687] ACPI: Reserving SSDT table memory at [mem 0x8ad73000-0x8ad758b1]
+[    0.017688] ACPI: Reserving SSDT table memory at [mem 0x8ad66000-0x8ad660b7]
+[    0.017689] ACPI: Reserving SSDT table memory at [mem 0x8ad65000-0x8ad653df]
+[    0.017690] ACPI: Reserving SSDT table memory at [mem 0x8ad64000-0x8ad64593]
+[    0.017691] ACPI: Reserving SSDT table memory at [mem 0x8ad63000-0x8ad63b82]
+[    0.017692] ACPI: Reserving DMAR table memory at [mem 0x8ad62000-0x8ad62087]
+[    0.017693] ACPI: Reserving MCFG table memory at [mem 0x8ad89000-0x8ad8903b]
+[    0.017701] ACPI: DMI detected to setup _OSI("Darwin"): Apple hardware
+[    0.017747] No NUMA configuration found
+[    0.017748] Faking a node at [mem 0x0000000000000000-0x000000026f5fffff]
+[    0.017752] NODE_DATA(0) allocated [mem 0x26f5fa8c0-0x26f5ffdff]
+[    0.017784] Zone ranges:
+[    0.017785]   DMA      [mem 0x0000000000001000-0x0000000000ffffff]
+[    0.017787]   DMA32    [mem 0x0000000001000000-0x00000000ffffffff]
+[    0.017789]   Normal   [mem 0x0000000100000000-0x000000026f5fffff]
+[    0.017790]   Device   empty
+[    0.017791] Movable zone start for each node
+[    0.017792] Early memory node ranges
+[    0.017793]   node   0: [mem 0x0000000000001000-0x0000000000057fff]
+[    0.017794]   node   0: [mem 0x0000000000059000-0x000000000008efff]
+[    0.017795]   node   0: [mem 0x0000000000090000-0x000000000009ffff]
+[    0.017796]   node   0: [mem 0x0000000000100000-0x000000008ad0ffff]
+[    0.017797]   node   0: [mem 0x000000008ad53000-0x000000008ad5cfff]
+[    0.017798]   node   0: [mem 0x000000008ad8f000-0x000000008ae38fff]
+[    0.017799]   node   0: [mem 0x000000008ae8f000-0x000000008aed1fff]
+[    0.017800]   node   0: [mem 0x000000008aeff000-0x000000008af83fff]
+[    0.017801]   node   0: [mem 0x000000008aff0000-0x000000008affffff]
+[    0.017802]   node   0: [mem 0x0000000100000000-0x000000026f5fffff]
+[    0.017804] Initmem setup node 0 [mem 0x0000000000001000-0x000000026f5fffff]
+[    0.017810] On node 0, zone DMA: 1 pages in unavailable ranges
+[    0.017811] On node 0, zone DMA: 1 pages in unavailable ranges
+[    0.017812] On node 0, zone DMA: 1 pages in unavailable ranges
+[    0.017836] On node 0, zone DMA: 96 pages in unavailable ranges
+[    0.022089] On node 0, zone DMA32: 67 pages in unavailable ranges
+[    0.022094] On node 0, zone DMA32: 50 pages in unavailable ranges
+[    0.022097] On node 0, zone DMA32: 86 pages in unavailable ranges
+[    0.022099] On node 0, zone DMA32: 45 pages in unavailable ranges
+[    0.022102] On node 0, zone DMA32: 108 pages in unavailable ranges
+[    0.033810] On node 0, zone Normal: 20480 pages in unavailable ranges
+[    0.033841] On node 0, zone Normal: 2560 pages in unavailable ranges
+[    0.033848] Reserving Intel graphics memory at [mem 0x8ba00000-0x8f9fffff]
+[    0.034012] ACPI: PM-Timer IO Port: 0x1808
+[    0.034023] ACPI: LAPIC_NMI (acpi_id[0x01] high edge lint[0x1])
+[    0.034025] ACPI: LAPIC_NMI (acpi_id[0x02] high edge lint[0x1])
+[    0.034026] ACPI: LAPIC_NMI (acpi_id[0x03] high edge lint[0x1])
+[    0.034027] ACPI: LAPIC_NMI (acpi_id[0x04] high edge lint[0x1])
+[    0.034028] ACPI: LAPIC_NMI (acpi_id[0x05] high edge lint[0x1])
+[    0.034028] ACPI: LAPIC_NMI (acpi_id[0x06] high edge lint[0x1])
+[    0.034029] ACPI: LAPIC_NMI (acpi_id[0x07] high edge lint[0x1])
+[    0.034030] ACPI: LAPIC_NMI (acpi_id[0x08] high edge lint[0x1])
+[    0.034041] IOAPIC[0]: apic_id 2, version 32, address 0xfec00000, GSI 0-39
+[    0.034044] ACPI: INT_SRC_OVR (bus 0 bus_irq 0 global_irq 2 dfl dfl)
+[    0.034046] ACPI: INT_SRC_OVR (bus 0 bus_irq 9 global_irq 9 high level)
+[    0.034052] ACPI: Using ACPI (MADT) for SMP configuration information
+[    0.034053] ACPI: HPET id: 0x8086a201 base: 0xfed00000
+[    0.034058] TSC deadline timer available
+[    0.034063] CPU topo: Max. logical packages:   1
+[    0.034064] CPU topo: Max. logical dies:       1
+[    0.034065] CPU topo: Max. dies per package:   1
+[    0.034071] CPU topo: Max. threads per core:   2
+[    0.034072] CPU topo: Num. cores per package:     2
+[    0.034073] CPU topo: Num. threads per package:   4
+[    0.034073] CPU topo: Allowing 4 present CPUs plus 0 hotplug CPUs
+[    0.034096] PM: hibernation: Registered nosave memory: [mem 0x00000000-0x00000fff]
+[    0.034098] PM: hibernation: Registered nosave memory: [mem 0x00058000-0x00058fff]
+[    0.034100] PM: hibernation: Registered nosave memory: [mem 0x0008f000-0x0008ffff]
+[    0.034102] PM: hibernation: Registered nosave memory: [mem 0x000a0000-0x000fffff]
+[    0.034104] PM: hibernation: Registered nosave memory: [mem 0x8ad10000-0x8ad52fff]
+[    0.034106] PM: hibernation: Registered nosave memory: [mem 0x8ad5d000-0x8ad8efff]
+[    0.034108] PM: hibernation: Registered nosave memory: [mem 0x8ae39000-0x8ae8efff]
+[    0.034110] PM: hibernation: Registered nosave memory: [mem 0x8aed2000-0x8aefefff]
+[    0.034112] PM: hibernation: Registered nosave memory: [mem 0x8af84000-0x8afeffff]
+[    0.034114] PM: hibernation: Registered nosave memory: [mem 0x8b000000-0xffffffff]
+[    0.034115] [mem 0x8fa00000-0xe00f7fff] available for PCI devices
+[    0.034119] Booting paravirtualized kernel on bare hardware
+[    0.034122] clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 1910969940391419 ns
+[    0.040378] setup_percpu: NR_CPUS:384 nr_cpumask_bits:4 nr_cpu_ids:4 nr_node_ids:1
+[    0.040743] percpu: Embedded 116 pages/cpu s294912 r65536 d114688 u524288
+[    0.040751] pcpu-alloc: s294912 r65536 d114688 u524288 alloc=1*2097152
+[    0.040754] pcpu-alloc: [0] 0 1 2 3 
+[    0.040775] Kernel command line: initrd=\EFI\nixos\v6bc83nw2h5x85106qkcr1v1qyi1ax7g-initrd-linux-6.12.80-initrd.efi init=/nix/store/vkf1lapdlnhabmi02h61l7cspmbfwbfd-nixos-system-nixos-25.11.9067.54170c54449e/init pci=noaer intel_iommu=on iommu=strict loglevel=4 lsm=landlock,yama,bpf
+[    0.040839] DMAR: IOMMU enabled
+[    0.041868] Dentry cache hash table entries: 1048576 (order: 11, 8388608 bytes, linear)
+[    0.042374] Inode-cache hash table entries: 524288 (order: 10, 4194304 bytes, linear)
