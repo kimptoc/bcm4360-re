@@ -1,6 +1,120 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.182 — extended post-release TCM sampling)
+## Current state (2026-04-20, POST test.182 — ARM running but TCM[0..0x1c] + NVRAM marker UNCHANGED for 3 s)
+
+### TEST.182 RESULT — clean run; hypothesis (B) confirmed
+
+Captured artifacts:
+- `phase5/logs/test.182.stage0`
+- `phase5/logs/test.182.stage0.stream`
+- `phase5/logs/test.182.journalctl.txt`
+
+Result: **ARM continues running firmware for ≥3 s post-release, but does
+not touch TCM[0x0..0x1c] or the NVRAM marker at `ramsize - 4` in that
+window.** Host survived cleanly. Clean `-ENODEV` + rmmod. No MCE/AER/panic.
+
+### Decisive sequence (condensed)
+
+```
+pre-release snapshot:
+  NVRAM marker at ramsize-4 = 0xffc70038
+  TCM[0x00]=0xb80ef000  TCM[0x04]=0xb82ef000  TCM[0x08]=0xb839f000
+  TCM[0x0c]=0xb844f000  TCM[0x10]=0xb852f000  TCM[0x14]=0xb860f000
+  TCM[0x18]=0xb86ef000  TCM[0x1c]=0xb87cf000
+  pre-set-active:         IOCTL=0x00000021 RESET_CTL=0x0 CPUHALT=YES
+calling brcmf_chip_set_active resetintr=0xb80ef000 (BusMaster stays cleared)
+brcmf_chip_set_active returned true
+post-set-active-20ms:     IOCTL=0x00000001 RESET_CTL=0x0 CPUHALT=NO
+post-set-active-100ms:    IOCTL=0x00000001 RESET_CTL=0x0 CPUHALT=NO
+post-set-active-500ms:    IOCTL=0x00000001 RESET_CTL=0x0 CPUHALT=NO
+  dwell-500ms  NVRAM marker UNCHANGED (0xffc70038)
+  dwell-500ms  TCM[0x00..0x1c] all UNCHANGED (matches pre-release)
+post-set-active-1500ms:   IOCTL=0x00000001 RESET_CTL=0x0 CPUHALT=NO
+  dwell-1500ms NVRAM marker UNCHANGED
+  dwell-1500ms TCM[0x00..0x1c] all UNCHANGED
+post-set-active-3000ms:   IOCTL=0x00000001 RESET_CTL=0x0 CPUHALT=NO
+  dwell-3000ms NVRAM marker UNCHANGED
+  dwell-3000ms TCM[0x00..0x1c] all UNCHANGED
+released fw/nvram after extended post-release TCM sampling; returning -ENODEV
+```
+
+### Interpretation
+
+- ARM CR4 is genuinely running: `CPUHALT=NO` holds steady at 20 ms,
+  100 ms, 500 ms, 1.5 s, and 3 s post-release. No re-halt, no reset.
+- The initial 8-word TCM window (firmware image header — the vector
+  table / initial jump targets written as part of the 442 KB fw download)
+  is read-only or at least untouched by firmware for the first 3 s.
+  Those words map to reset-vector / exception-vector entries
+  (`0xb80ef000`, `0xb82ef000`, …) and wouldn't be modified by normal
+  firmware init.
+- The NVRAM marker at `ramsize - 4 = 0xffc70038` is ALSO unchanged.
+  Upstream firmware writes `BRCMF_FWNVRAM_MAGIC` / size at this slot
+  as part of NVRAM consumption. After 3 s with ARM running, our
+  firmware has *not* performed that write.
+- Combined with the fact that test.181 already showed the host
+  surviving 30 s post-release, this is hypothesis (B) from PRE-182:
+  **ARM is running but firmware is stalled in a very early loop that
+  does not touch TCM[0..0x1c] or the NVRAM marker**.
+- No evidence yet that firmware is doing *any* TCM writes — but we
+  only sampled a 32-byte window. The working hypothesis for test.183
+  is that firmware either:
+  (a) stalls before reaching NVRAM consumption (waiting on a backplane
+      register, PMU resource, clock, or PCIe host-handshake that
+      brcmfmac never provides because BusMaster/MSI stay disabled);
+  (b) writes its shared-memory structure to a different TCM region
+      (e.g. `sharedram_addr` at `ramsize - 8` or a firmware-resolved
+      address), leaving the first 32 bytes untouched.
+
+### Why this is still good news
+
+- No crash, no MCE/AER, clean rmmod — repeatability confirmed.
+- ARM CR4 running stably for ≥3 s under brcmfmac with BusMaster
+  cleared gives us a reliable *observation platform*: we can now
+  extend probes to any TCM window and any MMIO read without
+  destabilising the host.
+- The shape of the problem is now concrete: *what is firmware doing
+  (or waiting for) between ARM release and its first TCM write?*
+
+### Current HW state after test.182
+
+- `brcmfmac` unloaded; `brcmutil` still loaded.
+- Endpoint 03:00.0: `Mem- BusMaster-`, BAR regions `[disabled]`,
+  `<MAbort-`, link 2.5GT/s x1. Clean post-rmmod state. Re-initialises
+  on next insmod.
+- Root port 00:1c.2: clean.
+- No MCE/AER. No SMC reset needed.
+
+### Recommended next step — PRE test.183
+
+Widen the observation window. Two parallel probes:
+
+1. **Widen TCM scan.** The firmware image header occupies the first
+   TCM region; shared structures are typically placed near the end
+   of RAM. Test.183 should sample:
+   - Last 64 bytes of TCM: `TCM[ramsize - 64 .. ramsize - 4]` in
+     4-byte words — this covers NVRAM marker (ramsize-4), sharedram
+     address slot (upstream convention: `ramsize - 8`), and any
+     trailing firmware handshake fields.
+   - A small mid-TCM sample: `TCM[0x1000]`, `TCM[0x2000]`,
+     `TCM[0x10000]`, `TCM[0x40000]`, `TCM[0x80000]` — just a few
+     probe points to see if firmware has touched *any* memory.
+   - Same 500 ms / 1500 ms / 3000 ms dwell cadence; log CHANGED/
+     UNCHANGED per word.
+2. **Sample backplane via BAR0.** Read chipcommon rev/revID and
+   ARM CR4 wrapper bank index once pre-release and once at 3 s
+   post-release to see whether firmware is performing any
+   backplane ops. If those registers change, firmware is alive
+   on the backplane even if it hasn't touched TCM in the windows
+   we're watching.
+
+Keep BusMaster cleared. Still return `-ENODEV`. Keep `WAIT_SECS=45`.
+
+Commit + push + sync the PRE-test.183 checkpoint before running.
+
+---
+
+## Previous state (2026-04-20, PRE test.182 — extended post-release TCM sampling)
 
 ### PRE-TEST.182 checkpoint
 

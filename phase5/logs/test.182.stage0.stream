@@ -1,0 +1,628 @@
+=== dmesg stream start: Mon 20 Apr 19:11:28 BST 2026 ===
+[ 3835.797494] brcmfmac: BCM4360 test.181: module_init entry — brcmf_chip_set_active isolation (ARM release)
+[ 3835.797586] brcmfmac: BCM4360 test.156: before brcmf_core_init()
+[ 3835.797616] brcmfmac: BCM4360 test.155: brcmf_core_init() entry
+[ 3835.797644] brcmfmac: BCM4360 test.155: before brcmf_sdio_register()
+[ 3835.799447] brcmfmac: BCM4360 test.155: after brcmf_sdio_register() err=0
+[ 3835.851876] brcmfmac: BCM4360 test.155: post-SDIO sync (before PCI)
+[ 3835.853432] brcmfmac: BCM4360 test.155: before brcmf_pcie_register()
+[ 3835.854965] brcmfmac: BCM4360 test.181: brcmf_pcie_register() entry
+[ 3836.161597] brcmfmac: BCM4360 test.181: before pci_register_driver
+[ 3836.465614] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=000000002c0e7a36)
+[ 3836.769509] brcmfmac: BCM4360 test.158: probe entry flush done — proceeding
+[ 3837.073489] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+[ 3837.073544] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+[ 3837.073660] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+[ 3837.585707] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+[ 3837.585862] brcmfmac: BCM4360 test.158: before brcmf_chip_attach
+[ 3837.889633] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcf5981400000
+[ 3837.889649] brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+[ 3837.940523] brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+[ 3837.941022] brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+[ 3837.941083] brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+[ 3837.943644] brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+[ 3837.946701] brcmfmac 0000:03:00.0: BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)
+[ 3837.949718] brcmfmac 0000:03:00.0: BCM4360 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0
+[ 3837.953063] brcmfmac: BCM4360 test.181: post-145 ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 3837.956786] brcmfmac: brcmf_chip_recognition: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+[ 3837.959985] brcmfmac: brcmf_chip_recognition: BCM4360 test.125: after reset, before get_raminfo
+[ 3837.963339] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[ 3837.966925] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[ 3837.969971] brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+[ 3838.273611] brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+[ 3838.273738] brcmfmac: BCM4360 test.158: about to pci_clear_master (config-space write)
+[ 3838.577444] brcmfmac 0000:03:00.0: BCM4360 test.158: BusMaster cleared after chip_attach
+[ 3838.881486] brcmfmac: BCM4360 test.158: about to read LnkCtl before ASPM disable
+[ 3839.185429] brcmfmac: BCM4360 test.158: LnkCtl read before=0x0140 — disabling ASPM
+[ 3839.489502] brcmfmac: BCM4360 test.158: pci_disable_link_state returned — reading LnkCtl
+[ 3839.794395] brcmfmac 0000:03:00.0: BCM4360 test.158: ASPM disabled; LnkCtl before=0x0140 after=0x0140 ASPM-bits-after=0x0
+[ 3840.097513] brcmfmac 0000:03:00.0: BCM4360 test.181: root port 0000:00:1c.2 LnkCtl before=0x0040 ASPM=0x0 CLKREQ=off — disabling L0s/L1/CLKPM
+[ 3840.401478] brcmfmac: BCM4360 test.181: root-port pci_disable_link_state returned — reading LnkCtl
+[ 3840.705390] brcmfmac 0000:03:00.0: BCM4360 test.181: root port 0000:00:1c.2 LnkCtl after=0x0040 ASPM=0x0 CLKREQ=off
+[ 3841.313421] brcmfmac 0000:03:00.0: BCM4360 test.159: before PCIE2 core/reginfo setup
+[ 3841.617422] brcmfmac 0000:03:00.0: BCM4360 test.159: reginfo selected (pcie2 rev=1)
+[ 3841.921475] brcmfmac 0000:03:00.0: BCM4360 test.159: pcie_bus_dev allocated
+[ 3842.225409] brcmfmac 0000:03:00.0: BCM4360 test.159: settings allocated (BCM4360 dummy path)
+[ 3842.529407] brcmfmac 0000:03:00.0: BCM4360 test.159: bus allocated
+[ 3842.834370] brcmfmac 0000:03:00.0: BCM4360 test.159: msgbuf allocated
+[ 3843.138299] brcmfmac 0000:03:00.0: BCM4360 test.159: struct wiring done — before pci_pme_capable
+[ 3843.441414] brcmfmac 0000:03:00.0: BCM4360 test.159: after pci_pme_capable wowl=1
+[ 3843.745405] brcmfmac 0000:03:00.0: BCM4360 test.160: drvdata set — before brcmf_alloc
+[ 3844.049379] brcmfmac 0000:03:00.0: BCM4360 test.160: brcmf_alloc complete — wiphy allocated
+[ 3844.353375] brcmfmac 0000:03:00.0: BCM4360 test.160: OTP read bypassed — OTP not needed
+[ 3844.657259] brcmfmac 0000:03:00.0: BCM4360 test.160: before prepare_fw_request
+[ 3844.961258] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[ 3844.961272] brcmfmac 0000:03:00.0: BCM4360 test.160: firmware request prepared
+[ 3845.265404] brcmfmac: BCM4360 test.161: calling brcmf_fw_get_firmwares — async callback expected
+[ 3845.569341] brcmfmac 0000:03:00.0: BCM4360 test.161: brcmf_fw_get_firmwares returned 0 (async/success; callback will fire)
+[ 3845.575337] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+[ 3845.575425] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+[ 3845.575432] brcmfmac: BCM4360 test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0
+[ 3845.575570] brcmfmac: BCM4360 test.181: setup-entry ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 3845.873362] brcmfmac: BCM4360 test.181: pci_register_driver returned ret=0
+[ 3845.873422] brcmfmac: BCM4360 test.155: after brcmf_pcie_register() err=0
+[ 3845.923474] brcmfmac: BCM4360 test.155: post-PCI sync (skipping USB)
+[ 3845.923522] brcmfmac: BCM4360 test.156: after brcmf_core_init() err=0
+[ 3845.926846] brcmfmac: BCM4360 test.181: pre-attach ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 3845.930007] brcmfmac: BCM4360 test.128: before brcmf_pcie_attach
+[ 3845.932356] brcmfmac: BCM4360 test.128: brcmf_pcie_attach ENTRY
+[ 3845.932358] brcmfmac: BCM4360 test.129: brcmf_pcie_attach bypassed for BCM4360
+[ 3845.932359] brcmfmac: BCM4360 test.128: after brcmf_pcie_attach
+[ 3845.932374] brcmfmac: BCM4360 test.181: post-attach ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 3846.232549] brcmfmac: BCM4360 test.134: post-attach before fw-ptr-extract
+[ 3846.532622] brcmfmac: BCM4360 test.134: after kfree(fwreq)
+[ 3846.832715] brcmfmac: BCM4360 test.130: before brcmf_chip_get_raminfo
+[ 3847.132784] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[ 3847.132841] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[ 3847.132876] brcmfmac: BCM4360 test.130: after brcmf_chip_get_raminfo
+[ 3847.132917] brcmfmac: BCM4360 test.181: post-raminfo ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 3847.434943] brcmfmac: BCM4360 test.130: after brcmf_pcie_adjust_ramsize
+[ 3847.735021] brcmfmac: BCM4360 test.181: pre-download ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 3847.735067] brcmfmac: BCM4360 test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)
+[ 3848.035137] brcmfmac: BCM4360 test.142: enter_download_state — confirming ARM CR4 reset state
+[ 3848.035188] brcmfmac: BCM4360 test.142: ARM CR4 state RESET_CTL=0x00000000 IN_RESET=NO/BAD IOCTL=0x0001 CPUHALT=NO FGC=NO CLK=YES
+[ 3848.335271] brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffcf5981400000
+[ 3848.335278] brcmfmac 0000:03:00.0: BCM4360 test.138: pre-BAR2-ioread32 (tcm=ffffcf5981400000)
+[ 3848.635364] brcmfmac 0000:03:00.0: BCM4360 test.138: post-BAR2-ioread32 = 0xb80ef000 (real value — BAR2 accessible)
+[ 3848.935462] brcmfmac: BCM4360 test.181: pre-halt ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 3848.985513] brcmfmac: BCM4360 test.181: re-halting ARM CR4 via brcmf_chip_set_passive
+[ 3849.136608] brcmfmac: BCM4360 test.181: post-halt ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 3849.186662] brcmfmac: BCM4360 test.181: starting chunked fw write, total_words=110558 (442233 bytes) tail=1 wbase=ffffcf5981400000
+[ 3849.238947] brcmfmac: BCM4360 test.181: wrote 4096 words (16384 bytes)
+[ 3849.291233] brcmfmac: BCM4360 test.181: wrote 8192 words (32768 bytes)
+[ 3849.343494] brcmfmac: BCM4360 test.181: wrote 12288 words (49152 bytes)
+[ 3849.395760] brcmfmac: BCM4360 test.181: wrote 16384 words (65536 bytes)
+[ 3849.448025] brcmfmac: BCM4360 test.181: wrote 20480 words (81920 bytes)
+[ 3849.500290] brcmfmac: BCM4360 test.181: wrote 24576 words (98304 bytes)
+[ 3849.552574] brcmfmac: BCM4360 test.181: wrote 28672 words (114688 bytes)
+[ 3849.606761] brcmfmac: BCM4360 test.181: wrote 32768 words (131072 bytes)
+[ 3849.659034] brcmfmac: BCM4360 test.181: wrote 36864 words (147456 bytes)
+[ 3849.711299] brcmfmac: BCM4360 test.181: wrote 40960 words (163840 bytes)
+[ 3849.763562] brcmfmac: BCM4360 test.181: wrote 45056 words (180224 bytes)
+[ 3849.815832] brcmfmac: BCM4360 test.181: wrote 49152 words (196608 bytes)
+[ 3849.868098] brcmfmac: BCM4360 test.181: wrote 53248 words (212992 bytes)
+[ 3849.920359] brcmfmac: BCM4360 test.181: wrote 57344 words (229376 bytes)
+[ 3849.972627] brcmfmac: BCM4360 test.181: wrote 61440 words (245760 bytes)
+[ 3850.024895] brcmfmac: BCM4360 test.181: wrote 65536 words (262144 bytes)
+[ 3850.077159] brcmfmac: BCM4360 test.181: wrote 69632 words (278528 bytes)
+[ 3850.129424] brcmfmac: BCM4360 test.181: wrote 73728 words (294912 bytes)
+[ 3850.181700] brcmfmac: BCM4360 test.181: wrote 77824 words (311296 bytes)
+[ 3850.233963] brcmfmac: BCM4360 test.181: wrote 81920 words (327680 bytes)
+[ 3850.286230] brcmfmac: BCM4360 test.181: wrote 86016 words (344064 bytes)
+[ 3850.338493] brcmfmac: BCM4360 test.181: wrote 90112 words (360448 bytes)
+[ 3850.390761] brcmfmac: BCM4360 test.181: wrote 94208 words (376832 bytes)
+[ 3850.443056] brcmfmac: BCM4360 test.181: wrote 98304 words (393216 bytes)
+[ 3850.495324] brcmfmac: BCM4360 test.181: wrote 102400 words (409600 bytes)
+[ 3850.547591] brcmfmac: BCM4360 test.181: wrote 106496 words (425984 bytes)
+[ 3850.599840] brcmfmac: BCM4360 test.181: all 110558 words written, before tail (tail=1)
+[ 3850.649893] brcmfmac: BCM4360 test.181: tail 1 bytes written at offset 442232
+[ 3850.699954] brcmfmac: BCM4360 test.181: fw write complete (442233 bytes)
+[ 3850.699989] brcmfmac: BCM4360 test.181: before post-fw msleep(100)
+[ 3850.801078] brcmfmac: BCM4360 test.181: after post-fw msleep(100)
+[ 3850.801139] brcmfmac: BCM4360 test.181: host resetintr=0xb80ef000 before NVRAM
+[ 3850.801183] brcmfmac: BCM4360 test.181: pre-NVRAM write address=0x9ff1c len=228 naddr=ffffcf598149ff1c
+[ 3850.801256] brcmfmac: BCM4360 test.181: post-NVRAM write done (228 bytes)
+[ 3850.803919] brcmfmac: BCM4360 test.181: NVRAM marker at ramsize-4 = 0xffc70038
+[ 3850.805987] brcmfmac: BCM4360 test.181: TCM[0x0000]=0xb80ef000
+[ 3850.807954] brcmfmac: BCM4360 test.181: TCM[0x0004]=0xb82ef000
+[ 3850.810048] brcmfmac: BCM4360 test.181: TCM[0x0008]=0xb839f000
+[ 3850.811968] brcmfmac: BCM4360 test.181: TCM[0x000c]=0xb844f000
+[ 3850.813807] brcmfmac: BCM4360 test.181: TCM[0x0010]=0xb852f000
+[ 3850.815643] brcmfmac: BCM4360 test.181: TCM[0x0014]=0xb860f000
+[ 3850.817421] brcmfmac: BCM4360 test.181: TCM[0x0018]=0xb86ef000
+[ 3850.819190] brcmfmac: BCM4360 test.181: TCM[0x001c]=0xb87cf000
+[ 3850.820946] brcmfmac: BCM4360 test.181: INTERNAL_MEM core not found — resetcore skipped (expected on BCM4360)
+[ 3850.822746] brcmfmac: BCM4360 test.181: pre-set-active ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 3850.874526] brcmfmac: BCM4360 test.181: calling brcmf_chip_set_active resetintr=0xb80ef000 (BusMaster stays cleared)
+[ 3850.926329] brcmfmac 0000:03:00.0: BCM4360 test.65 activate: rstvec=0xb80ef000 to TCM[0]; CMD=0x0002 (BusMaster preserved)
+[ 3850.926475] brcmfmac: BCM4360 test.181: brcmf_chip_set_active returned true
+[ 3850.948405] brcmfmac: BCM4360 test.181: post-set-active-20ms ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 CPUHALT=NO
+[ 3851.030238] brcmfmac: BCM4360 test.181: post-set-active-100ms ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 CPUHALT=NO
+[ 3851.030337] brcmfmac: BCM4360 test.181: released fw/nvram after brcmf_chip_set_active probes; returning -ENODEV
+[ 3851.030380] brcmfmac: BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+[ 3851.337152] brcmfmac: BCM4360 test.163: fw released; returning from setup (state still DOWN)
+[ 3851.547261] wlp0s20u2: authenticate with 60:83:e7:3f:c8:33 (local address=2c:30:33:a7:29:5a)
+[ 3851.547266] wlp0s20u2: send auth to 60:83:e7:3f:c8:33 (try 1/3)
+[ 3851.622457] wlp0s20u2: authenticated
+[ 3851.623056] wlp0s20u2: associate with 60:83:e7:3f:c8:33 (try 1/3)
+[ 3851.994981] wlp0s20u2: RX AssocResp from 60:83:e7:3f:c8:33 (capab=0x1511 status=0 aid=7)
+[ 3852.056310] wlp0s20u2: associated
+[ 3852.056426] wlp0s20u2: Limiting TX power to 20 (23 - 3) dBm as advertised by 60:83:e7:3f:c8:33
+[ 3881.201217] brcmfmac: BCM4360 test.161: remove() short-circuit — state=0 != UP; skipping MMIO cleanup
+[ 3881.514387] brcmfmac: BCM4360 test.161: remove() short-circuit complete
+[ 3899.982929] pcieport 0000:00:1c.2: Enabling MPC IRBNCE
+[ 3899.982937] pcieport 0000:00:1c.2: Intel PCH root port ACS workaround enabled
+[ 3938.451408] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 3938.452036] sd 0:0:0:0: [sda] Stopping disk
+[ 3941.795922] wlp0s20u2: disconnect from AP 60:83:e7:3f:c8:33 for new auth to 60:83:e7:3f:8a:8b
+[ 3942.832115] wlp0s20u2: authenticate with 60:83:e7:3f:8a:8b (local address=2c:30:33:a7:29:5a)
+[ 3942.832128] wlp0s20u2: send auth to 60:83:e7:3f:8a:8b (try 1/3)
+[ 3942.835401] wlp0s20u2: authenticated
+[ 3942.837303] wlp0s20u2: associate with 60:83:e7:3f:8a:8b (try 1/3)
+[ 3942.847950] wlp0s20u2: RX ReassocResp from 60:83:e7:3f:8a:8b (capab=0x1511 status=0 aid=8)
+[ 3942.849691] wlp0s20u2: associated
+[ 3942.878034] wlp0s20u2: Limiting TX power to 20 (23 - 3) dBm as advertised by 60:83:e7:3f:8a:8b
+[ 3942.967647] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 3942.967663] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 3943.284925] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 3943.285100] ata1.00: LPM support broken, forcing max_power
+[ 3943.285218] ata1.00: unexpected _GTF length (8)
+[ 3943.285607] ata1.00: LPM support broken, forcing max_power
+[ 3943.285916] ata1.00: unexpected _GTF length (8)
+[ 3943.286037] ata1.00: configured for UDMA/133
+[ 3943.286175] sd 0:0:0:0: [sda] Starting disk
+[ 3943.295439] sd 0:0:0:0: [sda] Starting disk
+[ 3943.297662] sd 0:0:0:0: [sda] Starting disk
+[ 4033.280394] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4033.281098] sd 0:0:0:0: [sda] Stopping disk
+[ 4038.988559] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4038.988574] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4039.306185] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4039.306506] ata1.00: LPM support broken, forcing max_power
+[ 4039.306961] ata1.00: unexpected _GTF length (8)
+[ 4039.307519] ata1.00: LPM support broken, forcing max_power
+[ 4039.307827] ata1.00: unexpected _GTF length (8)
+[ 4039.308008] ata1.00: configured for UDMA/133
+[ 4039.308126] sd 0:0:0:0: [sda] Starting disk
+[ 4039.315327] sd 0:0:0:0: [sda] Starting disk
+[ 4039.319331] sd 0:0:0:0: [sda] Starting disk
+[ 4064.763461] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4064.764061] sd 0:0:0:0: [sda] Stopping disk
+[ 4070.731391] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4070.731406] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4071.048811] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4071.049084] ata1.00: LPM support broken, forcing max_power
+[ 4071.049433] ata1.00: unexpected _GTF length (8)
+[ 4071.049892] ata1.00: LPM support broken, forcing max_power
+[ 4071.050205] ata1.00: unexpected _GTF length (8)
+[ 4071.050388] ata1.00: configured for UDMA/133
+[ 4071.050486] sd 0:0:0:0: [sda] Starting disk
+[ 4071.058503] sd 0:0:0:0: [sda] Starting disk
+[ 4071.060984] sd 0:0:0:0: [sda] Starting disk
+[ 4094.237631] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4094.238225] sd 0:0:0:0: [sda] Stopping disk
+[ 4099.914343] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4099.914357] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4100.232080] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4100.245418] ata1.00: LPM support broken, forcing max_power
+[ 4100.245544] ata1.00: unexpected _GTF length (8)
+[ 4100.245889] ata1.00: LPM support broken, forcing max_power
+[ 4100.246133] ata1.00: unexpected _GTF length (8)
+[ 4100.246349] ata1.00: configured for UDMA/133
+[ 4100.246513] sd 0:0:0:0: [sda] Starting disk
+[ 4100.260231] sd 0:0:0:0: [sda] Starting disk
+[ 4100.262954] sd 0:0:0:0: [sda] Starting disk
+[ 4125.980968] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4125.981605] sd 0:0:0:0: [sda] Stopping disk
+[ 4131.656992] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4131.656997] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4131.974926] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4131.975237] ata1.00: LPM support broken, forcing max_power
+[ 4131.975700] ata1.00: unexpected _GTF length (8)
+[ 4131.976238] ata1.00: LPM support broken, forcing max_power
+[ 4131.976553] ata1.00: unexpected _GTF length (8)
+[ 4131.976739] ata1.00: configured for UDMA/133
+[ 4131.976875] sd 0:0:0:0: [sda] Starting disk
+[ 4131.983460] sd 0:0:0:0: [sda] Starting disk
+[ 4131.987835] sd 0:0:0:0: [sda] Starting disk
+[ 4158.238939] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4158.239625] sd 0:0:0:0: [sda] Stopping disk
+[ 4163.911813] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4163.911818] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4164.229382] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4164.229653] ata1.00: LPM support broken, forcing max_power
+[ 4164.230068] ata1.00: unexpected _GTF length (8)
+[ 4164.230698] ata1.00: LPM support broken, forcing max_power
+[ 4164.231014] ata1.00: unexpected _GTF length (8)
+[ 4164.231209] ata1.00: configured for UDMA/133
+[ 4164.231354] sd 0:0:0:0: [sda] Starting disk
+[ 4164.238995] sd 0:0:0:0: [sda] Starting disk
+[ 4164.241629] sd 0:0:0:0: [sda] Starting disk
+[ 4200.821368] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4200.822094] sd 0:0:0:0: [sda] Stopping disk
+[ 4201.355977] sd 0:0:0:0: [sda] Starting disk
+[ 4201.357877] sd 0:0:0:0: [sda] Starting disk
+[ 4227.587068] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4227.587689] sd 0:0:0:0: [sda] Stopping disk
+[ 4234.053186] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4234.053192] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4234.370542] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4234.370762] ata1.00: LPM support broken, forcing max_power
+[ 4234.370894] ata1.00: unexpected _GTF length (8)
+[ 4234.371251] ata1.00: LPM support broken, forcing max_power
+[ 4234.371569] ata1.00: unexpected _GTF length (8)
+[ 4234.371768] ata1.00: configured for UDMA/133
+[ 4234.371898] sd 0:0:0:0: [sda] Starting disk
+[ 4234.380730] sd 0:0:0:0: [sda] Starting disk
+[ 4234.384000] sd 0:0:0:0: [sda] Starting disk
+[ 4269.715308] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4269.715936] sd 0:0:0:0: [sda] Stopping disk
+[ 4276.035804] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4276.035818] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4276.353376] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4276.353687] ata1.00: LPM support broken, forcing max_power
+[ 4276.354085] ata1.00: unexpected _GTF length (8)
+[ 4276.354538] ata1.00: LPM support broken, forcing max_power
+[ 4276.354856] ata1.00: unexpected _GTF length (8)
+[ 4276.355003] ata1.00: configured for UDMA/133
+[ 4276.355117] sd 0:0:0:0: [sda] Starting disk
+[ 4276.361962] sd 0:0:0:0: [sda] Starting disk
+[ 4276.366141] sd 0:0:0:0: [sda] Starting disk
+[ 4301.708450] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4301.709157] sd 0:0:0:0: [sda] Stopping disk
+[ 4307.778573] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4307.778588] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4308.096253] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4308.096537] ata1.00: LPM support broken, forcing max_power
+[ 4308.096942] ata1.00: unexpected _GTF length (8)
+[ 4308.097298] ata1.00: LPM support broken, forcing max_power
+[ 4308.097619] ata1.00: unexpected _GTF length (8)
+[ 4308.097707] ata1.00: configured for UDMA/133
+[ 4308.097798] sd 0:0:0:0: [sda] Starting disk
+[ 4308.107191] sd 0:0:0:0: [sda] Starting disk
+[ 4308.108188] sd 0:0:0:0: [sda] Starting disk
+[ 4337.881260] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4337.881964] sd 0:0:0:0: [sda] Stopping disk
+[ 4343.617352] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4343.617367] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4343.934970] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4343.935266] ata1.00: LPM support broken, forcing max_power
+[ 4343.935667] ata1.00: unexpected _GTF length (8)
+[ 4343.935987] ata1.00: LPM support broken, forcing max_power
+[ 4343.936311] ata1.00: unexpected _GTF length (8)
+[ 4343.936532] ata1.00: configured for UDMA/133
+[ 4343.936680] sd 0:0:0:0: [sda] Starting disk
+[ 4343.943528] sd 0:0:0:0: [sda] Starting disk
+[ 4343.946996] sd 0:0:0:0: [sda] Starting disk
+[ 4370.239191] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4370.239910] sd 0:0:0:0: [sda] Stopping disk
+[ 4375.872275] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4375.872289] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4376.189814] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4376.190094] ata1.00: LPM support broken, forcing max_power
+[ 4376.190493] ata1.00: unexpected _GTF length (8)
+[ 4376.190883] ata1.00: LPM support broken, forcing max_power
+[ 4376.191247] ata1.00: unexpected _GTF length (8)
+[ 4376.191442] ata1.00: configured for UDMA/133
+[ 4376.191567] sd 0:0:0:0: [sda] Starting disk
+[ 4376.198157] sd 0:0:0:0: [sda] Starting disk
+[ 4376.201920] sd 0:0:0:0: [sda] Starting disk
+[ 4409.830092] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4409.830736] sd 0:0:0:0: [sda] Stopping disk
+[ 4415.807678] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4415.807684] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4416.124134] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4416.124343] ata1.00: LPM support broken, forcing max_power
+[ 4416.124529] ata1.00: unexpected _GTF length (8)
+[ 4416.125093] ata1.00: LPM support broken, forcing max_power
+[ 4416.125399] ata1.00: unexpected _GTF length (8)
+[ 4416.125559] ata1.00: configured for UDMA/133
+[ 4416.125734] sd 0:0:0:0: [sda] Starting disk
+[ 4416.133205] sd 0:0:0:0: [sda] Starting disk
+[ 4416.136541] sd 0:0:0:0: [sda] Starting disk
+[ 4442.235200] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4442.235881] sd 0:0:0:0: [sda] Stopping disk
+[ 4447.549718] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4447.549733] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4447.867120] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4447.867306] ata1.00: LPM support broken, forcing max_power
+[ 4447.867618] ata1.00: unexpected _GTF length (8)
+[ 4447.868160] ata1.00: LPM support broken, forcing max_power
+[ 4447.868494] ata1.00: unexpected _GTF length (8)
+[ 4447.868714] ata1.00: configured for UDMA/133
+[ 4447.868863] sd 0:0:0:0: [sda] Starting disk
+[ 4447.876524] sd 0:0:0:0: [sda] Starting disk
+[ 4447.879413] sd 0:0:0:0: [sda] Starting disk
+[ 4480.299596] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4480.300309] sd 0:0:0:0: [sda] Stopping disk
+[ 4485.948240] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4485.948245] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4486.266086] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4486.266377] ata1.00: LPM support broken, forcing max_power
+[ 4486.266790] ata1.00: unexpected _GTF length (8)
+[ 4486.267139] ata1.00: LPM support broken, forcing max_power
+[ 4486.267507] ata1.00: unexpected _GTF length (8)
+[ 4486.267625] ata1.00: configured for UDMA/133
+[ 4486.267737] sd 0:0:0:0: [sda] Starting disk
+[ 4486.275514] sd 0:0:0:0: [sda] Starting disk
+[ 4486.278018] sd 0:0:0:0: [sda] Starting disk
+[ 4521.747517] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4521.748103] sd 0:0:0:0: [sda] Stopping disk
+[ 4522.333046] sd 0:0:0:0: [sda] Starting disk
+[ 4522.334978] sd 0:0:0:0: [sda] Starting disk
+[ 4548.560802] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4548.561488] sd 0:0:0:0: [sda] Stopping disk
+[ 4554.553690] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4554.553696] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4554.870951] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4554.885015] ata1.00: LPM support broken, forcing max_power
+[ 4554.885144] ata1.00: unexpected _GTF length (8)
+[ 4554.885460] ata1.00: LPM support broken, forcing max_power
+[ 4554.885550] ata1.00: unexpected _GTF length (8)
+[ 4554.885764] ata1.00: configured for UDMA/133
+[ 4554.885853] sd 0:0:0:0: [sda] Starting disk
+[ 4554.901592] sd 0:0:0:0: [sda] Starting disk
+[ 4554.902489] sd 0:0:0:0: [sda] Starting disk
+[ 4580.791595] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4580.792179] sd 0:0:0:0: [sda] Stopping disk
+[ 4586.808728] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4586.808743] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4587.125962] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4587.126157] ata1.00: LPM support broken, forcing max_power
+[ 4587.126366] ata1.00: unexpected _GTF length (8)
+[ 4587.126901] ata1.00: LPM support broken, forcing max_power
+[ 4587.127206] ata1.00: unexpected _GTF length (8)
+[ 4587.127368] ata1.00: configured for UDMA/133
+[ 4587.127546] sd 0:0:0:0: [sda] Starting disk
+[ 4587.135386] sd 0:0:0:0: [sda] Starting disk
+[ 4587.138298] sd 0:0:0:0: [sda] Starting disk
+[ 4644.887310] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4644.887902] sd 0:0:0:0: [sda] Stopping disk
+[ 4648.758094] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4648.758101] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4649.075153] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4649.075374] ata1.00: LPM support broken, forcing max_power
+[ 4649.075715] ata1.00: unexpected _GTF length (8)
+[ 4649.076089] ata1.00: LPM support broken, forcing max_power
+[ 4649.076346] ata1.00: unexpected _GTF length (8)
+[ 4649.076474] ata1.00: configured for UDMA/133
+[ 4649.076589] sd 0:0:0:0: [sda] Starting disk
+[ 4649.086244] sd 0:0:0:0: [sda] Starting disk
+[ 4649.088941] sd 0:0:0:0: [sda] Starting disk
+[ 4806.994781] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4806.995481] sd 0:0:0:0: [sda] Stopping disk
+[ 4810.031765] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4810.031771] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4810.349087] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4810.349289] ata1.00: LPM support broken, forcing max_power
+[ 4810.349744] ata1.00: unexpected _GTF length (8)
+[ 4810.350091] ata1.00: LPM support broken, forcing max_power
+[ 4810.350416] ata1.00: unexpected _GTF length (8)
+[ 4810.350503] ata1.00: configured for UDMA/133
+[ 4810.350640] sd 0:0:0:0: [sda] Starting disk
+[ 4810.359041] sd 0:0:0:0: [sda] Starting disk
+[ 4810.362615] sd 0:0:0:0: [sda] Starting disk
+[ 4842.795306] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4842.795944] sd 0:0:0:0: [sda] Stopping disk
+[ 4843.398273] sd 0:0:0:0: [sda] Starting disk
+[ 4843.403248] sd 0:0:0:0: [sda] Starting disk
+[ 4869.740642] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4869.741231] sd 0:0:0:0: [sda] Stopping disk
+[ 4872.134484] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4872.134499] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4872.451056] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4872.451383] ata1.00: LPM support broken, forcing max_power
+[ 4872.451808] ata1.00: unexpected _GTF length (8)
+[ 4872.452173] ata1.00: LPM support broken, forcing max_power
+[ 4872.452590] ata1.00: unexpected _GTF length (8)
+[ 4872.452704] ata1.00: configured for UDMA/133
+[ 4872.453060] sd 0:0:0:0: [sda] Starting disk
+[ 4872.459557] sd 0:0:0:0: [sda] Starting disk
+[ 4872.463033] sd 0:0:0:0: [sda] Starting disk
+[ 4895.916189] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4895.916845] sd 0:0:0:0: [sda] Stopping disk
+[ 4899.630283] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4899.630297] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4899.953227] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4899.953465] ata1.00: LPM support broken, forcing max_power
+[ 4899.954044] ata1.00: unexpected _GTF length (8)
+[ 4899.954469] ata1.00: LPM support broken, forcing max_power
+[ 4899.954852] ata1.00: unexpected _GTF length (8)
+[ 4899.955028] ata1.00: configured for UDMA/133
+[ 4899.955171] sd 0:0:0:0: [sda] Starting disk
+[ 4899.962283] sd 0:0:0:0: [sda] Starting disk
+[ 4899.965969] sd 0:0:0:0: [sda] Starting disk
+[ 4967.929164] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[ 4967.929851] sd 0:0:0:0: [sda] Stopping disk
+[ 4972.241375] pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+[ 4972.241389] pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+[ 4972.558346] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[ 4972.558538] ata1.00: LPM support broken, forcing max_power
+[ 4972.558684] ata1.00: unexpected _GTF length (8)
+[ 4972.558988] ata1.00: LPM support broken, forcing max_power
+[ 4972.559297] ata1.00: unexpected _GTF length (8)
+[ 4972.559422] ata1.00: configured for UDMA/133
+[ 4972.559524] sd 0:0:0:0: [sda] Starting disk
+[ 4972.565494] sd 0:0:0:0: [sda] Starting disk
+[ 4972.569971] sd 0:0:0:0: [sda] Starting disk
+[ 4987.320646] pcieport 0000:00:1c.2: Enabling MPC IRBNCE
+[ 4987.320651] pcieport 0000:00:1c.2: Intel PCH root port ACS workaround enabled
+[ 5001.416911] pcieport 0000:00:1c.2: Enabling MPC IRBNCE
+[ 5001.416917] pcieport 0000:00:1c.2: Intel PCH root port ACS workaround enabled
+[ 5001.537469] brcmfmac: BCM4360 test.182: module_init entry — extended post-release TCM sampling
+[ 5001.537568] brcmfmac: BCM4360 test.156: before brcmf_core_init()
+[ 5001.537597] brcmfmac: BCM4360 test.155: brcmf_core_init() entry
+[ 5001.537625] brcmfmac: BCM4360 test.155: before brcmf_sdio_register()
+[ 5001.539310] brcmfmac: BCM4360 test.155: after brcmf_sdio_register() err=0
+[ 5001.591104] brcmfmac: BCM4360 test.155: post-SDIO sync (before PCI)
+[ 5001.591136] brcmfmac: BCM4360 test.155: before brcmf_pcie_register()
+[ 5001.591163] brcmfmac: BCM4360 test.182: brcmf_pcie_register() entry
+[ 5001.894746] brcmfmac: BCM4360 test.182: before pci_register_driver
+[ 5002.634050] pcieport 0000:00:1c.2: Enabling MPC IRBNCE
+[ 5002.634064] pcieport 0000:00:1c.2: Intel PCH root port ACS workaround enabled
+[ 5002.634262] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=000000000381e4c1)
+[ 5002.934775] brcmfmac: BCM4360 test.158: probe entry flush done — proceeding
+[ 5003.238752] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+[ 5003.238893] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+[ 5003.239097] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+[ 5003.750793] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+[ 5003.750949] brcmfmac: BCM4360 test.158: before brcmf_chip_attach
+[ 5004.054768] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcf5981800000
+[ 5004.054778] brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+[ 5004.105670] brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+[ 5004.106326] brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+[ 5004.106453] brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+[ 5004.106624] brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+[ 5004.111813] brcmfmac 0000:03:00.0: BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)
+[ 5004.117164] brcmfmac 0000:03:00.0: BCM4360 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0
+[ 5004.118975] brcmfmac: BCM4360 test.182: post-145 ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 5004.120665] brcmfmac: brcmf_chip_recognition: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+[ 5004.125057] brcmfmac: brcmf_chip_recognition: BCM4360 test.125: after reset, before get_raminfo
+[ 5004.128537] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[ 5004.131448] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[ 5004.134007] brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+[ 5004.438722] brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+[ 5004.438863] brcmfmac: BCM4360 test.158: about to pci_clear_master (config-space write)
+[ 5004.742722] brcmfmac 0000:03:00.0: BCM4360 test.158: BusMaster cleared after chip_attach
+[ 5005.046651] brcmfmac: BCM4360 test.158: about to read LnkCtl before ASPM disable
+[ 5005.350594] brcmfmac: BCM4360 test.158: LnkCtl read before=0x0140 — disabling ASPM
+[ 5005.654652] brcmfmac: BCM4360 test.158: pci_disable_link_state returned — reading LnkCtl
+[ 5005.958541] brcmfmac 0000:03:00.0: BCM4360 test.158: ASPM disabled; LnkCtl before=0x0140 after=0x0140 ASPM-bits-after=0x0
+[ 5006.262575] brcmfmac 0000:03:00.0: BCM4360 test.182: root port 0000:00:1c.2 LnkCtl before=0x0040 ASPM=0x0 CLKREQ=off — disabling L0s/L1/CLKPM
+[ 5006.566637] brcmfmac: BCM4360 test.182: root-port pci_disable_link_state returned — reading LnkCtl
+[ 5006.870593] brcmfmac 0000:03:00.0: BCM4360 test.182: root port 0000:00:1c.2 LnkCtl after=0x0040 ASPM=0x0 CLKREQ=off
+[ 5007.478535] brcmfmac 0000:03:00.0: BCM4360 test.159: before PCIE2 core/reginfo setup
+[ 5007.782463] brcmfmac 0000:03:00.0: BCM4360 test.159: reginfo selected (pcie2 rev=1)
+[ 5008.086492] brcmfmac 0000:03:00.0: BCM4360 test.159: pcie_bus_dev allocated
+[ 5008.390490] brcmfmac 0000:03:00.0: BCM4360 test.159: settings allocated (BCM4360 dummy path)
+[ 5008.694498] brcmfmac 0000:03:00.0: BCM4360 test.159: bus allocated
+[ 5008.998493] brcmfmac 0000:03:00.0: BCM4360 test.159: msgbuf allocated
+[ 5009.302419] brcmfmac 0000:03:00.0: BCM4360 test.159: struct wiring done — before pci_pme_capable
+[ 5009.606503] brcmfmac 0000:03:00.0: BCM4360 test.159: after pci_pme_capable wowl=1
+[ 5009.910455] brcmfmac 0000:03:00.0: BCM4360 test.160: drvdata set — before brcmf_alloc
+[ 5010.215363] brcmfmac 0000:03:00.0: BCM4360 test.160: brcmf_alloc complete — wiphy allocated
+[ 5010.519312] brcmfmac 0000:03:00.0: BCM4360 test.160: OTP read bypassed — OTP not needed
+[ 5010.822382] brcmfmac 0000:03:00.0: BCM4360 test.160: before prepare_fw_request
+[ 5011.126400] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[ 5011.126419] brcmfmac 0000:03:00.0: BCM4360 test.160: firmware request prepared
+[ 5011.430384] brcmfmac: BCM4360 test.161: calling brcmf_fw_get_firmwares — async callback expected
+[ 5011.734353] brcmfmac 0000:03:00.0: BCM4360 test.161: brcmf_fw_get_firmwares returned 0 (async/success; callback will fire)
+[ 5011.740216] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+[ 5011.740347] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+[ 5011.740358] brcmfmac: BCM4360 test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0
+[ 5011.740493] brcmfmac: BCM4360 test.182: setup-entry ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 5012.038417] brcmfmac: BCM4360 test.182: pci_register_driver returned ret=0
+[ 5012.038548] brcmfmac: BCM4360 test.155: after brcmf_pcie_register() err=0
+[ 5012.088679] brcmfmac: BCM4360 test.155: post-PCI sync (skipping USB)
+[ 5012.088738] brcmfmac: BCM4360 test.156: after brcmf_core_init() err=0
+[ 5012.092003] brcmfmac: BCM4360 test.182: pre-attach ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 5012.094419] brcmfmac: BCM4360 test.128: before brcmf_pcie_attach
+[ 5012.096472] brcmfmac: BCM4360 test.128: brcmf_pcie_attach ENTRY
+[ 5012.098812] brcmfmac: BCM4360 test.129: brcmf_pcie_attach bypassed for BCM4360
+[ 5012.100925] brcmfmac: BCM4360 test.128: after brcmf_pcie_attach
+[ 5012.104095] brcmfmac: BCM4360 test.182: post-attach ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 5012.406226] brcmfmac: BCM4360 test.134: post-attach before fw-ptr-extract
+[ 5012.706288] brcmfmac: BCM4360 test.134: after kfree(fwreq)
+[ 5013.006363] brcmfmac: BCM4360 test.130: before brcmf_chip_get_raminfo
+[ 5013.306437] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[ 5013.306521] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[ 5013.306576] brcmfmac: BCM4360 test.130: after brcmf_chip_get_raminfo
+[ 5013.306628] brcmfmac: BCM4360 test.182: post-raminfo ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 5013.609665] brcmfmac: BCM4360 test.130: after brcmf_pcie_adjust_ramsize
+[ 5013.909742] brcmfmac: BCM4360 test.182: pre-download ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 5013.909790] brcmfmac: BCM4360 test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)
+[ 5014.209855] brcmfmac: BCM4360 test.142: enter_download_state — confirming ARM CR4 reset state
+[ 5014.209905] brcmfmac: BCM4360 test.142: ARM CR4 state RESET_CTL=0x00000000 IN_RESET=NO/BAD IOCTL=0x0001 CPUHALT=NO FGC=NO CLK=YES
+[ 5014.509990] brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffcf5981800000
+[ 5014.509996] brcmfmac 0000:03:00.0: BCM4360 test.138: pre-BAR2-ioread32 (tcm=ffffcf5981800000)
+[ 5014.810075] brcmfmac 0000:03:00.0: BCM4360 test.138: post-BAR2-ioread32 = 0xb80ef000 (real value — BAR2 accessible)
+[ 5015.110170] brcmfmac: BCM4360 test.182: pre-halt ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 5015.126173] mt76x2u 2-2:1.0: error: mt76x02u_mcu_wait_resp failed with -110
+[ 5015.160228] brcmfmac: BCM4360 test.182: re-halting ARM CR4 via brcmf_chip_set_passive
+[ 5015.311639] brcmfmac: BCM4360 test.182: post-halt ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 5015.361731] brcmfmac: BCM4360 test.182: starting chunked fw write, total_words=110558 (442233 bytes) tail=1 wbase=ffffcf5981800000
+[ 5015.414018] brcmfmac: BCM4360 test.182: wrote 4096 words (16384 bytes)
+[ 5015.466278] brcmfmac: BCM4360 test.182: wrote 8192 words (32768 bytes)
+[ 5015.518540] brcmfmac: BCM4360 test.182: wrote 12288 words (49152 bytes)
+[ 5015.570818] brcmfmac: BCM4360 test.182: wrote 16384 words (65536 bytes)
+[ 5015.623082] brcmfmac: BCM4360 test.182: wrote 20480 words (81920 bytes)
+[ 5015.675344] brcmfmac: BCM4360 test.182: wrote 24576 words (98304 bytes)
+[ 5015.727608] brcmfmac: BCM4360 test.182: wrote 28672 words (114688 bytes)
+[ 5015.779899] brcmfmac: BCM4360 test.182: wrote 32768 words (131072 bytes)
+[ 5015.832166] brcmfmac: BCM4360 test.182: wrote 36864 words (147456 bytes)
+[ 5015.884433] brcmfmac: BCM4360 test.182: wrote 40960 words (163840 bytes)
+[ 5015.936722] brcmfmac: BCM4360 test.182: wrote 45056 words (180224 bytes)
+[ 5015.988985] brcmfmac: BCM4360 test.182: wrote 49152 words (196608 bytes)
+[ 5016.041245] brcmfmac: BCM4360 test.182: wrote 53248 words (212992 bytes)
+[ 5016.093506] brcmfmac: BCM4360 test.182: wrote 57344 words (229376 bytes)
+[ 5016.145769] brcmfmac: BCM4360 test.182: wrote 61440 words (245760 bytes)
+[ 5016.166153] mt76x2u 2-2:1.0: error: MCU resp evt:0 seq:6-5
+[ 5016.198030] brcmfmac: BCM4360 test.182: wrote 65536 words (262144 bytes)
+[ 5016.250295] brcmfmac: BCM4360 test.182: wrote 69632 words (278528 bytes)
+[ 5016.302577] brcmfmac: BCM4360 test.182: wrote 73728 words (294912 bytes)
+[ 5016.354839] brcmfmac: BCM4360 test.182: wrote 77824 words (311296 bytes)
+[ 5016.407101] brcmfmac: BCM4360 test.182: wrote 81920 words (327680 bytes)
+[ 5016.459364] brcmfmac: BCM4360 test.182: wrote 86016 words (344064 bytes)
+[ 5016.511624] brcmfmac: BCM4360 test.182: wrote 90112 words (360448 bytes)
+[ 5016.563905] brcmfmac: BCM4360 test.182: wrote 94208 words (376832 bytes)
+[ 5016.616166] brcmfmac: BCM4360 test.182: wrote 98304 words (393216 bytes)
+[ 5016.668434] brcmfmac: BCM4360 test.182: wrote 102400 words (409600 bytes)
+[ 5016.720695] brcmfmac: BCM4360 test.182: wrote 106496 words (425984 bytes)
+[ 5016.772936] brcmfmac: BCM4360 test.182: all 110558 words written, before tail (tail=1)
+[ 5016.822983] brcmfmac: BCM4360 test.182: tail 1 bytes written at offset 442232
+[ 5016.873028] brcmfmac: BCM4360 test.182: fw write complete (442233 bytes)
+[ 5016.873065] brcmfmac: BCM4360 test.182: before post-fw msleep(100)
+[ 5016.975055] brcmfmac: BCM4360 test.182: after post-fw msleep(100)
+[ 5016.975096] brcmfmac: BCM4360 test.182: host resetintr=0xb80ef000 before NVRAM
+[ 5016.975127] brcmfmac: BCM4360 test.182: pre-NVRAM write address=0x9ff1c len=228 naddr=ffffcf598189ff1c
+[ 5016.975184] brcmfmac: BCM4360 test.182: post-NVRAM write done (228 bytes)
+[ 5016.977216] brcmfmac: BCM4360 test.182: NVRAM marker at ramsize-4 = 0xffc70038 (pre-release snapshot)
+[ 5016.979255] brcmfmac: BCM4360 test.182: TCM[0x0000]=0xb80ef000 (pre-release snapshot)
+[ 5016.981247] brcmfmac: BCM4360 test.182: TCM[0x0004]=0xb82ef000 (pre-release snapshot)
+[ 5016.983243] brcmfmac: BCM4360 test.182: TCM[0x0008]=0xb839f000 (pre-release snapshot)
+[ 5016.985217] brcmfmac: BCM4360 test.182: TCM[0x000c]=0xb844f000 (pre-release snapshot)
+[ 5016.987168] brcmfmac: BCM4360 test.182: TCM[0x0010]=0xb852f000 (pre-release snapshot)
+[ 5016.989067] brcmfmac: BCM4360 test.182: TCM[0x0014]=0xb860f000 (pre-release snapshot)
+[ 5016.990937] brcmfmac: BCM4360 test.182: TCM[0x0018]=0xb86ef000 (pre-release snapshot)
+[ 5016.992769] brcmfmac: BCM4360 test.182: TCM[0x001c]=0xb87cf000 (pre-release snapshot)
+[ 5016.994581] brcmfmac: BCM4360 test.182: INTERNAL_MEM core not found — resetcore skipped (expected on BCM4360)
+[ 5016.996415] brcmfmac: BCM4360 test.182: pre-set-active ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 5017.048241] brcmfmac: BCM4360 test.182: calling brcmf_chip_set_active resetintr=0xb80ef000 (BusMaster stays cleared)
+[ 5017.098298] brcmfmac 0000:03:00.0: BCM4360 test.65 activate: rstvec=0xb80ef000 to TCM[0]; CMD=0x0002 (BusMaster preserved)
+[ 5017.099101] brcmfmac: BCM4360 test.182: brcmf_chip_set_active returned true
+[ 5017.119151] brcmfmac: BCM4360 test.182: post-set-active-20ms ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 CPUHALT=NO
+[ 5017.199225] brcmfmac: BCM4360 test.182: post-set-active-100ms ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 CPUHALT=NO
+[ 5017.607063] brcmfmac: BCM4360 test.182: post-set-active-500ms ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 CPUHALT=NO
+[ 5017.607127] brcmfmac: BCM4360 test.182: dwell-500ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+[ 5017.607174] brcmfmac: BCM4360 test.182: dwell-500ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[ 5017.607220] brcmfmac: BCM4360 test.182: dwell-500ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[ 5017.609193] brcmfmac: BCM4360 test.182: dwell-500ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[ 5017.611070] brcmfmac: BCM4360 test.182: dwell-500ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[ 5017.612871] brcmfmac: BCM4360 test.182: dwell-500ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[ 5017.614693] brcmfmac: BCM4360 test.182: dwell-500ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[ 5017.616476] brcmfmac: BCM4360 test.182: dwell-500ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[ 5017.618284] brcmfmac: BCM4360 test.182: dwell-500ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[ 5018.662034] brcmfmac: BCM4360 test.182: post-set-active-1500ms ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 CPUHALT=NO
+[ 5018.662097] brcmfmac: BCM4360 test.182: dwell-1500ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+[ 5018.662144] brcmfmac: BCM4360 test.182: dwell-1500ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[ 5018.662190] brcmfmac: BCM4360 test.182: dwell-1500ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[ 5018.664223] brcmfmac: BCM4360 test.182: dwell-1500ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[ 5018.666101] brcmfmac: BCM4360 test.182: dwell-1500ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[ 5018.667921] brcmfmac: BCM4360 test.182: dwell-1500ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[ 5018.669874] brcmfmac: BCM4360 test.182: dwell-1500ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[ 5018.671654] brcmfmac: BCM4360 test.182: dwell-1500ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[ 5018.673449] brcmfmac: BCM4360 test.182: dwell-1500ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[ 5020.197919] brcmfmac: BCM4360 test.182: post-set-active-3000ms ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 CPUHALT=NO
+[ 5020.197983] brcmfmac: BCM4360 test.182: dwell-3000ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+[ 5020.198032] brcmfmac: BCM4360 test.182: dwell-3000ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[ 5020.198079] brcmfmac: BCM4360 test.182: dwell-3000ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[ 5020.199932] brcmfmac: BCM4360 test.182: dwell-3000ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[ 5020.201776] brcmfmac: BCM4360 test.182: dwell-3000ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[ 5020.204221] brcmfmac: BCM4360 test.182: dwell-3000ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[ 5020.205927] brcmfmac: BCM4360 test.182: dwell-3000ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[ 5020.207584] brcmfmac: BCM4360 test.182: dwell-3000ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[ 5020.209243] brcmfmac: BCM4360 test.182: dwell-3000ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[ 5020.210961] brcmfmac: BCM4360 test.182: released fw/nvram after extended post-release TCM sampling; returning -ENODEV
+[ 5020.212551] brcmfmac: BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+[ 5020.517953] brcmfmac: BCM4360 test.163: fw released; returning from setup (state still DOWN)
+=== dmesg stream end: Mon 20 Apr 19:12:31 BST 2026 ===

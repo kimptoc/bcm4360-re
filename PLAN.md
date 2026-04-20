@@ -59,10 +59,18 @@ hard-crash sessions (tests 149–157).
   continuously executing firmware; host survived the full 30 s harness
   dwell; no MCE/AER/panic; clean rmmod. First clean ARM release on BCM4360
   in this tree.
+- **test.182 NEGATIVE RESULT (clean run):** ARM stays running
+  (CPUHALT=NO at 20/100/500/1500/3000 ms) but TCM[0x0..0x1c] and the
+  NVRAM marker at `ramsize - 4` are UNCHANGED through 3 s post-release.
+  Host survives. Interpretation: firmware is stalled in an early loop
+  that does not touch the image-header TCM window or the NVRAM slot.
+  Next step (test.183) widens the TCM scan to the last 64 bytes + a
+  handful of mid-TCM probe points and adds a BAR0 backplane read.
 
-**Next boundary:** observe firmware activity after ARM release — extended
-post-release dwells with TCM sampling to detect firmware-originated writes
-(test.182). BusMaster still stays cleared.
+**Next boundary:** determine whether firmware is doing *any* TCM or
+backplane writes post-release — wide TCM scan (last 64 B + mid-TCM
+samples) plus BAR0 chipcommon/CR4-wrapper sampling (test.183). BusMaster
+still stays cleared.
 
 **Re-entering the old 5.2 investigation:** once the probe-path restore is
 complete (i.e. firmware download and ARM release can run without host crash),
