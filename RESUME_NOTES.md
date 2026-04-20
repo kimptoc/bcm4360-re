@@ -1,6 +1,82 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.162 SUCCESS — ready for test.163)
+## Current state (2026-04-20, PRE test.163 — REBUILT, ready for insmod)
+
+### CODE STATE: test.163 implemented — setup callback now enters brcmf_pcie_download_fw_nvram
+
+**What test.163 adds over test.162:**
+- Removes test.162 early-return (before download_fw_nvram).
+- Setup callback now calls `brcmf_pcie_download_fw_nvram(devinfo, fw, nvram, nvram_len)`.
+- With `bcm4360_skip_arm=1`, that function:
+  1. `brcmf_pcie_enter_download_state`: reads ARM CR4 state (test.142), no MMIO writes.
+  2. Pre-BAR2 `ioread32(devinfo->tcm)` probe (test.138).
+  3. `brcmf_pcie_copy_mem_todev(rambase=0, fw->data, 442233)` — 110,558 × 32-bit iowrite32.
+  4. Releases `fw` and sets address=`ramsize - nvram_len` for NVRAM.
+  5. Writes NVRAM (228 bytes) via copy_mem_todev.
+  6. Frees `nvram`.
+  7. Reads back NVRAM marker at `ramsize-4`.
+  8. Reads PMU/HT state (read-only).
+  9. Reads *0x62e20 baseline (should be 0).
+  10. d11 wrap RESET_CTL/IOCTL read-only diagnostics.
+  11. `bcm4360_skip_arm=1` → dump first 64 bytes of TCM → return -ENODEV.
+- New BCM4360 early-return AFTER download_fw_nvram using return value:
+  - logs ret
+  - releases CLM/TXCAP (both NULL, no-op)
+  - returns — skips the fail: path (which would call coredump + bus_reset + device_release_driver)
+
+**Hypothesis for test.163:**
+- 442KB BAR2 iowrite32 is proven safe from Phase 3, and test.158 changes
+  (removing duplicate ARM halt) shouldn't affect BAR2 writes.
+- ARM is halted (buscore_reset/test.145) so it cannot interfere during the write.
+- Expect clean 442KB download + NVRAM write + TCM dump + -ENODEV return + clean rmmod.
+- If crash: will pinpoint exactly where (pre-BAR2 probe, during copy_mem_todev,
+  or NVRAM write, etc. — enter_download_state's mdelay will flush each breadcrumb).
+
+**Key log markers to watch for:**
+```
+test.163: module_init entry
+test.163: brcmf_pcie_register() entry
+[probe chain through test.160]
+test.161: calling brcmf_fw_get_firmwares → returned 0
+test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0
+test.128: before/after brcmf_pcie_attach (BCM4360 no-op)
+test.134: post-attach / after kfree(fwreq)
+test.130: before/after brcmf_chip_get_raminfo
+test.130: after brcmf_pcie_adjust_ramsize
+test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)
+test.142: enter_download_state — ARM CR4 state read-only check
+test.138: pre-BAR2-ioread32
+test.138: post-BAR2-ioread32 = <non-ffffffff>  ← KEY MARKER: BAR2 alive
+(copy_mem_todev — may take seconds at BAR2 write speeds)
+BCM4360 debug: NVRAM loaded, len=228, writing to TCM 0x...
+BCM4360 debug: NVRAM marker at ramsize-4 = ...
+BCM4360 pre-ARM: clk_ctl_st=... res_state=... HT=NO
+test.101 pre-ARM baseline: *0x62e20=0x00000000 ZERO (expected)
+test.114b: wrap_RESET_CTL=... d11 wrap/IOCTL state
+test.12: skipping ARM release (bcm4360_skip_arm=1)
+test.12: FW downloaded OK, dumping TCM state
+BCM4360 TCM[0x0000]: <fw bytes visible>
+test.12: sharedram[...] = 0x...
+test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+test.163: fw released; returning from setup (state still DOWN)
+[rmmod]
+test.161: remove() short-circuit — state=0 != UP
+test.161: remove() short-circuit complete
+```
+
+**Pre-test PCIe state (2026-04-20 ~10:17):**
+- 03:00.0: MAbort-, DevSta clean, LnkSta 2.5GT/s Width x1.
+
+**Build status:** REBUILT; .ko test.163 markers verified.
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+---
+
+## Previous state (2026-04-20, POST test.162 SUCCESS — ready for test.163)
 
 ### MILESTONE: setup callback safely reaches door of download_fw_nvram
 

@@ -3685,37 +3685,29 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 	 * this was the crash trigger. Testing without it for test.135.
 	 */
 
-	/* test.162: BCM4360 early-return before BAR2 writes begin. Scope
-	 * exercised: brcmf_pcie_attach (no-op for BCM4360), fw-ptr extract,
-	 * kfree(fwreq), brcmf_chip_get_raminfo (fixed info), brcmf_pcie_adjust_ramsize
-	 * (fw-header parse — pure memory). Stops before brcmf_pcie_download_fw_nvram
-	 * which is the first 442KB BAR2 write. Release fw/nvram/clm/txcap so rmmod
-	 * short-circuit path stays clean. */
+	pr_emerg("BCM4360 test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)\n");
+	mdelay(300);
+	ret = brcmf_pcie_download_fw_nvram(devinfo, fw, nvram, nvram_len);
+
+	/* test.163: BCM4360 early-return after download_fw_nvram. When
+	 * bcm4360_skip_arm=1, the function intentionally returns -ENODEV after
+	 * downloading fw + NVRAM + verifying TCM contents. fw/nvram are already
+	 * released inside the function (release_firmware(fw), brcmf_fw_nvram_free(nvram)).
+	 * Clean return avoids the fail: path which would call brcmf_fw_crashed +
+	 * device_release_driver (extra complexity we don't need at this stage). */
 	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
-		pr_emerg("BCM4360 test.162: early return BEFORE brcmf_pcie_download_fw_nvram\n");
+		pr_emerg("BCM4360 test.163: download_fw_nvram returned ret=%d (expected -ENODEV for skip_arm=1)\n", ret);
 		msleep(300);
-		pr_emerg("BCM4360 test.162: releasing fw (fw=%p size=%zu) nvram=%p len=%u clm=%p txcap=%p\n",
-			 fw, fw ? fw->size : 0, nvram, nvram_len,
-			 devinfo->clm_fw, devinfo->txcap_fw);
-		msleep(300);
-		release_firmware(fw);
-		brcmf_fw_nvram_free(nvram);
+		/* clm_fw/txcap_fw are NULL (optional, not present) but release them anyway */
 		release_firmware(devinfo->clm_fw);
 		devinfo->clm_fw = NULL;
 		release_firmware(devinfo->txcap_fw);
 		devinfo->txcap_fw = NULL;
-		pr_emerg("BCM4360 test.162: fw released; returning from setup (state still DOWN)\n");
+		pr_emerg("BCM4360 test.163: fw released; returning from setup (state still DOWN)\n");
 		msleep(300);
 		return;
 	}
 
-	pr_emerg("BCM4360 test.130: before brcmf_pcie_download_fw_nvram\n");
-	mdelay(300);
-	/* test.137: confirm mdelay completed — if this appears, crash is NOT async during the
-	 * 300ms above; it's inside download_fw_nvram (enter_download_state or BAR2).
-	 */
-	pr_emerg("BCM4360 test.137: post-mdelay — calling brcmf_pcie_download_fw_nvram\n");
-	ret = brcmf_pcie_download_fw_nvram(devinfo, fw, nvram, nvram_len);
 	if (ret) {
 		pr_emerg("BCM4360 test.130: brcmf_pcie_download_fw_nvram FAILED ret=%d\n", ret);
 		goto fail;
@@ -4510,19 +4502,19 @@ static struct pci_driver brcmf_pciedrvr = {
  * after chip_attach() has initialized the PCIe-to-backplane bridge. */
 void brcmf_pcie_early_arm_halt(void)
 {
-	pr_emerg("BCM4360 test.162: module_init entry — attach + fw-extract + raminfo + adjust_ramsize; early-return before download_fw_nvram\n");
+	pr_emerg("BCM4360 test.163: module_init entry — step into brcmf_pcie_download_fw_nvram (442KB BAR2 fw + NVRAM write)\n");
 }
 
 int brcmf_pcie_register(void)
 {
 	int ret;
 
-	pr_emerg("BCM4360 test.162: brcmf_pcie_register() entry\n");
-	msleep(300); /* test.162: flush marker before pci_register_driver */
-	pr_emerg("BCM4360 test.162: before pci_register_driver\n");
-	msleep(300); /* test.162: flush — if crash here, it's in pci_register_driver kernel code */
+	pr_emerg("BCM4360 test.163: brcmf_pcie_register() entry\n");
+	msleep(300); /* test.163: flush marker before pci_register_driver */
+	pr_emerg("BCM4360 test.163: before pci_register_driver\n");
+	msleep(300); /* test.163: flush — if crash here, it's in pci_register_driver kernel code */
 	ret = pci_register_driver(&brcmf_pciedrvr);
-	pr_emerg("BCM4360 test.162: pci_register_driver returned ret=%d\n", ret);
+	pr_emerg("BCM4360 test.163: pci_register_driver returned ret=%d\n", ret);
 	return ret;
 }
 
