@@ -46,10 +46,23 @@ hard-crash sessions (tests 149–157).
   Early-return before `brcmf_pcie_download_fw_nvram`. Clean rmmod via test.161
   short-circuit. DevSta clean post-test.
 
-**Next boundary:** `brcmf_pcie_download_fw_nvram` — the 442KB BAR2 iowrite32
-of firmware + NVRAM placement. This is where the Phase 5.2 crash investigation
-started. Expect success based on Phase 3 evidence; this re-verifies the path
-after the test.158 probe reset sequence changes.
+**Completed since (2026-04-20 PM):**
+- **test.177 SUCCESS:** 228-byte NVRAM BAR2 write at `ramsize - nvram_len`.
+- **test.178 SUCCESS:** NVRAM marker readback at `ramsize - 4` = 0xffc70038.
+- **test.179 SUCCESS:** 8-word TCM verify dump at `TCM[0x0..0x1c]`.
+- **test.180 NEGATIVE RESULT:** `BCMA_CORE_INTERNAL_MEM` is absent on
+  BCM4360, so the upstream `brcmf_pcie_exit_download_state` INTERNAL_MEM
+  resetcore branch is a no-op on our chip.
+- **test.181 BREAKTHROUGH:** `brcmf_chip_set_active(ci, resetintr)` runs
+  cleanly. ARM CR4 IOCTL went from 0x0021 (CPUHALT=YES) to 0x0001
+  (CPUHALT=NO); both 20 ms and 100 ms post-release probes confirm ARM
+  continuously executing firmware; host survived the full 30 s harness
+  dwell; no MCE/AER/panic; clean rmmod. First clean ARM release on BCM4360
+  in this tree.
+
+**Next boundary:** observe firmware activity after ARM release — extended
+post-release dwells with TCM sampling to detect firmware-originated writes
+(test.182). BusMaster still stays cleared.
 
 **Re-entering the old 5.2 investigation:** once the probe-path restore is
 complete (i.e. firmware download and ARM release can run without host crash),
@@ -57,14 +70,19 @@ the TCM[0x58f08] D11-object-not-linked finding from test.98 still applies —
 the path-B D11 core bring-up probe plan remains valid, just currently gated
 behind getting firmware boot to run again.
 
-**What is proven working:**
-- Chip recognition, BAR0/BAR2 mapping, firmware download, NVRAM placement.
-- ARM release without host crash (after extended crash-isolation work in 5.2).
-- Firmware reaches early init; `si_kattach` completes; console output visible.
+**What is proven working (as of test.181):**
+- Chip recognition, BAR0/BAR2 mapping, 442 KB firmware download, 228 B NVRAM
+  placement, NVRAM marker readback at ramsize-4.
+- ARM CR4 release via `brcmf_chip_set_active` (test.181 — reproducibly
+  clean on current tree; CPUHALT transitions YES→NO, host survives ≥30 s).
+- Clean module rmmod while ARM continues running firmware.
 
-**What is not yet working:**
-- Firmware never progresses past the D11 PHY wait loop → no shared-memory
-  handshake → no driver-to-firmware communication.
+**What is not yet re-verified in this regression-recovery tree:**
+- Firmware-originated TCM writes (next: test.182 post-release dwell +
+  TCM re-read).
+- Sharedram handshake / firmware init completion.
+- Firmware reaching the old Phase-5.2 D11 PHY wait loop; test.98 finding
+  `TCM[0x58f08] == 0` remains the standing downstream hypothesis.
 
 See also GitHub issues #9 (architecture assessment) and #11 (direction review).
 
