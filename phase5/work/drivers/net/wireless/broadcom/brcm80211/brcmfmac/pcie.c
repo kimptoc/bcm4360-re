@@ -1970,8 +1970,9 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		u32 pre_wide[40] = {0};	/* test.188: 16-KB grid across 640-KB TCM */
 		u32 pre_tail[16] = {0};	/* test.188: last 64 B of TCM */
 		u32 pre_bp[BRCMF_BP_REG_COUNT] = {0};	/* test.188: backplane regs */
-		u32 pre_fw_sample[256] = {0};	/* test.188: 256 samples across fw region */
-		u32 fw_sample_offsets[256] = {0};	/* offsets for each sample */
+		const u32 nr_fw_samples = 256;	/* test.188: fw-sample count */
+		u32 *pre_fw_sample = NULL;	/* test.188: heap-alloc'd — see below */
+		u32 *fw_sample_offsets = NULL;	/* heap-alloc'd offsets for each sample */
 		static const u32 wide_offsets[40] = {
 			0x00000, 0x04000, 0x08000, 0x0c000,
 			0x10000, 0x14000, 0x18000, 0x1c000,
@@ -1984,6 +1985,20 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			0x80000, 0x84000, 0x88000, 0x8c000,
 			0x90000, 0x94000, 0x98000, 0x9c000
 		};
+
+		/* test.188: heap-allocate fw-sample buffers (2 KB total) to keep
+		 * kernel stack under the 2 KB warn threshold. Allocation failure
+		 * is non-fatal — the fw-integrity probe is simply skipped.
+		 */
+		pre_fw_sample = kcalloc(nr_fw_samples, sizeof(u32), GFP_KERNEL);
+		fw_sample_offsets = kcalloc(nr_fw_samples, sizeof(u32), GFP_KERNEL);
+		if (!pre_fw_sample || !fw_sample_offsets) {
+			pr_emerg("BCM4360 test.188: fw-sample kcalloc failed — probe D disabled\n");
+			kfree(pre_fw_sample);
+			kfree(fw_sample_offsets);
+			pre_fw_sample = NULL;
+			fw_sample_offsets = NULL;
+		}
 
 		/* Pre-halt probe (hi-window only since test.169) */
 		brcmf_pcie_probe_armcr4_state(devinfo, "pre-halt");
@@ -2125,11 +2140,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			}
 			/* test.188: sample firmware region at 256 evenly spaced offsets */
 			/* High-density sampling (every ~1.7 KB across 442 KB fw) */
-			if (fw->size >= 1024) {  /* Need reasonable size for meaningful sampling */
-				u32 step = fw->size / (ARRAY_SIZE(fw_sample_offsets) - 1);
+			if (fw->size >= 1024 && fw_sample_offsets) {  /* Need reasonable size and alloc success */
+				u32 step = fw->size / (nr_fw_samples - 1);
 				if (step < 4) step = 4;  /* Minimum 4-byte alignment */
-				
-				for (j = 0; j < ARRAY_SIZE(fw_sample_offsets); j++) {
+
+				for (j = 0; j < nr_fw_samples; j++) {
 					u32 offset = j * step;
 					/* Ensure offset is 4-byte aligned and within fw size */
 					offset = (offset + 3) & ~3u;
@@ -2297,22 +2312,6 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				}
 
 				for (j = 0; j < ARRAY_SIZE(pre_tail); j++) {
-				/* test.188: resample firmware region during dwell */
-				if (fw->size >= 1024) {
-					for (j = 0; j < ARRAY_SIZE(fw_sample_offsets); j++) {
-						u32 offset = fw_sample_offsets[j];
-						u32 val = brcmf_pcie_read_ram32(devinfo, offset);
-						u32 fw_val = get_unaligned_le32(fw->data + offset);
-						pr_emerg("BCM4360 test.188: dwell-%ums fw-sample[0x%05x]=0x%08x (TCM) vs 0x%08x (fw->data) was 0x%08x %s\n",
-							dwell_labels_ms[d], offset,
-							val, fw_val, pre_fw_sample[j],
-							(val == pre_fw_sample[j]) ? "UNCHANGED" :
-							(val == fw_val) ? "REVERTED" : "CHANGED");
-					}
-				} else {
-					pr_emerg("BCM4360 test.188: dwell-%ums firmware too small (%zu bytes), skipping\n",
-						dwell_labels_ms[d], fw->size);
-				}
 					u32 offset = devinfo->ci->ramsize -
 						     64 + j * 4;
 					u32 val = brcmf_pcie_read_ram32(devinfo,
@@ -2326,8 +2325,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							"CHANGED");
 				}
 				/* test.188: resample firmware region during dwell */
-				if (fw->size >= 1024) {
-					for (j = 0; j < ARRAY_SIZE(fw_sample_offsets); j++) {
+				if (fw->size >= 1024 && fw_sample_offsets) {
+					for (j = 0; j < nr_fw_samples; j++) {
 						u32 offset = fw_sample_offsets[j];
 						u32 val = brcmf_pcie_read_ram32(devinfo, offset);
 						u32 fw_val = get_unaligned_le32(fw->data + offset);
@@ -2367,16 +2366,16 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		/* Tier 1: 0-50 ms at 5 ms intervals (immediate fault detection) */
 		pr_emerg("BCM4360 test.188: Tier 1 - 0-50 ms at 5 ms intervals\n");
 		for (i = 0; i < 10; i++) {
-		u32 j;  /* test.188: loop counter for fine-grain sampling */
+			u32 j;
 			mdelay(5);
 			brcmf_pcie_probe_armcr4_state(devinfo, "tier1");
 			brcmf_pcie_probe_d11_state(devinfo, "tier1");
 			
 			/* Also sample a subset of fw region during fine-grain */
-			if (fw->size >= 1024 && (i % 2 == 0)) {  /* Every other sample */
+			if (fw->size >= 1024 && fw_sample_offsets && (i % 2 == 0)) {  /* Every other sample */
 				for (j = 0; j < 16; j++) {  /* Sample 16 of 256 points */
 					u32 idx = j * 16;
-					if (idx >= ARRAY_SIZE(fw_sample_offsets)) break;
+					if (idx >= nr_fw_samples) break;
 					u32 offset = fw_sample_offsets[idx];
 					u32 val = brcmf_pcie_read_ram32(devinfo, offset);
 					u32 fw_val = get_unaligned_le32(fw->data + offset);
@@ -2395,7 +2394,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			brcmf_pcie_probe_d11_state(devinfo, "tier2");
 			
 			/* Minimal fw sampling during tier 2 (just check for major changes) */
-			if (fw->size >= 1024 && (i % 5 == 0)) {  /* Every 5th sample */
+			if (fw->size >= 1024 && fw_sample_offsets && (i % 5 == 0)) {  /* Every 5th sample */
 				u32 offset = fw_sample_offsets[0];  /* Just first sample */
 				u32 val = brcmf_pcie_read_ram32(devinfo, offset);
 				u32 fw_val = get_unaligned_le32(fw->data + offset);
@@ -2437,6 +2436,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 		release_firmware(fw);
 		brcmf_fw_nvram_free(nvram);
+		kfree(pre_fw_sample);
+		kfree(fw_sample_offsets);
 		pr_emerg("BCM4360 test.188: released fw/nvram after BM-before-set_active + dwell + BM-clear; returning -ENODEV\n");
 		return -ENODEV;
 	} else {

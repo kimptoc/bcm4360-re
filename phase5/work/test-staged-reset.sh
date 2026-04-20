@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.187.stage${STAGE}"
+LOG="$LOG_DIR/test.188.stage${STAGE}"
 
-echo "=== test.187: BusMaster ON before set_active — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.188: fw-integrity check + fine-grain CR4/D11 sampling — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -28,7 +28,7 @@ case "$STAGE" in
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.187: test.186b enabled BusMaster 3s after set_active — too late; firmware's first DMA had already failed. test.64/65-era pcie.c comments (~L2725/L4033) state BusMaster MUST be on before set_active so PCIe2 DMA init succeeds. test.187 applies that requirement. DMA-stall is still the live hypothesis — if firmware now completes startup DMA we expect TCM writes, D11 RESET_CTL clearing, sharedram marker replacing 0xffc70038.)" | tee -a "$LOG"
+echo "(test.188: DMA-stall falsified by 186d/187; exception/spin-loop is leading. Probe D (fw-image integrity): 256 evenly spaced TCM samples compared against fw->data for MATCH/MISMATCH. Fine-grain CR4/D11 sampling tier 1 = 10x5ms, tier 2 = 30x50ms to catch transient writes missed by the 500/1500/3000 ms dwell grid. Predictions: MISMATCH = download corruption; CR4/D11 transient = firmware progress pre-fault; all UNCHANGED/MATCH = firmware truly idle in exception handler.)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -113,14 +113,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=45  # test.187: in-module dwell is ~3s after set_active; leave generous slack
+    WAIT_SECS=45  # test.188: dwell grid + tier-1 (50ms) + tier-2 (1500ms) ≈ 4.5s in-module; leave generous slack
 else
     SKIP_ARM=0
     WAIT_SECS=60
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.187 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.188 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.
