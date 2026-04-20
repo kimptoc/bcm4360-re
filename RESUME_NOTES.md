@@ -1,6 +1,85 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.179 — tiny TCM verify SUCCESS)
+## Current state (2026-04-20, PRE test.180 — INTERNAL_MEM resetcore discriminator)
+
+### PRE-TEST.180 checkpoint
+
+Implemented test.180 as the next boundary after test.179's success:
+1. Keep the full chunked BAR2 firmware write.
+2. Keep `msleep(100)` after `fw write complete`.
+3. Keep host-side resetintr extraction.
+4. Keep the 228-byte NVRAM BAR2 write at `0x9ff1c`.
+5. Keep the `ramsize - 4` NVRAM marker readback.
+6. Keep the 8-word TCM verify dump at offsets `0x0..0x1c`.
+7. Add only the first half of `brcmf_pcie_exit_download_state`:
+   - `brcmf_chip_get_core(ci, BCMA_CORE_INTERNAL_MEM)`.
+   - If present, `mdelay(50)` → `brcmf_chip_resetcore(core, 0, 0, 0)`
+     → `mdelay(50)`, with `pre-resetcore INTERNAL_MEM core->base=... rev=...`
+     and `post-resetcore INTERNAL_MEM complete` log lines.
+   - If absent, log `INTERNAL_MEM core not found — resetcore skipped`.
+8. Release `fw`/`nvram` and return `-ENODEV`.
+9. Still skip `brcmf_chip_set_active(ci, resetintr)`, device-side resetintr
+   use, broad TCM dumps, and ARM release.
+
+Build status: OK via kernel kbuild. Existing warning only:
+`brcmf_pcie_write_ram32` is defined but unused. BTF generation is skipped
+because `vmlinux` is unavailable.
+
+`strings brcmfmac.ko | grep test.180` confirms these new markers are present:
+- `BCM4360 test.180: pre-resetcore INTERNAL_MEM core->base=0x%08x rev=%u`
+- `BCM4360 test.180: post-resetcore INTERNAL_MEM complete`
+- `BCM4360 test.180: INTERNAL_MEM core not found — resetcore skipped`
+- `BCM4360 test.180: released fw/nvram after INTERNAL_MEM resetcore; returning -ENODEV`
+
+No `test.179` strings remain in the module binary.
+
+Before running: commit, push, and `sync` this PRE-test.180 checkpoint. Then run
+only stage 0:
+`sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+
+### Hypothesis
+
+`brcmf_pcie_exit_download_state()` performs two chip-touching operations:
+internal-memory core reset, then `brcmf_chip_set_active(..., resetintr)` which
+releases ARM. On BCM4360 we've never run this function cleanly — the old
+host-crash path was everywhere downstream. test.180 asks whether the first
+half alone (INTERNAL_MEM resetcore, no set_active, no ARM release) is safe.
+
+If it is, the next test can focus narrowly on `brcmf_chip_set_active` and ARM
+release as the remaining half, with firmware + NVRAM + internal-mem core
+reset all known-safe beneath it.
+
+### Interpretation matrix
+
+- Survives with `INTERNAL_MEM core not found`: chip topology lacks that
+  core on BCM4360 (or `brcmf_chip_get_core` returns NULL for it). Record the
+  fact and plan test.181 against `brcmf_chip_set_active(..., resetintr)` only.
+- Survives with `pre-resetcore` + `post-resetcore` both logged and clean rmmod:
+  INTERNAL_MEM core reset is safe; next test isolates
+  `brcmf_chip_set_active(..., resetintr)` / ARM release.
+- Freezes between `pre-resetcore` and `post-resetcore`: `brcmf_chip_resetcore`
+  on INTERNAL_MEM is itself the next unsafe operation. Next test adds
+  register-level probing of INTERNAL_MEM reset state rather than calling the
+  library helper.
+- Freezes after `post-resetcore` but before the harness `-ENODEV` return: the
+  post-resetcore settle is itself a boundary; extend the mdelay and add further
+  breadcrumbs.
+
+### Pre-test HW state (still the test.179 post-run state, 2026-04-20 18:34)
+
+- `brcmfmac` is unloaded. `brcmutil` remains loaded.
+- Endpoint 03:00.0 visible: `Mem+ BusMaster-`, BAR0=b0600000, BAR2=b0400000,
+  `<MAbort-`, link 2.5GT/s x1, endpoint ASPM disabled.
+- Endpoint AER UESta clear; correctable `Timeout+ AdvNonFatalErr+` remains.
+- Root port 00:1c.2 visible: bus 03/03, memory window b0400000-b06fffff,
+  bridge `MAbort-`, secondary `<MAbort-`, link 2.5GT/s x1, ASPM disabled.
+
+Re-run `lspci -vvv -s 03:00.0` in the harness before insmod to confirm no
+fresh dirty state.
+
+---
+
+## Previous state (2026-04-20, POST test.179 — tiny TCM verify SUCCESS)
 
 ### TEST.179 RESULT — tiny BAR2 TCM verify survives
 
