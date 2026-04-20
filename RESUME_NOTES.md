@@ -84,12 +84,13 @@ crash blast radius is identical to test.166 (hard reboot).
 ### PRE-TEST CHECKLIST
 
 - [x] Save test.166 journal to phase5/logs/test.166.journalctl.txt
-- [ ] Commit + push test.166 logs and this post-analysis
-- [ ] Implement test.167 in pcie.c (add halt + post-halt RESET_CTL read)
-- [ ] Bump module_init + register banners to test.167
-- [ ] Bump `test-staged-reset.sh` log prefix test.166 → test.167
-- [ ] `make -C phase5/work` and verify test.167 markers in .ko
-- [ ] Re-check PCIe state (MAbort-, CommClk+, LnkSta clean)
+- [x] Commit + push test.166 logs and this post-analysis (`453e2b5`)
+- [x] Implement test.167 in pcie.c (halt + post-halt RESET_CTL read + post-write)
+- [x] Bump module_init + register banners to test.167
+- [x] Bump `test-staged-reset.sh` log prefix test.166 → test.167
+- [x] Build OK (kbuild), .ko contains all 13 test.167 markers
+- [x] PCIe 03:00.0 clean: MAbort-, CommClk+, LnkSta 2.5GT/s x1; sticky
+      CorrErr+/UnsupReq+ from test.166 crash (harmless). brcmfmac NOT loaded.
 - [ ] Commit + push pre-test state + `sync`
 - [ ] Run `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
 
