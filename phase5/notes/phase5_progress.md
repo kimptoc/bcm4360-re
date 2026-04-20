@@ -591,3 +591,33 @@ variant should avoid calling `brcmf_core_init()` entirely. If it reaches
 `before brcmf_pcie_register()` but not the PCI entry marker, the registration
 call transition is the current suspect. If it reaches the PCI body markers,
 continue narrowing around `pci_register_driver()` / probe.
+
+## Phase 5.4: Current state (2026-04-20, POST test.172)
+
+The module-load/registration crash window from tests 145-148 has been cleared
+again; the current failure is back in `brcmf_pcie_download_fw_nvram()` after a
+complete BAR2 firmware write.
+
+Latest evidence:
+- test.170 proved the full 442233 byte firmware write can complete.
+- test.171 froze after `idle-1`, about 20-30 ms after `fw write complete`, with
+  ARM CR4 still halted.
+- test.172 disabled endpoint ASPM and checked the upstream root port. Endpoint
+  ASPM bits were cleared; root port LnkCtl was already `0x0040` before the new
+  disable call, meaning root-port ASPM bits were clear and ClockPM/CLKREQ was
+  already off.
+- test.172 completed the full firmware write and logged `idle-0` through
+  `idle-7`, all with `CPUHALT=YES`, then hard-froze before `idle-8` or
+  `post-idle-loop`.
+
+Conclusion: root-port ASPM/CLKPM is unlikely to be the primary cause. The
+fatal condition is still in the post-write idle/probe window, before resetintr
+or NVRAM writes, while ARM remains halted. Timing moved from roughly 20-30 ms
+to roughly 80-90 ms, so there is jitter or sensitivity to the preceding
+config/MMIO sequence.
+
+Next discriminator: test.173 should remove BAR0 ARM CR4 MMIO from the
+post-write idle loop and use a no-device-MMIO 10 x 10 ms delay loop with
+breadcrumbs only. If that survives to `post-idle-loop`, the ARM CR4 BAR0 probes
+are implicated. If it still freezes inside the no-MMIO loop, investigate an
+asynchronous chip/host event after a completed BAR2 firmware write.

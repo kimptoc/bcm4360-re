@@ -6589,3 +6589,75 @@ Before running:
 1. Commit and push this test.172 code/build-state checkpoint.
 2. Run only stage 0:
    `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+
+---
+
+## TEST.172 RESULT — 2026-04-20 17:41 (root-port ASPM already off; freeze moved to ~80-90 ms)
+
+### Captured evidence
+- Stage0 wrapper log: `phase5/logs/test.172.stage0`
+- Crash-time dmesg stream: `phase5/logs/test.172.stage0.stream`
+- Previous-boot journal captured after SMC reset:
+  `phase5/logs/test.172.journalctl.txt`
+
+### Result
+
+The post-SMC-reset PCIe hierarchy is clean:
+- Endpoint 03:00.0: BCM4360 visible, Mem+, BusMaster+, BAR0=b0600000,
+  BAR2=b0400000, Status has `<MAbort-`.
+- Root port 00:1c.2: secondary=03/subordinate=03, memory window
+  b0400000-b06fffff, bridge control `MAbort-`, secondary status `<MAbort-`.
+
+The root-port link-control test produced an important negative result:
+- Endpoint LnkCtl changed from `0x0143` to `0x0140`; endpoint ASPM bits clear.
+- Root port LnkCtl was already `0x0040` before the new disable call:
+  ASPM bits clear and CLKREQ/ClockPM off.
+- Root port LnkCtl remained `0x0040` after `pci_disable_link_state()`.
+
+test.172 again completed the full 442233 byte BAR2 firmware write:
+- `all 110558 words written, before tail (tail=1)`
+- `tail 1 bytes written at offset 442232`
+- `post-write ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES`
+- `fw write complete (442233 bytes)`
+
+The post-write idle loop logged through:
+- `idle-0` ... `idle-7`, all with `CPUHALT=YES`
+
+No `idle-8`, no `idle-9`, no `post-idle-loop`, no MCE, no panic, and no
+PCIe/AER error were captured before the host froze. SMC reset was required.
+
+### Interpretation
+
+Root-port ASPM/CLKPM is not the current primary explanation: the root port was
+already in the target state before the test. The crash still happens after the
+firmware payload is fully written while ARM CR4 remains halted.
+
+test.172 lasted longer than test.171 (through idle-7 instead of idle-1), so the
+exact freeze timing has jitter or depends on the preceding config-space/MMIO
+sequence. The best current bound is: fatal window occurs during the post-write
+idle/probe phase, after about 80 ms in this run, before any resetintr read or
+NVRAM write.
+
+### PRE-TEST.173 recommendation
+
+Do **not** run another test until this note and the test.172 artifacts are
+committed and pushed.
+
+Next best test: remove BAR0 ARM CR4 MMIO from the post-write idle loop.
+
+Suggested code change for test.173:
+1. Keep endpoint/root-port link-state logging unchanged for comparability.
+2. After `fw write complete`, replace the 10 x `mdelay(10) + ARM CR4 probe`
+   loop with a no-device-MMIO loop: log before/after each 10 ms delay, but do
+   not call `brcmf_pcie_probe_armcr4_state()` inside that idle window.
+3. Keep the `post-idle-loop` breadcrumb immediately before the existing
+   resetintr read so the next boundary remains clear.
+4. Keep stage0 only and keep `bcm4360_skip_arm=1`.
+
+Interpretation:
+- If the no-MMIO loop survives to `post-idle-loop`, the BAR0 ARM CR4 probes
+  themselves are implicated in the post-write crash path.
+- If it still freezes during the no-MMIO idle window, focus on an asynchronous
+  chip/host event after a complete BAR2 firmware write, not on the probe reads.
+- If it reaches `post-idle-loop` but freezes on resetintr, the next boundary is
+  the PCIE2 resetintr read rather than the idle delay.
