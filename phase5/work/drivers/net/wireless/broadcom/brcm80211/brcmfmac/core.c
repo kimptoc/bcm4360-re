@@ -1536,28 +1536,38 @@ void brcmf_bus_change_state(struct brcmf_bus *bus, enum brcmf_bus_state state)
 	}
 }
 
+/* Track which bus drivers were registered so exit only unregisters those. */
+static bool brcmf_sdio_was_registered;
+static bool brcmf_usb_was_registered;
+static bool brcmf_pcie_was_registered;
+
 int __init brcmf_core_init(void)
 {
 	int err;
+
+	brcmf_sdio_was_registered = false;
+	brcmf_usb_was_registered = false;
+	brcmf_pcie_was_registered = false;
 
 	pr_emerg("BCM4360 test.150: brcmf_core_init() entry\n");
 	pr_emerg("BCM4360 test.150: before brcmf_sdio_register()\n");
 	err = brcmf_sdio_register();
 	pr_emerg("BCM4360 test.150: after brcmf_sdio_register() err=%d\n", err);
+	if (!err)
+		brcmf_sdio_was_registered = true;
+	else
+		return err;
 	mdelay(50);
 	pr_emerg("BCM4360 test.150: post-SDIO sync (skipping USB and PCI)\n");
 	return 0;
-
-error_pcie_register:
-	brcmf_usb_exit();
-error_usb_register:
-	brcmf_sdio_exit();
-	return err;
 }
 
 void __exit brcmf_core_exit(void)
 {
-	brcmf_sdio_exit();
-	brcmf_usb_exit();
-	brcmf_pcie_exit();
+	if (brcmf_pcie_was_registered)
+		brcmf_pcie_exit();
+	if (brcmf_usb_was_registered)
+		brcmf_usb_exit();
+	if (brcmf_sdio_was_registered)
+		brcmf_sdio_exit();
 }

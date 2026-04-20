@@ -1,0 +1,21 @@
+=== test.150: brcmf_core_init/brcmf_pcie_register call-site markers — stage=0 ===
+Date: Mon 20 Apr 07:46:47 BST 2026
+
+Stage 0: skip_arm=1 — module_init/register markers; no ARM release if probe reaches firmware path.
+(test.150: SDIO-only registration discriminator — calls brcmf_sdio_register() then returns; USB and PCI skipped; 50ms post-SDIO sync marker)
+
+=== Pre-test BAR0 MMIO guard ===
+BAR0 MMIO UR/I/O error (6ms) — device alive; SBR in probe should fix. Proceeding.
+
+Removing existing brcmfmac...
+=== Pre-test PCIe state ===
+(lspci not available)
+
+=== Pre-test root port (00:1c.2) state ===
+
+=== Flushing to disk ===
+Flush complete.
+
+=== Loading brcmfmac (bcm4360_reset_stage=0, bcm4360_skip_arm=1) --- test.150 ===
+insmod returned rc=1
+Waiting 12s for firmware init (streaming to test.150.stage0.stream)...
