@@ -1,6 +1,96 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.181 — BREAKTHROUGH: ARM release works, firmware running)
+## Current state (2026-04-20, PRE test.182 — extended post-release TCM sampling)
+
+### PRE-TEST.182 checkpoint
+
+Test.181 proved `brcmf_chip_set_active(ci, 0xb80ef000)` releases ARM CR4
+cleanly (IOCTL 0x0021→0x0001, CPUHALT YES→NO, no RESET_CTL change, host
+survives ≥30 s). The next boundary is to determine whether firmware is
+actually *executing* — writing to its own TCM — or simply spinning in an
+early stall loop.
+
+Implementation (same probe tree as test.181 through `post-set-active-100ms`,
+then extended):
+1. Immediately after the 8-word TCM verify dump, snapshot the 8 words into
+   local array `pre_tcm[8]` and the NVRAM marker at `ramsize - 4` into
+   `pre_marker` (new locals in the BCM4360 early-return block).
+2. Keep the test.181 sequence through `post-set-active-100ms`.
+3. Loop three extra dwell stages with labels 500 ms / 1500 ms / 3000 ms.
+   Incremental sleeps: +400 ms, +1000 ms, +1500 ms. Each stage:
+   - `brcmf_pcie_probe_armcr4_state(devinfo, "post-set-active-<label>ms")`
+   - Read NVRAM marker; compare against `pre_marker`; log CHANGED/UNCHANGED.
+   - Read TCM[0x0..0x1c] word-by-word; compare against `pre_tcm[j]`; log
+     CHANGED/UNCHANGED per word.
+4. Release `fw`/`nvram` and return `-ENODEV`. Still no BusMaster, no MSI,
+   no sharedram polling, no advance into normal attach.
+
+Harness change: `WAIT_SECS` bumped from 30 to 45 to cover the additional
+~3 s in-module dwell plus existing 100 ms + 20/100 ms post-probes.
+
+Build: OK via kernel kbuild. Module carries 34 `test.182` markers and 0
+`test.181` strings. Only existing warning is `brcmf_pcie_write_ram32
+defined but not used`. BTF skipped (vmlinux unavailable).
+
+### Hypothesis
+
+Firmware will either:
+- (A) ARM has started executing firmware and is initialising its early
+  state — at least one TCM word in 0x0..0x1c will change between the
+  pre-release snapshot and one of the 500/1500/3000 ms reads, and/or
+  the NVRAM marker at `ramsize - 4` will change (firmware parsed NVRAM
+  and overwrote the marker), OR
+- (B) ARM is running but firmware is stalled in a very early loop that
+  does not touch TCM[0..0x1c] or the NVRAM marker — all reads
+  UNCHANGED. In that case the next test expands the TCM scan window
+  and/or starts sampling backplane state via BAR0.
+
+Expected ARM state across all three dwells: `IOCTL=0x00000001
+RESET_CTL=0x00000000 CPUHALT=NO` (same as test.181 post-probes). Any
+divergence (e.g. CPUHALT returning to YES) means the ARM has re-halted
+itself, which would be a new finding.
+
+### Interpretation matrix
+
+- Any TCM word in 0x0..0x1c CHANGED at 500 ms / 1500 ms / 3000 ms:
+  firmware is executing and touching its own TCM. Strong green light for
+  test.183 to expand the TCM scan and hunt for sharedram structure.
+- NVRAM marker at `ramsize - 4` CHANGED: firmware has consumed NVRAM
+  (normal on successful boot) and likely moved into sharedram setup.
+- All UNCHANGED but ARM CR4 probes remain CPUHALT=NO across dwells:
+  ARM is running but stuck in an early loop that never touches
+  TCM[0..0x1c] or NVRAM marker. Next test widens the scan window and
+  adds backplane-register sampling via BAR0 to see if firmware is
+  doing any MMIO at all.
+- ARM CR4 probe at any dwell returns CPUHALT=YES or an unexpected
+  RESET_CTL: ARM has re-halted itself (fault, watchdog, or deliberate
+  halt). Investigate before doing anything else.
+- Host freezes during the extended dwell (no stream lines past a given
+  dwell, harness appears to hang): prolonged ARM execution without
+  BusMaster/MSI is unstable. Narrow the dwell window and consider
+  enabling BusMaster before the last stage.
+
+### Run command
+
+Only stage 0. Full battery-drain recovery policy still applies if the
+harness aborts before insmod on BAR0 CTO:
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+Post-run: capture `journalctl -k -b 0 --since "10 minutes ago" > phase5/logs/test.182.journalctl.txt`,
+update RESUME_NOTES with the POST-TEST.182 observation, commit, push.
+
+### Pre-test HW state expected
+
+Same as test.181 post-run: endpoint `03:00.0` shows `Mem- BusMaster-` with
+BAR regions `[disabled]`. This is the normal post-rmmod state and will
+re-initialise on next insmod.
+
+---
+
+## Previous state (2026-04-20, POST test.181 — BREAKTHROUGH: ARM release works, firmware running)
 
 ### TEST.181 RESULT — brcmf_chip_set_active SUCCESS; ARM CR4 running; host stable
 

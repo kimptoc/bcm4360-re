@@ -17,18 +17,18 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.181.stage${STAGE}"
+LOG="$LOG_DIR/test.182.stage${STAGE}"
 
-echo "=== test.181: brcmf_chip_set_active (ARM release) isolation — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.182: extended post-ARM-release TCM sampling — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: skip_arm=1 — download_fw_nvram: enter_download_state (read-only) + BAR2 ioread32 probe + 442KB iowrite32 fw; sleeps 100 ms, reads host resetintr from fw->data, writes NVRAM to BAR2, reads the ramsize-4 NVRAM marker, reads TCM[0x0..0x1c], attempts INTERNAL_MEM resetcore (expected NULL on BCM4360), then probe CR4 + brcmf_chip_set_active(ci, resetintr) + probe CR4 at 20 ms + probe CR4 at 100 ms. BusMaster remains cleared. Releases fw/NVRAM, returns -ENODEV." | tee -a "$LOG" ;;
+    0) echo "Stage 0: skip_arm=1 — download_fw_nvram: enter_download_state (read-only) + BAR2 ioread32 probe + 442KB iowrite32 fw; sleeps 100 ms, reads host resetintr from fw->data, writes NVRAM to BAR2, snapshots ramsize-4 NVRAM marker + TCM[0x0..0x1c], attempts INTERNAL_MEM resetcore (NULL on BCM4360), probe CR4 + brcmf_chip_set_active(ci, resetintr) + probe CR4 at 20 ms + 100 ms + dwell/re-read at 500 ms / 1.5 s / 3 s (each dwell diffs TCM + marker against pre-release snapshot). BusMaster remains cleared. Releases fw/NVRAM, returns -ENODEV." | tee -a "$LOG" ;;
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.181: test.180 showed INTERNAL_MEM core is absent on BCM4360. This run adds brcmf_chip_set_active(ci, resetintr) — the ARM release — with pre/post CR4 probes. BusMaster stays cleared so firmware cannot DMA to host during the observation window. Returns -ENODEV before any sharedram polling or normal attach.)" | tee -a "$LOG"
+echo "(test.182: test.181 proved the ARM release is safe (ARM CR4 running at 20/100 ms). This run snapshots TCM[0x0..0x1c] + NVRAM marker pre-release, then after set_active re-reads them at 500 ms / 1.5 s / 3 s dwells and logs CHANGED/UNCHANGED per word. BusMaster still cleared. Returns -ENODEV before any sharedram polling or normal attach.)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -113,14 +113,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=30  # test.181: brcmf_chip_set_active ARM-release discriminator
+    WAIT_SECS=45  # test.182: post-release TCM sampling (up to 3 s in-module dwell)
 else
     SKIP_ARM=0
     WAIT_SECS=60
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.181 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.182 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.
