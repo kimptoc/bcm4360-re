@@ -104,6 +104,36 @@ inform the exception-loop vs missing-prerequisite question).
 
 ---
 
+## POST-TEST.187 (2026-04-20) — resetintr offset out of TCM range; no TCM writes; exception-loop hypothesis strengthened
+
+Captured artifacts:
+- `phase5/logs/test.187.stage0`
+- `phase5/logs/test.187.stage0.stream`
+- `phase5/logs/test.187.journalctl.txt` (to be captured)
+
+Result: **clean run, host stable, returned -ENODEV as designed.**
+
+### Observations
+1. **resetintr offset calculation**: `resetintr_offset = 0xb80ef000 - 0xb8000000 = 0xef000`. This exceeds TCM size (`ramsize = 0xa0000`), so the resetintr vector lies outside TCM (likely in IMEM region). The probe skipped sampling due to range check.
+2. **No TCM writes**: All sampled TCM regions (header, wide grid, tail) unchanged across dwell periods, identical to test.186d.
+3. **ARM CR4 IOCTL**: CPUHALT cleared after `brcmf_chip_set_active`, ARM running but no visible activity.
+4. **D11 still in reset**: RESET_CTL unchanged.
+5. **PMU activity**: pmutimer monotonic, pmucontrol bit-9 flipped once (as before).
+6. **No mailboxint activity**: No D2H or FN0 bits asserted.
+7. **BusMaster ON before set_active** (as test.186d) still no DMA-stall evidence.
+
+### Interpretation
+- **Exception-loop hypothesis strengthened**: Firmware is not writing to TCM, not releasing D11, not asserting mailboxint, despite ARM being out of halt for ≥3 s. The resetintr vector is outside TCM, so we cannot yet inspect the instruction stream. Need to sample IMEM region.
+- **Firmware image integrity**: Not yet probed (probe D pending). No corruption observed in sampled wide‑TCM grid (but only TCM region).
+- **Next step**: Probe IMEM region around resetintr offset (0xef000) using BAR2 mapping (size 2 MB). Also implement firmware integrity check.
+
+### Recommended next step
+**test.188**: 
+A. Sample IMEM region at offset 0xef000 (256 bytes) before and after set_active, ignoring TCM size limit (but ensure offset < 2 MB). 
+B. Add firmware integrity check: compare wide‑TCM grid with original firmware data (probe D).
+C. Keep BusMaster ON before set_active, skip_arm=1, -ENODEV return.
+
+---
 ## PRE-TEST.187 (2026-04-20) — TCM instruction snapshot around resetintr + firmware integrity check
 
 ### Hypothesis
