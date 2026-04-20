@@ -17,18 +17,18 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.185.stage${STAGE}"
+LOG="$LOG_DIR/test.186.stage${STAGE}"
 
-echo "=== test.185: extended post-ARM-release TCM sampling — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.186a: H2D mailbox kick after passive dwell — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: skip_arm=1 — download_fw_nvram: enter_download_state (read-only) + BAR2 ioread32 probe + 442KB iowrite32 fw; sleeps 100 ms, reads host resetintr from fw->data, writes NVRAM to BAR2, snapshots TCM wide-grid (40 points every 16 KB across 640 KB) + image-header + tail 64 B + ChipCommon backplane regs (clk_ctl_st, pmucontrol, pmustatus, res_state, pmutimer, min/max_res_mask, pmuwatchdog), probes CR4 (IOCTL/IOSTATUS/RESET_CTL) and D11 (IOCTL/IOSTATUS/RESET_CTL) pre-release, attempts INTERNAL_MEM resetcore (NULL on BCM4360), brcmf_chip_set_active(ci, resetintr) + CR4 probe at 20/100 ms + dwell/re-read at 500/1500/3000 ms (each dwell diffs all regions and probes CR4+D11). BusMaster remains cleared. Releases fw/NVRAM, returns -ENODEV." | tee -a "$LOG" ;;
+    0) echo "Stage 0: skip_arm=1 — same passive flow as test.185 (enter_download_state, 442KB fw + 228B NVRAM write, brcmf_chip_set_active, dwell at 500/1500/3000ms with D11+CR4+CC+TCM probes). After 3000ms dwell: ring H2D_MAILBOX_0 (BAR0+0x140) + H2D_MAILBOX_1 (BAR0+0x144) + SBMBX (PCI config 0x98), then post-kick dwells at 500ms and 2000ms with full D11+CR4+CC+mailboxint+TCM diff. BusMaster remains cleared throughout. Returns -ENODEV." | tee -a "$LOG" ;;
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.185: test.184 proved firmware is executing — pmutimer ticks, pmucontrol bit 9 flipped once — but TCM stayed UNCHANGED in 32 sample points. This run widens the TCM scan to a 16-KB grid (40 points across 640 KB) and adds D11 wrapper observation + CR4 wrapper IOSTATUS. BusMaster still cleared. Returns -ENODEV.)" | tee -a "$LOG"
+echo "(test.186a: test.185 showed fw idles after one pmucontrol bit-9 write, D11 held in reset, 56 TCM probes UNCHANGED. This run reuses the test.185 passive flow, then after the 3000ms dwell rings all three H2D channels (H2D_MAILBOX_0, H2D_MAILBOX_1/HostReady, SBMBX) to test whether fw is stalled waiting for a host doorbell. Post-kick dwells at 500/2000ms capture any response. BusMaster still cleared. Returns -ENODEV.)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -113,14 +113,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=45  # test.185: post-release TCM sampling (up to 3 s in-module dwell)
+    WAIT_SECS=45  # test.186: post-release TCM sampling (up to 3 s in-module dwell)
 else
     SKIP_ARM=0
     WAIT_SECS=60
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.185 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.186 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.

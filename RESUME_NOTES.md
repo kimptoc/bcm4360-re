@@ -1,5 +1,47 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.186a (2026-04-20, staged) — H2D mailbox kick after passive dwell
+
+### Hypothesis
+test.185 showed firmware is alive (pmucontrol bit 9 flipped, pmutimer
+ticks) but idles without touching D11 or TCM. The simplest candidate
+for "stuck waiting" is a host doorbell that we never sent. test.186a
+reuses the test.185 passive flow verbatim, then — after the 3000ms
+dwell completes — rings all three available H2D channels in quick
+succession:
+
+1. `H2D_MAILBOX_0` — BAR0 PCIE2-core offset 0x140, generic doorbell
+2. `H2D_MAILBOX_1` — BAR0 PCIE2-core offset 0x144, HostReady doorbell
+3. `SBMBX`         — PCI config-space offset 0x98, sideband mailbox
+
+All three are single-word MMIO/config writes. No BusMaster needed,
+no shared-info parse needed, no DMA. After the kick, dwell +500 ms
+and +2000 ms (total ~2.5 s post-kick) and re-probe D11+CR4 wrappers,
+CC backplane regs, mailboxint, NVRAM marker, image-header TCM,
+wide-TCM grid (40 points), and tail-TCM (16 points). BusMaster
+remains cleared; still -ENODEV early return.
+
+### Prediction
+- **Most likely (continuation of test.185 null)**: all post-kick
+  probes match pre-kick values, no D11 bring-up, no TCM writes,
+  mailboxint stays 0. Confirms firmware isn't gated on a doorbell
+  at this early stage.
+- **Positive evidence (best case)**: mailboxint asserts, OR D11
+  RESET_CTL clears bit 0, OR at least one TCM word changes. Any of
+  these would pinpoint a specific channel firmware is listening on.
+- **Unexpected (must investigate)**: host MMIO freeze, completion
+  timeout on the SBMBX config write, or firmware halt indicated by
+  D11/CR4 wedge.
+
+### Run command
+```
+sudo ./phase5/work/test-staged-reset.sh 0
+```
+WAIT_SECS=45 covers the extra ~2 s post-kick dwell (total in-module
+~5 s). PCIe pre-test: MAbort-, LnkSta x1 2.5GT/s — clean.
+
+---
+
 ## POST-TEST.185 (2026-04-20) — D11 held in reset; firmware stalled in earliest init
 
 Captured artifacts:
