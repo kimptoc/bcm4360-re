@@ -18,3 +18,17 @@ Flush complete.
 === Loading brcmfmac (bcm4360_reset_stage=0, bcm4360_skip_arm=1) --- test.149 ===
 insmod returned rc=0
 Waiting 12s for firmware init (streaming to test.149.stage0.stream)...
+
+=== dmesg snapshot (kernel ring buffer) ===
+[  297.800073] brcmfmac: loading out-of-tree module taints kernel.
+[  297.808957] brcmfmac: BCM4360 test.149: module_init entry (no BAR0 MMIO)
+[  297.809073] brcmfmac: BCM4360 test.149: before brcmf_core_init()
+[  297.809135] brcmfmac: BCM4360 test.149: brcmf_core_init() entry
+[  297.859186] brcmfmac: BCM4360 test.149: pre-return sync (no registrations)
+[  297.859219] brcmfmac: BCM4360 test.149: after brcmf_core_init() err=0
+[  588.865752] Modules linked in: brcmfmac(O-) brcmutil ccm af_packet btusb btrtl btintel btbcm btmtk bluetooth ecdh_generic ecc mt76x2u mt76x2_common mt76x02_usb mt76_usb mt76x02_lib mt76 mac80211 input_leds joydev hid_apple cfg80211 uas mousedev hid_generic usbhid usb_storage bcm5974 rfkill hid libarc4 apple_mfi_fastcharge snd_hda_codec_hdmi ofpart cmdlinepart spi_nor intel_rapl_msr nls_iso8859_1 mtd nls_cp437 intel_rapl_common vfat x86_pkg_temp_thermal fat intel_powerclamp spi_intel_platform iTCO_wdt intel_pmc_bxt coretemp watchdog spi_intel mac_hid crct10dif_pclmul evdev i915 crc32_pclmul polyval_clmulni mei_pxp mei_hdcp polyval_generic ghash_clmulni_intel applesmc sha512_ssse3 sha256_ssse3 sha1_ssse3 aesni_intel gf128mul crypto_simd cryptd rapl intel_cstate intel_uncore snd_hda_codec_cirrus snd_hda_codec_generic efi_pstore led_class i2c_i801 snd_hda_intel i2c_smbus i2c_mux lpc_ich snd_intel_dspcfg drm_buddy ttm snd_intel_sdw_acpi snd_hda_codec acpi_als drm_display_helper snd_hda_core industrialio_triggered_buffer
+[  588.865884]  brcmfmac_module_exit+0xd/0x30 [brcmfmac]
+[  588.877625]  brcmfmac_module_exit+0xd/0x30 [brcmfmac]
+[  588.877715] Modules linked in: brcmfmac(O-) brcmutil ccm af_packet btusb btrtl btintel btbcm btmtk bluetooth ecdh_generic ecc mt76x2u mt76x2_common mt76x02_usb mt76_usb mt76x02_lib mt76 mac80211 input_leds joydev hid_apple cfg80211 uas mousedev hid_generic usbhid usb_storage bcm5974 rfkill hid libarc4 apple_mfi_fastcharge snd_hda_codec_hdmi ofpart cmdlinepart spi_nor intel_rapl_msr nls_iso8859_1 mtd nls_cp437 intel_rapl_common vfat x86_pkg_temp_thermal fat intel_powerclamp spi_intel_platform iTCO_wdt intel_pmc_bxt coretemp watchdog spi_intel mac_hid crct10dif_pclmul evdev i915 crc32_pclmul polyval_clmulni mei_pxp mei_hdcp polyval_generic ghash_clmulni_intel applesmc sha512_ssse3 sha256_ssse3 sha1_ssse3 aesni_intel gf128mul crypto_simd cryptd rapl intel_cstate intel_uncore snd_hda_codec_cirrus snd_hda_codec_generic efi_pstore led_class i2c_i801 snd_hda_intel i2c_smbus i2c_mux lpc_ich snd_intel_dspcfg drm_buddy ttm snd_intel_sdw_acpi snd_hda_codec acpi_als drm_display_helper snd_hda_core industrialio_triggered_buffer
+=== Capture complete ===
+Cleaning up brcmfmac...

@@ -1,0 +1,3 @@
+=== dmesg stream start: Mon 20 Apr 08:07:35 BST 2026 ===
+[  748.717949] brcmfmac: BCM4360 test.151: module_init entry (no BAR0 MMIO)
+[  748.718004] brcmfmac: BCM4360 test.151: before brcmf_core_init()

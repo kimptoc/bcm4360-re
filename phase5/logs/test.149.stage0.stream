@@ -5,3 +5,4 @@
 [  297.809135] brcmfmac: BCM4360 test.149: brcmf_core_init() entry
 [  297.859186] brcmfmac: BCM4360 test.149: pre-return sync (no registrations)
 [  297.859219] brcmfmac: BCM4360 test.149: after brcmf_core_init() err=0
+=== dmesg stream end: Mon 20 Apr 07:46:47 BST 2026 ===
