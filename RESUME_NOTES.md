@@ -1,31 +1,30 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.153 — full SBR, early-return before chip_attach; PCIe clean)
+## Current state (2026-04-20, PRE test.154 — SBR+chip_attach; early-return before ARM halt)
 
-### CODE STATE: test.153 source prepared, rebuilt, committed, and pushed
+### CODE STATE: test.154 source prepared, rebuilt, committed, and pushed
 
-**test.153 change: full SBR block runs, early-return AFTER SBR, BEFORE chip_attach**
-- `brcmf_pcie_probe()` now runs the full SBR block:
-  `pci_save_state()`, `pci_read_config_word()`, `pci_write_config_word(PCI_BRIDGE_CTL_BUS_RESET)`,
-  `msleep(10)`, `pci_write_config_word(deassert)`, `msleep(500)`, `pci_restore_state()`
-- Returns `-ENODEV` AFTER SBR complete, BEFORE `brcmf_chip_attach()`.
-- 50ms delays in core.c retained (post-SDIO, post-PCI sync).
-- Test script: dmesg kill bug fixed (also kills `dmesg -wk` subprocess); WAIT_SECS=15.
+**test.154 change: full SBR + chip_attach; early-return AFTER chip_attach, BEFORE ARM halt**
+- `brcmf_pcie_probe()` runs full SBR block (pci_save_state, bridge reset, pci_restore_state).
+- Calls `brcmf_chip_attach()` — BAR0 MMIO reads to enumerate chip.
+- If chip_attach FAILS: logs `chip_attach FAILED ret=N` and falls through to `fail` label.
+- If chip_attach SUCCEEDS: calls `brcmf_chip_detach()`, returns `-ENODEV` before ARM halt.
 
 **Purpose:**
-- test.152 SUCCESS: probe entry without HW access is safe (all markers, no crash).
-- test.153 narrows crash to: SBR block OR chip_attach (BAR0 MMIO reads).
-- If no crash: SBR is safe; chip_attach is next (known to work in test.53 era).
-- If crash: SBR is the crash trigger; narrow down which SBR operation (most likely
-  `pci_write_config_word(PCI_BRIDGE_CTL_BUS_RESET)` assertion).
+- test.153 SUCCESS: full SBR is safe (all markers, clean rmmod, SBR took ~518ms).
+- test.154 narrows crash to: chip_attach (BAR0 MMIO reads) OR later probe ops (ARM halt etc.).
+- chip_attach worked in test.53 era; may fail now if device state is different post-crash cycles.
 
 **Hypothesis:**
-- Expect NO crash — SBR worked cleanly in test.53; the bridge reset should not crash.
-- If SBR is safe: the crash regressed in chip_attach (or later probe ops).
+- HIGH RISK of crash — BAR0 MMIO reads in chip_attach are the historically problematic area.
+  chip_attach reads backplane registers over PCIe BAR0, which caused Completion Timeouts in
+  test.52 (before SBR was introduced). After SBR, device should be in clean POR state.
+- If NO crash: chip_attach succeeds; crash was in ARM halt or later ops. Huge progress.
+- If crash during chip_attach: BAR0 state post-SBR is still not clean enough for MMIO.
 
-**Pre-test PCIe state (2026-04-20, post-test.152 clean run):**
-- Root port `00:1c.2`: `DLActive+`, `CommClk+`, `MAbort-`, `BridgeCtl: >Reset-` — clean.
-- Endpoint `03:00.0`: `MAbort-`, `DevSta: CorrErr+ UnsupReq+` (expected).
+**Pre-test PCIe state (2026-04-20, post-test.153 clean run):**
+- Root port `00:1c.2`: `DLActive+`, `CommClk+`, `MAbort-` — clean.
+- Endpoint `03:00.0`: `MAbort-`, `DevSta: CorrErr+ UnsupReq+` (expected from UR guard).
 - No driver bound; no brcm modules loaded.
 
 **Test command:**
@@ -35,9 +34,33 @@ sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 Stage1 remains forbidden.
 
 **Interpretation matrix:**
-- No crash, `SBR complete` marker, `post-PCI sync` appear: SBR safe; chip_attach next.
-- Crash after `before SBR` but before `SBR complete`: crash is in SBR body (pci_write_config_word assertion likely).
-- Crash after `SBR complete`: crash in post-SBR pci_restore_state or mdelay (very unlikely).
+- No crash, `chip_attach OK` marker, `post-PCI sync` appear: chip_attach safe; ARM halt next.
+- `chip_attach FAILED ret=N`: chip not enumerating post-SBR; investigate brcmf_pcie_buscore_ops.
+- Crash after `before brcmf_chip_attach`: crash in chip_attach BAR0 MMIO reads.
+- Crash after `SBR complete` but before `before brcmf_chip_attach`: crash in pci_restore_state (unlikely).
+
+---
+
+## Previous state (2026-04-20, POST test.153 SUCCESS — SBR safe; chip_attach next)
+
+### CODE/LOG STATE: test.153 ran cleanly — all markers appeared; SBR took 518ms
+
+**test.153 key log entries:**
+```
+brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+brcmfmac: BCM4360 test.153: SBR complete — early return before chip_attach
+brcmfmac: BCM4360 test.153: pci_register_driver returned ret=0
+brcmfmac: BCM4360 test.153: post-PCI sync (skipping USB)
+brcmfmac: BCM4360 test.153: after brcmf_core_init() err=0
+```
+
+**Key findings:**
+- Full SBR (assert + 10ms hold + deassert + 500ms wait + pci_restore_state) is SAFE.
+- bridge_ctrl=0x0002 → PCI_BRIDGE_CTL_ISA bit set; SBR bit not stuck — bridge is clean.
+- SBR timing: ~518ms (10ms + 500ms + overhead) — consistent with expected.
+- Crash trigger is `brcmf_chip_attach()` (BAR0 MMIO reads) or later probe operations.
+- rmmod completed cleanly; dmesg kill fix working (no hung script).
 
 ---
 

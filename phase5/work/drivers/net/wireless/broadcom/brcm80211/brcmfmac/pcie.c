@@ -4020,21 +4020,26 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		pci_restore_state(pdev);
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.53: SBR complete — bridge_ctrl restored\n");
-		pr_emerg("BCM4360 test.153: SBR complete — early return before chip_attach\n");
-		kfree(devinfo);
-		return -ENODEV;
 	}
 
+	pr_emerg("BCM4360 test.154: before brcmf_chip_attach\n");
 	devinfo->ci = brcmf_chip_attach(devinfo, pdev->device,
 					&brcmf_pcie_buscore_ops);
 	if (IS_ERR(devinfo->ci)) {
 		ret = PTR_ERR(devinfo->ci);
 		devinfo->ci = NULL;
+		pr_emerg("BCM4360 test.154: chip_attach FAILED ret=%d\n", ret);
 		goto fail;
 	}
-	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
+	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.119: brcmf_chip_attach returned successfully\n");
+		pr_emerg("BCM4360 test.154: chip_attach OK — early return before ARM halt\n");
+		brcmf_chip_detach(devinfo->ci);
+		devinfo->ci = NULL;
+		kfree(devinfo);
+		return -ENODEV;
+	}
 
 	/* test.142: reordered — ARM CR4 reset FIRST (highest priority: stop garbage
 	 * execution before any other probe work), then BusMaster/ASPM cleanup.
@@ -4449,18 +4454,18 @@ static struct pci_driver brcmf_pciedrvr = {
  * after chip_attach() has initialized the PCIe-to-backplane bridge. */
 void brcmf_pcie_early_arm_halt(void)
 {
-	pr_emerg("BCM4360 test.153: module_init entry (no BAR0 MMIO)\n");
+	pr_emerg("BCM4360 test.154: module_init entry (no BAR0 MMIO)\n");
 }
 
 int brcmf_pcie_register(void)
 {
 	int ret;
 
-	pr_emerg("BCM4360 test.153: brcmf_pcie_register() entry\n");
-	pr_emerg("BCM4360 test.153: skipping brcmf_dbg in brcmf_pcie_register\n");
-	pr_emerg("BCM4360 test.153: after skipped brcmf_dbg, before pci_register_driver\n");
+	pr_emerg("BCM4360 test.154: brcmf_pcie_register() entry\n");
+	pr_emerg("BCM4360 test.154: skipping brcmf_dbg in brcmf_pcie_register\n");
+	pr_emerg("BCM4360 test.154: after skipped brcmf_dbg, before pci_register_driver\n");
 	ret = pci_register_driver(&brcmf_pciedrvr);
-	pr_emerg("BCM4360 test.153: pci_register_driver returned ret=%d\n", ret);
+	pr_emerg("BCM4360 test.154: pci_register_driver returned ret=%d\n", ret);
 	return ret;
 }
 

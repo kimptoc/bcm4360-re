@@ -1,0 +1,45 @@
+=== test.153: SBR-complete early-return — before chip_attach — stage=0 ===
+Date: Mon 20 Apr 08:35:30 BST 2026
+
+Stage 0: skip_arm=1 — module_init/register markers; no ARM release if probe reaches firmware path.
+(test.153: full SBR runs in probe; early return after SBR, before chip_attach)
+
+=== Pre-test BAR0 MMIO guard ===
+BAR0 MMIO UR/I/O error (7ms) — device alive; SBR in probe should fix. Proceeding.
+
+=== Pre-test PCIe state ===
+(lspci not available)
+
+=== Pre-test root port (00:1c.2) state ===
+
+=== Flushing to disk ===
+Flush complete.
+
+=== Loading brcmfmac (bcm4360_reset_stage=0, bcm4360_skip_arm=1) --- test.153 ===
+insmod returned rc=0
+Waiting 15s for firmware init (streaming to test.153.stage0.stream)...
+
+=== dmesg snapshot (kernel ring buffer) ===
+[ 1524.261157] brcmfmac: BCM4360 test.153: module_init entry (no BAR0 MMIO)
+[ 1524.261282] brcmfmac: BCM4360 test.153: before brcmf_core_init()
+[ 1524.261324] brcmfmac: BCM4360 test.153: brcmf_core_init() entry
+[ 1524.261363] brcmfmac: BCM4360 test.153: before brcmf_sdio_register()
+[ 1524.261402] brcmfmac: BCM4360 test.153: after brcmf_sdio_register() err=0
+[ 1524.314327] brcmfmac: BCM4360 test.153: post-SDIO sync (before PCI)
+[ 1524.314383] brcmfmac: BCM4360 test.153: before brcmf_pcie_register()
+[ 1524.314427] brcmfmac: BCM4360 test.153: brcmf_pcie_register() entry
+[ 1524.314470] brcmfmac: BCM4360 test.153: skipping brcmf_dbg in brcmf_pcie_register
+[ 1524.314522] brcmfmac: BCM4360 test.153: after skipped brcmf_dbg, before pci_register_driver
+[ 1524.317074] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=0000000004565ec3)
+[ 1524.319690] brcmfmac: BCM4360 test.127: probe entry (vendor=14e4 device=43a0)
+[ 1524.322714] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+[ 1524.325444] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+[ 1524.328238] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+[ 1524.846530] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+[ 1524.846578] brcmfmac: BCM4360 test.153: SBR complete — early return before chip_attach
+[ 1524.846650] brcmfmac: BCM4360 test.153: pci_register_driver returned ret=0
+[ 1524.846683] brcmfmac: BCM4360 test.153: after brcmf_pcie_register() err=0
+[ 1524.896725] brcmfmac: BCM4360 test.153: post-PCI sync (skipping USB)
+[ 1524.899072] brcmfmac: BCM4360 test.153: after brcmf_core_init() err=0
+=== Capture complete ===
+Cleaning up brcmfmac...
