@@ -1,53 +1,69 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.149 — early-return discriminator; PCIe clean after SMC reset)
+## Current state (2026-04-20, PRE test.150 — SDIO-only registration; PCIe clean)
 
-### CODE STATE: test.149 source prepared, rebuilt, committed, and pushed
+### CODE STATE: test.150 source prepared, rebuilt, committed, and pushed
 
-**test.149 change: early-return discriminator in brcmf_core_init()**
+**test.150 change: SDIO-only registration**
 - No BAR0 MMIO, BAR2 MMIO, PCI config, or pre-probe mitigation.
 - `brcmf_core_init()` now:
-  - Logs `BCM4360 test.149: brcmf_core_init() entry`
+  - Logs `BCM4360 test.150: brcmf_core_init() entry`
+  - Logs `BCM4360 test.150: before brcmf_sdio_register()`
+  - Calls `brcmf_sdio_register()` (no cleanup on early return — rmmod may need reboot)
+  - Logs `BCM4360 test.150: after brcmf_sdio_register() err=%d`
   - Delays 50ms (`mdelay(50)`)
-  - Logs `BCM4360 test.149: pre-return sync (no registrations)`
-  - Returns 0 immediately — SDIO, USB, and PCI registrations are skipped entirely
-- `brcmfmac_module_init()` logs:
-  - `BCM4360 test.149: before brcmf_core_init()`
-  - `BCM4360 test.149: after brcmf_core_init() err=0`
-- `brcmf_pcie_early_arm_halt()` still logs:
-  - `BCM4360 test.149: module_init entry (no BAR0 MMIO)`
+  - Logs `BCM4360 test.150: post-SDIO sync (skipping USB and PCI)`
+  - Returns 0 — USB and PCI registrations skipped
+- `brcmfmac_module_init()` still logs before/after `brcmf_core_init()`.
+- `brcmf_pcie_early_arm_halt()` still logs module_init entry.
 
-**Purpose (two questions answered by one test):**
-1. Does the crash go away? → Yes: bus registration (SDIO/USB/PCI) or probe is the trigger.
-2. Does the `pre-return sync` marker appear? → If only `entry` survives, the crash is async HW coinciding with module load; printk-persistence-loss between consecutive emerg calls is ruled out.
+**Purpose:**
+- test.149 proved: no crash with zero registrations; printk persistence fine.
+- test.150 isolates SDIO registration: if it crashes → SDIO is the trigger; if safe → add USB next, then PCI.
+- Note: `brcmf_sdio_exit()` is NOT called on this early-return path; if crash-free, may need reboot between tests instead of rmmod.
 
 **Hypothesis:**
-- Expect no crash (early return should be safe).
-- Expect both `entry` and `pre-return sync` to appear, confirming printk persistence is not the problem.
-- If still crashes: stop narrowing source markers; pivot to netconsole/serial for persistence-proof logging or investigate async HW (ACPI, SMI, another driver triggering on module load).
+- Expect no crash (SDIO bus registration should be benign for a PCIe device with no SDIO hardware attached).
+- Expect all markers including `post-SDIO sync` to appear.
+- If crashes: SDIO subsystem init has a side effect that interacts badly with the BCM4360 PCIe state — investigate SDIO subsystem global init.
 
-**Build required before running:**
-```
-make -C /nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules
-```
+**Build status:** Rebuilt with test.150 instrumentation.
 
-**Pre-test PCIe state (post-SMC reset, 2026-04-20):**
-- Root port `00:1c.2`: secondary/subordinate `03/03`, `CommClk+`, `DLActive+`, `MAbort-` (clean).
-- Endpoint `03:00.0`: present `14e4:43a0` rev `03`, BAR0 `b0600000` size `32K`, BAR2 `b0400000` size `2M`, `MAbort-`, AER `UESta` clear.
-- `DevSta: CorrErr+ UnsupReq+` persists from prior UR guard runs (expected).
-- No bcma/wl/brcmfmac modules loaded; no driver bound to 03:00.0.
+**Pre-test PCIe state (2026-04-20):**
+- Root port `00:1c.2`: `DLActive+`, `CommClk+`, `MAbort-`, bus `03/03` — clean.
+- Endpoint `03:00.0`: present, `MAbort-`, AER clear, `DevSta: CorrErr+ UnsupReq+` (expected from UR guard).
+- No driver bound to 03:00.0; no bcma/wl/brcm modules loaded.
 
-**Test command after rebuild/commit/push:**
+**Test command:**
 ```
 sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 ```
 Stage1 remains forbidden.
 
 **Interpretation matrix:**
-- No crash, both markers appear: registration/probe is the trigger; next test adds SDIO registration only.
-- No crash, only `entry` appears: async HW coinciding; the 50ms delay likely absorbed the event without crash.
-- Crash with only `entry`: async HW crash between consecutive pr_emerg — pivot to serial/netconsole.
-- Crash with both markers: registration skip is not enough; something else at module-init level crashes.
+- No crash, all markers appear: SDIO safe; add USB next (test.151 = SDIO+USB, skip PCI).
+- Crash before/during `brcmf_sdio_register()`: SDIO init is the trigger; investigate SDIO subsystem.
+- Crash after SDIO but before `post-SDIO sync`: SDIO side effects (async) are the trigger.
+
+---
+
+## Previous state (2026-04-20, POST test.149 SUCCESS — no crash; SDIO-only is next)
+
+### CODE/LOG STATE: test.149 ran cleanly — all markers appeared
+
+**Stream log captured:**
+```
+brcmfmac: BCM4360 test.149: module_init entry (no BAR0 MMIO)
+brcmfmac: BCM4360 test.149: before brcmf_core_init()
+brcmfmac: BCM4360 test.149: brcmf_core_init() entry
+brcmfmac: BCM4360 test.149: pre-return sync (no registrations)   [after 50ms mdelay]
+brcmfmac: BCM4360 test.149: after brcmf_core_init() err=0
+```
+
+**Key findings:**
+1. **No crash**: brcmf_core_init() with no registrations is safe — module load alone does not trigger the crash.
+2. **Printk persistence confirmed**: both `entry` and `pre-return sync` appeared after a 50ms delay; the test.148 missing marker was not a persistence issue but a crash-during-registration event.
+3. **Root cause narrowed**: crash is triggered by SDIO, USB, or PCI registration (or probe side effects).
 
 ---
 

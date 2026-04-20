@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.149.stage${STAGE}"
+LOG="$LOG_DIR/test.150.stage${STAGE}"
 
-echo "=== test.149: brcmf_core_init/brcmf_pcie_register call-site markers — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.150: brcmf_core_init/brcmf_pcie_register call-site markers — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -28,7 +28,7 @@ case "$STAGE" in
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.149: early-return discriminator — brcmf_core_init() returns before any bus registration; 50ms delay + pre-return sync marker; no MMIO)" | tee -a "$LOG"
+echo "(test.150: SDIO-only registration discriminator — calls brcmf_sdio_register() then returns; USB and PCI skipped; 50ms post-SDIO sync marker)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -105,14 +105,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=12  # test.149: module/core/register markers + existing staged-reset/download diagnostics
+    WAIT_SECS=12  # test.150: module/core/register markers + existing staged-reset/download diagnostics
 else
     SKIP_ARM=0
     WAIT_SECS=35
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.149 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.150 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.

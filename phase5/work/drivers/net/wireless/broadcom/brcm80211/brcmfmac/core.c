@@ -1540,9 +1540,12 @@ int __init brcmf_core_init(void)
 {
 	int err;
 
-	pr_emerg("BCM4360 test.149: brcmf_core_init() entry\n");
+	pr_emerg("BCM4360 test.150: brcmf_core_init() entry\n");
+	pr_emerg("BCM4360 test.150: before brcmf_sdio_register()\n");
+	err = brcmf_sdio_register();
+	pr_emerg("BCM4360 test.150: after brcmf_sdio_register() err=%d\n", err);
 	mdelay(50);
-	pr_emerg("BCM4360 test.149: pre-return sync (no registrations)\n");
+	pr_emerg("BCM4360 test.150: post-SDIO sync (skipping USB and PCI)\n");
 	return 0;
 
 error_pcie_register:

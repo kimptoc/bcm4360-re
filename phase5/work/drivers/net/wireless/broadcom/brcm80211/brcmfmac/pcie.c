@@ -4446,18 +4446,18 @@ static struct pci_driver brcmf_pciedrvr = {
  * after chip_attach() has initialized the PCIe-to-backplane bridge. */
 void brcmf_pcie_early_arm_halt(void)
 {
-	pr_emerg("BCM4360 test.149: module_init entry (no BAR0 MMIO)\n");
+	pr_emerg("BCM4360 test.150: module_init entry (no BAR0 MMIO)\n");
 }
 
 int brcmf_pcie_register(void)
 {
 	int ret;
 
-	pr_emerg("BCM4360 test.149: brcmf_pcie_register() entry\n");
-	pr_emerg("BCM4360 test.149: skipping brcmf_dbg in brcmf_pcie_register\n");
-	pr_emerg("BCM4360 test.149: after skipped brcmf_dbg, before pci_register_driver\n");
+	pr_emerg("BCM4360 test.150: brcmf_pcie_register() entry\n");
+	pr_emerg("BCM4360 test.150: skipping brcmf_dbg in brcmf_pcie_register\n");
+	pr_emerg("BCM4360 test.150: after skipped brcmf_dbg, before pci_register_driver\n");
 	ret = pci_register_driver(&brcmf_pciedrvr);
-	pr_emerg("BCM4360 test.149: pci_register_driver returned ret=%d\n", ret);
+	pr_emerg("BCM4360 test.150: pci_register_driver returned ret=%d\n", ret);
 	return ret;
 }
 
