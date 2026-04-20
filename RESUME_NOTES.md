@@ -1,6 +1,66 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.161 — REBUILT, ready for insmod)
+## Current state (2026-04-20, POST test.161 SUCCESS — ready for test.162)
+
+### HUGE MILESTONE: async firmware loader + setup callback + remove short-circuit all clean
+
+**test.161 log entries (dmesg):**
+```
+test.161: module_init entry — fw_get_firmwares + setup-callback stub + remove short-circuit
+test.161: brcmf_pcie_register() entry → before pci_register_driver → pci_register_driver returned ret=0
+[probe chain through test.160 scope SUCCESS]
+test.160: before prepare_fw_request → firmware request prepared
+test.161: calling brcmf_fw_get_firmwares — async callback expected
+test.161: brcmf_fw_get_firmwares returned 0 (async/success; callback will fire)
+[async fw loader runs]
+Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+test.161: brcmf_pcie_setup CALLBACK INVOKED ret=0
+test.161: fw CODE size=442233
+test.161: NVRAM data=<ptr> len=228
+test.161: CLM=NULL TXCAP=NULL
+test.161: fw released; returning from setup (ret=0)
+[rmmod]
+test.161: remove() short-circuit — state=0 != UP; skipping MMIO cleanup
+test.161: remove() short-circuit complete
+```
+
+**Key findings:**
+- Async firmware loader path WORKS on BCM4360 — no crash, callback fires cleanly.
+- **Firmware sizes CONFIRMED:**
+  - `brcmfmac4360-pcie.bin` = **442233 bytes (432 KB)** ✓ matches Phase 1 extraction
+  - `brcmfmac4360-pcie.txt` (NVRAM) = **228 bytes** ✓ NVRAM file IS present
+  - `.clm_blob` and `.txcap_blob` NOT present (ENOENT) — OPTIONAL flag means no error.
+- `brcmf_pcie_setup` successfully entered with ret=0 and populated fwreq.
+- BCM4360 early-return stub released all fw handles without MMIO.
+- `brcmf_pcie_remove` short-circuit path worked: state=0 (DOWN), MMIO skipped.
+- **Clean rmmod** — no crash, machine stable.
+
+**Post-test PCIe state (2026-04-20 ~10:10):**
+- Endpoint 03:00.0: DevSta `CorrErr- NonFatalErr- FatalErr- UnsupReq-` (FULLY CLEAN).
+- MAbort-, LnkSta 2.5GT/s Width x1.
+
+**What this proves:**
+- The ENTIRE probe path from `insmod` through `brcmf_fw_get_firmwares` +
+  async callback entry is now safe and reproducible on BCM4360.
+- firmware bytes sit in RAM ready for TCM download.
+- Next slice can start doing BAR2 MMIO (the historically crash-prone work).
+
+### Next: test.162 — `brcmf_pcie_attach` (first BAR2 MMIO of setup callback)
+
+**Scope:** In the setup callback (instead of early-return), call ONLY
+`brcmf_pcie_attach(devinfo)` — which does IRQ prep, mailbox sizes, shared
+memory structure setup. Then still early-return. No firmware download yet.
+
+**Why carefully:** `brcmf_pcie_attach` is the entry point into the BAR2 MMIO
+era. If it crashes, we know exactly where. If it succeeds, test.163 can do
+`brcmf_chip_get_raminfo` (already known safe — fixed RAM info).
+
+**Build status:** Current .ko is test.161 build. test.162 will require rebuild.
+
+---
+
+## Previous state (2026-04-20, PRE test.161 — REBUILT, ready for insmod)
 
 ### CODE STATE: test.161 implemented, built, markers verified in .ko strings
 

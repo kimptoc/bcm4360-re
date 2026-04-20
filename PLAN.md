@@ -36,11 +36,15 @@ hard-crash sessions (tests 149–157).
 - **test.160 SUCCESS:** brcmf_alloc (wiphy_new + cfg80211 ops) + OTP bypass +
   brcmf_pcie_prepare_fw_request all safe. Firmware name resolved:
   `brcm/brcmfmac4360-pcie` for chip BCM4360/3.
+- **test.161 SUCCESS:** `brcmf_fw_get_firmwares` async path + setup callback
+  entry + BCM4360 early-return stub + `brcmf_pcie_remove` BCM4360 short-circuit
+  guard (skips MMIO cleanup when `state != UP`). Firmware blobs loaded:
+  CODE 442233 B, NVRAM 228 B (CLM/TXCAP absent — optional). Clean rmmod.
 
-**Next boundary:** `brcmf_fw_get_firmwares()` → async callback
-`brcmf_pcie_setup()` — where firmware download to TCM, NVRAM placement, ring
-buffer setup, and ARM release happen.  This is the historical crash-prone path
-that gated the pre-regression Phase 5.2 work (TCM[0x58f08] D11 probe).
+**Next boundary:** In setup callback, begin doing BAR2 MMIO — starting with
+`brcmf_pcie_attach(devinfo)` (mailbox sizes, shared structure setup). This
+is the entry to the historical crash-prone path that gated the pre-regression
+Phase 5.2 work (TCM[0x58f08] D11 probe).
 
 **Re-entering the old 5.2 investigation:** once the probe-path restore is
 complete (i.e. firmware download and ARM release can run without host crash),
