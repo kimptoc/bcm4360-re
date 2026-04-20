@@ -6661,3 +6661,38 @@ Interpretation:
   chip/host event after a complete BAR2 firmware write, not on the probe reads.
 - If it reaches `post-idle-loop` but freezes on resetintr, the next boundary is
   the PCIE2 resetintr read rather than the idle delay.
+
+---
+
+## PRE-TEST.173 STATE — 2026-04-20 17:58
+
+Implemented the recommended test.173 code checkpoint:
+- `pcie.c`: relabeled current breadcrumbs to `test.173`; retained the
+  endpoint/root-port LnkCtl logging from test.172 for comparability; replaced
+  the post-`fw write complete` 10 x `mdelay(10) + ARM CR4 BAR0 probe` loop
+  with a no-device-MMIO loop that logs before and after each 10 ms delay.
+- `test-staged-reset.sh`: writes `test.173.stageN` logs and documents the
+  no-MMIO post-fw idle-loop discriminator. Stage0 remains the only intended
+  next run (`bcm4360_skip_arm=1`, `WAIT_SECS=90`).
+
+Build status:
+- Build command used:
+  `make -C /nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules`
+- Build result: OK. Existing warning only:
+  `brcmf_pcie_write_ram32` defined but not used. BTF skipped because `vmlinux`
+  is unavailable.
+- `strings brcmfmac.ko | rg "test\\.173|no-MMIO|post-idle-loop"` confirms
+  the new markers are in the module.
+
+Before running:
+1. Commit and push this test.173 code/build-state checkpoint.
+2. Run only stage 0:
+   `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
+
+Expected interpretation:
+- Reaches `post-idle-loop`: BAR0 ARM CR4 probes are implicated in the
+  post-write crash path.
+- Freezes during the no-MMIO idle loop: asynchronous chip/host event after a
+  completed BAR2 firmware write remains the leading hypothesis.
+- Reaches `post-idle-loop` then freezes on resetintr: PCIE2 resetintr read is
+  the next boundary.

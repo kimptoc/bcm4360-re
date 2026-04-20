@@ -621,3 +621,15 @@ post-write idle loop and use a no-device-MMIO 10 x 10 ms delay loop with
 breadcrumbs only. If that survives to `post-idle-loop`, the ARM CR4 BAR0 probes
 are implicated. If it still freezes inside the no-MMIO loop, investigate an
 asynchronous chip/host event after a completed BAR2 firmware write.
+
+## Phase 5.4: PRE test.173
+
+test.173 is prepared and built. It keeps the test.172 endpoint/root-port
+link-state logging for comparability, then changes the post-`fw write complete`
+idle window to 10 x 10 ms delays with breadcrumbs only. No BAR0 ARM CR4 probe
+runs inside that idle loop.
+
+Run only stage0 next. Interpret survival to `post-idle-loop` as evidence that
+the BAR0 ARM probes were contributing to the crash; interpret another freeze
+inside the no-MMIO loop as evidence for an asynchronous post-write chip/host
+event.

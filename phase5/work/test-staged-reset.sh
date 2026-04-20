@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.172.stage${STAGE}"
+LOG="$LOG_DIR/test.173.stage${STAGE}"
 
-echo "=== test.172: disable upstream root-port ASPM/CLKPM before test.171 post-fw idle probes — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.173: no-MMIO post-fw idle loop after complete BAR2 firmware write — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -28,7 +28,7 @@ case "$STAGE" in
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.172: test.171 completed the full 442KB fw write, logged idle-0 and idle-1 with ARM halted, then hard-froze before idle-2. This run disables ASPM/CLKPM on the upstream root port before download while preserving the same 10 x mdelay(10)+ARM-probe idle loop. Expected: survival through post-idle-loop implicates root-port link power management; another freeze after idle-1 shifts focus to chip PMU/watchdog or BAR0 probe side effects.)" | tee -a "$LOG"
+echo "(test.173: test.172 showed endpoint ASPM cleared and root-port ASPM/CLKPM already off, then completed the 442KB fw write and froze after idle-7 while ARM CR4 still reported halted. This run keeps the same post-write 10 x 10ms idle window but removes BAR0 ARM CR4 probes from that window. Expected: survival through post-idle-loop implicates the BAR0 probes; another freeze inside the no-MMIO idle loop points to an asynchronous post-write chip/host event.)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -113,14 +113,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=90  # test.172: root-port link-state disable plus same post-fw idle probes
+    WAIT_SECS=90  # test.173: no-device-MMIO post-fw idle-loop discriminator
 else
     SKIP_ARM=0
     WAIT_SECS=60
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.172 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.173 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.
