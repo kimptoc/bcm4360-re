@@ -1,8 +1,10 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.158 SUCCESS — preparing test.159)
+## Current state (2026-04-20, POST test.158 SUCCESS — test.159 READY TO RUN)
 
-### CODE STATE: test.158 ran cleanly — all markers appeared, no crash, clean rmmod
+### CODE STATE: test.159 source prepared, REBUILT, ready for insmod
+
+**test.158 ran cleanly — all markers appeared, no crash, clean rmmod (details below).**
 
 **test.158 key log entries (from dmesg snapshot):**
 ```
