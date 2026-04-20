@@ -1,6 +1,71 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.177 — NVRAM BAR2 write discriminator)
+## Current state (2026-04-20, POST test.177 — NVRAM BAR2 write SUCCESS)
+
+### TEST.177 RESULT — NVRAM BAR2 write after safe sleep/resetintr survives
+
+Captured artifacts:
+- `phase5/logs/test.177.stage0`
+- `phase5/logs/test.177.stage0.stream`
+
+Result: **SUCCESS / no crash.** test.177 completed the full 442233-byte BAR2
+firmware write, slept for 100 ms after `fw write complete`, read resetintr from
+host firmware memory, wrote the 228-byte NVRAM blob to BAR2 at `0x9ff1c`,
+released `fw`/`nvram`, returned `-ENODEV`, waited the harness's 30 seconds, and
+cleaned up without freezing.
+
+Key persisted markers:
+```
+BCM4360 test.177: fw write complete (442233 bytes)
+BCM4360 test.177: before post-fw msleep(100)
+BCM4360 test.177: after post-fw msleep(100)
+BCM4360 test.177: host resetintr=0xb80ef000 before NVRAM
+BCM4360 test.177: pre-NVRAM write address=0x9ff1c len=228 naddr=ffffcf5982c9ff1c
+BCM4360 test.177: post-NVRAM write done (228 bytes)
+BCM4360 test.177: released fw/nvram after NVRAM write; returning -ENODEV
+BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+BCM4360 test.163: fw released; returning from setup (state still DOWN)
+```
+
+### Interpretation
+
+The NVRAM BAR2 write is safe after the sleeping dwell and host resetintr
+extraction. The old crash boundary is now further downstream than the raw NVRAM
+write. The next untested boundary is reading back the NVRAM marker at
+`ramsize - 4` after the NVRAM write.
+
+### Current HW state after test.177
+
+- `brcmfmac` is unloaded. `brcmutil` remains loaded from the harness; USB Wi-Fi
+  stack modules remain unrelated.
+- Endpoint 03:00.0 is visible: `Mem+ BusMaster-`, BAR0=b0600000, BAR2=b0400000,
+  `<MAbort-`, link 2.5GT/s x1, endpoint ASPM disabled.
+- Endpoint AER UESta is clear; correctable `Timeout+ AdvNonFatalErr+` remains.
+- Root port 00:1c.2 is visible: bus 03/03, memory window b0400000-b06fffff,
+  bridge `MAbort-`, secondary `<MAbort-`, link 2.5GT/s x1, ASPM disabled.
+
+### Recommended next step — PRE test.178
+
+Do **not** run another hardware test until this note and the test.177 artifacts
+are committed, pushed, and synced.
+
+Best next discriminator: add only the NVRAM marker/readback after the successful
+test.177 NVRAM write, then release and return:
+1. Keep the test.177 sequence through `post-NVRAM write done`.
+2. Read/log `brcmf_pcie_read_ram32(devinfo, devinfo->ci->ramsize - 4)`.
+3. Release `fw`/`nvram` and return `-ENODEV`.
+4. Still skip post-write ARM probe, device-side resetintr use, TCM dump, and
+   ARM release.
+
+Expected interpretation:
+- Survives: marker/readback is safe; next boundary can add the small TCM verify
+  dump or device-side resetintr/exit-download-state work.
+- Freezes on/after the marker read: BAR2 readback from the NVRAM/shared-RAM
+  marker address is the next unsafe operation.
+
+---
+
+## Previous state (2026-04-20, PRE test.177 — NVRAM BAR2 write discriminator)
 
 ### PRE-TEST.177 checkpoint
 

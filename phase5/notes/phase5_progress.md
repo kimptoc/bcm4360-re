@@ -804,3 +804,32 @@ Build status: OK via kernel kbuild. The only warning is the pre-existing unused
 `brcmf_pcie_write_ram32` helper, and BTF is skipped because `vmlinux` is
 unavailable. `brcmfmac.ko` contains the `test.177` host resetintr, pre-NVRAM,
 post-NVRAM, and early-return markers.
+
+## Phase 5.4: Current state (2026-04-20, POST test.177)
+
+test.177 succeeded. It completed the full 442233 byte BAR2 firmware write,
+slept for 100 ms after `fw write complete`, read host resetintr, wrote the
+228-byte NVRAM blob to BAR2 at `0x9ff1c`, released `fw`/`nvram`, returned
+`-ENODEV`, waited 30 seconds in the harness, and unloaded `brcmfmac` without a
+host freeze.
+
+Persisted key markers:
+- `BCM4360 test.177: host resetintr=0xb80ef000 before NVRAM`
+- `BCM4360 test.177: pre-NVRAM write address=0x9ff1c len=228 naddr=ffffcf5982c9ff1c`
+- `BCM4360 test.177: post-NVRAM write done (228 bytes)`
+- `BCM4360 test.177: released fw/nvram after NVRAM write; returning -ENODEV`
+
+This proves the NVRAM BAR2 write itself is safe after the sleeping dwell and
+host resetintr extraction. The next untested boundary is the NVRAM marker
+readback at `ramsize - 4`.
+
+Current post-test PCIe state remains sane for fatal errors: endpoint and root
+port are visible, link is 2.5GT/s x1, endpoint/root port ASPM are disabled,
+`MAbort-` is clear on the relevant bridges/device state, and endpoint UESta is
+clear. Endpoint correctable AER still reports `Timeout+ AdvNonFatalErr+`.
+
+Recommended test.178: preserve the test.177 sequence through
+`post-NVRAM write done`, then add only
+`brcmf_pcie_read_ram32(devinfo, devinfo->ci->ramsize - 4)` with a breadcrumb,
+release `fw`/`nvram`, and return `-ENODEV`. Continue to skip post-write ARM
+probing, device-side resetintr use, TCM dump, and ARM release.

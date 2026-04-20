@@ -1,0 +1,271 @@
+=== dmesg stream start: Mon Apr 20 18:24:23 BST 2026 ===
+[ 1830.477624] brcmfmac: BCM4360 test.176: module_init entry — immediate return after complete BAR2 fw write
+[ 1830.477725] brcmfmac: BCM4360 test.156: before brcmf_core_init()
+[ 1830.477759] brcmfmac: BCM4360 test.155: brcmf_core_init() entry
+[ 1830.477791] brcmfmac: BCM4360 test.155: before brcmf_sdio_register()
+[ 1830.479206] brcmfmac: BCM4360 test.155: after brcmf_sdio_register() err=0
+[ 1830.530700] brcmfmac: BCM4360 test.155: post-SDIO sync (before PCI)
+[ 1830.530737] brcmfmac: BCM4360 test.155: before brcmf_pcie_register()
+[ 1830.530770] brcmfmac: BCM4360 test.176: brcmf_pcie_register() entry
+[ 1830.838547] brcmfmac: BCM4360 test.176: before pci_register_driver
+[ 1831.142644] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=00000000d0936112)
+[ 1831.446525] brcmfmac: BCM4360 test.158: probe entry flush done — proceeding
+[ 1831.750596] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+[ 1831.750655] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+[ 1831.750777] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+[ 1832.262663] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+[ 1832.262740] brcmfmac: BCM4360 test.158: before brcmf_chip_attach
+[ 1832.566623] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcf5983c00000
+[ 1832.566633] brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+[ 1832.617618] brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+[ 1832.618277] brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+[ 1832.618391] brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+[ 1832.618551] brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+[ 1832.623136] brcmfmac 0000:03:00.0: BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)
+[ 1832.627386] brcmfmac 0000:03:00.0: BCM4360 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0
+[ 1832.627403] brcmfmac: BCM4360 test.176: post-145 ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 1832.627408] brcmfmac: brcmf_chip_recognition: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+[ 1832.627411] brcmfmac: brcmf_chip_recognition: BCM4360 test.125: after reset, before get_raminfo
+[ 1832.627413] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[ 1832.627416] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[ 1832.627428] brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+[ 1832.934569] brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+[ 1832.934760] brcmfmac: BCM4360 test.158: about to pci_clear_master (config-space write)
+[ 1833.238466] brcmfmac 0000:03:00.0: BCM4360 test.158: BusMaster cleared after chip_attach
+[ 1833.542513] brcmfmac: BCM4360 test.158: about to read LnkCtl before ASPM disable
+[ 1833.847435] brcmfmac: BCM4360 test.158: LnkCtl read before=0x0140 — disabling ASPM
+[ 1834.150445] brcmfmac: BCM4360 test.158: pci_disable_link_state returned — reading LnkCtl
+[ 1834.454440] brcmfmac 0000:03:00.0: BCM4360 test.158: ASPM disabled; LnkCtl before=0x0140 after=0x0140 ASPM-bits-after=0x0
+[ 1834.758498] brcmfmac 0000:03:00.0: BCM4360 test.176: root port 0000:00:1c.2 LnkCtl before=0x0040 ASPM=0x0 CLKREQ=off — disabling L0s/L1/CLKPM
+[ 1835.062466] brcmfmac: BCM4360 test.176: root-port pci_disable_link_state returned — reading LnkCtl
+[ 1835.366446] brcmfmac 0000:03:00.0: BCM4360 test.176: root port 0000:00:1c.2 LnkCtl after=0x0040 ASPM=0x0 CLKREQ=off
+[ 1835.974431] brcmfmac 0000:03:00.0: BCM4360 test.159: before PCIE2 core/reginfo setup
+[ 1836.278342] brcmfmac 0000:03:00.0: BCM4360 test.159: reginfo selected (pcie2 rev=1)
+[ 1836.582394] brcmfmac 0000:03:00.0: BCM4360 test.159: pcie_bus_dev allocated
+[ 1836.886424] brcmfmac 0000:03:00.0: BCM4360 test.159: settings allocated (BCM4360 dummy path)
+[ 1837.190351] brcmfmac 0000:03:00.0: BCM4360 test.159: bus allocated
+[ 1837.494422] brcmfmac 0000:03:00.0: BCM4360 test.159: msgbuf allocated
+[ 1837.798374] brcmfmac 0000:03:00.0: BCM4360 test.159: struct wiring done — before pci_pme_capable
+[ 1838.102366] brcmfmac 0000:03:00.0: BCM4360 test.159: after pci_pme_capable wowl=1
+[ 1838.406357] brcmfmac 0000:03:00.0: BCM4360 test.160: drvdata set — before brcmf_alloc
+[ 1838.710394] brcmfmac 0000:03:00.0: BCM4360 test.160: brcmf_alloc complete — wiphy allocated
+[ 1839.014315] brcmfmac 0000:03:00.0: BCM4360 test.160: OTP read bypassed — OTP not needed
+[ 1839.318225] brcmfmac 0000:03:00.0: BCM4360 test.160: before prepare_fw_request
+[ 1839.622236] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[ 1839.622243] brcmfmac 0000:03:00.0: BCM4360 test.160: firmware request prepared
+[ 1839.926276] brcmfmac: BCM4360 test.161: calling brcmf_fw_get_firmwares — async callback expected
+[ 1840.230299] brcmfmac 0000:03:00.0: BCM4360 test.161: brcmf_fw_get_firmwares returned 0 (async/success; callback will fire)
+[ 1840.236370] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+[ 1840.236458] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+[ 1840.236465] brcmfmac: BCM4360 test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0
+[ 1840.236614] brcmfmac: BCM4360 test.176: setup-entry ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 1840.534287] brcmfmac: BCM4360 test.176: pci_register_driver returned ret=0
+[ 1840.534355] brcmfmac: BCM4360 test.155: after brcmf_pcie_register() err=0
+[ 1840.584410] brcmfmac: BCM4360 test.155: post-PCI sync (skipping USB)
+[ 1840.584447] brcmfmac: BCM4360 test.156: after brcmf_core_init() err=0
+[ 1840.584622] brcmfmac: BCM4360 test.176: pre-attach ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 1840.584700] brcmfmac: BCM4360 test.128: before brcmf_pcie_attach
+[ 1840.587169] brcmfmac: BCM4360 test.128: brcmf_pcie_attach ENTRY
+[ 1840.589622] brcmfmac: BCM4360 test.129: brcmf_pcie_attach bypassed for BCM4360
+[ 1840.591447] brcmfmac: BCM4360 test.128: after brcmf_pcie_attach
+[ 1840.593116] brcmfmac: BCM4360 test.176: post-attach ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 1840.895495] brcmfmac: BCM4360 test.134: post-attach before fw-ptr-extract
+[ 1841.195561] brcmfmac: BCM4360 test.134: after kfree(fwreq)
+[ 1841.495630] brcmfmac: BCM4360 test.130: before brcmf_chip_get_raminfo
+[ 1841.795697] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[ 1841.795757] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[ 1841.795798] brcmfmac: BCM4360 test.130: after brcmf_chip_get_raminfo
+[ 1841.795844] brcmfmac: BCM4360 test.176: post-raminfo ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 1842.097439] brcmfmac: BCM4360 test.130: after brcmf_pcie_adjust_ramsize
+[ 1842.397522] brcmfmac: BCM4360 test.176: pre-download ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 1842.397577] brcmfmac: BCM4360 test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)
+[ 1842.697646] brcmfmac: BCM4360 test.142: enter_download_state — confirming ARM CR4 reset state
+[ 1842.697703] brcmfmac: BCM4360 test.142: ARM CR4 state RESET_CTL=0x00000000 IN_RESET=NO/BAD IOCTL=0x0001 CPUHALT=NO FGC=NO CLK=YES
+[ 1842.997790] brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffcf5983c00000
+[ 1842.997795] brcmfmac 0000:03:00.0: BCM4360 test.138: pre-BAR2-ioread32 (tcm=ffffcf5983c00000)
+[ 1843.297874] brcmfmac 0000:03:00.0: BCM4360 test.138: post-BAR2-ioread32 = 0xb80ef000 (real value — BAR2 accessible)
+[ 1843.597983] brcmfmac: BCM4360 test.176: pre-halt ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 1843.606107] mt76x2u 2-2:1.0: error: mt76x02u_mcu_wait_resp failed with -110
+[ 1843.648046] brcmfmac: BCM4360 test.176: re-halting ARM CR4 via brcmf_chip_set_passive
+[ 1843.698157] mt76x2u 2-2:1.0: error: MCU resp evt:0 seq:7-6
+[ 1843.799038] brcmfmac: BCM4360 test.176: post-halt ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 1843.849096] brcmfmac: BCM4360 test.176: starting chunked fw write, total_words=110558 (442233 bytes) tail=1 wbase=ffffcf5983c00000
+[ 1843.901383] brcmfmac: BCM4360 test.176: wrote 4096 words (16384 bytes)
+[ 1843.953647] brcmfmac: BCM4360 test.176: wrote 8192 words (32768 bytes)
+[ 1844.005911] brcmfmac: BCM4360 test.176: wrote 12288 words (49152 bytes)
+[ 1844.058176] brcmfmac: BCM4360 test.176: wrote 16384 words (65536 bytes)
+[ 1844.110443] brcmfmac: BCM4360 test.176: wrote 20480 words (81920 bytes)
+[ 1844.162713] brcmfmac: BCM4360 test.176: wrote 24576 words (98304 bytes)
+[ 1844.214990] brcmfmac: BCM4360 test.176: wrote 28672 words (114688 bytes)
+[ 1844.267290] brcmfmac: BCM4360 test.176: wrote 32768 words (131072 bytes)
+[ 1844.319563] brcmfmac: BCM4360 test.176: wrote 36864 words (147456 bytes)
+[ 1844.371837] brcmfmac: BCM4360 test.176: wrote 40960 words (163840 bytes)
+[ 1844.424106] brcmfmac: BCM4360 test.176: wrote 45056 words (180224 bytes)
+[ 1844.476374] brcmfmac: BCM4360 test.176: wrote 49152 words (196608 bytes)
+[ 1844.528641] brcmfmac: BCM4360 test.176: wrote 53248 words (212992 bytes)
+[ 1844.580907] brcmfmac: BCM4360 test.176: wrote 57344 words (229376 bytes)
+[ 1844.633177] brcmfmac: BCM4360 test.176: wrote 61440 words (245760 bytes)
+[ 1844.685444] brcmfmac: BCM4360 test.176: wrote 65536 words (262144 bytes)
+[ 1844.737710] brcmfmac: BCM4360 test.176: wrote 69632 words (278528 bytes)
+[ 1844.789975] brcmfmac: BCM4360 test.176: wrote 73728 words (294912 bytes)
+[ 1844.842243] brcmfmac: BCM4360 test.176: wrote 77824 words (311296 bytes)
+[ 1844.894508] brcmfmac: BCM4360 test.176: wrote 81920 words (327680 bytes)
+[ 1844.946774] brcmfmac: BCM4360 test.176: wrote 86016 words (344064 bytes)
+[ 1844.999041] brcmfmac: BCM4360 test.176: wrote 90112 words (360448 bytes)
+[ 1845.051306] brcmfmac: BCM4360 test.176: wrote 94208 words (376832 bytes)
+[ 1845.103571] brcmfmac: BCM4360 test.176: wrote 98304 words (393216 bytes)
+[ 1845.155837] brcmfmac: BCM4360 test.176: wrote 102400 words (409600 bytes)
+[ 1845.179325] wlp0s20u2: authenticate with 60:83:e7:3f:c8:33 (local address=2c:30:33:a7:29:5a)
+[ 1845.179330] wlp0s20u2: send auth to 60:83:e7:3f:c8:33 (try 1/3)
+[ 1845.208104] brcmfmac: BCM4360 test.176: wrote 106496 words (425984 bytes)
+[ 1845.260353] brcmfmac: BCM4360 test.176: all 110558 words written, before tail (tail=1)
+[ 1845.310405] brcmfmac: BCM4360 test.176: tail 1 bytes written at offset 442232
+[ 1845.360461] brcmfmac: BCM4360 test.176: fw write complete (442233 bytes)
+[ 1845.360503] brcmfmac: BCM4360 test.176: before post-fw msleep(100)
+[ 1845.360779] wlp0s20u2: authenticated
+[ 1845.361999] wlp0s20u2: associate with 60:83:e7:3f:c8:33 (try 1/3)
+[ 1845.378768] wlp0s20u2: RX AssocResp from 60:83:e7:3f:c8:33 (capab=0x1511 status=0 aid=7)
+[ 1845.380529] wlp0s20u2: associated
+[ 1845.458490] wlp0s20u2: Limiting TX power to 20 (23 - 3) dBm as advertised by 60:83:e7:3f:c8:33
+[ 1845.461993] brcmfmac: BCM4360 test.176: after post-fw msleep(100)
+[ 1845.462049] brcmfmac: BCM4360 test.176: host resetintr=0xb80ef000 before release
+[ 1845.462122] brcmfmac: BCM4360 test.176: released fw/nvram after host resetintr; returning -ENODEV
+[ 1845.462173] brcmfmac: BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+[ 1845.765961] brcmfmac: BCM4360 test.163: fw released; returning from setup (state still DOWN)
+[ 1874.845752] brcmfmac: BCM4360 test.161: remove() short-circuit — state=0 != UP; skipping MMIO cleanup
+[ 1875.154921] brcmfmac: BCM4360 test.161: remove() short-circuit complete
+[ 2173.993790] wlp0s20u2: disconnect from AP 60:83:e7:3f:c8:33 for new auth to 60:83:e7:3f:8a:8b
+[ 2175.086832] wlp0s20u2: authenticate with 60:83:e7:3f:8a:8b (local address=2c:30:33:a7:29:5a)
+[ 2175.086837] wlp0s20u2: send auth to 60:83:e7:3f:8a:8b (try 1/3)
+[ 2175.090532] wlp0s20u2: authenticated
+[ 2175.091171] wlp0s20u2: associate with 60:83:e7:3f:8a:8b (try 1/3)
+[ 2175.103513] wlp0s20u2: RX ReassocResp from 60:83:e7:3f:8a:8b (capab=0x1511 status=0 aid=8)
+[ 2175.105387] wlp0s20u2: associated
+[ 2175.199758] wlp0s20u2: Limiting TX power to 20 (23 - 3) dBm as advertised by 60:83:e7:3f:8a:8b
+[ 2176.468315] brcmfmac: BCM4360 test.177: module_init entry — NVRAM BAR2 write after safe sleep/resetintr
+[ 2176.468419] brcmfmac: BCM4360 test.156: before brcmf_core_init()
+[ 2176.468454] brcmfmac: BCM4360 test.155: brcmf_core_init() entry
+[ 2176.468487] brcmfmac: BCM4360 test.155: before brcmf_sdio_register()
+[ 2176.470012] brcmfmac: BCM4360 test.155: after brcmf_sdio_register() err=0
+[ 2176.521584] brcmfmac: BCM4360 test.155: post-SDIO sync (before PCI)
+[ 2176.521623] brcmfmac: BCM4360 test.155: before brcmf_pcie_register()
+[ 2176.521656] brcmfmac: BCM4360 test.177: brcmf_pcie_register() entry
+[ 2176.824177] brcmfmac: BCM4360 test.177: before pci_register_driver
+[ 2177.128144] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=00000000851545fb)
+[ 2177.432073] brcmfmac: BCM4360 test.158: probe entry flush done — proceeding
+[ 2177.736142] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+[ 2177.736229] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+[ 2177.736367] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+[ 2178.248205] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+[ 2178.248282] brcmfmac: BCM4360 test.158: before brcmf_chip_attach
+[ 2178.552227] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcf5982c00000
+[ 2178.552239] brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+[ 2178.603145] brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+[ 2178.603700] brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+[ 2178.603789] brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+[ 2178.603892] brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+[ 2178.606874] brcmfmac 0000:03:00.0: BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)
+[ 2178.610053] brcmfmac 0000:03:00.0: BCM4360 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0
+[ 2178.612339] brcmfmac: BCM4360 test.177: post-145 ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2178.614649] brcmfmac: brcmf_chip_recognition: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+[ 2178.616821] brcmfmac: brcmf_chip_recognition: BCM4360 test.125: after reset, before get_raminfo
+[ 2178.618713] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[ 2178.620573] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[ 2178.622244] brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+[ 2178.928161] brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+[ 2178.928333] brcmfmac: BCM4360 test.158: about to pci_clear_master (config-space write)
+[ 2179.232077] brcmfmac 0000:03:00.0: BCM4360 test.158: BusMaster cleared after chip_attach
+[ 2179.536016] brcmfmac: BCM4360 test.158: about to read LnkCtl before ASPM disable
+[ 2179.840108] brcmfmac: BCM4360 test.158: LnkCtl read before=0x0140 — disabling ASPM
+[ 2180.144094] brcmfmac: BCM4360 test.158: pci_disable_link_state returned — reading LnkCtl
+[ 2180.448039] brcmfmac 0000:03:00.0: BCM4360 test.158: ASPM disabled; LnkCtl before=0x0140 after=0x0140 ASPM-bits-after=0x0
+[ 2180.752005] brcmfmac 0000:03:00.0: BCM4360 test.177: root port 0000:00:1c.2 LnkCtl before=0x0040 ASPM=0x0 CLKREQ=off — disabling L0s/L1/CLKPM
+[ 2181.056004] brcmfmac: BCM4360 test.177: root-port pci_disable_link_state returned — reading LnkCtl
+[ 2181.360896] brcmfmac 0000:03:00.0: BCM4360 test.177: root port 0000:00:1c.2 LnkCtl after=0x0040 ASPM=0x0 CLKREQ=off
+[ 2181.967991] brcmfmac 0000:03:00.0: BCM4360 test.159: before PCIE2 core/reginfo setup
+[ 2182.271968] brcmfmac 0000:03:00.0: BCM4360 test.159: reginfo selected (pcie2 rev=1)
+[ 2182.575937] brcmfmac 0000:03:00.0: BCM4360 test.159: pcie_bus_dev allocated
+[ 2182.879838] brcmfmac 0000:03:00.0: BCM4360 test.159: settings allocated (BCM4360 dummy path)
+[ 2183.183897] brcmfmac 0000:03:00.0: BCM4360 test.159: bus allocated
+[ 2183.487925] brcmfmac 0000:03:00.0: BCM4360 test.159: msgbuf allocated
+[ 2183.791868] brcmfmac 0000:03:00.0: BCM4360 test.159: struct wiring done — before pci_pme_capable
+[ 2184.095879] brcmfmac 0000:03:00.0: BCM4360 test.159: after pci_pme_capable wowl=1
+[ 2184.399821] brcmfmac 0000:03:00.0: BCM4360 test.160: drvdata set — before brcmf_alloc
+[ 2184.703829] brcmfmac 0000:03:00.0: BCM4360 test.160: brcmf_alloc complete — wiphy allocated
+[ 2185.007740] brcmfmac 0000:03:00.0: BCM4360 test.160: OTP read bypassed — OTP not needed
+[ 2185.311794] brcmfmac 0000:03:00.0: BCM4360 test.160: before prepare_fw_request
+[ 2185.615780] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[ 2185.615790] brcmfmac 0000:03:00.0: BCM4360 test.160: firmware request prepared
+[ 2185.919725] brcmfmac: BCM4360 test.161: calling brcmf_fw_get_firmwares — async callback expected
+[ 2186.223838] brcmfmac 0000:03:00.0: BCM4360 test.161: brcmf_fw_get_firmwares returned 0 (async/success; callback will fire)
+[ 2186.230584] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+[ 2186.230701] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+[ 2186.230714] brcmfmac: BCM4360 test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0
+[ 2186.230876] brcmfmac: BCM4360 test.177: setup-entry ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2186.527748] brcmfmac: BCM4360 test.177: pci_register_driver returned ret=0
+[ 2186.527833] brcmfmac: BCM4360 test.155: after brcmf_pcie_register() err=0
+[ 2186.577906] brcmfmac: BCM4360 test.155: post-PCI sync (skipping USB)
+[ 2186.577949] brcmfmac: BCM4360 test.156: after brcmf_core_init() err=0
+[ 2186.578026] brcmfmac: BCM4360 test.177: pre-attach ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2186.578109] brcmfmac: BCM4360 test.128: before brcmf_pcie_attach
+[ 2186.580376] brcmfmac: BCM4360 test.128: brcmf_pcie_attach ENTRY
+[ 2186.582675] brcmfmac: BCM4360 test.129: brcmf_pcie_attach bypassed for BCM4360
+[ 2186.584324] brcmfmac: BCM4360 test.128: after brcmf_pcie_attach
+[ 2186.584338] brcmfmac: BCM4360 test.177: post-attach ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2186.884374] brcmfmac: BCM4360 test.134: post-attach before fw-ptr-extract
+[ 2187.184441] brcmfmac: BCM4360 test.134: after kfree(fwreq)
+[ 2187.484511] brcmfmac: BCM4360 test.130: before brcmf_chip_get_raminfo
+[ 2187.784579] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[ 2187.784642] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[ 2187.784684] brcmfmac: BCM4360 test.130: after brcmf_chip_get_raminfo
+[ 2187.784729] brcmfmac: BCM4360 test.177: post-raminfo ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2188.086280] brcmfmac: BCM4360 test.130: after brcmf_pcie_adjust_ramsize
+[ 2188.386396] brcmfmac: BCM4360 test.177: pre-download ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2188.386450] brcmfmac: BCM4360 test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)
+[ 2188.686523] brcmfmac: BCM4360 test.142: enter_download_state — confirming ARM CR4 reset state
+[ 2188.686591] brcmfmac: BCM4360 test.142: ARM CR4 state RESET_CTL=0x00000000 IN_RESET=NO/BAD IOCTL=0x0001 CPUHALT=NO FGC=NO CLK=YES
+[ 2188.986689] brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffcf5982c00000
+[ 2188.986695] brcmfmac 0000:03:00.0: BCM4360 test.138: pre-BAR2-ioread32 (tcm=ffffcf5982c00000)
+[ 2189.286774] brcmfmac 0000:03:00.0: BCM4360 test.138: post-BAR2-ioread32 = 0xb80ef000 (real value — BAR2 accessible)
+[ 2189.586881] brcmfmac: BCM4360 test.177: pre-halt ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2189.636940] brcmfmac: BCM4360 test.177: re-halting ARM CR4 via brcmf_chip_set_passive
+[ 2189.787203] brcmfmac: BCM4360 test.177: post-halt ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2189.837260] brcmfmac: BCM4360 test.177: starting chunked fw write, total_words=110558 (442233 bytes) tail=1 wbase=ffffcf5982c00000
+[ 2189.889557] brcmfmac: BCM4360 test.177: wrote 4096 words (16384 bytes)
+[ 2189.941832] brcmfmac: BCM4360 test.177: wrote 8192 words (32768 bytes)
+[ 2189.994113] brcmfmac: BCM4360 test.177: wrote 12288 words (49152 bytes)
+[ 2190.046421] brcmfmac: BCM4360 test.177: wrote 16384 words (65536 bytes)
+[ 2190.098690] brcmfmac: BCM4360 test.177: wrote 20480 words (81920 bytes)
+[ 2190.150959] brcmfmac: BCM4360 test.177: wrote 24576 words (98304 bytes)
+[ 2190.203225] brcmfmac: BCM4360 test.177: wrote 28672 words (114688 bytes)
+[ 2190.255492] brcmfmac: BCM4360 test.177: wrote 32768 words (131072 bytes)
+[ 2190.307769] brcmfmac: BCM4360 test.177: wrote 36864 words (147456 bytes)
+[ 2190.360046] brcmfmac: BCM4360 test.177: wrote 40960 words (163840 bytes)
+[ 2190.412317] brcmfmac: BCM4360 test.177: wrote 45056 words (180224 bytes)
+[ 2190.464583] brcmfmac: BCM4360 test.177: wrote 49152 words (196608 bytes)
+[ 2190.516850] brcmfmac: BCM4360 test.177: wrote 53248 words (212992 bytes)
+[ 2190.569116] brcmfmac: BCM4360 test.177: wrote 57344 words (229376 bytes)
+[ 2190.621385] brcmfmac: BCM4360 test.177: wrote 61440 words (245760 bytes)
+[ 2190.673670] brcmfmac: BCM4360 test.177: wrote 65536 words (262144 bytes)
+[ 2190.725959] brcmfmac: BCM4360 test.177: wrote 69632 words (278528 bytes)
+[ 2190.778234] brcmfmac: BCM4360 test.177: wrote 73728 words (294912 bytes)
+[ 2190.830518] brcmfmac: BCM4360 test.177: wrote 77824 words (311296 bytes)
+[ 2190.882789] brcmfmac: BCM4360 test.177: wrote 81920 words (327680 bytes)
+[ 2190.935058] brcmfmac: BCM4360 test.177: wrote 86016 words (344064 bytes)
+[ 2190.987324] brcmfmac: BCM4360 test.177: wrote 90112 words (360448 bytes)
+[ 2191.039589] brcmfmac: BCM4360 test.177: wrote 94208 words (376832 bytes)
+[ 2191.091854] brcmfmac: BCM4360 test.177: wrote 98304 words (393216 bytes)
+[ 2191.144119] brcmfmac: BCM4360 test.177: wrote 102400 words (409600 bytes)
+[ 2191.196384] brcmfmac: BCM4360 test.177: wrote 106496 words (425984 bytes)
+[ 2191.248633] brcmfmac: BCM4360 test.177: all 110558 words written, before tail (tail=1)
+[ 2191.298686] brcmfmac: BCM4360 test.177: tail 1 bytes written at offset 442232
+[ 2191.348741] brcmfmac: BCM4360 test.177: fw write complete (442233 bytes)
+[ 2191.348781] brcmfmac: BCM4360 test.177: before post-fw msleep(100)
+[ 2191.455527] brcmfmac: BCM4360 test.177: after post-fw msleep(100)
+[ 2191.455587] brcmfmac: BCM4360 test.177: host resetintr=0xb80ef000 before NVRAM
+[ 2191.455631] brcmfmac: BCM4360 test.177: pre-NVRAM write address=0x9ff1c len=228 naddr=ffffcf5982c9ff1c
+[ 2191.455702] brcmfmac: BCM4360 test.177: post-NVRAM write done (228 bytes)
+[ 2191.457457] brcmfmac: BCM4360 test.177: released fw/nvram after NVRAM write; returning -ENODEV
+[ 2191.459093] brcmfmac: BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+[ 2191.767494] brcmfmac: BCM4360 test.163: fw released; returning from setup (state still DOWN)
+=== dmesg stream end: Mon Apr 20 18:25:04 BST 2026 ===
