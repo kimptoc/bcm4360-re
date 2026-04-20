@@ -1,6 +1,80 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.179 — tiny TCM verify discriminator)
+## Current state (2026-04-20, POST test.179 — tiny TCM verify SUCCESS)
+
+### TEST.179 RESULT — tiny BAR2 TCM verify survives
+
+Captured artifacts:
+- `phase5/logs/test.179.stage0`
+- `phase5/logs/test.179.stage0.stream`
+
+Result: **SUCCESS / no crash.** test.179 completed the full 442233-byte BAR2
+firmware write, slept for 100 ms, read host resetintr, wrote the 228-byte NVRAM
+blob to BAR2 at `0x9ff1c`, read back the `ramsize - 4` NVRAM marker, read eight
+32-bit words from TCM offsets `0x0..0x1c`, released `fw`/`nvram`, returned
+`-ENODEV`, waited the harness's 30 seconds, and cleaned up without freezing.
+
+Key persisted markers:
+```
+BCM4360 test.179: fw write complete (442233 bytes)
+BCM4360 test.179: after post-fw msleep(100)
+BCM4360 test.179: host resetintr=0xb80ef000 before NVRAM
+BCM4360 test.179: pre-NVRAM write address=0x9ff1c len=228 naddr=ffffcf5982c9ff1c
+BCM4360 test.179: post-NVRAM write done (228 bytes)
+BCM4360 test.179: NVRAM marker at ramsize-4 = 0xffc70038
+BCM4360 test.179: TCM[0x0000]=0xb80ef000
+BCM4360 test.179: TCM[0x0004]=0xb82ef000
+BCM4360 test.179: TCM[0x0008]=0xb839f000
+BCM4360 test.179: TCM[0x000c]=0xb844f000
+BCM4360 test.179: TCM[0x0010]=0xb852f000
+BCM4360 test.179: TCM[0x0014]=0xb860f000
+BCM4360 test.179: TCM[0x0018]=0xb86ef000
+BCM4360 test.179: TCM[0x001c]=0xb87cf000
+BCM4360 test.179: released fw/nvram after tiny TCM verify; returning -ENODEV
+```
+
+### Interpretation
+
+Small post-NVRAM BAR2 reads are safe. The current safe boundary now includes
+full firmware write, sleeping dwell, host resetintr extraction, NVRAM write,
+NVRAM marker readback, and a tiny TCM verify dump. The next meaningful risk is
+the downstream `brcmf_pcie_exit_download_state()` path, but that function does
+two things: resets the internal-memory core, then calls `brcmf_chip_set_active`
+with `resetintr` and releases ARM. Split those apart.
+
+### Current HW state after test.179
+
+- `brcmfmac` is unloaded. `brcmutil` remains loaded from the harness; USB Wi-Fi
+  stack modules remain unrelated.
+- Endpoint 03:00.0 is visible: `Mem+ BusMaster-`, BAR0=b0600000, BAR2=b0400000,
+  `<MAbort-`, link 2.5GT/s x1, endpoint ASPM disabled.
+- Endpoint AER UESta is clear; correctable `Timeout+ AdvNonFatalErr+` remains.
+- Root port 00:1c.2 is visible: bus 03/03, memory window b0400000-b06fffff,
+  bridge `MAbort-`, secondary `<MAbort-`, link 2.5GT/s x1, ASPM disabled.
+
+### Recommended next step — PRE test.180
+
+Do **not** run another hardware test until this note and the test.179 artifacts
+are committed, pushed, and synced.
+
+Best next discriminator: add only the first half of
+`brcmf_pcie_exit_download_state()` after the successful test.179 tiny TCM dump:
+1. Keep the test.179 sequence through the tiny TCM reads.
+2. Get the `BCMA_CORE_INTERNAL_MEM` core and call
+   `brcmf_chip_resetcore(core, 0, 0, 0)` if present.
+3. Log before/after the internal-memory resetcore.
+4. Release `fw`/`nvram` and return `-ENODEV`.
+5. Still skip `brcmf_chip_set_active(devinfo->ci, resetintr)`, ARM release,
+   shared-RAM polling, and the rest of normal attach.
+
+Expected interpretation:
+- Survives: internal-memory resetcore is safe; next test can isolate
+  `brcmf_chip_set_active(..., resetintr)` / ARM release.
+- Freezes: the internal-memory core reset is the next unsafe operation.
+
+---
+
+## Previous state (2026-04-20, PRE test.179 — tiny TCM verify discriminator)
 
 ### PRE-TEST.179 checkpoint
 

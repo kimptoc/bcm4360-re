@@ -897,3 +897,39 @@ Build status: OK via kernel kbuild. The only warning is the pre-existing unused
 `brcmf_pcie_write_ram32` helper, and BTF is skipped because `vmlinux` is
 unavailable. `brcmfmac.ko` contains the `test.179` marker-readback, tiny TCM,
 and early-return markers.
+
+## Phase 5.4: Current state (2026-04-20, POST test.179)
+
+test.179 succeeded. It completed the full 442233 byte BAR2 firmware write,
+slept for 100 ms, read host resetintr, wrote the 228-byte NVRAM blob to BAR2 at
+`0x9ff1c`, read the `ramsize - 4` marker as `0xffc70038`, read eight 32-bit
+words from TCM offsets `0x0..0x1c`, released `fw`/`nvram`, returned `-ENODEV`,
+waited 30 seconds in the harness, and unloaded `brcmfmac` without a host
+freeze.
+
+Persisted tiny TCM values:
+- `TCM[0x0000]=0xb80ef000`
+- `TCM[0x0004]=0xb82ef000`
+- `TCM[0x0008]=0xb839f000`
+- `TCM[0x000c]=0xb844f000`
+- `TCM[0x0010]=0xb852f000`
+- `TCM[0x0014]=0xb860f000`
+- `TCM[0x0018]=0xb86ef000`
+- `TCM[0x001c]=0xb87cf000`
+
+This proves small post-NVRAM BAR2 reads are safe. The next meaningful risk is
+the downstream `brcmf_pcie_exit_download_state()` path, which should be split:
+first isolate the internal-memory `brcmf_chip_resetcore()` step, then in a
+later test isolate `brcmf_chip_set_active(..., resetintr)` / ARM release.
+
+Current post-test PCIe state remains sane for fatal errors: endpoint and root
+port are visible, link is 2.5GT/s x1, endpoint/root port ASPM are disabled,
+`MAbort-` is clear on the relevant bridges/device state, and endpoint UESta is
+clear. Endpoint correctable AER still reports `Timeout+ AdvNonFatalErr+`.
+
+Recommended test.180: preserve the test.179 sequence through the tiny TCM dump,
+then get the `BCMA_CORE_INTERNAL_MEM` core and call
+`brcmf_chip_resetcore(core, 0, 0, 0)` if present, with before/after breadcrumbs.
+Release `fw`/`nvram` and return `-ENODEV`. Continue to skip
+`brcmf_chip_set_active(..., resetintr)`, ARM release, shared-RAM polling, and
+the rest of normal attach.
