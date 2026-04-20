@@ -1,6 +1,78 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.175 — msleep dwell SUCCESS)
+## Current state (2026-04-20, POST test.176 — host resetintr SUCCESS)
+
+### TEST.176 RESULT — host resetintr extraction after safe sleep survives
+
+Captured artifacts:
+- `phase5/logs/test.176.stage0`
+- `phase5/logs/test.176.stage0.stream`
+
+Result: **SUCCESS / no crash.** test.176 completed the full 442233-byte BAR2
+firmware write, slept for 100 ms after `fw write complete` with no device MMIO,
+read resetintr from host firmware memory, released `fw`/`nvram`, returned
+`-ENODEV`, waited the harness's 30 seconds, and cleaned up `brcmfmac` without
+freezing.
+
+Key persisted markers:
+```
+BCM4360 test.176: all 110558 words written, before tail (tail=1)
+BCM4360 test.176: tail 1 bytes written at offset 442232
+BCM4360 test.176: fw write complete (442233 bytes)
+BCM4360 test.176: before post-fw msleep(100)
+BCM4360 test.176: after post-fw msleep(100)
+BCM4360 test.176: host resetintr=0xb80ef000 before release
+BCM4360 test.176: released fw/nvram after host resetintr; returning -ENODEV
+BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+BCM4360 test.163: fw released; returning from setup (state still DOWN)
+```
+
+### Interpretation
+
+The host-side `resetintr = get_unaligned_le32(fw->data)` boundary is safe.
+The observed resetintr value is `0xb80ef000`, matching the first firmware word
+also seen by the BAR2 ioread32 probe in this run. This was all host memory work
+after the safe `msleep(100)`, so the next real risk boundary is the NVRAM BAR2
+write.
+
+The old tests 170-173 froze before resetintr/NVRAM because they used post-write
+`mdelay` dwell. With `msleep(100)`, we have safely advanced through resetintr
+extraction and release. Continue adding one downstream boundary at a time.
+
+### Current HW state after test.176
+
+- `brcmfmac` is unloaded. `brcmutil` remains loaded from the harness; USB Wi-Fi
+  stack modules remain unrelated.
+- Endpoint 03:00.0 is visible: `Mem+ BusMaster-`, BAR0=b0600000, BAR2=b0400000,
+  `<MAbort-`, link 2.5GT/s x1, endpoint ASPM disabled from the test path.
+- Endpoint AER again shows `CESta Timeout+ AdvNonFatalErr+`; UESta is clear.
+- Root port 00:1c.2 is visible: bus 03/03, memory window b0400000-b06fffff,
+  bridge `MAbort-`, secondary `<MAbort-`, link 2.5GT/s x1, ASPM disabled.
+
+### Recommended next step — PRE test.177
+
+Do **not** run another hardware test until this note and the test.176 artifacts
+are committed, pushed, and synced.
+
+Best next discriminator: add the NVRAM BAR2 write after the safe `msleep(100)`
+and host resetintr extraction, then return before readback/ARM release:
+
+1. After `fw write complete`, `msleep(100)` as test.175/176 did.
+2. Read and log host `resetintr`.
+3. Write NVRAM to BAR2 using the existing chunked iowrite32 NVRAM loop.
+4. Release `fw`/`nvram` and return `-ENODEV`.
+5. Still skip post-write ARM probe, resetintr device write/use, NVRAM marker
+   readback, TCM dump, and ARM release.
+
+Expected interpretation:
+- Survives: NVRAM BAR2 write is safe when preceded by sleeping dwell; next test
+  can add the NVRAM marker/readback boundary.
+- Freezes: NVRAM write is the next unsafe BAR2 operation; then either reduce
+  NVRAM write granularity/delays or quiesce/reset before NVRAM.
+
+---
+
+## Previous state (2026-04-20, POST test.175 — msleep dwell SUCCESS)
 
 ### TEST.175 RESULT — `msleep(100)` after fw write survives
 

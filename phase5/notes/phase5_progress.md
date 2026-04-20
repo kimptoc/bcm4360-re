@@ -749,3 +749,40 @@ the safe sleep.
 Build status: OK via kernel kbuild. The only warning is the pre-existing unused
 `brcmf_pcie_write_ram32` helper, and BTF is skipped because `vmlinux` is
 unavailable. `brcmfmac.ko` contains the `test.176` host resetintr markers.
+
+## Phase 5.4: Current state (2026-04-20, POST test.176)
+
+test.176 succeeded. It completed the full 442233 byte BAR2 firmware write,
+slept for 100 ms after `fw write complete`, read `resetintr` from host firmware
+memory, released `fw`/`nvram`, returned `-ENODEV`, waited 30 seconds in the
+harness, and unloaded `brcmfmac` without a host freeze.
+
+Persisted key markers:
+- `BCM4360 test.176: fw write complete (442233 bytes)`
+- `BCM4360 test.176: before post-fw msleep(100)`
+- `BCM4360 test.176: after post-fw msleep(100)`
+- `BCM4360 test.176: host resetintr=0xb80ef000 before release`
+- `BCM4360 test.176: released fw/nvram after host resetintr; returning -ENODEV`
+
+This proves the host-side firmware-header boundary is safe after the sleeping
+dwell. The logged `resetintr` value, `0xb80ef000`, matches the first firmware
+word and the BAR2 ioread32 probe observed in the same run. The next real risk
+boundary is therefore the NVRAM BAR2 write, not elapsed sleep time or host-side
+`resetintr` extraction.
+
+Current post-test PCIe state remains sane for fatal errors: endpoint and root
+port are visible, link is 2.5GT/s x1, endpoint/root port ASPM are disabled,
+`MAbort-` is clear on the relevant bridges/device state, and endpoint UESta is
+clear. Endpoint correctable AER still reports `Timeout+ AdvNonFatalErr+`.
+
+Recommended test.177: preserve the safe sequence from test.176, then add only
+the NVRAM BAR2 write using the existing chunked iowrite32 NVRAM loop. Return
+`-ENODEV` immediately after releasing `fw`/`nvram`. Continue to skip post-write
+ARM probing, device-side resetintr use, NVRAM marker/readback, TCM dump, and
+ARM release.
+
+Interpretation:
+- If test.177 survives, NVRAM write is safe after sleeping dwell and the next
+  boundary should be the NVRAM marker/readback.
+- If it freezes, the NVRAM write is the newly isolated unsafe BAR2 operation;
+  then reduce write granularity/delays or quiesce/reset before NVRAM.
