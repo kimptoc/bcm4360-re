@@ -94,17 +94,34 @@ probes.
 ### PRE-TEST.169 CHECKLIST
 
 - [x] Save test.168 journal to `phase5/logs/test.168.journalctl.txt`
-- [ ] Edit pcie.c: add `post-145` probe inside buscore_reset; extend probe helper
-      to log chip.c ops-view alongside probe-view
-- [ ] Bump test.168 → test.169 in module_init banners, register banners,
-      download_fw_nvram log lines, and `test-staged-reset.sh`
-- [ ] `make -C phase5/work` → expect clean build; `strings brcmfmac.ko | grep
-      test.169` confirms new format strings present
-- [ ] Check `sudo lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'` is
-      clean after SMC reset; `lsmod | grep brcm` empty
-- [ ] `sync` after committing pre-test state; push to origin
+- [x] Edit pcie.c: extended probe helper to a dual-view read (loW=base+0x1000
+      and hiW=base+0x100000). Added `post-145` probe immediately after
+      `brcmf_chip_set_passive` inside buscore_reset. pre-halt/post-halt/post-write
+      blocks inside download_fw_nvram converted to dual-view probe calls.
+- [x] Bumped test.168 → test.169 across pcie.c, test-staged-reset.sh banners.
+- [x] Build OK (kbuild, 1 unrelated warning). `brcmfmac.ko` contains 11 test.169
+      format strings including the new dual-view log line and post-145/pre-halt/
+      post-halt/post-write/probe-site tags.
+- [x] PCIe 03:00.0: `Mem+ BusMaster+ MAbort- <MAbort-`, `LnkSta 2.5GT/s x1`,
+      `CommClk+`, sticky `CorrErr+ UnsupReq+` from test.168 crash (harmless).
+      `lsmod | grep brcm` empty. Safe to insmod.
+- [ ] Commit + push this pre-test state + `sync`
 - [ ] Run `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
-- [ ] Machine likely crashes again mid-fw-write; same recovery flow.
+
+### HYPOTHESIS for test.169
+
+Expect the 7+ dual-view probe lines (post-145, setup-entry, pre-attach,
+post-attach, post-raminfo, pre-download, pre-halt, post-halt, post-write) to
+report BOTH views on a single log line. The critical diagnostic is the
+**hiW view at `post-145`** — immediately after set_passive:
+
+- If `hiW IOCTL` shows CPUHALT=1 (bit 0x20 set) → set_passive is working;
+  the probe address is wrong; crash theory needs re-examination.
+- If `hiW IOCTL` shows CPUHALT=0 like the loW view → set_passive genuinely
+  does not halt CR4 on BCM4360; need a manual halt sequence mirroring
+  test.142's probe-time IOCTL|FGC|CLK write path.
+- If one view errors or reads 0xffffffff → wrapbase is neither of the
+  candidates; need erom dump to find it.
 
 ---
 
