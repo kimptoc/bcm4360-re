@@ -1,5 +1,82 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.186b (2026-04-20) — BusMaster enable does not unstick firmware; exception-loop is the leading hypothesis
+
+Captured artifacts:
+- `phase5/logs/test.186b.stage0`
+- `phase5/logs/test.186b.stage0.stream`
+- `phase5/logs/test.186b.journalctl.txt` (607 lines)
+
+Result: **clean run, host stable, no crash. Firmware did not respond
+to BusMaster being enabled for 100 ms.** All post-BM samples match the
+test.186c/186a/185 passive baseline — D11 still in reset, TCM
+unchanged, NVRAM marker unchanged, mailboxint=0x0 throughout. The only
+signals remain test.184's one-shot pmucontrol bit-9 flip and the
+monotonic pmutimer tick.
+
+### BM transition
+
+```
+pre-BM       PCI_COMMAND=0x0002 BM=OFF  mailboxint=0x00000000
+BM-on        PCI_COMMAND=0x0006 BM=ON
+BM-on+50ms   mailboxint=0x00000000 UNCHANGED  D11 RESET_CTL=0x01  CR4 IOCTL=0x01
+BM-on+100ms  mailboxint=0x00000000 UNCHANGED  D11 RESET_CTL=0x01  CR4 IOCTL=0x01
+BM-cleared   PCI_COMMAND=0x0002 BM=OFF
+post-BM-500ms  (all same as pre)  pmucontrol=0x01770381 (test.184 baseline)
+post-BM-2000ms (all same as pre)  pmutimer keeps ticking
+```
+
+All three MMIO guards passed — endpoint remained responsive
+throughout. No AER, no MCE, clean rmmod.
+
+### Interpretation
+
+With BusMaster on firmware had unimpeded access to host memory via
+PCIe DMA. If the early stall were a "DMA attempt silently fails because
+BusMaster is cleared" wait, enabling BusMaster for 100 ms should have
+let the attempted DMA complete and produced a visible side effect
+(TCM write, D11 release, sharedram marker replacing 0xffc70038, or a
+D2H doorbell). Nothing happened.
+
+Combined with 186a/186c (doorbells ruled out), this strongly points
+to **candidate 1: firmware is in an exception/panic loop very early
+in its startup**, after the single pmucontrol bit-9 write. The CPU is
+running (CPUHALT=NO, pmutimer still advances) but not touching
+anything we can observe via MMIO.
+
+### What still fits and what doesn't
+
+- **Fits an exception loop:** no memory writes, no DMA attempts, no
+  doorbells, CPU running, one pre-exception register write completed.
+- **Does not fit a DMA stall:** BusMaster-on window should have
+  yielded *some* DMA progress or caused an AER — it did neither.
+- **Does not fit D11-wait:** firmware would still be reading TCM
+  header or polling CC registers, which we'd see on MMIO. No reads
+  are observable of course, but the *lack of any writes* for 5 s is
+  hard to reconcile with a sensible wait loop.
+
+### Next boundary
+
+Shift the search from "what might firmware be waiting on" to
+"what is firmware's actual state right now?". Two useful probes:
+1. **Re-halt + inspect.** Clear CPUHALT → set CPUHALT to re-halt the
+   ARM core, then read TCM + CR4 wrapper registers. If the CPU was in
+   an exception vector, the panic handler may have left breadcrumbs
+   in a known TCM location (trap vector table, scratch area, or the
+   image header's panic-log field).
+2. **Compare to the `wl` driver trace.** Phase 2 captured a partial
+   MMIO trace of the macOS `wl` driver. The sequence between the
+   equivalent `set_active` point and firmware reaching usable state
+   must differ from our path somewhere — if we can diff those MMIO
+   sequences we can find the missing step that lets firmware progress.
+   Artifact: `phase5/logs/wl-trace`.
+
+The second probe is lower-risk (read-only comparison, no hardware
+interaction) and may reveal the required host step quickly; it should
+come first.
+
+---
+
 ## PRE-TEST.186b (2026-04-20, staged) — brief BusMaster-on window
 
 ### Hypothesis

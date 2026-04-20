@@ -114,13 +114,30 @@ hard-crash sessions (tests 149–157).
   was our own write latch. Doorbell theory fully ruled out for this
   stage. Remaining candidates narrow to (1) exception/panic loop and
   (2) DMA stall.
+- **test.186b NULL-RESULT (BusMaster enable does not unstick firmware):**
+  After the 3-s passive dwell, pci_set_master for a ~100 ms window
+  while sampling at +50/+100 ms, then pci_clear_master and post-BM
+  dwells at 500/2000 ms. All three MMIO guards passed (endpoint
+  responsive throughout). **Firmware produced zero change during or
+  after the BM-on window**: D11 still in reset, TCM unchanged, NVRAM
+  marker unchanged, mailboxint=0x0 throughout, pmucontrol/pmutimer
+  match test.184 baseline. Clean run, no AER/MCE, clean rmmod. DMA
+  stall hypothesis effectively falsified — if firmware were waiting
+  on DMA it should have made progress once BusMaster was on. Leading
+  hypothesis is now **candidate 1: firmware is in an exception /
+  panic loop very early** (after the one pmucontrol bit-9 write); CPU
+  is running but not touching anything observable over MMIO.
 
-**Next boundary:** test.186b — brief BusMaster enable window (still
--ENODEV early return, no full attach) — to discriminate between
-DMA-stall (firmware completes its startup DMA and begins writing TCM
-/ releasing D11 / replacing the NVRAM marker) and exception-loop
-(no change). Risk-mitigated with a very short window and MMIO guards
-before/after.
+**Next boundary:** shift from "what might firmware be waiting on?" to
+"what is firmware's actual state right now?". Two complementary
+probes:
+1. **wl-trace diff** (read-only, lowest risk): compare `phase5/logs/wl-trace`
+   MMIO sequence for the post-set_active region against our own path to
+   identify missing host steps.
+2. **Re-halt + inspect** (low risk, requires small driver change):
+   after the 3-s dwell, re-assert CPUHALT in CR4 IOCTL, read CR4
+   wrapper status + TCM panic-log area to look for breadcrumbs left
+   by a panic handler.
 
 **Re-entering the old 5.2 investigation:** once the probe-path restore is
 complete (i.e. firmware download and ARM release can run without host crash),
