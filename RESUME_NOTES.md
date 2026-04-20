@@ -9216,33 +9216,98 @@ Expected interpretation:
   the next boundary.
 
 
-## PRE-TEST.188 STATE — 2026-04-20 22:22
+## POST-TEST.187 (2026-04-20) — Probe A skipped due to wrong TCM-base assumption; no new signal
 
-**Hypothesis:** The D11 core is not being properly brought out of reset or enabled during firmware initialization. The firmware hangs in si_attach's D11 core bring-up because prerequisite checks (clock/power/reset-state/interrupt routing) are missing.
+Captured artifacts:
+- `phase5/logs/test.187.stage0`
+- `phase5/logs/test.187.stage0.stream`
+- `phase5/logs/test.187.journalctl.txt` (449 lines)
 
-**Test design:** Path B from phase5_progress.md - D11 prerequisite checks, step 1: D11 core BCMA state probe.
+Result: **clean run, host stable, returned -ENODEV as designed.**
+Probe A (TCM instruction snapshot around resetintr) was skipped because
+`resetintr_offset = 0xef000` exceeds `ramsize = 0xa0000`. The assumption
+that `resetintr - 0xb8000000` maps to TCM offset is incorrect for BCM4360.
+
+### Observed behaviour
+
+All readings identical to test.186d:
+- ARM CR4: IOCTL 0x21→0x01 (CPUHALT cleared), IOSTATUS=0, RESET_CTL=0
+- D11 core: IOCTL=0x07, IOSTATUS=0x00, RESET_CTL=0x01 (in reset)
+- TCM regions: header, wide grid, tail all unchanged across dwells
+- Backplane registers: pmutimer advances, pmucontrol bit 9 flipped once
+- PCIE2 mailboxint: 0x0 (no D2H, no FN0 bits)
+
+Probe A log output:
+```
+test.187: resetintr offset 0xef000 out of TCM range (ramsize=0xa0000), skipping
+test.187: dwell-500ms  resetintr offset 0xef000 out of range, skipping
+test.187: dwell-1500ms resetintr offset 0xef000 out of range, skipping
+test.187: dwell-3000ms resetintr offset 0xef000 out of range, skipping
+```
+
+### Interpretation
+
+1. **Probe A non-functional**: The `0xb8000000` TCM-base assumption is wrong
+   for BCM4360. `resetintr = 0xb80ef000` likely points to ARM boot ROM, not
+   TCM. Even if sampled, it would read empty TCM, not executing code.
+
+2. **No new signal**: Test.187 adds no new data beyond test.186d. The
+   "resetintr out of range" warnings are the only observable difference.
+
+3. **Probe D not implemented**: The promised firmware-integrity check
+   (compare fw->data with TCM readback) was not implemented.
+
+4. **DMA-stall already falsified**: As established in POST-TEST.186d,
+   BusMaster ON/OFF makes no difference; DMA-stall hypothesis remains
+   falsified.
+
+### Lessons for next test
+
+- **Fix or drop probe A**: Either sample TCM[0..fw->size] at evenly spaced
+  offsets (actual firmware region), or drop the resetintr probe entirely.
+- **Implement probe D**: Cheapest way to rule out firmware corruption.
+- **Avoid redundant probes**: D11 state is already sampled in all tests;
+  need new signal, not re-collection of known data.
+- **Reframe hypothesis**: Firmware shows no MMIO/TCM activity → likely
+  faulting before reaching peripheral init, not stuck in D11 bring-up.
+
+---
+
+## PRE-TEST.188 STATE — 2026-04-20 22:45 (updated per feedback)
+
+**Revised hypothesis:** Firmware runs on CR4 but produces no MMIO/TCM activity → likely faulting before reaching peripheral init (including D11), not stuck in D11 bring-up. The ARM exception/spin-loop hypothesis remains leading.
+
+**Test design:** Implement probe D (fw-image integrity check) + fine-grain sampling to catch transient activity.
 
 **Implementation:**
-1. Add probes to read D11 core wrapper registers (IOCTL, IOST, RESET_CTL) via chip.c bus ops
-2. Sample at ARM-release time (immediately after `brcmf_chip_set_active`)
-3. Sample again at T+200ms to see if firmware changes D11 core state before freezing
-4. Compare with expected state from proprietary `wl` driver reset trace
+1. **Probe D - Firmware integrity check:** Compare TCM readback at 32 evenly spaced offsets within fw region (0..fw->size) with original fw->data
+   - Any mismatch indicates corruption during download
+   - Any change during dwell indicates firmware self-modification
+2. **Fine-grain sampling:** Sample CR4/D11 state every 20 ms for first 200 ms after ARM release
+   - Catch transient writes missed by coarse (500/1500/3000 ms) grid
+   - Use same `brcmf_pcie_probe_armcr4_state()` and `brcmf_pcie_probe_d11_state()` functions
+3. **CR4 wrapper fault registers:** Add probe for CR4 fault/status registers (beyond IOCTL/IOST/RESET_CTL)
+   - If ARM is in exception handler, fault registers should show non-zero values
+4. **Keep existing probes unchanged** for comparability with test.186d/187 baseline
 
 **Expected outcomes:**
-- If D11 core is in reset (RESET_CTL bit 0 set): firmware cannot proceed with D11 initialization
-- If D11 core is out of reset but IOCTL/IOST show unexpected state: clock/power/interrupt issues
-- If D11 core state changes between samples: firmware is attempting D11 bring-up but hitting a different blocker
+- If fw-image vs TCM mismatch: download corruption is the root cause
+- If fine-grain sampling shows transient activity: firmware is making brief progress before faulting
+- If CR4 fault registers non-zero: ARM is in exception handler, not idle/spin-loop
+- If all probes match test.186d: firmware is truly idle with no MMIO/TCM activity
 
 **Code changes needed:**
-- Add `brcmf_chip_get_d11_state()` function to read D11 core wrapper registers
-- Insert probes at appropriate points in `brcmf_pcie_download_fw_nvram()` or `brcmf_pcie_setup()`
-- Log D11 state alongside existing ARM CR4 probes
+1. Add `brcmf_pcie_sample_fw_region()` function for probe D
+2. Add fine-grain sampling loop (10 x 20ms intervals)
+3. Add CR4 fault register probe (need to identify correct register offsets)
+4. Relabel breadcrumbs to test.188
 
 **Risk assessment:** Read-only probes; minimal risk beyond existing test framework.
 
 **Next steps after test.188:**
-1. If D11 is in reset: investigate why `brcmf_chip_set_active` doesn't release D11 reset
-2. If D11 is out of reset but IOCTL/IOST wrong: check clock request registers and PMU resources
-3. If D11 state changes: firmware is progressing further than expected; need finer-grained probes
+1. If fw-image mismatch: investigate download path (BAR2 writes, timing, byte order)
+2. If transient activity detected: focus probe window around that activity
+3. If CR4 fault registers active: investigate exception cause (bad jump target, memory fault)
+4. If all null: pursue clean-room cross-reference against proprietary `wl` driver reset sequence
 
 ---
