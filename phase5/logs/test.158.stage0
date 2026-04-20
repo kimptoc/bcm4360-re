@@ -1,0 +1,67 @@
+=== test.158: NO-ARM-HALT; BusMaster/ASPM slice + per-marker msleep(300) — stage=0 ===
+Date: Mon 20 Apr 09:37:45 BST 2026
+
+Stage 0: skip_arm=1 — per-marker msleep(300); duplicate ARM halt REMOVED; BusMaster/ASPM; early return before reginfo.
+(test.158: SBR + chip_attach (halts ARM) + BusMaster clear + ASPM disable; early return before reginfo; 300ms per marker)
+
+=== Pre-test BAR0 MMIO guard ===
+BAR0 MMIO UR/I/O error (7ms) — device alive; SBR in probe should fix. Proceeding.
+
+=== Pre-test PCIe state ===
+(lspci not available)
+
+=== Pre-test root port (00:1c.2) state ===
+
+=== Flushing to disk ===
+Flush complete.
+
+=== Loading brcmfmac (bcm4360_reset_stage=0, bcm4360_skip_arm=1) --- test.158 ===
+insmod returned rc=0
+Waiting 45s for firmware init (streaming to test.158.stage0.stream)...
+
+=== dmesg snapshot (kernel ring buffer) ===
+[  517.032322] brcmfmac: loading out-of-tree module taints kernel.
+[  517.039449] brcmfmac: BCM4360 test.158: module_init entry — no-ARM-halt; BusMaster/ASPM slice
+[  517.039553] brcmfmac: BCM4360 test.156: before brcmf_core_init()
+[  517.039581] brcmfmac: BCM4360 test.155: brcmf_core_init() entry
+[  517.039605] brcmfmac: BCM4360 test.155: before brcmf_sdio_register()
+[  517.039631] brcmfmac: BCM4360 test.155: after brcmf_sdio_register() err=0
+[  517.091370] brcmfmac: BCM4360 test.155: post-SDIO sync (before PCI)
+[  517.091405] brcmfmac: BCM4360 test.155: before brcmf_pcie_register()
+[  517.091431] brcmfmac: BCM4360 test.158: brcmf_pcie_register() entry
+[  517.393261] brcmfmac: BCM4360 test.158: before pci_register_driver
+[  517.697340] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=00000000b09cbb15)
+[  518.001269] brcmfmac: BCM4360 test.158: probe entry flush done — proceeding
+[  518.305288] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+[  518.305334] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+[  518.305521] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+[  518.817355] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+[  518.817407] brcmfmac: BCM4360 test.158: before brcmf_chip_attach
+[  519.121423] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcab301400000
+[  519.121466] brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+[  519.172276] brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+[  519.173035] brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+[  519.173074] brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+[  519.173121] brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+[  519.174958] brcmfmac 0000:03:00.0: BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)
+[  519.177031] brcmfmac 0000:03:00.0: BCM4360 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0
+[  519.182389] brcmfmac: brcmf_chip_recognition: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+[  519.185758] brcmfmac: brcmf_chip_recognition: BCM4360 test.125: after reset, before get_raminfo
+[  519.187550] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[  519.189293] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[  519.191075] brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+[  519.498188] brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+[  519.498243] brcmfmac: BCM4360 test.158: about to pci_clear_master (config-space write)
+[  519.802311] brcmfmac 0000:03:00.0: BCM4360 test.158: BusMaster cleared after chip_attach
+[  520.105180] brcmfmac: BCM4360 test.158: about to read LnkCtl before ASPM disable
+[  520.409254] brcmfmac: BCM4360 test.158: LnkCtl read before=0x0143 — disabling ASPM
+[  520.714245] brcmfmac: BCM4360 test.158: pci_disable_link_state returned — reading LnkCtl
+[  521.018099] brcmfmac 0000:03:00.0: BCM4360 test.158: ASPM disabled; LnkCtl before=0x0143 after=0x0140 ASPM-bits-after=0x0
+[  521.321059] brcmfmac: BCM4360 test.158: early return after BusMaster/ASPM — before reginfo
+[  521.321113] brcmfmac: brcmf_pcie_probe: failed 14e4:43a0
+[  521.321267] brcmfmac: BCM4360 test.158: pci_register_driver returned ret=0
+[  521.321315] brcmfmac: BCM4360 test.155: after brcmf_pcie_register() err=0
+[  521.371370] brcmfmac: BCM4360 test.155: post-PCI sync (skipping USB)
+[  521.371403] brcmfmac: BCM4360 test.156: after brcmf_core_init() err=0
+=== Capture complete ===
+Cleaning up brcmfmac...

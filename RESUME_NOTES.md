@@ -1,8 +1,75 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.157 CRASH PINPOINTED — test.158 READY TO RUN)
+## Current state (2026-04-20, POST test.158 SUCCESS — preparing test.159)
 
-### CODE STATE: test.158 source prepared, REBUILT, ready for insmod
+### CODE STATE: test.158 ran cleanly — all markers appeared, no crash, clean rmmod
+
+**test.158 key log entries (from dmesg snapshot):**
+```
+test.158: module_init entry — no-ARM-halt; BusMaster/ASPM slice
+test.128: PROBE ENTRY (device=43a0 vendor=14e4 ...)
+test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002)
+test.53: SBR complete — bridge_ctrl restored
+test.158: before brcmf_chip_attach
+test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+test.145: halting ARM CR4 after second SBR (buscore_reset)
+test.145: ARM CR4 halt done
+test.119: brcmf_chip_attach returned successfully
+test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+test.158: about to pci_clear_master (config-space write)
+test.158: BusMaster cleared after chip_attach
+test.158: about to read LnkCtl before ASPM disable
+test.158: LnkCtl read before=0x0143 — disabling ASPM
+test.158: pci_disable_link_state returned — reading LnkCtl
+test.158: ASPM disabled; LnkCtl before=0x0143 after=0x0140 ASPM-bits-after=0x0
+test.158: early return after BusMaster/ASPM — before reginfo
+test.158: pci_register_driver returned ret=0
+```
+
+**Key findings:**
+- Duplicate ARM halt CONFIRMED as the sole crash trigger (test.157 thesis validated).
+- pci_clear_master: safe (config-space write).
+- pci_disable_link_state(ASPM_ALL): safe. LnkCtl 0x0143 → 0x0140 (ASPM bits 0x3 cleared).
+- DevSta post-test: UnsupReq- (cleared! previous runs had UnsupReq+).
+- Clean rmmod, machine stable.
+
+**Post-test PCIe state (2026-04-20 ~09:40):**
+- `BusMaster-` (cleared by driver — persists post-rmmod).
+- `LnkCtl: ASPM Disabled; CommClk+` (ASPM cleared by driver — persists post-rmmod).
+- `DevSta: CorrErr+ UnsupReq- AuxPwr+` (UnsupReq cleared).
+- `LnkSta: Speed 2.5GT/s, Width x1` — stable.
+- `MAbort-` — clean.
+
+### test.159 plan — ADD reginfo selection + bus/devinfo allocations + wiring
+
+**Rationale:**
+- Upstream probe continues from ASPM disable → select PCIE2 core + reginfo → kzalloc
+  pcie_bus_dev → kzalloc settings (dummy for BCM4360) → kzalloc bus → kzalloc bus->msgbuf →
+  wire up pointers → pci_pme_capable (config-space read) → dev_set_drvdata.
+- All these are pure kernel memory alloc + config-space read.  No BAR0 MMIO, no DMA setup.
+- Existing markers already present (test.120/123/132) — just need per-marker msleep(300)
+  and move the early-return AFTER the wiring step, before `brcmf_alloc()`.
+
+**test.159 scope:**
+- Remove test.158 early return.
+- Add msleep(300) to each existing marker in the reginfo→drvdata section.
+- Add new early return right BEFORE `brcmf_alloc(&devinfo->pdev->dev, devinfo->settings)`.
+- brcmf_alloc is the next known HW/core boundary — isolate it for test.160.
+
+**Expected outcomes:**
+- Clean run through all markers, early-return before brcmf_alloc.
+- If crash: per-marker sleeps identify the exact kzalloc/wiring step (very unlikely).
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+---
+
+## Previous state (2026-04-20, POST test.157 CRASH PINPOINTED — test.158 ready)
+
+### CODE STATE: test.158 prepared — duplicate ARM halt removed; BusMaster/ASPM slice
 
 **test.157 CRASH ANALYSIS (boot -1, 09:09–09:29):**
 - test.157 RAN cleanly through all markers; crash pinpointed precisely by per-marker msleep(300).
