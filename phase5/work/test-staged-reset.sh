@@ -17,18 +17,18 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.186c.stage${STAGE}"
+LOG="$LOG_DIR/test.186b.stage${STAGE}"
 
-echo "=== test.186c: mailboxint-clear + per-kick probe — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.186b: brief BusMaster-on window — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: skip_arm=1 — same passive flow as test.185 then kick sequence as test.186a, but BEFORE kicking: W1C-clear mailboxint (write 0xffffffff, read back), then read mailboxint AFTER each individual kick (H2D_MAILBOX_0, H2D_MAILBOX_1, SBMBX) to attribute any asserted bits to a specific channel. Post-kick dwells at 500ms and 2000ms with full D11+CR4+CC+mailboxint+TCM diff. BusMaster remains cleared throughout. Returns -ENODEV." | tee -a "$LOG" ;;
+    0) echo "Stage 0: skip_arm=1 — same passive flow as test.185/186a/186c through the 3s dwell, then: (a) MMIO guard read, (b) pci_set_master, (c) sample mailboxint + CR4 + D11 at BM-on+50ms and BM-on+100ms, (d) MMIO guard read, (e) pci_clear_master, (f) MMIO guard read, (g) post-BM dwells at 500ms and 2000ms with full D11+CR4+CC+mailboxint+TCM diff. Window limited to ~100ms to mitigate Phase-4B-era BusMaster-on crashes. Returns -ENODEV." | tee -a "$LOG" ;;
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.186c: test.186a saw mailboxint=0x1 post-kick but bit 0 is outside int_fn0/int_d2h_db. Disambiguate: clear mailboxint (W1C 0xffffffff) first, then sample after each of the three kicks to attribute bit sources precisely. All other observations identical to test.186a. Returns -ENODEV.)" | tee -a "$LOG"
+echo "(test.186b: doorbell theory ruled out by 186a/186c. Discriminate DMA-stall vs exception/panic loop by briefly enabling BusMaster — if firmware is DMA-stalled it should complete startup DMA and produce visible change (TCM writes, D11 release, sharedram marker replacing 0xffc70038). If no change, exception-loop becomes leading hypothesis.)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from

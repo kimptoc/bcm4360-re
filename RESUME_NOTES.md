@@ -1,5 +1,43 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.186b (2026-04-20, staged) — brief BusMaster-on window
+
+### Hypothesis
+After 186a/186c ruled out the doorbell path, the two remaining
+candidates for firmware's early stall are (1) exception/panic loop and
+(2) DMA stall (firmware needs to fetch something over PCIe DMA but
+BusMaster is cleared, so the attempt silently fails). This test briefly
+enables BusMaster for ~100 ms after the existing 3-s passive dwell,
+then immediately clears it again and dwells for 500 ms and 2 s, with
+MMIO-guard reads before the enable, after the enable, and after the
+clear to detect any host/endpoint wedge early.
+
+### Prediction
+- **If firmware is DMA-stalled:** during or after the BM-on window we
+  expect to see at least one of — (a) TCM write activity (any of the
+  56 probed offsets CHANGED), (b) D11 RESET_CTL clearing from 0x01,
+  (c) sharedram-info address replacing our 0xffc70038 NVRAM marker
+  at ramsize-4, or (d) mailboxint asserting a D2H bit (0x10000+).
+- **If firmware is in an exception/panic loop:** no change anywhere.
+  Same post-BM snapshot as test.186a/186c: D11 still in reset, TCM
+  unchanged, pmucontrol bit 9 still the only set bit in the CC diff.
+
+### Risk
+Phase-4B hard-crashed the host when BusMaster was left on through
+full attach. Mitigations: (a) very short window (~100 ms total),
+(b) MMIO guard reads before/after to bail early if the endpoint
+stops responding, (c) always `pci_clear_master` before continuing.
+If the machine crashes, post-recovery notes and the `stream` log
+capture whatever made it to disk.
+
+### Run command
+```
+sudo ./phase5/work/test-staged-reset.sh 0
+```
+PCIe pre-test: verify no MAbort+ on `lspci -vvv -s 03:00.0`.
+
+---
+
 ## POST-TEST.186c (2026-04-20) — mailboxint is RW-set-on-write; no H2D channel elicits firmware response
 
 Captured artifacts:
