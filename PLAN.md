@@ -104,12 +104,23 @@ hard-crash sessions (tests 149–157).
   remain: (1) fw stalled in exception/panic loop after one PMU write;
   (2) fw waiting on DMA (disambiguate via BusMaster-window test);
   (3) fw waiting on D11 wrapper (less likely).
+- **test.186c NULL-RESULT (mailboxint is not W1C on BCM4360):** cleared
+  `mailboxint` via write-0xffffffff and sampled after each kick. The
+  clear-write instead *set* bits 0-1 (pre-kick 0x0 → post-write 0x3),
+  proving these bits are RW / "write-sets" rather than W1C. All three
+  subsequent kicks (H2D_MAILBOX_0, H2D_MAILBOX_1, SBMBX) produced
+  delta=0 on `mailboxint` and no change to D11, TCM, NVRAM marker, or
+  pmucontrol beyond the test.184 baseline. Confirms test.186a's 0x1
+  was our own write latch. Doorbell theory fully ruled out for this
+  stage. Remaining candidates narrow to (1) exception/panic loop and
+  (2) DMA stall.
 
-**Next boundary:** test.186c (quick disambiguation) — clear `mailboxint`
-before the kick to determine whether bit 0 is our own echo or a lazy
-firmware assert. Then test.186b — brief BusMaster enable window
-(still -ENODEV early return, no full attach) — to discriminate between
-DMA-stall and exception-loop theories.
+**Next boundary:** test.186b — brief BusMaster enable window (still
+-ENODEV early return, no full attach) — to discriminate between
+DMA-stall (firmware completes its startup DMA and begins writing TCM
+/ releasing D11 / replacing the NVRAM marker) and exception-loop
+(no change). Risk-mitigated with a very short window and MMIO guards
+before/after.
 
 **Re-entering the old 5.2 investigation:** once the probe-path restore is
 complete (i.e. firmware download and ARM release can run without host crash),

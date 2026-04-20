@@ -1,5 +1,82 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.186c (2026-04-20) — mailboxint is RW-set-on-write; no H2D channel elicits firmware response
+
+Captured artifacts:
+- `phase5/logs/test.186c.stage0`
+- `phase5/logs/test.186c.stage0.stream`
+- `phase5/logs/test.186c.journalctl.txt` (594 lines)
+
+Result: **clean run, host stable. Hypothesis partially correct and
+partially wrong.** The W1C theory of `mailboxint` is disproved: writing
+0xffffffff to clear the register instead left bits 0-1 asserted
+(pre-kick 0x0 → after-write 0x3), meaning that for this chip bits 0-1
+of mailboxint are read/write (or "write-sets") rather than write-one-
+to-clear. None of the three kick channels then changed the value
+further — delta=0 after H2D_MAILBOX_0, H2D_MAILBOX_1, and SBMBX.
+
+### Per-kick attribution
+
+```
+pre-kick           mailboxint = 0x00000000
+after W1C-clear    mailboxint = 0x00000003   <- write of 0xffffffff SET bits 0-1
+after H2D_MBX_0=1  mailboxint = 0x00000003  (delta=0x0)
+after H2D_MBX_1=1  mailboxint = 0x00000003  (delta=0x0)
+after SBMBX=1      mailboxint = 0x00000003  (delta=0x0)
+post-kick +500ms   mailboxint = 0x00000003  UNCHANGED
+post-kick +2000ms  mailboxint = 0x00000003  UNCHANGED
+```
+
+### Key conclusions
+
+1. **Bits 0-1 of `mailboxint` are not W1C — our clear-write SET them.**
+   Most likely these bits are "host-side latch of H2D activity" and
+   the 0xffffffff write is interpreted as "raise both mailbox-0 and
+   mailbox-1 doorbell" on the endpoint side. This matches the test.186a
+   observation (0x1 appeared after a single mailbox-0 kick = bit 0);
+   test.186c just wrote-all-ones and got both bits.
+2. **Test.186a's 0x1 was our own write, confirmed.** Not firmware.
+3. **Not one of the three H2D channels elicited any firmware
+   response** (no D2H bits 0x10000+, no FN0 bits 0x0100/0x0200, no
+   D11 wrapper change, no TCM change, no NVRAM marker change).
+4. **D11 wrapper unchanged throughout** — RESET_CTL=0x01, IOCTL=0x07
+   at pre-halt, pre-set-active, every dwell, post-kick +500/+2000ms.
+   Firmware never releases D11 on its own at this stage.
+5. **Only signs of life remain test.184 baseline**: pmucontrol bit 9
+   flipped once (0x01770181 → 0x01770381 by dwell+500ms), pmutimer
+   ticks monotonically (+~36 kHz). No new activity after the kicks.
+
+### What this rules in / out
+
+- **Ruled out (strongly):** "firmware is waiting on H2D doorbell to
+  start." Three different doorbell paths, zero response. The doorbell
+  mechanism doesn't become active at this stage of bring-up.
+- **Still in play (of test.186a's three candidates):**
+  (1) exception/panic loop after single PMU write, and
+  (2) DMA stall (BusMaster cleared → any DMA attempt fails silently).
+  (3) D11 wrapper wait is less likely now — firmware normally brings
+  D11 up itself after PMU init, so the fact that D11 hasn't moved
+  suggests firmware never reached the D11-init code path, not that
+  it's stuck polling D11.
+
+### Next boundary
+
+test.186b: briefly enable BusMaster for ~100 ms after ARM release,
+then clear it again and sample. If firmware is DMA-stalled (candidate
+2), the brief BusMaster window should let its startup DMA complete
+and we should see either (a) TCM write activity, (b) D11 wrapper
+release, or (c) sharedram-info address replacing our 0xffc70038 marker
+at ramsize-4. If no change, the exception-loop theory (candidate 1)
+becomes the leading hypothesis and we'd need a different probe
+strategy (e.g. reading CR4 wrapper IFP/PC registers if exposed, or
+re-asserting reset and inspecting TCM for a panic stub).
+
+Risk note: BusMaster-on after ARM release crashed the host in Phase-4B.
+The mitigation is (a) very brief window, (b) root-port MMIO guard
+before/after, (c) immediate re-clear if any MMIO slows down.
+
+---
+
 ## PRE-TEST.186c (2026-04-20, staged) — per-kick mailboxint attribution
 
 ### Hypothesis
