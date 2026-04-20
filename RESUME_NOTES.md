@@ -1,6 +1,107 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.182 — ARM running but TCM[0..0x1c] + NVRAM marker UNCHANGED for 3 s)
+## Current state (2026-04-20, PRE test.183 — widened TCM scan: image-header + mid + tail)
+
+### PRE-TEST.183 checkpoint
+
+Test.182 proved ARM CR4 runs continuously for ≥3 s after release, but
+TCM[0x0..0x1c] and the NVRAM marker at `ramsize - 4` stay UNCHANGED
+across 500/1500/3000 ms dwells. Two open questions:
+
+- Is firmware doing *any* TCM writes (we only sampled 32 bytes near the
+  image header)?
+- Has firmware written its shared-memory address anywhere near
+  `ramsize - 8`, where upstream brcmfmac looks for it?
+
+Test.183 widens the TCM observation window by adding two more regions
+to the pre-release snapshot and each dwell re-read. No BusMaster change,
+no MSI, same `-ENODEV` return path.
+
+Implementation:
+1. Keep the test.182 image-header snapshot (TCM[0x0..0x1c], 8 words).
+2. Add mid-TCM probe points at offsets `0x1000, 0x2000, 0x4000, 0x8000,
+   0x10000, 0x20000, 0x40000, 0x80000`. These sample the body of the
+   firmware image (0x40000 = 256 KB, 0x80000 = 512 KB both land inside
+   the 442 KB fw — should read as firmware code/data pre-release).
+   Storage: `pre_mid[8]`. Pre-release log tag: `mid-TCM[0x%05x]`.
+3. Add last-64-B-of-TCM window: 16 words at
+   `ramsize - 64 .. ramsize - 4` (0x9ffc0 .. 0x9fffc). Covers the
+   NVRAM marker at `ramsize - 4`, the upstream sharedram-address slot
+   at `ramsize - 8`, and any adjacent handshake fields.
+   Storage: `pre_tail[16]`. Pre-release log tag: `tail-TCM[0x%05x]`.
+4. At each dwell (500/1500/3000 ms) re-read *all three* regions (same
+   8 + 8 + 16 words) and log CHANGED/UNCHANGED per word.
+5. Keep `brcmf_chip_set_active` release path. Release fw/nvram and
+   return `-ENODEV`.
+
+Build: OK via kernel kbuild. Module has 38 `test.183` markers and 0
+`test.182` strings. Pre-release tags `mid-TCM` and `tail-TCM` present in
+binary. Only existing warning is `brcmf_pcie_write_ram32 defined but not
+used`. BTF skipped (vmlinux unavailable).
+
+Harness `WAIT_SECS` stays 45 — the three extra snapshot regions add
+~50 ms total of MMIO reads, not enough to affect the 3 s in-module
+dwell budget.
+
+### Hypothesis
+
+One of the following:
+- (A1) Firmware is alive and has written into mid-TCM — probably to
+  initialise its own data segment. One or more mid-TCM words CHANGED
+  at 500 ms or later. Strong evidence that firmware is executing past
+  early init and starting to lay down runtime state.
+- (A2) Firmware has written the sharedram address at `ramsize - 8` or
+  another word in the last 64 B. One of the `tail-TCM` words CHANGED.
+  This is the signature brcmfmac normally looks for. If CHANGED at
+  3000 ms, we know exactly where to read the handshake and test.184
+  can start interpreting its contents.
+- (B1) All three regions stay UNCHANGED across 3000 ms. Firmware is
+  running but wedged in a loop that doesn't touch TCM at all. Next
+  test would need to observe the backplane (chipcommon / CR4
+  wrapper) and/or sample the PMU clock counter to confirm firmware
+  is doing *any* work. May also indicate we need to enable BusMaster
+  and MSI for firmware to progress past host-handshake wait.
+- (B2) Changes appear but in an unexpected pattern (e.g. only the
+  last two words of tail, or scattered mid-TCM words). Interpretation
+  case-by-case; likely narrows the search window.
+
+Expected ARM state across all three dwells: `IOCTL=0x00000001
+RESET_CTL=0x00000000 CPUHALT=NO` (same as test.182). Any divergence
+means ARM re-halted itself — new finding to investigate.
+
+### Interpretation matrix
+
+- tail-TCM word at `ramsize - 8` CHANGED: firmware wrote sharedram
+  address. Huge. Record the value — test.184 dereferences it.
+- Any tail-TCM word CHANGED (excluding marker at ramsize-4):
+  firmware is touching the end-of-TCM handshake region.
+- Any mid-TCM word CHANGED: firmware is executing past the
+  image-header window and modifying its own memory.
+- All regions UNCHANGED, CPUHALT=NO holds: ARM running but no TCM
+  writes — next test samples backplane state / considers enabling
+  BusMaster.
+- ARM probe returns CPUHALT=YES at any dwell: ARM re-halted. Treat
+  as regression from test.181/.182; investigate.
+- Host freezes during dwell: narrow the dwell window.
+
+### Run command
+
+Only stage 0:
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+Post-run: capture journalctl to `phase5/logs/test.183.journalctl.txt`,
+update RESUME_NOTES with POST-TEST.183, commit and push.
+
+### Pre-test HW state expected
+
+Same as test.182 post-run: endpoint `03:00.0` shows `Mem- BusMaster-`,
+BAR regions `[disabled]`, `<MAbort-`. Normal post-rmmod state, clean.
+
+---
+
+## Previous state (2026-04-20, POST test.182 — ARM running but TCM[0..0x1c] + NVRAM marker UNCHANGED for 3 s)
 
 ### TEST.182 RESULT — clean run; hypothesis (B) confirmed
 
