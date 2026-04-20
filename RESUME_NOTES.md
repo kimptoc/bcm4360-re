@@ -1,6 +1,118 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.181 — brcmf_chip_set_active isolation)
+## Current state (2026-04-20, POST test.181 — BREAKTHROUGH: ARM release works, firmware running)
+
+### TEST.181 RESULT — brcmf_chip_set_active SUCCESS; ARM CR4 running; host stable
+
+Captured artifacts:
+- `phase5/logs/test.181.stage0`
+- `phase5/logs/test.181.stage0.stream`
+- `phase5/logs/test.181.journalctl.txt`
+
+Result: **SUCCESS — ARM is running firmware and the host survived 30 s.**
+
+Decisive sequence:
+```
+BCM4360 test.181: pre-set-active ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES
+BCM4360 test.181: calling brcmf_chip_set_active resetintr=0xb80ef000 (BusMaster stays cleared)
+BCM4360 test.65 activate: rstvec=0xb80ef000 to TCM[0]; CMD=0x0002 (BusMaster preserved)
+BCM4360 test.181: brcmf_chip_set_active returned true
+BCM4360 test.181: post-set-active-20ms  ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 CPUHALT=NO
+BCM4360 test.181: post-set-active-100ms ARM CR4 IOCTL=0x00000001 RESET_CTL=0x00000000 CPUHALT=NO
+BCM4360 test.181: released fw/nvram after brcmf_chip_set_active probes; returning -ENODEV
+BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+BCM4360 test.163: fw released; returning from setup (state still DOWN)
+=== Capture complete ===
+Cleaning up brcmfmac...
+```
+
+### Interpretation — what the numbers say
+
+- `pre-set-active` IOCTL=0x0021: CPUHALT bit (0x20) + CLK-something bit (0x01)
+  set — ARM is halted.
+- After `brcmf_chip_set_active` the IOCTL reads 0x0001: the 0x20 CPUHALT bit
+  has been cleared while 0x01 stays on. `RESET_CTL` stays 0 (ARM not in
+  reset). This is exactly the signature of a successful CR4 release.
+- Both post probes (20 ms and 100 ms) show the same stable IOCTL=0x0001 /
+  CPUHALT=NO. ARM CR4 is running firmware continuously.
+- The activate op logged "rstvec=0xb80ef000 to TCM[0]; CMD=0x0002
+  (BusMaster preserved)". `CMD=0x0002` means Memory Space is enabled but
+  BusMaster and I/O are disabled — firmware cannot DMA to host memory,
+  as intended.
+- No MCE, no PCIe AER, no panic. Clean `-ENODEV` return, clean rmmod, no
+  SMC reset needed. The 30 s harness dwell completed normally with ARM
+  running in the background.
+- Post-run lspci shows endpoint `Mem- BusMaster- CommClk-` with regions
+  `[disabled]` — that is the normal post-rmmod state when brcmfmac disables
+  the device on unload. Not a fault indicator.
+
+### Why this matters
+
+This is the first clean `brcmf_chip_set_active` on BCM4360 via brcmfmac in
+this tree. Phase 4B used to crash the host within 100-200 ms of ARM release;
+now ARM runs for >30 s without wedging anything. The accumulated safety
+changes — SBR on probe, endpoint + root-port ASPM off, CommClk+, BusMaster
+cleared before ARM release, full 442 KB fw + 228 B NVRAM + marker in TCM,
+explicit ARM re-halt via `brcmf_chip_set_passive` before fw write — are
+collectively sufficient to make the CR4 release safe.
+
+The historic Phase-4B "host crashes ~100-200 ms after ARM release" is no
+longer reproducible in this configuration. The stability prerequisite for
+Phase 5.2's exit criterion (firmware reaches a state where it writes a
+shared-memory handshake) is now in place.
+
+### Current HW state after test.181
+
+- `brcmfmac` is unloaded. `brcmutil` remains loaded.
+- Endpoint 03:00.0 visible: `Mem- BusMaster-`, BAR regions `[disabled]`,
+  `<MAbort-`, link 2.5GT/s x1, ASPM disabled, CommClk-. This is the
+  expected post-rmmod state and re-initialises cleanly on next insmod.
+- Root port 00:1c.2 visible, clean. No MAbort.
+- No kernel panic, MCE, AER, or SMC reset required.
+
+### Recommended next step — PRE test.182
+
+Do **not** run another hardware test until this note and the test.181
+artifacts are committed, pushed, and synced.
+
+Best next discriminator: let ARM run, then sample TCM to see whether
+firmware has started initialising memory.
+
+Suggested test.182:
+1. Keep the test.181 sequence through `post-set-active-100ms`.
+2. Add a longer dwell after `post-set-active-100ms`: `msleep(500)` and
+   `msleep(1000)` in stages with breadcrumbs `dwell-500ms`, `dwell-1500ms`.
+3. After each dwell, re-probe ARM CR4 state and re-read a small TCM window
+   — specifically `TCM[0x0..0x1c]` (same 8 words as test.181) plus the
+   NVRAM marker at `ramsize - 4`. Compare against the pre-release values
+   to detect firmware-originated writes.
+4. Release `fw`/`nvram` and return `-ENODEV`. Still do NOT enable
+   BusMaster, do NOT enable MSI, do NOT advance to sharedram polling.
+
+Interpretation matrix:
+- Any TCM word in 0x0..0x1c changes between the pre-release dump and a
+  post-release re-read: firmware is executing and writing to its own TCM.
+  Next test expands the TCM scan and starts hunting for the sharedram
+  structure address.
+- The NVRAM marker changes: firmware has consumed the NVRAM placement
+  (normal on successful boot) and likely moved into shared-memory setup.
+- No TCM changes after 1.5 s: ARM is running but firmware is wedged in an
+  early loop (e.g. waiting for a register that never asserts). Next test
+  adds BAR0 reads of chipcommon registers to see whether firmware is
+  actively doing backplane I/O.
+- Host freezes during the extended dwell: something about prolonged ARM
+  execution without BusMaster/MSI is unstable. Narrow the window and
+  consider enabling BusMaster before the last dwell stage.
+
+### Pre-test HW state remains the test.181 post-run state
+
+- Endpoint disabled post-rmmod (expected). Next insmod will re-initialise.
+- No dirty state. Safe to proceed to test.182 once PRE-test.182 is
+  committed.
+
+---
+
+## Previous state (2026-04-20, PRE test.181 — brcmf_chip_set_active isolation)
 
 ### PRE-TEST.181 checkpoint
 
