@@ -1,8 +1,8 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.157 CRASH PINPOINTED — preparing test.158)
+## Current state (2026-04-20, POST test.157 CRASH PINPOINTED — test.158 READY TO RUN)
 
-### CODE STATE: NOT yet rebuilt — test.158 plan below; pcie.c unchanged since test.157
+### CODE STATE: test.158 source prepared, REBUILT, ready for insmod
 
 **test.157 CRASH ANALYSIS (boot -1, 09:09–09:29):**
 - test.157 RAN cleanly through all markers; crash pinpointed precisely by per-marker msleep(300).

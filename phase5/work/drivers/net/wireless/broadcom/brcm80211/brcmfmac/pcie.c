@@ -3960,10 +3960,10 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	/* test.127: add very early marker in probe entry to confirm probe is called */
 	pr_emerg("BCM4360 test.128: PROBE ENTRY (device=%04x vendor=%04x id=%p)\n",
 		 pdev->device, pdev->vendor, id);
-	msleep(300); /* test.157: flush PROBE ENTRY before proceeding */
+	msleep(300); /* test.158: flush PROBE ENTRY before proceeding */
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
-		pr_emerg("BCM4360 test.157: probe entry flush done — proceeding\n");
-		msleep(300); /* test.157: flush before kzalloc */
+		pr_emerg("BCM4360 test.158: probe entry flush done — proceeding\n");
+		msleep(300); /* test.158: flush before kzalloc */
 	}
 
 	brcmf_dbg(PCIE, "Enter %x:%x\n", pdev->vendor, pdev->device);
@@ -4023,89 +4023,70 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 			  "BCM4360 test.53: SBR complete — bridge_ctrl restored\n");
 	}
 
-	pr_emerg("BCM4360 test.157: before brcmf_chip_attach\n");
-	msleep(300); /* test.157: flush before chip_attach MMIO */
+	pr_emerg("BCM4360 test.158: before brcmf_chip_attach\n");
+	msleep(300); /* test.158: flush before chip_attach MMIO */
 	devinfo->ci = brcmf_chip_attach(devinfo, pdev->device,
 					&brcmf_pcie_buscore_ops);
 	if (IS_ERR(devinfo->ci)) {
 		ret = PTR_ERR(devinfo->ci);
 		devinfo->ci = NULL;
-		pr_emerg("BCM4360 test.157: chip_attach FAILED ret=%d\n", ret);
+		pr_emerg("BCM4360 test.158: chip_attach FAILED ret=%d\n", ret);
 		goto fail;
 	}
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
 		dev_emerg(&pdev->dev,
 			  "BCM4360 test.119: brcmf_chip_attach returned successfully\n");
-		msleep(300); /* test.157: flush chip_attach success before ARM halt */
+		msleep(300); /* test.158: flush chip_attach success before BusMaster/ASPM */
 	}
 
-	/* test.142: reordered — ARM CR4 reset FIRST (highest priority: stop garbage
-	 * execution before any other probe work), then BusMaster/ASPM cleanup.
-	 * test.141 had the same reset code but AFTER BusMaster/ASPM; moved earlier
-	 * to minimise the window between chip_attach and ARM halt. */
+	/* test.158: REMOVED duplicate probe-level ARM halt.
+	 * test.157 proved chip_attach/buscore_reset already halted ARM (test.145 path);
+	 * the duplicate halt's RESET_CTL=1 wedged the ARM core's BAR0 window and the
+	 * next write triggered an MCE. Skip the duplicate halt entirely.
+	 *
+	 * test.158 scope: BusMaster clear + ASPM disable (both config-space ops, no BAR0).
+	 * Early return after BusMaster/ASPM — before reginfo/allocs.
+	 */
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
 		u16 lnkctl_before, lnkctl_after;
-		u32 ioctl_before, ioctl_after_fgc, reset_ctl;
 		struct brcmf_core *arm_core;
 
-		/* Log ARM CR4 base address so it can be hardcoded for pre-chip_attach
-		 * reset in a future test (needed to set BAR0_WINDOW without devinfo->ci). */
+		/* Log ARM CR4 base for reference (no MMIO to ARM core). */
 		arm_core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_ARM_CR4);
 		if (arm_core)
 			dev_emerg(&pdev->dev,
-				  "BCM4360 test.142: ARM CR4 core->base=0x%08x (for early-reset hardcode)\n",
+				  "BCM4360 test.158: ARM CR4 core->base=0x%08x (no MMIO issued)\n",
 				  arm_core->base);
 
-		/* test.141/142: proper BCMA ARM CR4 reset — IOCTL=FGC|CLK|CPUHALT first,
-		 * then RESET_CTL=1.  test.140 omitted the IOCTL gate step and got
-		 * RESET_CTL=0xffffffff (wrapper wedged). */
-		pr_emerg("BCM4360 test.157: about to select ARM core (BAR0 window change)\n");
-		msleep(300); /* test.157: flush before select_core MMIO */
-		brcmf_pcie_select_core(devinfo, BCMA_CORE_ARM_CR4);
-		pr_emerg("BCM4360 test.157: ARM select_core done — reading IOCTL\n");
-		msleep(300); /* test.157: flush after select_core */
-		ioctl_before = brcmf_pcie_read_reg32(devinfo, 0x1408);
-		pr_emerg("BCM4360 test.157: IOCTL read done (0x%04x) — writing CPUHALT|FGC|CLK\n",
-			 ioctl_before);
-		msleep(300); /* test.157: flush after IOCTL read */
-		brcmf_pcie_write_reg32(devinfo, 0x1408, 0x0023); /* CPUHALT|FGC|CLK */
-		pr_emerg("BCM4360 test.157: IOCTL write done — flush-reading IOCTL\n");
-		msleep(300); /* test.157: flush after IOCTL write */
-		ioctl_after_fgc = brcmf_pcie_read_reg32(devinfo, 0x1408); /* flush */
-		pr_emerg("BCM4360 test.157: IOCTL flush done (0x%04x) — asserting RESET_CTL\n",
-			 ioctl_after_fgc);
-		msleep(300); /* test.157: flush before RESET_CTL write */
-		brcmf_pcie_write_reg32(devinfo, 0x1800, 1);      /* assert RESET_CTL */
-		pr_emerg("BCM4360 test.157: RESET_CTL write done — waiting 1ms\n");
-		msleep(300); /* test.157: flush after RESET_CTL write */
-		mdelay(1);
-		reset_ctl = brcmf_pcie_read_reg32(devinfo, 0x1800);
-		pr_emerg("BCM4360 test.157: RESET_CTL readback=0x%08x IN_RESET=%s — writing in-reset IOCTL\n",
-			 reset_ctl, (reset_ctl == 1) ? "YES" : "NO/WEDGED");
-		msleep(300); /* test.157: flush after RESET_CTL readback */
-		brcmf_pcie_write_reg32(devinfo, 0x1408, 0x0023); /* in-reset configure */
-		dev_emerg(&pdev->dev,
-			  "BCM4360 test.142: probe-time ARM CR4 reset: IOCTL_before=0x%04x IOCTL_fgc=0x%04x RESET_CTL=0x%08x IN_RESET=%s\n",
-			  ioctl_before, ioctl_after_fgc, reset_ctl,
-			  (reset_ctl == 1) ? "YES" : "NO/WEDGED");
-		msleep(300); /* test.157: flush final marker before early return */
-
-		/* test.156/157: ARM halt discriminator — early return after MMIO writes, before
-		 * BusMaster/ASPM. If this runs without crash, ARM halt MMIO is safe. */
-		pr_emerg("BCM4360 test.157: early return after ARM halt — before BusMaster/ASPM\n");
-		ret = -ENODEV;
-		goto fail;
-
-		/* Now safe to clear BusMaster and disable ASPM — ARM is in reset. */
+		pr_emerg("BCM4360 test.158: about to pci_clear_master (config-space write)\n");
+		msleep(300); /* test.158: flush before pci_clear_master */
 		pci_clear_master(pdev);
 		dev_emerg(&pdev->dev,
-			  "BCM4360 test.133: BusMaster cleared after chip_attach\n");
+			  "BCM4360 test.158: BusMaster cleared after chip_attach\n");
+		msleep(300); /* test.158: flush after pci_clear_master */
+
+		pr_emerg("BCM4360 test.158: about to read LnkCtl before ASPM disable\n");
+		msleep(300); /* test.158: flush before lnkctl read */
 		pcie_capability_read_word(pdev, PCI_EXP_LNKCTL, &lnkctl_before);
+		pr_emerg("BCM4360 test.158: LnkCtl read before=0x%04x — disabling ASPM\n",
+			 lnkctl_before);
+		msleep(300); /* test.158: flush after lnkctl read */
+
 		pci_disable_link_state(pdev, PCIE_LINK_STATE_ASPM_ALL);
+		pr_emerg("BCM4360 test.158: pci_disable_link_state returned — reading LnkCtl\n");
+		msleep(300); /* test.158: flush after disable_link_state */
+
 		pcie_capability_read_word(pdev, PCI_EXP_LNKCTL, &lnkctl_after);
 		dev_emerg(&pdev->dev,
-			  "BCM4360 test.133: ASPM disabled; LnkCtl before=0x%04x after=0x%04x ASPM-bits-after=0x%x\n",
+			  "BCM4360 test.158: ASPM disabled; LnkCtl before=0x%04x after=0x%04x ASPM-bits-after=0x%x\n",
 			  lnkctl_before, lnkctl_after, lnkctl_after & PCI_EXP_LNKCTL_ASPMC);
+		msleep(300); /* test.158: flush final marker */
+
+		/* test.158: early return — BusMaster/ASPM discriminator.
+		 * If this runs cleanly, BusMaster/ASPM path is safe; test.159 adds reginfo. */
+		pr_emerg("BCM4360 test.158: early return after BusMaster/ASPM — before reginfo\n");
+		ret = -ENODEV;
+		goto fail;
 	}
 
 	if (pdev->device == BRCM_PCIE_4360_DEVICE_ID)
@@ -4481,19 +4462,19 @@ static struct pci_driver brcmf_pciedrvr = {
  * after chip_attach() has initialized the PCIe-to-backplane bridge. */
 void brcmf_pcie_early_arm_halt(void)
 {
-	pr_emerg("BCM4360 test.157: module_init entry — per-marker msleep(300) for crash location\n");
+	pr_emerg("BCM4360 test.158: module_init entry — no-ARM-halt; BusMaster/ASPM slice\n");
 }
 
 int brcmf_pcie_register(void)
 {
 	int ret;
 
-	pr_emerg("BCM4360 test.157: brcmf_pcie_register() entry\n");
-	msleep(300); /* test.157: flush marker before pci_register_driver */
-	pr_emerg("BCM4360 test.157: before pci_register_driver\n");
-	msleep(300); /* test.157: flush — if crash here, it's in pci_register_driver kernel code */
+	pr_emerg("BCM4360 test.158: brcmf_pcie_register() entry\n");
+	msleep(300); /* test.158: flush marker before pci_register_driver */
+	pr_emerg("BCM4360 test.158: before pci_register_driver\n");
+	msleep(300); /* test.158: flush — if crash here, it's in pci_register_driver kernel code */
 	ret = pci_register_driver(&brcmf_pciedrvr);
-	pr_emerg("BCM4360 test.157: pci_register_driver returned ret=%d\n", ret);
+	pr_emerg("BCM4360 test.158: pci_register_driver returned ret=%d\n", ret);
 	return ret;
 }
 
