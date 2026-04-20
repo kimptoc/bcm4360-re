@@ -1,6 +1,113 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.183 — wider scan: ALL regions UNCHANGED for 3 s; firmware not parsing NVRAM)
+## Current state (2026-04-20, PRE test.184 — ChipCommon backplane observation)
+
+### PRE-TEST.184 checkpoint
+
+Test.183 proved 32 TCM sample points across three regions are UNCHANGED
+through 3 s post-release. ARM CR4 stays CPUHALT=NO the whole time. The
+working hypothesis is that firmware is running but wedged in a
+pre-NVRAM-parser wait loop. To discriminate "ARM idle" from "ARM
+working in backplane state we haven't observed", test.184 adds
+ChipCommon backplane-register sampling.
+
+Implementation:
+
+1. New helper `brcmf_pcie_sample_backplane(devinfo, u32 vals[8])` reads
+   eight ChipCommon registers via `READCC32`:
+   - `clk_ctl_st`  — BP clock request / HAVEHT status bits
+   - `pmucontrol`  — PMU control word (written by firmware resource
+                     setup)
+   - `pmustatus`   — PMU state (HAVEHT bit 0x04 etc.)
+   - `res_state`   — which PMU resources are currently asserted
+   - `pmutimer`    — monotonic ILP-clock tick counter (~32 kHz).
+                     Ticks every dwell if the PMU is clocked,
+                     regardless of firmware. CHANGED→UNCHANGED flip
+                     here would mean the PMU itself has stopped.
+   - `min_res_mask`, `max_res_mask` — resource-request masks
+   - `pmuwatchdog` — PMU watchdog; firmware normally tickles this
+                     to keep itself running.
+2. New const array `brcmf_bp_reg_names[8]` for symbolic logging.
+3. In the BCM4360 early-return block:
+   - After the tail-TCM pre-release snapshot, call
+     `brcmf_pcie_sample_backplane(devinfo, pre_bp)` and log each
+     register as `CC-<name>=0x<val> (pre-release snapshot)`.
+   - At each dwell (500/1500/3000 ms) re-sample and log
+     `dwell-<ms>ms CC-<name>=0x<now> (was 0x<pre>) CHANGED|UNCHANGED`.
+4. TCM snapshots (image-header + mid + tail) stay identical to
+   test.183. ARM CR4 release path, BusMaster-cleared policy, and
+   `-ENODEV` return all unchanged.
+
+Build: OK via kernel kbuild. Module has 40 `test.184` markers and
+0 `test.183` strings. Format strings `CC-%s=...` present in binary.
+Only existing warning is `brcmf_pcie_write_ram32 defined but not used`.
+BTF skipped (vmlinux unavailable).
+
+Harness `WAIT_SECS` stays 45 — the 8 extra register reads per snapshot
+add negligible time.
+
+### Hypothesis
+
+Given test.183's finding that TCM stays static for 3 s:
+
+- (A) **PMU is alive (pmutimer ticks) but firmware is not touching
+  backplane resource regs either.** pmutimer CHANGED (monotonically
+  increasing by ≥ floor(500/32)·16 = ~16 ticks per 500 ms of ILP
+  clock at 32 kHz) — all *other* CC regs UNCHANGED. Means the chip
+  is clocked but firmware genuinely isn't doing work on the
+  backplane we can see. Likely waiting on an MMIO from the host
+  (BusMaster / MailBox / scratchpad).
+- (B) **PMU is alive AND firmware is manipulating backplane state.**
+  pmutimer + one or more of `clk_ctl_st`/`pmustatus`/`res_state`/
+  `min_res_mask`/`max_res_mask`/`pmuwatchdog` CHANGED. Means firmware
+  is running its resource/clock setup — significant activity we
+  haven't seen yet. Unexpected but very informative.
+- (C) **PMU is frozen.** pmutimer UNCHANGED. Would mean the whole PMU
+  has stalled, which would be a regression from test.181/.182/.183
+  (ARM CR4 is running, so the ARM clock domain is on — which usually
+  requires HAVEHT/HT clocks, which are PMU-sourced). Investigate
+  deeply.
+
+Expected at minimum: `pmutimer` monotonically increasing across
+dwells. That alone will confirm the chip's PMU is clocking normally.
+
+### Interpretation matrix
+
+- `pmutimer` increases per dwell, other CC regs UNCHANGED: firmware
+  is running on ARM but doing no backplane work — case (A). Next
+  test probably needs to enable BusMaster to get firmware past its
+  host-handshake wait.
+- `pmutimer` increases, and `pmustatus`/`res_state`/masks CHANGED:
+  firmware is driving backplane — case (B). Next test interprets
+  the changed bit fields.
+- `pmutimer` does NOT increase: PMU stalled — case (C). Investigate
+  before any host-facing progression.
+- `pmuwatchdog` CHANGED (decreasing): firmware is not tickling PMU
+  watchdog — it will eventually fire. Need to understand whether the
+  watchdog is active in our configuration.
+- ARM CR4 probe returns CPUHALT=YES at any dwell: regression.
+- TCM regions start CHANGED: unexpected — firmware finally wrote
+  somewhere; record exactly which region / offset.
+
+### Run command
+
+Only stage 0:
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+Post-run: capture journalctl to `phase5/logs/test.184.journalctl.txt`,
+update RESUME_NOTES.md with POST-TEST.184, commit and push.
+
+### Pre-test HW state expected
+
+Same as test.183 post-run: endpoint `03:00.0` shows `Mem- BusMaster-`,
+BAR regions `[disabled]`. Clean post-rmmod state. Re-initialises on
+next insmod.
+
+---
+
+## Previous state (2026-04-20, POST test.183 — wider scan: ALL regions UNCHANGED for 3 s; firmware not parsing NVRAM)
 
 ### TEST.183 RESULT — clean run; hypothesis (B1) reinforced
 
