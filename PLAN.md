@@ -75,11 +75,23 @@ hard-crash sessions (tests 149–157).
   word at `ramsize - 4`. Conclusion: firmware is running on ARM
   CR4 but has not reached NVRAM consumption. Likely wedged in a
   pre-NVRAM-parser wait loop (PMU/clock/host-handshake).
+- **test.184 SMALL-POSITIVE RESULT:** ChipCommon backplane sampling
+  (8 regs) + pmutimer diff proves firmware is executing. `pmutimer`
+  ticks at ~36 kHz (≈ILP) through all dwells → PMU clocked normally.
+  `pmucontrol` flipped bit 9 (0x200) exactly once between pre-release
+  and 500 ms, then stayed at `0x01770381` — firmware wrote at least
+  one pmucontrol bit as part of early init. All other backplane
+  regs + all 32 TCM sample points UNCHANGED through 3 s. Host
+  survives. Firmware is alive and performed a small amount of
+  early init, then idles. Most likely wedged at an early wait
+  point (host handshake, resource availability).
 
-**Next boundary:** observe backplane state via BAR0 reads
-(ARM CR4 wrapper status, ChipCommon PMU/watchdog) to discriminate
-"ARM is running but doing no work" vs "ARM is running but only
-touching backplane-local memory" (test.184). Still BusMaster-off.
+**Next boundary:** confirm whether firmware has written elsewhere
+in TCM beyond the 32-sample grid — wider scan (every 16 KB across
+640 KB = 40 probe points) and expanded backplane coverage (ARM CR4
+wrapper IOSTATUS + D11 wrapper) via test.185. Still BusMaster-off.
+Defer any host-handshake / BusMaster-enabled probes until passive
+observation is exhausted.
 
 **Re-entering the old 5.2 investigation:** once the probe-path restore is
 complete (i.e. firmware download and ARM release can run without host crash),

@@ -1,6 +1,157 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.184 — ChipCommon backplane observation)
+## Current state (2026-04-20, POST test.184 — pmutimer ticking, firmware flipped pmucontrol bit 9 once)
+
+### TEST.184 RESULT — firmware IS doing early init; one backplane bit moved
+
+Captured artifacts:
+- `phase5/logs/test.184.stage0`
+- `phase5/logs/test.184.stage0.stream`
+- `phase5/logs/test.184.journalctl.txt`
+
+Result: **Two pieces of evidence that firmware is executing, both on
+the backplane side only. All TCM (32 sample points) remains UNCHANGED.
+Host survives cleanly.**
+
+### Decisive observations
+
+#### pmutimer ticks at ~36 kHz — PMU is fully alive
+
+```
+pre-release:   CC-pmutimer=0x0bd41400
+dwell-500ms:   CC-pmutimer=0x0bd465bb   Δ=0x51bb  = 20923 ticks / 500 ms
+dwell-1500ms:  CC-pmutimer=0x0bd4ed96   Δ=0xd996  = 55702 ticks / 1500 ms
+dwell-3000ms:  CC-pmutimer=0x0bd5ba7f   Δ=0x1a67f = 108159 ticks / 3000 ms
+```
+
+Rate: ~36000 Hz (108159 / 3.0). This is close to ILP (32768 Hz) with
+our MMIO-read latency widening the apparent interval — the counter
+itself is monotonic, positive, and linear across the three dwells.
+The PMU clock domain is running normally.
+
+#### pmucontrol bit 0x200 set exactly once in the first 500 ms
+
+```
+pre-release:   CC-pmucontrol=0x01770181
+dwell-500ms:   CC-pmucontrol=0x01770381   CHANGED (bit 9 set)
+dwell-1500ms:  CC-pmucontrol=0x01770381   UNCHANGED
+dwell-3000ms:  CC-pmucontrol=0x01770381   UNCHANGED
+```
+
+**This is the first observed firmware side-effect on this chip
+under brcmfmac.** Someone — firmware is the only thing executing
+between pre-release and dwell-500ms — flipped bit 9 (0x200) of
+pmucontrol. Meaning of that bit: in the Broadcom PMU layout this
+field is typically part of `PCTL_XTALFREQ` (xtal-frequency-select,
+bits 9–12) or `PCTL_NOILP_ON_WAKE`. Without disassembly, we can
+only say: *firmware executed at least the code path that writes
+pmucontrol, and did so within 500 ms of ARM release*.
+
+After that single write, pmucontrol holds steady through 3 s.
+Firmware either:
+- finished its early PMU init and moved on, or
+- stalled right after that write.
+
+#### All other backplane registers UNCHANGED
+
+```
+CC-clk_ctl_st   = 0x00050040   (BP_ON_HT bit set in upper byte
+                                — HT clock available)
+CC-pmustatus    = 0x0000002a   (HAVEHT bit 0x04 *not* actually set,
+                                but firmware has HT via BP route;
+                                bits 0x02 + 0x08 + 0x20 asserted)
+CC-res_state    = 0x0000013b   (HAVEHT/HAVEALP/PLL up pattern —
+                                PMU resources in steady state)
+CC-min_res_mask = 0x0000013b
+CC-max_res_mask = 0x0000013f
+CC-pmuwatchdog  = 0x00000000
+```
+
+`res_state == min_res_mask` means all requested resources are
+asserted. `max_res_mask` is one bit higher (0x04 — commonly
+`RES_HT_AVAIL`) — that bit is available but not requested.
+pmuwatchdog = 0: no watchdog active.
+
+### All TCM regions still UNCHANGED
+
+Image-header, mid-TCM, tail-TCM: same exact values at pre-release,
+500/1500/3000 ms. Firmware has not written to TCM in any of the
+32 sample points. Consistent with test.183.
+
+### ARM CR4 state
+
+CPUHALT=NO at 20/100/500/1500/3000 ms. RESET_CTL=0 throughout. ARM
+continues running for the full 3 s, no regression.
+
+### Interpretation
+
+This refines hypothesis (A) from PRE-184:
+
+- Firmware *is* executing (pmucontrol bit flip is proof).
+- Firmware progressed far enough past reset to reach at least one
+  PMU manipulation in the first 500 ms, then stopped touching
+  anything observable on the backplane or TCM.
+- Most likely: firmware reached an early "wait for host" or
+  "wait for a specific resource" point and has been idle there
+  since ~500 ms.
+
+Ruled out:
+- "ARM totally idle" — we now have a side-effect that requires
+  ARM execution.
+- "PMU frozen / chip-wide stall" — pmutimer is ticking.
+- "MSVC compiler weirdness / probe reads were bogus" — the pre-release
+  `pmucontrol=0x01770181` vs post-release `0x01770381` differ only
+  in bit 9, so this is a real firmware write, not a race with our
+  probe.
+
+Not yet ruled out:
+- Firmware writes TCM in regions we aren't sampling (can't be
+  excluded without wider scan).
+- Firmware writes D11 SHM or other core-local SRAM (not visible
+  via TCM read).
+
+### Current HW state after test.184
+
+- `brcmfmac` unloaded; `brcmutil` still loaded.
+- Endpoint 03:00.0: `Mem- BusMaster-`, BAR regions `[disabled]`,
+  `<MAbort-`. Clean post-rmmod. Re-initialises on next insmod.
+- Root port 00:1c.2: clean. No AER/MCE.
+
+### Recommended next step — PRE test.185
+
+Two orthogonal probes worth doing before any host-side progression:
+
+1. **Widen the TCM scan further.** With the test.184 finding that
+   firmware wrote pmucontrol once, it's likely it also touched TCM
+   somewhere outside the 32 sample points we watch today. Sample
+   every 16 KB across the full 640 KB TCM (that's 40 probe points)
+   at pre-release and at 3000 ms — keeps the same dwell cadence
+   but gives ~8× the spatial coverage. Also record which word in
+   each 16 KB block we're reading (so if one changes, we know where).
+
+2. **Sample more backplane reg windows.** Read the ARM CR4 core
+   wrapper's IOSTATUS/RESET_ST alongside IOCTL/RESET_CTL. Also
+   probe the D11 core's ioctl/reset at `core->base + 0x100000 +
+   0x408/0x800` — if firmware is bringing the D11 PHY/MAC up,
+   that would show there.
+
+Start with (1) — it's the safest and most likely to find more
+activity given we already know firmware is running.
+
+Do *not* start enabling BusMaster or MSI until (1) + (2) both come
+back clean. That territory caused Phase-4B host crashes and we
+should exhaust passive observation first.
+
+Commit + push + sync PRE-test.185 before running.
+
+### Pre-test HW state expected
+
+Same as test.184 post-run: endpoint `03:00.0` shows `Mem- BusMaster-`,
+BAR regions `[disabled]`. Clean post-rmmod.
+
+---
+
+## Previous state (2026-04-20, PRE test.184 — ChipCommon backplane observation)
 
 ### PRE-TEST.184 checkpoint
 
