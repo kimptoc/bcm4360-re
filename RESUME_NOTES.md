@@ -1,6 +1,80 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.164 — REBUILT, ready for insmod)
+## Current state (2026-04-20, POST test.164 CRASH — machine rebooted, no SMC reset)
+
+### RESULT: test.164 CRASHED in the FINAL 16KB chunk of the 442KB fw write
+
+**Breadcrumbs captured (journal -b -1):**
+- All 26 × 16KB breadcrumbs fired cleanly up to word 106,496 / 425,984 bytes.
+- Crash happened between word 106,497 and word 110,558 (tail word) — i.e.,
+  somewhere in bytes **425,984..442,233** of the firmware.
+- Crash range = last 4,062 words (16,248 bytes) + 1 tail byte.
+
+**Post-crash state (2026-04-20 ~11:00):**
+- Hard reboot performed; NO SMC reset.
+- Device enumerates cleanly (BAR0=0xb0600000, BAR2=0xb0400000 [disabled]).
+- 03:00.0: Control Mem- BusMaster-, MAbort-, LnkSta 2.5GT/s x1, CommClk-.
+- brcmfmac not loaded.
+
+**Logs preserved:**
+- `phase5/logs/test.164.stage0` — harness stage 0 log (minimal, crash killed stream)
+- `phase5/logs/test.164.stage0.stream` — post-reboot kernel boot log (no test markers)
+- `phase5/logs/test.164.journalctl.txt` — prior-boot journal WITH all test.164 breadcrumbs
+
+### Interpretation
+
+1. **Writes 0..425,984 bytes are safe.** 26 consecutive 16KB breadcrumbs show
+   the BAR2 iowrite32 loop works fine for the first 425KB.
+2. **The LAST ~16KB of firmware triggers the crash.** Either:
+   (a) a specific word in 425,984..442,232, or
+   (b) the tail byte write (single iowrite32 of partial word), or
+   (c) something after the write completes but before the next breadcrumb lands
+       (e.g. if the write barrier flush itself is what crashes).
+3. rambase=0 ramsize=0xa0000 (640KB). fw ends at offset 442,233 — WELL below
+   top-of-TCM. This is not a TCM-overflow.
+4. **Possible theories:**
+   - TCM has an internal boundary around 0x68000 (425,984) — writes crossing
+     it fail. Speculative but the round number is suggestive.
+   - Specific firmware data triggers a hardware state change (unlikely in
+     halted-ARM TCM — should just be dumb RAM).
+   - Cumulative timing/state effect after ~100K writes.
+   - Tail-word write path (single 1-byte payload packed into u32) is buggy.
+
+### Plan for test.165 — narrow the crash to exact word
+
+**Changes:**
+1. Reduce `chunk_words` from 4096 (16KB) → **256 (1KB)**. Gives ~432
+   breadcrumbs over the 442KB, landing the crash into a ≤1KB window.
+2. Reduce `mdelay(50)` between chunks → `mdelay(20)`. 432 × 20ms = 8.6s —
+   fine, still flushes reliably.
+3. Add explicit pre-tail and post-tail breadcrumbs (already have a tail
+   breadcrumb; add one BEFORE the tail iowrite32 as well).
+4. Add a breadcrumb AFTER the final word write but BEFORE the tail, so we
+   distinguish "crashed in last word" vs "crashed in tail byte".
+5. Keep everything else identical (bcm4360_skip_arm=1, post-download fail
+   bypass, NVRAM write, TCM dump, -ENODEV return).
+
+**Hypothesis for test.165:**
+- If crash is deterministic at a specific word offset → we'll pinpoint to 1KB.
+- If crash is timing/cumulative → we may see it move (or vanish with slower
+  pacing from more mdelays).
+- If crash is in the tail byte path → pre-tail breadcrumb survives, post-tail
+  does not.
+
+**Risk:** Still a hardware-contact test. Machine may crash again.
+
+### Pre-test checklist
+
+- [x] Implement test.165 changes in pcie.c
+- [x] Build (`make -C phase5/work`)
+- [x] Verify .ko contains test.165 markers
+- [x] Re-check PCIe state of 03:00.0 (MAbort-, LnkSta 2.5GT/s, clean)
+- [x] Commit + push plan before insmod
+- [x] `sync` filesystem
+
+---
+
+## Previous state (2026-04-20, PRE test.164 — REBUILT, ready for insmod)
 
 ### CODE STATE: test.164 implemented — chunked 442KB fw write with per-16KB breadcrumbs
 

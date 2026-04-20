@@ -1838,29 +1838,35 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	}
 
 	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
-		/* test.164: BCM4360 chunked FW write with per-16KB breadcrumbs so
-		 * a crash during the 442KB iowrite32 loop shows which chunk died.
-		 * Loop mirrors brcmf_pcie_copy_mem_todev (strict 32-bit iowrite32).
+		/* test.165: narrow the final-chunk crash from test.164 (died in last
+		 * 16KB: words 106497..110558 + tail). Reduce chunk size to 1KB
+		 * (256 words) for ~432 breadcrumbs across the 442KB write, and add
+		 * explicit pre-tail / all-words-done markers so we can tell
+		 * "crashed in words" from "crashed in tail write".
 		 */
 		const __le32 *src32 = (const __le32 *)fw->data;
-		u32 chunk_words = 16384 / 4;	/* 16KB per breadcrumb */
+		u32 chunk_words = 1024 / 4;	/* 1KB per breadcrumb */
 		u32 total_words = (u32)(fw->size / 4);
 		u32 tail = fw->size & 3u;
 		void __iomem *wbase = devinfo->tcm + devinfo->ci->rambase;
 		u32 i;
 
-		pr_emerg("BCM4360 test.164: starting chunked fw write, total_words=%u (%zu bytes) tail=%u wbase=%px\n",
+		pr_emerg("BCM4360 test.165: starting chunked fw write, total_words=%u (%zu bytes) tail=%u wbase=%px\n",
 			 total_words, fw->size, tail, wbase);
 		mdelay(100);
 
 		for (i = 0; i < total_words; i++) {
 			iowrite32(le32_to_cpu(src32[i]), wbase + i * 4);
 			if ((i + 1) % chunk_words == 0) {
-				pr_emerg("BCM4360 test.164: wrote %u words (%u bytes)\n",
+				pr_emerg("BCM4360 test.165: wrote %u words (%u bytes)\n",
 					 i + 1, (i + 1) * 4);
-				mdelay(50);
+				mdelay(20);
 			}
 		}
+
+		pr_emerg("BCM4360 test.165: all %u words written, before tail (tail=%u)\n",
+			 total_words, tail);
+		mdelay(50);
 
 		if (tail) {
 			u32 tmp = 0;
@@ -1868,12 +1874,12 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			memcpy(&tmp, (const u8 *)fw->data + (fw->size & ~3u),
 			       tail);
 			iowrite32(tmp, wbase + (fw->size & ~3u));
-			pr_emerg("BCM4360 test.164: tail %u bytes written at offset %zu\n",
+			pr_emerg("BCM4360 test.165: tail %u bytes written at offset %zu\n",
 				 tail, fw->size & ~3u);
 			mdelay(50);
 		}
 
-		pr_emerg("BCM4360 test.164: fw write complete (%zu bytes)\n",
+		pr_emerg("BCM4360 test.165: fw write complete (%zu bytes)\n",
 			 fw->size);
 		mdelay(100);
 	} else {
@@ -4543,19 +4549,19 @@ static struct pci_driver brcmf_pciedrvr = {
  * after chip_attach() has initialized the PCIe-to-backplane bridge. */
 void brcmf_pcie_early_arm_halt(void)
 {
-	pr_emerg("BCM4360 test.164: module_init entry — chunked 442KB fw write with per-16KB breadcrumbs\n");
+	pr_emerg("BCM4360 test.165: module_init entry — chunked fw write with 1KB breadcrumbs + pre-tail marker\n");
 }
 
 int brcmf_pcie_register(void)
 {
 	int ret;
 
-	pr_emerg("BCM4360 test.164: brcmf_pcie_register() entry\n");
+	pr_emerg("BCM4360 test.165: brcmf_pcie_register() entry\n");
 	msleep(300); /* flush marker before pci_register_driver */
-	pr_emerg("BCM4360 test.164: before pci_register_driver\n");
+	pr_emerg("BCM4360 test.165: before pci_register_driver\n");
 	msleep(300); /* flush — if crash here, it's in pci_register_driver kernel code */
 	ret = pci_register_driver(&brcmf_pciedrvr);
-	pr_emerg("BCM4360 test.164: pci_register_driver returned ret=%d\n", ret);
+	pr_emerg("BCM4360 test.165: pci_register_driver returned ret=%d\n", ret);
 	return ret;
 }
 
