@@ -1,6 +1,78 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.173 — rebooted + SMC reset)
+## Current state (2026-04-20, POST test.174 — immediate return SUCCESS)
+
+### TEST.174 RESULT — clean unwind after complete fw write
+
+Captured artifacts:
+- `phase5/logs/test.174.stage0`
+- `phase5/logs/test.174.stage0.stream`
+
+Result: **SUCCESS / no crash.** test.174 completed the full 442233-byte BAR2
+firmware write, released `fw`/`nvram` immediately after `fw write complete`,
+returned `-ENODEV`, waited the harness's 30 seconds, and cleaned up `brcmfmac`
+without freezing.
+
+Key persisted markers:
+```
+BCM4360 test.174: all 110558 words written, before tail (tail=1)
+BCM4360 test.174: tail 1 bytes written at offset 442232
+BCM4360 test.174: fw write complete (442233 bytes)
+BCM4360 test.174: released fw/nvram immediately after fw write; returning -ENODEV
+BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+BCM4360 test.163: fw released; returning from setup (state still DOWN)
+```
+
+This is a strong discriminator: the completed firmware image in TCM is **not**
+by itself enough to trigger the host freeze. The test survived for at least 30 s
+after the completed write. The crash in tests 170-173 requires the driver to
+remain in the post-write path long enough to hit the bad condition.
+
+### Current HW state after test.174
+
+- `brcmfmac` is unloaded. `brcmutil` remains loaded from the harness; USB Wi-Fi
+  stack modules remain unrelated.
+- Endpoint 03:00.0 is visible: `Mem+ BusMaster-`, BAR0=b0600000, BAR2=b0400000,
+  `<MAbort-`, link 2.5GT/s x1, endpoint ASPM disabled from the test path.
+- Endpoint AER shows `CESta Timeout+ AdvNonFatalErr+`; UESta is clear. This is
+  new useful post-test evidence: no fatal/uncorrectable error, but at least one
+  correctable completion-timeout style event was recorded.
+- Root port 00:1c.2 is visible: bus 03/03, memory window b0400000-b06fffff,
+  bridge `MAbort-`, secondary `<MAbort-`, link 2.5GT/s x1, ASPM disabled.
+
+### Interpretation
+
+The current failure is no longer "complete firmware image causes inevitable
+async host death." test.174 proves the host can remain alive after the complete
+write if the driver returns immediately. The next highest-value distinction is
+whether the old post-write failure is specifically caused by `mdelay()`/busy
+waiting after heavy BAR2 writes, or by the next device MMIO operation after some
+settle time.
+
+### Recommended next step — PRE test.175
+
+Do **not** run another hardware test until this note and the test.174 artifacts
+are committed, pushed, and synced.
+
+Best next discriminator: keep test.174's immediate-release/early-return shape,
+but insert a **sleeping** post-write delay before the release/return:
+
+1. After `fw write complete`, call `msleep(100)` instead of `mdelay(100)`.
+2. Do not perform any post-write ARM probe, resetintr read, NVRAM write, or
+   readback.
+3. Then release `fw`/`nvram` and return `-ENODEV` exactly as test.174 did.
+
+Expected interpretation:
+- `msleep(100)` survives: the old freeze is likely tied to post-write busy-wait
+  dwell (`mdelay`) or CPU/context starvation after BAR2 writes. Next test can
+  try `msleep(100)` followed by resetintr/NVRAM boundary.
+- `msleep(100)` freezes: the bad condition is elapsed post-write time inside
+  the callback, independent of whether the delay is busy or sleeping. Next step
+  should quiesce/reset the chip immediately after the write before any dwell.
+
+---
+
+## Previous state (2026-04-20, POST test.173 — rebooted + SMC reset)
 
 ### TEST.173 RESULT — no-MMIO post-write idle loop still freezes
 

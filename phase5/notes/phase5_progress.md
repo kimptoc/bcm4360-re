@@ -678,3 +678,22 @@ Build status: OK via kernel kbuild. The only warning is the pre-existing unused
 `brcmf_pcie_write_ram32` helper, and BTF is skipped because `vmlinux` is
 unavailable. `brcmfmac.ko` contains the `test.174` immediate-return marker and
 no post-write `idle-` / `post-idle-loop` strings.
+
+## Phase 5.4: Current state (2026-04-20, POST test.174)
+
+test.174 succeeded. It completed the full 442233 byte BAR2 firmware write,
+released `fw`/`nvram` immediately after `fw write complete`, returned `-ENODEV`,
+waited 30 seconds in the harness, and unloaded `brcmfmac` without a host freeze.
+
+This changes the active theory: a completed firmware image in TCM is not enough
+to kill the host. The failure in tests 170-173 requires post-write dwell inside
+the driver path before returning. Current post-test PCIe state is clean for
+fatal errors (`MAbort-`, AER UESta clear), but endpoint AER has correctable
+`Timeout+ AdvNonFatalErr+`.
+
+Recommended test.175: after `fw write complete`, use `msleep(100)` instead of
+`mdelay(100)`, then release `fw`/`nvram` and return `-ENODEV` with no post-write
+probe, resetintr, NVRAM write, or readback. If `msleep(100)` survives, the
+freeze is likely tied to busy-wait dwell after BAR2 writes. If it freezes, the
+problem is elapsed post-write time inside the callback, independent of whether
+the delay is busy or sleeping.
