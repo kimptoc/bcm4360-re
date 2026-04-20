@@ -1,6 +1,75 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.162 — REBUILT, ready for insmod)
+## Current state (2026-04-20, POST test.162 SUCCESS — ready for test.163)
+
+### MILESTONE: setup callback safely reaches door of download_fw_nvram
+
+**test.162 log entries (dmesg, all markers hit cleanly):**
+```
+test.162: module_init entry
+test.162: brcmf_pcie_register() entry → pci_register_driver returned ret=0
+[probe chain through test.160 scope: ALL SUCCESS]
+test.161: calling brcmf_fw_get_firmwares → returned 0 (async)
+test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0
+test.128: before brcmf_pcie_attach → test.129: bypassed for BCM4360 → test.128: after
+test.134: post-attach before fw-ptr-extract
+test.134: after kfree(fwreq)
+test.130: before brcmf_chip_get_raminfo
+test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+test.130: after brcmf_chip_get_raminfo
+test.130: after brcmf_pcie_adjust_ramsize
+test.162: early return BEFORE brcmf_pcie_download_fw_nvram
+test.162: releasing fw (fw=<ptr> size=442233) nvram=<ptr> len=228 clm=0 txcap=0
+test.162: fw released; returning from setup (state still DOWN)
+[rmmod]
+test.161: remove() short-circuit — state=0 != UP; skipping MMIO cleanup
+test.161: remove() short-circuit complete
+```
+
+**Key findings:**
+- Setup callback ran ALL memory-ops fine: attach no-op, fw-ptr extract,
+  kfree(fwreq), get_raminfo (fixed BCM4360 info), adjust_ramsize.
+- `brcmf_pcie_adjust_ramsize` parsed fw->data (442KB) header without issue.
+- Early-return cleanly released fw/nvram/clm/txcap.
+- rmmod short-circuit worked again; DevSta fully clean after test.
+
+**Post-test PCIe state (2026-04-20 ~10:14):**
+- Endpoint 03:00.0: DevSta `CorrErr- NonFatalErr- FatalErr- UnsupReq-` (clean).
+- MAbort-, LnkSta 2.5GT/s Width x1.
+
+**What this proves:**
+- Entire probe + setup-up-to-download path is now safe/reproducible on BCM4360.
+- We can reach the door of `brcmf_pcie_download_fw_nvram` without any MMIO side-effects.
+- This test established the "waiting room" baseline for test.163.
+
+### Next: test.163 — `brcmf_pcie_download_fw_nvram` (THE BIG BAR2 WRITE)
+
+**Scope:** Call `brcmf_pcie_download_fw_nvram(devinfo, fw, nvram, nvram_len)`
+in the setup callback. This function:
+1. Calls `brcmf_pcie_enter_download_state` — currently for BCM4360 just reads
+   ARM CR4 state and logs (test.142) — no MMIO writes.
+2. Writes 442233 bytes of firmware to TCM at rambase=0 via BAR2 (32-bit iowrite32).
+3. Writes NVRAM (228 bytes) at top of TCM.
+4. Calls `brcmf_pcie_exit_download_state` — ARM release region (skipped via
+   `bcm4360_skip_arm=1` at stage 0).
+
+**Risk surface:**
+- 442KB of 32-bit iowrite32 to BAR2 — this is the core activity that Phase 3
+  already demonstrated works. But post-regression recovery means we need to
+  re-verify.
+- NVRAM write to top of TCM — known-safe pattern.
+- `bcm4360_skip_arm=1` means ARM stays halted, no firmware boot → no runaway MMIO.
+
+**Expected hypothesis:** All writes complete, no crash; test still early-exits
+before `brcmf_pcie_init_ringbuffers`. If a crash occurs, it will pinpoint
+whether BAR2 has been re-broken by test.158's changes or whether it's been
+stable all along.
+
+**Build status:** Current .ko is test.162 build. test.163 requires rebuild.
+
+---
+
+## Previous state (2026-04-20, PRE test.162 — REBUILT, ready for insmod)
 
 ### CODE STATE: test.162 implemented — setup callback runs attach→fw-extract→raminfo→adjust_ramsize, early-return before download
 

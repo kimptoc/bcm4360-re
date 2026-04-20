@@ -40,11 +40,16 @@ hard-crash sessions (tests 149–157).
   entry + BCM4360 early-return stub + `brcmf_pcie_remove` BCM4360 short-circuit
   guard (skips MMIO cleanup when `state != UP`). Firmware blobs loaded:
   CODE 442233 B, NVRAM 228 B (CLM/TXCAP absent — optional). Clean rmmod.
+- **test.162 SUCCESS:** Setup callback ran `brcmf_pcie_attach` (BCM4360 no-op) +
+  fw-ptr extract + `kfree(fwreq)` + `brcmf_chip_get_raminfo` (fixed info
+  rambase=0 ramsize=0xa0000) + `brcmf_pcie_adjust_ramsize` (fw-header parse).
+  Early-return before `brcmf_pcie_download_fw_nvram`. Clean rmmod via test.161
+  short-circuit. DevSta clean post-test.
 
-**Next boundary:** In setup callback, begin doing BAR2 MMIO — starting with
-`brcmf_pcie_attach(devinfo)` (mailbox sizes, shared structure setup). This
-is the entry to the historical crash-prone path that gated the pre-regression
-Phase 5.2 work (TCM[0x58f08] D11 probe).
+**Next boundary:** `brcmf_pcie_download_fw_nvram` — the 442KB BAR2 iowrite32
+of firmware + NVRAM placement. This is where the Phase 5.2 crash investigation
+started. Expect success based on Phase 3 evidence; this re-verifies the path
+after the test.158 probe reset sequence changes.
 
 **Re-entering the old 5.2 investigation:** once the probe-path restore is
 complete (i.e. firmware download and ARM release can run without host crash),
