@@ -17,18 +17,18 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.160.stage${STAGE}"
+LOG="$LOG_DIR/test.161.stage${STAGE}"
 
-echo "=== test.160: brcmf_alloc + OTP bypass + prepare_fw_request slice — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.161: brcmf_fw_get_firmwares + setup-callback stub + remove short-circuit — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: skip_arm=1 — test.159 scope + brcmf_alloc/OTP/prepare_fw_request; early return before fw_get_firmwares." | tee -a "$LOG" ;;
+    0) echo "Stage 0: skip_arm=1 — test.160 scope + fw_get_firmwares (async) + setup-callback stub (no BAR2 MMIO)." | tee -a "$LOG" ;;
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.160: test.159 flow + brcmf_alloc (wiphy_new) + OTP bypass + prepare_fw_request; early return before brcmf_fw_get_firmwares; 300ms per marker)" | tee -a "$LOG"
+echo "(test.161: test.160 flow + brcmf_fw_get_firmwares; setup callback logs fw sizes and returns; remove short-circuits MMIO cleanup; 300ms per marker)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -105,14 +105,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=55  # test.160: 300ms * ~26 sleeps + SBR 510ms + chip_attach; 55s is safe
+    WAIT_SECS=60  # test.161: ~160's test.160 load + async fw_get_firmwares + setup callback; 60s is safe
 else
     SKIP_ARM=0
-    WAIT_SECS=35
+    WAIT_SECS=40
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.160 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.161 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.

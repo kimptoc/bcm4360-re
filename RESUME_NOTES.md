@@ -1,6 +1,71 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, POST test.160 SUCCESS — DECISION POINT before test.161)
+## Current state (2026-04-20, PRE test.161 — REBUILT, ready for insmod)
+
+### CODE STATE: test.161 implemented, built, markers verified in .ko strings
+
+**What test.161 does:**
+1. Probe path runs unchanged through test.160 scope (all SUCCESS markers).
+2. At end of probe: `brcmf_fw_get_firmwares(bus->dev, fwreq, brcmf_pcie_setup)` now
+   called (test.160's early-return removed). This is an async firmware request
+   that loads `brcmfmac4360-pcie.bin/.txt/.clm_blob/.txcap_blob`.
+3. Async callback `brcmf_pcie_setup()` fires. Entry marker logs `ret=` and
+   firmware sizes (CODE/NVRAM/CLM/TXCAP).
+4. BCM4360 early-return stub in setup: releases all fw resources via
+   `release_firmware()` + `brcmf_fw_nvram_free()` + `kfree(fwreq)`, then
+   `return` — NO `brcmf_pcie_attach`, NO BAR2 writes, NO `brcmf_pcie_download_fw_nvram`.
+5. Device stays bound until `rmmod`. `brcmf_pcie_remove()` has a new BCM4360
+   short-circuit guard: when `state != UP`, skip MMIO-touching cleanup
+   (`console_read`, `intr_disable`, `release_ringbuffers`, `reset_device`) —
+   only do memory cleanup (`brcmf_detach`, `brcmf_free`, `kfree(bus)`,
+   `release_firmware(clm/txcap)`, `chip_detach`, `kfree(devinfo)`).
+
+**Why this slice is the right next step:**
+- Confirms async firmware loader path works on BCM4360 (VFS + request_firmware).
+- Proves `brcmf_pcie_setup` entry is reached and the fw pointers look sane.
+- Establishes clean baseline for next slice (test.162: `brcmf_pcie_attach` —
+  starts doing BAR2 MMIO, which is where real crashes begin).
+- Avoids firing any BAR2 MMIO (which is historically the crash trigger).
+
+**Hypothesis:** test.161 will log:
+- Probe path through test.160 scope
+- "calling brcmf_fw_get_firmwares — async callback expected"
+- "brcmf_fw_get_firmwares returned 0 (async/success; callback will fire)"
+- (brief delay while request_firmware loads)
+- "brcmf_pcie_setup CALLBACK INVOKED ret=0"
+- "fw CODE <ptr> size=452488" (~442 KB)
+- "NVRAM data=<ptr> len=<N>" (non-zero if nvram present; CODE-only if not)
+- "CLM=..." (NULL if .clm_blob not present)
+- "fw released; returning from setup (ret=0)"
+- On rmmod: "remove() short-circuit — state=0 != UP; skipping MMIO cleanup"
+- "remove() short-circuit complete"
+- Clean rmmod exit.
+
+**Possible failure modes:**
+- `request_firmware` fails for .txt/.clm_blob/.txcap_blob — NVRAM is OPTIONAL
+  so should not block; CLM/TXCAP are similarly optional.
+- Callback never fires (async hang) — test will just time out after 60s.
+- Crash inside `request_firmware` — unlikely since nothing MMIO.
+- rmmod crashes — this is the risky part: even with MMIO short-circuit,
+  `brcmf_detach` / `brcmf_free` touches driver state, and `chip_detach`
+  unmaps chip. These are memory ops and should be safe.
+
+**Build status:** REBUILT at 2026-04-20; .ko markers verified: test.161 strings
+present in module_init, register, setup-callback, setup-return, remove-short-circuit.
+
+**Pre-test PCIe state (2026-04-20):**
+- Endpoint 03:00.0: `MAbort-`, `LnkSta 2.5GT/s Width x1`, `ASPM Disabled`.
+- Bridge 00:1c.2 secondary status has `<MAbort+` (sticky from test.160 cleanup).
+  SBR in probe resets bridge; not a blocker.
+
+**Test command:**
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
+```
+
+---
+
+## Previous state (2026-04-20, POST test.160 SUCCESS — DECISION POINT before test.161)
 
 ### CODE STATE: test.160 ran cleanly. Considering scope of test.161 carefully.
 
