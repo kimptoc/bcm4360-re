@@ -1,30 +1,33 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## Current state (2026-04-20, PRE test.154 — SBR+chip_attach; early-return before ARM halt)
+## Current state (2026-04-20, PRE test.155 — full probe up to fw_get_firmwares; early return before firmware request)
 
-### CODE STATE: test.154 source prepared, rebuilt, committed, and pushed
+### CODE STATE: test.155 source prepared, rebuilt, NEED TO COMMIT AND PUSH
 
-**test.154 change: full SBR + chip_attach; early-return AFTER chip_attach, BEFORE ARM halt**
-- `brcmf_pcie_probe()` runs full SBR block (pci_save_state, bridge reset, pci_restore_state).
-- Calls `brcmf_chip_attach()` — BAR0 MMIO reads to enumerate chip.
-- If chip_attach FAILS: logs `chip_attach FAILED ret=N` and falls through to `fail` label.
-- If chip_attach SUCCEEDS: calls `brcmf_chip_detach()`, returns `-ENODEV` before ARM halt.
+**test.155 change: full probe through ARM halt + resource allocs; early return BEFORE brcmf_fw_get_firmwares()**
+- `brcmf_pcie_probe()` runs SBR → chip_attach → ARM CR4 halt → BusMaster clear → ASPM disable
+  → reginfo setup → pcie_bus_dev alloc → settings alloc → bus alloc → msgbuf alloc
+  → brcmf_alloc → OTP read → fwreq prepare → THEN early return before fw_get_firmwares.
+- Early return: `pr_emerg("BCM4360 test.155: before brcmf_fw_get_firmwares — early return\n"); ret = -ENODEV; goto fail_brcmf;`
+- `fail_brcmf` label handles cleanup of brcmf_alloc + all allocations.
 
 **Purpose:**
-- test.153 SUCCESS: full SBR is safe (all markers, clean rmmod, SBR took ~518ms).
-- test.154 narrows crash to: chip_attach (BAR0 MMIO reads) OR later probe ops (ARM halt etc.).
-- chip_attach worked in test.53 era; may fail now if device state is different post-crash cycles.
+- test.154 SUCCESS: chip_attach + early return after chip_attach was safe (all markers appeared,
+  chip fully enumerated — BCM4360 chip ID 0x15034360, RAM 640KB).
+- test.155 covers the remaining probe segment: ARM halt, resource allocs, OTP read, fwreq prepare.
+- This segment includes the ARM CR4 reset (IOCTL=CPUHALT|FGC|CLK + RESET_CTL=1) which
+  stops the BCM4360 ARM from executing firmware. This is potentially risky.
 
 **Hypothesis:**
-- HIGH RISK of crash — BAR0 MMIO reads in chip_attach are the historically problematic area.
-  chip_attach reads backplane registers over PCIe BAR0, which caused Completion Timeouts in
-  test.52 (before SBR was introduced). After SBR, device should be in clean POR state.
-- If NO crash: chip_attach succeeds; crash was in ARM halt or later ops. Huge progress.
-- If crash during chip_attach: BAR0 state post-SBR is still not clean enough for MMIO.
+- MODERATE RISK — ARM halt involves BAR0 MMIO writes via brcmf_pcie_write_reg32() to ARM
+  wrapper registers (0x1408, 0x1800). Post-SBR ARM should be in reset already, but writing
+  to wrapper regs could trigger unexpected behavior.
+- OTP read also does BAR0 MMIO via SPROM/OTP path.
+- If NO crash: ARM halt + all allocs + OTP + fwreq prepare all safe. Next test: allow fw_get_firmwares.
+- If crash: narrow between chip_attach-done and early-return; ARM halt is the prime suspect.
 
-**Pre-test PCIe state (2026-04-20, post-test.153 clean run):**
-- Root port `00:1c.2`: `DLActive+`, `CommClk+`, `MAbort-` — clean.
-- Endpoint `03:00.0`: `MAbort-`, `DevSta: CorrErr+ UnsupReq+` (expected from UR guard).
+**Pre-test PCIe state (2026-04-20, post-test.154 clean run):**
+- Endpoint `03:00.0`: `MAbort-`, `Status: Cap+ DevSta: CorrErr+` — clean.
 - No driver bound; no brcm modules loaded.
 
 **Test command:**
@@ -34,10 +37,30 @@ sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0
 Stage1 remains forbidden.
 
 **Interpretation matrix:**
-- No crash, `chip_attach OK` marker, `post-PCI sync` appear: chip_attach safe; ARM halt next.
-- `chip_attach FAILED ret=N`: chip not enumerating post-SBR; investigate brcmf_pcie_buscore_ops.
-- Crash after `before brcmf_chip_attach`: crash in chip_attach BAR0 MMIO reads.
-- Crash after `SBR complete` but before `before brcmf_chip_attach`: crash in pci_restore_state (unlikely).
+- No crash, `test.155: before brcmf_fw_get_firmwares` + `post-PCI sync` appear: all safe; enable fw_get_firmwares next (test.156, WAIT_SECS=35 for async callback).
+- Crash after `chip_attach returned successfully` but before ARM halt markers: crash in ARM halt MMIO writes.
+- Crash after ARM halt markers but before `test.155: before brcmf_fw_get_firmwares`: crash in OTP/fwreq alloc.
+- `test.155: before brcmf_fw_get_firmwares` seen + crash: crash in fail_brcmf cleanup path (unlikely).
+
+---
+
+## Previous state (2026-04-20, POST test.154 SUCCESS — chip_attach safe; ARM halt + allocs next)
+
+### CODE STATE: test.154 ran cleanly — all markers appeared, chip fully enumerated
+
+**test.154 key log entries (from stream log):**
+```
+brcmfmac: BCM4360 test.155: before brcmf_chip_attach  [NOTE: marker was test.154 at run time]
+brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+brcmfmac: BCM4360 test.154: chip_attach OK — early return before ARM halt
+brcmfmac: BCM4360 test.154: pci_register_driver returned ret=0
+brcmfmac: BCM4360 test.154: post-PCI sync (skipping USB)
+brcmfmac: BCM4360 test.154: after brcmf_core_init() err=0
+```
+- chip_attach fully succeeded: chip ID 0x15034360 (BCM4360), RAM base=0x0 size=0xa0000 (640KB).
+- ARM CR4 core base logged for future reference.
+- SBR timing: ~518ms. BAR0 MMIO reads in chip_attach did NOT crash the machine.
+- Clean rmmod after test. dmesg kill fix working correctly.
 
 ---
 

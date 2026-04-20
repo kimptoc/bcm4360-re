@@ -1,0 +1,58 @@
+=== dmesg stream start: Mon 20 Apr 08:39:06 BST 2026 ===
+[ 1524.261157] brcmfmac: BCM4360 test.153: module_init entry (no BAR0 MMIO)
+[ 1524.261282] brcmfmac: BCM4360 test.153: before brcmf_core_init()
+[ 1524.261324] brcmfmac: BCM4360 test.153: brcmf_core_init() entry
+[ 1524.261363] brcmfmac: BCM4360 test.153: before brcmf_sdio_register()
+[ 1524.261402] brcmfmac: BCM4360 test.153: after brcmf_sdio_register() err=0
+[ 1524.314327] brcmfmac: BCM4360 test.153: post-SDIO sync (before PCI)
+[ 1524.314383] brcmfmac: BCM4360 test.153: before brcmf_pcie_register()
+[ 1524.314427] brcmfmac: BCM4360 test.153: brcmf_pcie_register() entry
+[ 1524.314470] brcmfmac: BCM4360 test.153: skipping brcmf_dbg in brcmf_pcie_register
+[ 1524.314522] brcmfmac: BCM4360 test.153: after skipped brcmf_dbg, before pci_register_driver
+[ 1524.317074] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=0000000004565ec3)
+[ 1524.319690] brcmfmac: BCM4360 test.127: probe entry (vendor=14e4 device=43a0)
+[ 1524.322714] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+[ 1524.325444] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+[ 1524.328238] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+[ 1524.846530] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+[ 1524.846578] brcmfmac: BCM4360 test.153: SBR complete — early return before chip_attach
+[ 1524.846650] brcmfmac: BCM4360 test.153: pci_register_driver returned ret=0
+[ 1524.846683] brcmfmac: BCM4360 test.153: after brcmf_pcie_register() err=0
+[ 1524.896725] brcmfmac: BCM4360 test.153: post-PCI sync (skipping USB)
+[ 1524.899072] brcmfmac: BCM4360 test.153: after brcmf_core_init() err=0
+[ 1740.532867] brcmfmac: BCM4360 test.154: module_init entry (no BAR0 MMIO)
+[ 1740.532949] brcmfmac: BCM4360 test.154: before brcmf_core_init()
+[ 1740.532981] brcmfmac: BCM4360 test.154: brcmf_core_init() entry
+[ 1740.533009] brcmfmac: BCM4360 test.154: before brcmf_sdio_register()
+[ 1740.533039] brcmfmac: BCM4360 test.154: after brcmf_sdio_register() err=0
+[ 1740.584955] brcmfmac: BCM4360 test.154: post-SDIO sync (before PCI)
+[ 1740.584994] brcmfmac: BCM4360 test.154: before brcmf_pcie_register()
+[ 1740.585024] brcmfmac: BCM4360 test.154: brcmf_pcie_register() entry
+[ 1740.585054] brcmfmac: BCM4360 test.154: skipping brcmf_dbg in brcmf_pcie_register
+[ 1740.585103] brcmfmac: BCM4360 test.154: after skipped brcmf_dbg, before pci_register_driver
+[ 1740.586935] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=00000000f06893fe)
+[ 1740.586996] brcmfmac: BCM4360 test.127: probe entry (vendor=14e4 device=43a0)
+[ 1740.587048] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+[ 1740.587102] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+[ 1740.587292] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+[ 1741.108407] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+[ 1741.108461] brcmfmac: BCM4360 test.154: before brcmf_chip_attach
+[ 1741.108684] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcd8902000000
+[ 1741.108724] brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+[ 1741.159190] brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+[ 1741.159908] brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+[ 1741.161754] brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+[ 1741.163914] brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+[ 1741.166094] brcmfmac 0000:03:00.0: BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)
+[ 1741.168157] brcmfmac 0000:03:00.0: BCM4360 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0
+[ 1741.169987] brcmfmac: brcmf_chip_recognition: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+[ 1741.171776] brcmfmac: brcmf_chip_recognition: BCM4360 test.125: after reset, before get_raminfo
+[ 1741.173625] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[ 1741.175668] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[ 1741.177539] brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+[ 1741.179276] brcmfmac: BCM4360 test.154: chip_attach OK — early return before ARM halt
+[ 1741.181043] brcmfmac: BCM4360 test.154: pci_register_driver returned ret=0
+[ 1741.182855] brcmfmac: BCM4360 test.154: after brcmf_pcie_register() err=0
+[ 1741.234605] brcmfmac: BCM4360 test.154: post-PCI sync (skipping USB)
+[ 1741.234655] brcmfmac: BCM4360 test.154: after brcmf_core_init() err=0
+=== dmesg stream end: Mon 20 Apr 08:39:22 BST 2026 ===
