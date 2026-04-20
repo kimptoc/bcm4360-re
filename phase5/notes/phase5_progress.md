@@ -659,3 +659,22 @@ and no NVRAM/readback. A clean unwind would prove the crash needs post-write
 dwell time and would justify a follow-up timing sweep or immediate chip quiesce
 step. A freeze despite immediate return would mean the completed firmware image
 itself starts an asynchronous failure even without driver dwell.
+
+## Phase 5.4: PRE test.174
+
+test.174 is implemented as the immediate-return discriminator. It keeps the
+same setup, endpoint/root-port link-state logging, ARM halt checks before the
+write, and chunked 442233 byte BAR2 firmware write. After the tail byte and
+`fw write complete`, the BCM4360 path now releases `fw` and `nvram`, logs the
+immediate return, and returns `-ENODEV`.
+
+This intentionally skips the post-write ARM CR4 probe, all idle delay, resetintr
+read, NVRAM write, NVRAM/readback markers, and ARM release. Stage0 is the only
+intended run. If this unwinds cleanly, the crash requires post-write dwell time;
+if it still freezes, the completed firmware image itself is enough to trigger
+the asynchronous failure.
+
+Build status: OK via kernel kbuild. The only warning is the pre-existing unused
+`brcmf_pcie_write_ram32` helper, and BTF is skipped because `vmlinux` is
+unavailable. `brcmfmac.ko` contains the `test.174` immediate-return marker and
+no post-write `idle-` / `post-idle-loop` strings.

@@ -52,40 +52,44 @@ because test.172 showed root-port `LnkCtl=0x0040` during the run.
 - Note: after reboot, config space naturally shows endpoint/root-port ASPM
   enabled again. The test code disables/checks those during module load.
 
-### Recommended next step — PRE test.174
+### PRE test.174 — immediate return after complete fw write
 
-Do **not** run another hardware test until this note and the test.173 artifacts
-are committed and pushed.
+Do **not** run another hardware test until this note and the test.174 code/build
+checkpoint are committed, pushed, and synced.
 
-Best next discriminator: keep the full firmware write but remove the post-write
-idle wait entirely, and immediately early-return after the `fw write complete`
-breadcrumb (before the ARM CR4 post-write probe, before any idle delay, before
-resetintr, before NVRAM). This answers whether the freeze is caused simply by
-leaving the device alive after the completed write, or by the driver remaining
-inside `download_fw_nvram` long enough for the async event to fire.
+Implemented test.174 discriminator:
+1. Relabeled active breadcrumbs to `test.174`.
+2. Kept endpoint/root-port link-state logging and the existing chunked 442233 B
+   firmware write unchanged for comparability.
+3. Removed the post-write ARM CR4 probe and the 10 x 10 ms no-MMIO idle loop.
+4. Immediately after `fw write complete`, the BCM4360 path now:
+   - `release_firmware(fw)`,
+   - `brcmf_fw_nvram_free(nvram)`,
+   - logs `released fw/nvram immediately after fw write; returning -ENODEV`,
+   - returns `-ENODEV`.
+5. Skips resetintr read, NVRAM write, NVRAM marker readback, TCM dump, and ARM
+   release. Stage0 remains the only intended run.
 
-Suggested test.174 shape:
-1. Relabel breadcrumbs to `test.174`.
-2. Keep endpoint/root-port link-state logging and the existing chunked firmware
-   write unchanged for comparability.
-3. After tail-byte write and `fw write complete`, immediately:
-   - `release_firmware(fw)` if needed for leak hygiene,
-   - skip post-write ARM CR4 probe,
-   - skip all idle delays,
-   - skip resetintr/NVRAM/readback,
-   - return `-ENODEV` in the BCM4360 `bcm4360_skip_arm=1` path.
-4. Keep stage0 only.
-
-Expected interpretation:
+Hypothesis:
 - Clean `-ENODEV` unwind + rmmod succeeds: the crash needs post-write dwell
-  time; next test can progressively add `mdelay(1/5/10/20/50)` before return to
-  find the safe budget or add a chip quiesce/reset immediately after write.
+  time inside or after `download_fw_nvram`; next test can progressively add
+  `mdelay(1/5/10/20/50)` before return, or immediately quiesce/reset the chip.
 - Freeze even with immediate return: the completed firmware image in TCM triggers
-  an asynchronous event regardless of driver dwell; next step should be a
-  post-write chip/PCIe quiesce before returning (for example bus-master already
-  clear, then function/secondary-bus reset or core reset sequence).
+  an asynchronous failure regardless of driver dwell; next step should be a
+  post-write chip/PCIe quiesce before returning.
 - Clean return but freeze later during module unload: focus on remove/unregister
   path state after a completed write.
+
+Pre-test checklist:
+- [x] Code changed for immediate post-fw-write return.
+- [x] Build module via kbuild. Result OK; existing warning only:
+  `brcmf_pcie_write_ram32` defined but not used. BTF skipped because `vmlinux`
+  is unavailable.
+- [x] Verified `brcmfmac.ko` contains `test.174` and the immediate-return
+  marker; no `idle-` / `post-idle-loop` strings remain.
+- [x] Commit + push + sync this checkpoint.
+- [ ] Run only stage0:
+  `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
 
 ---
 

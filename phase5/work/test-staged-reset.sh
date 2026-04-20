@@ -17,18 +17,18 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.173.stage${STAGE}"
+LOG="$LOG_DIR/test.174.stage${STAGE}"
 
-echo "=== test.173: no-MMIO post-fw idle loop after complete BAR2 firmware write — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.174: immediate return after complete BAR2 firmware write — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 case "$STAGE" in
-    0) echo "Stage 0: skip_arm=1 — test.162 scope + download_fw_nvram: enter_download_state (read-only) + BAR2 ioread32 probe + 442KB iowrite32 fw + NVRAM write + TCM verify dump; returns -ENODEV." | tee -a "$LOG" ;;
+    0) echo "Stage 0: skip_arm=1 — download_fw_nvram: enter_download_state (read-only) + BAR2 ioread32 probe + 442KB iowrite32 fw; releases fw/NVRAM immediately after fw write complete and returns -ENODEV." | tee -a "$LOG" ;;
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.173: test.172 showed endpoint ASPM cleared and root-port ASPM/CLKPM already off, then completed the 442KB fw write and froze after idle-7 while ARM CR4 still reported halted. This run keeps the same post-write 10 x 10ms idle window but removes BAR0 ARM CR4 probes from that window. Expected: survival through post-idle-loop implicates the BAR0 probes; another freeze inside the no-MMIO idle loop points to an asynchronous post-write chip/host event.)" | tee -a "$LOG"
+echo "(test.174: test.173 completed the 442KB fw write, then froze during a no-device-MMIO idle loop after idle-8-before. This run removes the post-write ARM probe, idle delay, resetintr read, NVRAM write, and readback, then returns immediately after fw write complete. Expected: clean unwind proves the crash needs post-write dwell time; freeze despite immediate return points to an async failure triggered by the completed firmware image.)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -113,14 +113,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=90  # test.173: no-device-MMIO post-fw idle-loop discriminator
+    WAIT_SECS=30  # test.174: immediate post-fw-write return discriminator
 else
     SKIP_ARM=0
     WAIT_SECS=60
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.173 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.174 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.
