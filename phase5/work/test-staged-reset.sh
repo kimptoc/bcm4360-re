@@ -17,9 +17,9 @@ PCI_DEV="03:00.0"
 PCI_SLOT="0000:$PCI_DEV"
 
 mkdir -p "$LOG_DIR"
-LOG="$LOG_DIR/test.169.stage${STAGE}"
+LOG="$LOG_DIR/test.170.stage${STAGE}"
 
-echo "=== test.169: dual-wrapbase ARM CR4 probes (base+0x1000 vs base+0x100000) + post-145 probe inside buscore_reset — stage=$STAGE ===" | tee "$LOG"
+echo "=== test.170: post-fw-write breadcrumbs + chunked NVRAM iowrite32 (single hi-window CR4 probe) — stage=$STAGE ===" | tee "$LOG"
 echo "Date: $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
@@ -28,7 +28,7 @@ case "$STAGE" in
     1) echo "Stage 1: skip_arm=0 — BBPLL bringup + ARM release. Run only after clean stage 0." | tee -a "$LOG" ;;
     *) echo "ERROR: Invalid stage (use 0 or 1)" | tee -a "$LOG"; exit 1 ;;
 esac
-echo "(test.169: dual-view probe — loW=BAR0@base+0x1000/offset 0x1408,0x1800 [test.168] AND hiW=BAR0@base+0x100000/offset 0x408,0x800 [BCMA AI canonical]. Adds post-145 probe in buscore_reset. 7 probes total: post-145, setup-entry, pre-attach, post-attach, post-raminfo, pre-download, pre-halt/post-halt/pre-write/post-write inside download_fw_nvram)" | tee -a "$LOG"
+echo "(test.170: probe collapsed to single hi-window read at base+0x100000 + offsets 0x408/0x800 (test.169 confirmed wrapbase). New post-fw-write breadcrumbs: post-mdelay100, after release_firmware, pre-NVRAM, NVRAM chunked iowrite32 with breadcrumbs, post-NVRAM done — to localize the test.169 post-fw crash site.)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 
 # Pre-test MMIO check — distinguish Completion Timeout (CTO) from
@@ -105,14 +105,14 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=90  # test.169: test.167 flow + 6 probes (~100ms added) — still fits in 90s budget
+    WAIT_SECS=90  # test.170: same flow + a handful of NVRAM breadcrumbs — still fits in 90s budget
 else
     SKIP_ARM=0
     WAIT_SECS=60
 fi
 
 echo "" | tee -a "$LOG"
-echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.169 ===" | tee -a "$LOG"
+echo "=== Loading brcmfmac (bcm4360_reset_stage=$STAGE, bcm4360_skip_arm=$SKIP_ARM) --- test.170 ===" | tee -a "$LOG"
 sync
 
 # Start streaming kernel messages to a separate file BEFORE insmod.

@@ -94,11 +94,14 @@ load against a halted ARM. Then we'd need to start releasing ARM.
 
 ### PRE-TEST.170 CHECKLIST
 - [x] Save test.169 journal to `phase5/logs/test.169.journalctl.txt`
-- [x] PCIe state checked: clean
-- [ ] Edit pcie.c per plan above
-- [ ] Bump banners test.169 → test.170 in pcie.c, test-staged-reset.sh
-- [ ] Build with `make -C phase5/work`
-- [ ] Commit + push pre-test state + `sync`
+- [x] PCIe state checked: clean (`Mem+ BusMaster+ MAbort- <MAbort- LnkSta 2.5GT/s x1`)
+- [x] Edit pcie.c: probe helper collapsed to single hi-window read (drop loW),
+      added post-fw-write breadcrumbs (post-mdelay100 / after release_firmware /
+      pre-NVRAM write / chunked NVRAM iowrite32 with breadcrumbs / post-NVRAM done)
+- [x] Bumped banners test.169 → test.170 across pcie.c, test-staged-reset.sh
+- [x] Built via kbuild — `brcmfmac.ko` contains 16 test.170 format strings,
+      1 unrelated unused-function warning
+- [x] Commit + push pre-test state + `sync`
 - [ ] Run `sudo /home/kimptoc/bcm4360-re/phase5/work/test-staged-reset.sh 0`
 
 ---
