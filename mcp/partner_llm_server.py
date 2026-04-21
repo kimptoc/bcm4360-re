@@ -254,8 +254,11 @@ def dispatch_gemini(
             description=(
                 "If True (default), runs Gemini CLI with "
                 "--approval-mode plan (read-only — no file writes, no "
-                "command execution). Set False only when you intend for "
-                "the agent to make changes."
+                "command execution). Set False to run in --approval-mode "
+                "yolo (auto-approve all actions) — required when the "
+                "agent needs to edit files or execute shell commands "
+                "non-interactively. Do NOT use False for untrusted "
+                "prompts."
             ),
         ),
     ] = True,
@@ -285,7 +288,11 @@ def dispatch_gemini(
     User must have run `gemini auth login` at least once."""
     argv = ["gemini", "-p", prompt]
     argv.append("--approval-mode")
-    argv.append("plan" if read_only else "default")
+    # "default" prompts for approval on every action — hangs in a
+    # subprocess with no TTY. For non-interactive use we need "yolo"
+    # (auto-approve all) or "plan" (read-only). Map read_only=False
+    # to yolo so the CLI can actually run shell tools + edit files.
+    argv.append("plan" if read_only else "yolo")
     if model:
         argv.extend(["-m", model])
     return _run_cli(argv, cwd, timeout_seconds)
