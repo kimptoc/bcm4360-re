@@ -36,8 +36,12 @@ Logged via `brcmf_err` with read-back before/after for proof.
 
 ### Build + pre-test
 
-- chip.c edited, built clean
-- PCIe state: (check before running)
+- chip.c edited, built clean (brcmfmac.ko + chip.c timestamps match @ 2026-04-22 00:46)
+- PCIe state (verified pre-run after crash + SMC reset):
+  - `MAbort-`, `CommClk+`, LnkSta Speed 2.5GT/s Width x1 — clean
+  - DevSta has `CorrErr+ UnsupReq+` — benign post-boot noise, no FatalErr
+- Session context: prior session ended with a crash; user performed SMC reset
+  before this run. Boot 0 (2026-04-22 00:49) is fresh, no prior module load.
 
 ### Run
 
