@@ -1,30 +1,53 @@
-# test.189 Implementation Plan — DRAFT (pending value-level review)
+# test.189 Implementation Plan — REVIEWED (values verified, one update applied)
 
-> **Status:** DRAFT from Codex dispatch 2026-04-21.
-> **Pending review before implementation:**
-> - The LTR threshold values inside the `brcmf_pcie_attach` BCM4360 branch
->   (0x883c883c at 0x844, 0x88648864 at 0x848, 0x90039003 at 0x84c) were
->   not in the DeepSeek §1.6 gap-analysis table. They may have been read
->   from bcma source directly; verify against
->   `scratch/asahi-linux/drivers/bcma/driver_pcie2.c` before using.
-> - `READCC32(devinfo, chipstatus)` and `READCC32(devinfo, pmustatus)` —
->   verify the macro exists in brcmfmac's pcie.c / pcie.h.
-> - `devinfo->ci->chiprev` and `core->rev` field names — verify the
->   actual struct field names in brcmfmac chip.h.
-> - XTAL 40 MHz detect via `chipstatus & 0x1` — verify against
->   `BCMA_CC_CHIPST_4360_XTAL_40MZ` in bcma header.
+> **Status:** Codex draft 2026-04-21, value-level reviewed against
+> bcma and brcmfmac sources 2026-04-21 post-Gemini re-anchor.
 >
-> Gemini is re-verifying 0x3fffffff and related values in parallel
-> (phase6/wl_pmu_res_init_analysis.md). Do not implement this plan
-> until (a) the above magic numbers are spot-verified against bcma
-> and (b) Gemini's re-anchor results are folded in.
+> **Verification results — all green:**
+> - LTR threshold values `0x883c883c`/`0x88648864`/`0x90039003` at
+>   `0x844`/`0x848`/`0x84c` match `bcma/driver_pcie2.c:60-67` exactly
+>   (`bcma_core_pcie2_set_ltr_vals`).
+> - PCIE2 offset constants (DEVSTSCTRL2=0xD4, LTRENAB=0x400,
+>   LTR_STATE=0x01A0, DLYPERST=0x0100, DISSPROMLD=0x0200,
+>   PMCR_REFUP=0x1814, SBMBX=0x098, PM_CLK_PERIOD=0x184c) match
+>   `include/linux/bcma/bcma_driver_pcie2.h`.
+> - `BCMA_CC_CHIPST_4360_XTAL_40MZ = 0x1` confirmed in
+>   `bcma_driver_chipcommon.h:109`.
+> - `READCC32` macro exists at `brcmfmac/pcie.c:664` and is already
+>   used for `pmustatus`/`min_res_mask`/`max_res_mask` reads.
+> - `struct brcmf_chip.chiprev` and `struct brcmf_core.rev` exist in
+>   `brcmfmac/chip.h:30,46`.
+>
+> **Update applied from Gemini re-anchor (commit cc5d525):**
+> `min_res_mask` changed from `0x3` → **`0x103`** to match wl's actual
+> behavior for BCM4360 with corerev ≤ 3 (our chip is chiprev 3). Bits
+> 0+1+8 → ALP + HT + resource 8. See Change 2 below.
+>
+> **`0x3fffffff` explicitly excluded** — Gemini's re-anchor refuted
+> this value for BCM4360; it belongs to `si_pmu_chipcontrol`'s path
+> for *other chips* (BCM4314, etc.), not BCM4360
+> (phase6/wl_pmu_res_init_analysis.md §5.1).
+>
+> **Note — the DLYPERST/DISSPROMLD WAR in Change 3 is dead code on
+> our hardware** because bcma's guard `ci->rev > 3` evaluates FALSE
+> for chiprev 3. Code path kept for parity with bcma; harmless no-op
+> on this board.
+>
+> **Outstanding (not blocking test.189, but worth a follow-up):**
+> - Package-ID bit 0x20 gate in `si_pmu_res_init` — confirmed real
+>   per Gemini §5.2 but its WAR writes are not yet extracted. If
+>   test.189 doesn't advance firmware, revisit.
+> - "corerev" terminology in Gemini's §3.1 assumed to mean chip rev
+>   (matches 3 for our hardware on both ">2" and "≤3" predicates).
+>   If 0x103 turns out to be wrong, first suspect a different core's
+>   rev being meant.
 
 ---
 
 # test.189 Implementation Plan — conservative PMU + PCIe2 port
 
 ## 1. Summary
-`test.189` should add only the verified PMU and PCIe2 prerequisites that current `brcmfmac` is still missing on BCM4360: set `NOILPONW`, apply the conservative initial PMU resource masks (`min_res_mask = 0x3`, `max_res_mask = 0x1ff`), port the verified `bcma_core_pcie2_init()` writes for the BCM4360 PCIe2 core, and gate final ARM release on `pmustatus & 0x4` before calling `brcmf_chip_set_active()`. The reason is unchanged from `test.188`: firmware leaves halt, but then does absolutely nothing observable, which is the signature expected when a required clock/resource/PCIe bring-up step is missing rather than when the firmware image itself is corrupt (`RESUME_NOTES.md:19-38`, `RESUME_NOTES.md:56-72`).
+`test.189` should add only the verified PMU and PCIe2 prerequisites that current `brcmfmac` is still missing on BCM4360: set `NOILPONW`, apply the matches-wl initial PMU resource masks (`min_res_mask = 0x103`, `max_res_mask = 0x1ff`), port the verified `bcma_core_pcie2_init()` writes for the BCM4360 PCIe2 core, and gate final ARM release on `pmustatus & 0x4` before calling `brcmf_chip_set_active()`. The reason is unchanged from `test.188`: firmware leaves halt, but then does absolutely nothing observable, which is the signature expected when a required clock/resource/PCIe bring-up step is missing rather than when the firmware image itself is corrupt (`RESUME_NOTES.md:19-38`, `RESUME_NOTES.md:56-72`).
 
 ## 2. Verified inputs
 - `test.188` established the baseline failure signature: ARM leaves halt, D11 stays in reset, TCM stays byte-identical, `mailboxint` stays zero, and `pmustatus` never changes during the 3 s window. That means the next test should focus on missing bring-up prerequisites, not firmware download integrity (`RESUME_NOTES.md:19-38`, `RESUME_NOTES.md:56-72`).
@@ -33,7 +56,7 @@
 - The verified `bcma` PMU rule for `BCMA_CC_PMU_CTL` is: clear `NOILPONW` only for `pmurev == 1`, otherwise set it. BCM4360 is in the non-rev-1 path (`scratch/asahi-linux/drivers/bcma/driver_chipcommon_pmu.c:295-307`).
 - The clean-room PMU analysis confirmed that BCM4360 PMU control bit 9 is `NOILPONW`, not the HT-request handshake bit, and that `pmustatus` bit 2 (`0x4`) is the verified HT-available indicator (`phase6/wl_pmu_res_init_analysis.md:5-18`).
 - The verified BCM4360 helper mask is `max_res_mask = 0x1ff`, covering resources 0-8 (`phase6/wl_pmu_res_init_analysis.md:43-47`).
-- Inference from verified wl table data: resource bit 0 is ALP and resource bit 1 is HT, so the narrowest synchronous boot request is `min_res_mask = 0x3`. This is conservative because it asserts only the two resources directly identified in the verified resource table and matches the verified HT-availability poll target (`phase6/wl_pmu_res_init_analysis.md:14-18`, `phase6/wl_pmu_res_init_analysis.md:24-35`, `phase6/wl_pmu_res_init_analysis.md:43-47`).
+- Per Gemini's re-anchored disassembly (§3.1), wl's actual initial `min_res_mask` for BCM4360 with corerev ≤ 3 is `0x103` (bits 0+1+8: ALP, HT, and resource 8). Using `0x103` matches wl behavior exactly rather than picking a narrower conservative value (`phase6/wl_pmu_res_init_analysis.md:43-47`).
 - The verified BCM4360 PCIe2 init sequence from `bcma_core_pcie2_init()` is: BCM4360 rev>3 `CLK_CONTROL` WAR (`DLYPERST` cleared, `DISSPROMLD` set), LTR WAR, PM clock period write, `PMCR_REFUP |= 0x1f`, and `SBMBX = 1` (`scratch/asahi-linux/drivers/bcma/driver_pcie2.c:39-55`, `scratch/asahi-linux/drivers/bcma/driver_pcie2.c:57-105`, `scratch/asahi-linux/drivers/bcma/driver_pcie2.c:132-186`; summarized in `phase6/pmu_pcie_gap_analysis_final.md:57-75`).
 - `bcma` derives BCM4360 ALP from `chipstatus` bit 0: 40 MHz when set, 20 MHz when clear. That directly determines the PM clock period programmed into PCIe2 (`scratch/asahi-linux/drivers/bcma/driver_chipcommon_pmu.c:336-347`, `scratch/asahi-linux/include/linux/bcma/bcma_driver_chipcommon.h:109`).
 - `brcmf_chip_set_active()` currently remains the only final ARM-release primitive in the path, and `brcmf_pcie_exit_download_state()` is where that call is made now (`phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/chip.c:1407-1425`, `phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c:950-964`).
@@ -162,12 +185,12 @@ New code:
 +			chip->ops->write32(chip->ctx,
 +					CORE_CC_REG(pmu->base, max_res_mask), 0x1ff);
 +			chip->ops->write32(chip->ctx,
-+					CORE_CC_REG(pmu->base, min_res_mask), 0x3);
++					CORE_CC_REG(pmu->base, min_res_mask), 0x103);
 +		}
 +	}
 ```
 
-Rationale: `0x1ff` is the verified BCM4360 helper `max_res_mask`, and `0x3` is the narrowest conservative floor supported by the verified table because bits 0 and 1 are ALP and HT. This is the smallest mask pair that can force synchronous HT availability without pulling in any unverified package-dependent expansion path (`phase6/wl_pmu_res_init_analysis.md:14-18`, `phase6/wl_pmu_res_init_analysis.md:24-35`, `phase6/wl_pmu_res_init_analysis.md:43-47`).
+Rationale: `0x1ff` is the verified BCM4360 helper `max_res_mask` (9-entry resource table). `0x103` matches wl's actual initial value for BCM4360 with corerev ≤ 3 per Gemini's re-anchored disassembly (`phase6/wl_pmu_res_init_analysis.md:43-47` §3.1). Bits set: 0 (ALP) + 1 (HT) + 8. Previous draft used `0x3` (ALP+HT only) as a minimal conservative value; `0x103` is the matches-wl value and is preferred because bit 8 is a resource wl actually asserts and we don't know what firmware requires (`phase6/wl_pmu_res_init_analysis.md §5.1` refuted the alternative `0x3fffffff` override).
 
 ### PCIe2 init
 
@@ -380,7 +403,7 @@ Rationale: the verified HT handshake is not `pmucontrol` bit 9; it is `pmustatus
 (This is the same hunk as Change 4; retained for plan completeness.)
 
 ## 4. Sequencing
-1. `brcmf_chip_attach()` runs first, and its existing `brcmf_chip_setup()` PMU-capability block becomes the place where BCM4360 gets `NOILPONW`, `max_res_mask = 0x1ff`, and `min_res_mask = 0x3` before any firmware work starts (`chip.c:1122-1138`).
+1. `brcmf_chip_attach()` runs first, and its existing `brcmf_chip_setup()` PMU-capability block becomes the place where BCM4360 gets `NOILPONW`, `max_res_mask = 0x1ff`, and `min_res_mask = 0x103` before any firmware work starts (`chip.c:1122-1138`).
 2. The firmware callback path later enters `brcmf_pcie_setup()`, which already calls `brcmf_pcie_attach()` before `brcmf_chip_get_raminfo()` (`pcie.c:4298-4303`, `pcie.c:4319-4328`).
 3. `brcmf_pcie_attach()` stops returning early for BCM4360 and instead applies the verified PCIe2 sequence: `CLK_CONTROL` WAR, conditional LTR WAR, PM clock period programming, `PMCR_REFUP |= 0x1f`, and `SBMBX = 1` (`pcie.c:885-913` after the change).
 4. `brcmf_chip_get_raminfo()` stays where it is today; no logic moves across it (`pcie.c:4319-4328`, `chip.c:757-823`).
