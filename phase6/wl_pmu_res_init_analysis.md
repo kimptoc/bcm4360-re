@@ -69,7 +69,32 @@ qualifies) the writes are:
 | `regcontrol` #0xf | `0x0000000e` |
 
 These writes use the indirect address/data pair at ChipCommon
-`0x650/0x654` (chipcontrol) and `0x660/0x664` (regcontrol).
+`0x650/0x654` (chipcontrol) and `0x660/0x664` (the indexed indirect
+register whose behavior is consistent with "regulator control" but
+see naming note below).
+
+### §0.1 Offset-naming clarification (added 2026-04-22)
+
+The "regcontrol" label used throughout §3 and §6 of this doc refers
+to the **hardware register pair at ChipCommon offsets `0x660/0x664`**,
+which wl.ko's disassembly targets for the WAR writes at +0x1529e /
++0x152a6 / +0x152ff / +0x1531a (verified).
+
+Linux's `struct chipcregs` (drivers/net/wireless/broadcom/brcm80211/
+include/chipcommon.h) uses a different field-name convention:
+
+| ChipCommon offset | Linux `struct chipcregs` field | Wl.ko usage           |
+|-------------------|--------------------------------|-----------------------|
+| `0x650` / `0x654` | `chipcontrol_addr` / `_data`   | chipcontrol (agreed)  |
+| `0x658` / `0x65c` | `regcontrol_addr` / `_data`    | `si_pmu_otp_regcontrol` accesses these (0x658/0x65c) |
+| `0x660` / `0x664` | `pllcontrol_addr` / `_data`    | WAR writes target these |
+
+So when this document's §6 tables say "`regcontrol` #6/#7/#0xe/#0xf",
+the **hardware offset is 0x660/0x664**, which in Linux field naming
+is `pllcontrol_addr` / `pllcontrol_data`. The brcmfmac test.192 code
+uses `CORE_CC_REG(pmu->base, pllcontrol_addr/_data)` to hit the
+correct offsets, regardless of the historical "regcontrol" label
+used in wl.ko symbols or this doc.
 
 ### Source-of-truth addresses (verified against pmu_res_init_disasm.txt)
 

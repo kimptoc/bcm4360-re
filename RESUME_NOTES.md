@@ -1,5 +1,77 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.192 (2026-04-22) — apply chip_pkg=0 PMU WARs (chipcontrol #1 + pllcontrol #6/7/0xe/0xf)
+
+**Status:** chip.c edited, module built clean, NOT YET TESTED on hardware.
+
+### Hypothesis
+
+test.188 baseline (uncommitted in test.191 logs) gets past probe to
+firmware download but the firmware stalls with all TCM/D11 scratch
+regions marked UNCHANGED. Our current best guess for why: Apple
+BCM4360 has `chip_pkg = 0`, so it takes the bit-0x20-CLEAR branch of
+`si_pmu_res_init`, which executes a sequence of PMU WAR writes that
+brcmfmac has never performed. Without those writes some PMU/PLL
+resource never asserts HT-avail, so the firmware never starts.
+
+### What test.192 adds to test.188 baseline
+
+In `brcmf_chip_setup` (chip.c:1134+), **after** `pmucaps`/`pmurev` have
+been read but **before** bus-core setup, for `BCM_CC_4360_CHIP_ID &&
+cc->pub.rev > 3`:
+
+1. `chipcontrol #1 |= 0x800` (RMW via 0x650/0x654 addr/data pair)
+2. `pllcontrol_data = 0x080004e2` at index 6     (0x660/0x664)
+3. `pllcontrol_data = 0x0000000e` at index 7
+4. `pllcontrol_data = 0x080004e2` at index 0xe
+5. `pllcontrol_data = 0x0000000e` at index 0xf
+
+**Offset-naming note:** wl.ko's symbol names call the 0x660/0x664 pair
+"regcontrol" in some places, but Linux `struct chipcregs` reserves
+that name for 0x658/0x65c and uses `pllcontrol_addr/_data` for
+0x660/0x664. The writes in test.192 use the Linux field names
+`pllcontrol_addr/_data` to target the hardware offsets 0x660/0x664
+that wl.ko actually writes. See `phase6/wl_pmu_res_init_analysis.md`
+§0.1 for the naming-collision table.
+
+### Expected outcomes
+
+| Outcome | Interpretation | Next step |
+|---|---|---|
+| TCM or D11 scratch region shows CHANGED bytes in dump | WARs were blocking firmware; PMU WAR set is necessary | Follow firmware progress; may need further PMU/PLL work |
+| All scratch regions still UNCHANGED, clean -ENODEV exit | WARs didn't unblock firmware; something else missing | Revisit PCIe2 init (DLYPERST/DISSPROMLD) or min/max_res_mask 0x1ff widening |
+| Hard crash during probe | PMU write triggered a fault before firmware download | Bisect the 5 WAR writes one at a time |
+| New error in dmesg (e.g. PMU timeout) | WAR changed PMU state enough to unblock but something else hits a ceiling | Inspect error location |
+
+### Build status
+
+- `chip.c` updated with `pllcontrol_addr`/`_data` field names (was
+  incorrectly using `regcontrol_*` in earlier draft — that would have
+  targeted 0x658/0x65c which is the wrong register pair).
+- `make -C $KDIR M=...brcmfmac modules` → clean build, no warnings.
+- `brcmfmac.ko` rebuilt at
+  `/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko`.
+
+### Pre-test checklist (from CLAUDE.md)
+
+1. Build status: REBUILT CLEAN (just now)
+2. PCIe state check: not run yet — user should verify before test:
+   `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'`
+3. Hypothesis stated: see above.
+4. Plan committed and pushed: (this commit)
+5. Filesystem sync: included in commit step.
+
+### Run command
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Expected log: `phase5/logs/test.192` (or `test.192.journalctl.txt`
+with full journal).
+
+---
+
 ## POST-TEST.191 (2026-04-22) — CHIP IS HEALTHY; live PMU state invalidates test.189 mask values
 
 Captured: `phase5/logs/test.191.journalctl.txt` (current-boot dump, 972
