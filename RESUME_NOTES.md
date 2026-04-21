@@ -1,6 +1,83 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## POST-TEST.192 + PRE-TEST.193 (2026-04-22) — WARs ran without crash; diagnostic build needed to confirm side effects
+## POST-TEST.193 (2026-04-22) — WARs confirmed landing but produce no firmware progress → PMU WARs ruled out as blocker
+
+Log: `phase5/logs/test.193.journalctl.txt` (974 lines) + `.full.txt`.
+
+### Diagnostic output confirmed
+
+```
+test.193: chip=0x4360 ccrev=43 pmurev=17 pmucaps=0x10a22b11
+test.193: PMU WARs applied — chipcontrol#1 0x00000a10->0x00000a10
+          pllcontrol#6=0x080004e2 #0xf=0x0000000e
+```
+
+| Fact | Evidence |
+|---|---|
+| Gate condition met (`chip==4360 && ccrev>3`) | ccrev=43, prints "applied" not "SKIPPED" |
+| pmurev=17, pmucaps=0x10a22b11 | matches wl.ko expectations for BCM4360 |
+| chipcontrol #1 already has bit 0x800 SET at probe time | read-back 0x00000a10 both before AND after OR-0x800 |
+| pllcontrol #6 write landed | read-back 0x080004e2 matches value we wrote |
+| pllcontrol #0xf write landed | read-back 0x0000000e matches value we wrote |
+| Firmware still blocked | all TCM/D11 scratch UNCHANGED, res_state=0x13b UNCHANGED |
+
+**Bottom line:** chip_pkg=0 PMU WARs are NOT the firmware-stall blocker.
+Bit 0x800 of chipcontrol #1 is already set by POR/bootrom; the pllcontrol
+#6/#7/#0xe/#0xf writes land cleanly but have no visible downstream effect
+on pmustatus / res_state / clk_ctl_st / TCM.
+
+### Comparison vs test.192 (WARs off) and test.191 (baseline)
+
+All PMU/TCM samples IDENTICAL to test.191 baseline. The WARs changed **nothing
+visible** in any register we currently sample. Likely explanations:
+
+1. The pllcontrol writes are regulator voltage targets — effect is only
+   observable on an oscilloscope / by downstream resources drawing that rail.
+   No register snapshot would show it.
+2. The WARs enable capabilities the firmware needs **later**, once it's
+   running; but firmware never starts because a **different** prerequisite
+   is still missing.
+
+Either way, we've exhausted the PMU-WAR hypothesis.
+
+### Next gap to investigate — PCIe2 core bring-up
+
+Log line at test.193 t=2219ms: `BCM4360 test.129: brcmf_pcie_attach bypassed
+for BCM4360` — brcmfmac's `brcmf_pcie_attach` returns early for BCM4360 at
+pcie.c:895, skipping:
+
+- **PCIE2_CLK_CONTROL DLYPERST/DISSPROMLD** workaround for rev>3
+  (this is THE BCM4360-specific PCIe workaround from bcma; phase6 gap analysis
+  ranked it #1 of missing writes)
+- LTR (Latency Tolerance Reporting) config
+- Power-management clock-period, PMCR_REFUP, SBMBX writes
+
+Our earlier decision to bypass brcmf_pcie_attach was to avoid a crash during
+development; now that the chip is stable through fw-download, we can re-enable
+selective parts. Recommend test.194: implement just the **PCIE2_CLK_CONTROL
+DLYPERST/DISSPROMLD** write (bcma `bcma_core_pcie2_workarounds` for BCM4360
+corerev>3) as the next candidate unblock.
+
+### Preserved evidence
+
+- `phase5/logs/test.192.journalctl.txt` — WARs silent (INFO filtered)
+- `phase5/logs/test.193.journalctl.txt` — WARs confirmed via brcmf_err
+- `phase6/wl_pmu_res_init_analysis.md` — PMU WAR analysis with §0/§0.1 corrections
+
+### Action items (next session)
+
+1. Re-read `phase6/downstream_survey.md` and the bcma `driver_pcie2.c`
+   DLYPERST/DISSPROMLD workaround.
+2. Find the PCIE2 core in chip->cores (PCIE2 coreid / pci_dev base address).
+3. Implement the workaround in a new callsite (before set_active / fw download),
+   gated on BCM4360 && corerev>3.
+4. Test as test.194.
+
+---
+
+## PRE-TEST.193 (2026-04-22) — diagnostic build to confirm WARs land
+
+(Now superseded by POST-TEST.193 above. Original plan retained for context.)
 
 ### Test.192 result — no crash, no visible state delta
 
