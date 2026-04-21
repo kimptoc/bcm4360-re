@@ -1,5 +1,87 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.194 (2026-04-22) — PCIe2 writes landed cleanly, firmware executes but stalls on HT-clock polling
+
+Log: `phase5/logs/test.194.journalctl.txt` (727 lines visible in dmesg) +
+`test.194.journalctl.full.txt` (977 lines journalctl capture).
+
+### Diagnostic output
+
+```
+test.194: PCIe2 CLK_CONTROL probe = 0x00000182   ← PCIe2 core alive, probe passed
+test.194: SBMBX write done                        ← CONFIGIND 0x098 = 0x1 ✓
+test.194: PMCR_REFUP 0x00051852 -> 0x0005185f    ← read back confirms +0x1f bits set
+```
+
+### Key finding — ARM CR4 IS RUNNING, firmware stalls on HT clock
+
+Mis-read the earlier logs; ARM CR4 *is* released via `brcmf_chip_set_active`:
+
+```
+calling brcmf_chip_set_active resetintr=0xb80ef000 (BusMaster ENABLED)
+brcmf_chip_set_active returned true
+post-set-active-20ms   ARM CR4 IOCTL=0x00000001 CPUHALT=NO    ← ARM released
+post-set-active-3000ms ARM CR4 IOCTL=0x00000001 CPUHALT=NO    ← still running
+```
+
+**Firmware executes but makes no observable progress.** Consistent with the
+stall described in `phase6/wl_pmu_res_init_analysis.md §1`: firmware writes
+`NOILPONW` (pmucontrol bit 0x200) early in `si_pmu_init` — we see
+pmucontrol change from 0x01770181 → 0x01770381 over the dwell — then
+polls for HT clock availability and never sees it.
+
+### Evidence that ARM is running but stalled
+
+| Signal | Value | Interpretation |
+|---|---|---|
+| ARM CR4 IOCTL | 0x0021 → 0x0001 | CPUHALT cleared ✓ |
+| pmucontrol | 0x01770181 → 0x01770381 | NOILPONW bit 0x200 was set by firmware `si_pmu_init` |
+| pmustatus | 0x2a (stable) | no progress (expect HT_AVAIL bits to appear) |
+| res_state | 0x13b (stable) | HT resource never asserted |
+| min_res_mask | 0x13b | unchanged |
+| max_res_mask | 0x13f | unchanged — **HT resources likely gated OUT** |
+| D11 RESET_CTL | 0x0001 (stable) | D11 still in reset — firmware never gets far enough to initialise D11 |
+| TCM | all stable | firmware isn't writing scratch/heap → stuck in polling loop |
+
+### Next hypothesis — widen max_res_mask to 0x1ff
+
+Wl.ko's final writes at +0x153ed/+0x15401 program `min_res_mask` and
+`max_res_mask`. POR leaves max_res_mask=0x13f (bits 0..5, 8). Wl.ko
+widens max to **0x1ff** (bits 0..8 all permitted). If the HT clock
+resource sits at bit 6 or bit 7, the chip can never grant it without
+the wider mask, so the firmware's HT-avail poll will never succeed.
+
+Planned test.195:
+
+1. In `brcmf_chip_setup` (before the PMU WAR block), write
+   `max_res_mask = 0x1ff` (offset 0x61c). Leave min_res_mask alone
+   (POR=0x13b matches wl.ko's resolved value).
+2. Use `brcmf_err`/`pr_emerg` for the write log so it's visible.
+3. Expected signature of success: either (a) res_state grows beyond
+   0x13b over the dwell, or (b) D11 RESET_CTL changes from 0x1 to 0x0
+   (fw advances to core init), or (c) TCM scratch regions show writes.
+
+### Ruled out so far
+
+| Hypothesis | Test | Outcome |
+|---|---|---|
+| chip_pkg=0 PMU WARs (chipcontrol#1, pllcontrol #6/#7/#0xe/#0xf) | 193 | ruled out — writes landed, no effect |
+| PCIe2 SBMBX + PMCR_REFUP | 194 | ruled out — writes landed, no effect |
+| ARM CR4 not released | 194 | ruled out — set_active confirmed, CPUHALT cleared |
+| DLYPERST workaround | (skipped) | doesn't apply — chiprev=3 vs gate `>3` |
+| LTR workaround | (skipped) | doesn't apply — pcie2 core rev=1 vs gate ≥2 |
+
+### Remaining untested candidates (priority order)
+
+1. **max_res_mask = 0x1ff** (test.195 — planned above, cheap bit widen)
+2. **OTP init / radio calibration** — brcmfmac skips OTP entirely; firmware
+   might need OTP-derived values before HT can assert
+3. **min_res_mask = 0x1ff** also (go nuclear after max)
+4. **D11 core passive init** — brcmfmac doesn't explicitly do anything to D11
+   core before set_active; maybe firmware expects clock-enable
+
+---
+
 ## PRE-TEST.194 (2026-04-22) — minimal PCIe2 init (SBMBX + PMCR_REFUP) re-enabled with liveness probe
 
 **Status:** pcie.c edited, module built clean, ready to run.
