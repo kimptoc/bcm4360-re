@@ -1,5 +1,94 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.190 (2026-04-21) — hard crash EARLIER than test.189, at halt ARM CR4; min_res_mask bisect inconclusive
+
+Captured: `phase5/logs/test.190.journalctl.txt` (prior-boot dump, 1077
+lines). Host hard-froze at 23:46:17 BST (during `buscore_reset`);
+required SMC reset. PCIe state clean post-reset (`<MAbort-`).
+
+### Crash sequence
+Last brcmfmac kernel line (both boots hung immediately after):
+```
+23:46:17.207 brcmfmac 0000:03:00.0: BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)
+```
+
+No "ARM CR4 halt done" followup, no Oops, no MCE logged before the
+hang. Hard freeze requiring SMC reset.
+
+### Why this is surprising
+The only code diff between test.189 and test.190 is dropping the
+`min_res_mask = 0x103` write in `brcmf_chip_setup`. That write runs
+*later* in the flow than the hang point — `brcmf_chip_setup` is
+called from `brcmf_chip_recognition` after `brcmf_chip_attach`, while
+the halt ARM CR4 is inside `buscore_reset` which runs *before*
+chip_attach returns. So the bisect change cannot logically account
+for the earlier crash location.
+
+Test.188 (no PMU writes at all) traversed the same halt ARM CR4 step
+in ~3 ms (dmesg `[57629.418085]` → `[57629.421031]`).
+Test.189 traversed it sub-second in journalctl too.
+Test.190 got stuck *at* that step.
+
+### Additional signal: printk deltas
+Every brcmfmac log line in test.190 is spaced **~500-585 ms** from
+the previous one — uniformly, even for in-kernel-only code that
+should execute in microseconds (e.g. 528 ms between
+`brcmf_core_init entry` and `before brcmf_sdio_register`). In
+test.188 these same transitions are sub-millisecond. Something is
+systemically slowing every printk or every in-kernel step by ~500 ms.
+
+### Gemini's top 3 hypotheses (in likelihood order)
+1. **Dirty PCIe/root-port state post-SMC-reset.** MMIO to the chip
+   or PCIe link is hitting silent retries, stalling everything. The
+   chip hangs at halt ARM CR4 independent of our code change.
+2. **Kernel RCU/softlockup throttling** triggered by slow MMIO —
+   kernel applies ~500 ms scheduling penalties.
+3. **Hardware watchdog inside the chip** fires while driver is slow,
+   terminating the session before chip_attach completes.
+
+(1) is most consistent with the symptoms — the slowness is uniform
+across ALL init lines (not just MMIO-adjacent ones), suggesting
+kernel-level delay, but the host was also running on just-post-
+SMC-reset state where PCIe Root Port may have been in a degraded
+link (not an MAbort-visible fault but a slower-retry mode).
+
+### Interpretation
+- Option-A bisect is **inconclusive**. We cannot tell whether
+  `min_res_mask=0x103` was the test.189 trigger because test.190
+  hit a *different* failure before the diff mattered.
+- The crash is happening in a code path that test.188 passed
+  cleanly. That means either (a) environmental slowness (bad PCIe
+  state, warm chip, prior-test residue) is the real story, or (b)
+  the NOILPONW / max_res_mask writes have a latent side-effect that
+  manifests at the next MMIO even after chip_attach returns — but
+  that's a stretch given chip.c layout.
+
+### Recommended next step — back out to known-good baseline first
+
+Before touching more PMU writes we need a **clean test.188 re-run**
+(no chip.c PMU writes, no pcie.c PCIe2 port code) to confirm the
+baseline is *still* stable after the two hard crashes + SMC resets.
+
+- If test.188 re-run succeeds (reaches post-attach, -ENODEV exit):
+  the chip/PCIe is healthy; test.190's early crash was driven by
+  the PMU writes (NOILPONW or max_res_mask) or by chip state that
+  test.188's code path tolerates but test.190's doesn't. Then retry
+  Option-A (min_res_mask removed) again — if it crashes the same
+  way twice, we have a reproducible signal.
+- If test.188 re-run also crashes: the chip is in a persistent bad
+  state (possibly a firmware-side latch) and we need a full power
+  cycle / battery drain rather than SMC reset. That rules out any
+  code-level bisect conclusion for now.
+
+Call this **test.191 = revert to test.188 code, rebuild, re-run as
+baseline sanity**.
+
+### Files
+- Log: `phase5/logs/test.190.journalctl.txt`
+- Crash analysis anchor: search for "halting ARM CR4" — last brcmfmac line
+
+---
+
 ## PRE-TEST.190 (2026-04-21) — Option-A bisect: drop min_res_mask only, rebuilt clean
 
 Module rebuilt 2026-04-21 after test.189 crash, clean (only pre-existing
