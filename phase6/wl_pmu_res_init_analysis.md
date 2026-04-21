@@ -1,5 +1,102 @@
 # BCM4360 PMU Resource Initialization Analysis
 
+## 0. AUDIT CORRECTION (2026-04-22) — prior §3.1 & §6.5 were wrong
+
+Re-audit after test.191 baseline showed the chip's live state is
+`min_res_mask=0x13b`, `max_res_mask=0x13f` BEFORE any host-side
+PMU write (ARM CR4 is halted, no firmware has run on Linux boot).
+That contradicted §3.1's claim that the driver writes 0x103 / 0x1ff.
+
+Raw-disassembly re-audit clarified the flow:
+
+1. `si_pmu_chipcontrol` (wl.ko+0x111b0) does NOT MMIO-write
+   `min_res_mask` or `max_res_mask`. It seeds two STACK-LOCAL
+   variables `min_msk` and `max_msk` (passed by address from
+   `si_pmu_res_init` at +0x15249 / +0x1524d — `lea -0x38(%rbp)` and
+   `lea -0x34(%rbp)`). Seed values are `0x103` and `0x1ff` for the
+   BCM4360 path.
+2. `si_pmu_res_init` then calls a dependency resolver helper at
+   wl.ko+0x118f2 (the `si_pmu_is_otp_powered+0x18f` label is a
+   misnamed sibling — it's really `si_pmu_res_deps`). At +0x1526a
+   it passes the 0x103 seed in `%ecx`. The helper iterates bits
+   0..30, and for every set bit reads the chip's own
+   `res_dep_mask`/`res_update_timer` registers (ChipCommon offsets
+   `0x620`/`0x624`) via MMIO and OR-merges the transitive closure
+   of dependencies. At +0x15272 the result is OR'd back into the
+   seed: `or %r13d,%eax` → stored at `-0x34(%rbp)` (+0x15275).
+3. The final MMIO writes happen at the tail of `si_pmu_res_init`:
+   - +0x153d9: write to `0x61c` (max_res_mask) a transitional value
+     `(readl(0x61c) | max_msk | min_msk)` — priming step.
+   - +0x153ed: write final resolved `min_msk` to `0x618`.
+   - +0x15401: write final `max_msk` to `0x61c`.
+
+The live chip's `0x13b`/`0x13f` are therefore the **hardware POR
+defaults** (wl.ko has never run on Linux boot, so the chip was never
+programmed). `0x13b = 0x103 | 0x38`, i.e. the seed plus whatever
+resources 3, 4, 5 depend on. That matches the dep-resolver output.
+
+### What the driver SHOULD do on BCM4360
+
+| Register | What wl.ko writes | What POR already has | Minimum needed |
+|---|---|---|---|
+| `min_res_mask` (0x618) | 0x13b (= 0x103 + resolver deps) | 0x13b | Don't touch, or write 0x13b |
+| `max_res_mask` (0x61c) | 0x1ff (widened beyond POR) | 0x13f | Optional widening to 0x1ff |
+| `pmucontrol` NOILPONW bit | set by `si_pmu_init` early; also toggled by firmware ~3 s after attach | bit clears to 0 pre-attach | Only matters if we enable ARM CR4 |
+
+### What test.189 did wrong
+
+test.189 wrote `min_res_mask = 0x103` directly — the **seed**
+value, not the **resolved** value. That stripped the chip of
+resources 3/4/5 that the POR dependency graph had already
+enabled. Very likely the test.189 hang trigger.
+
+### §6 correction — Apple BCM4360 takes the bit-0x20-CLEAR path
+
+Apple's BCM4360 modules report `chip_pkg = 0` → bit 0x20 is
+CLEAR. The `test $0x20,%al; jne 15399` at +0x15296 (corerev ≤ 3)
+and +0x152e4 (corerev > 3) means: if bit is SET, SKIP the WARs
+(jump over). Apple hardware does NOT take the skip — it **executes
+the WAR writes**. These are therefore MANDATORY for Apple, contrary
+to §6.5's previous recommendation. For corerev > 3 (BCM4360 rev 17
+qualifies) the writes are:
+
+| Register | Value |
+|---|---|
+| `chipcontrol` #1 RMW | `val \| 0x800` |
+| `regcontrol` #6 | `0x080004e2` |
+| `regcontrol` #7 | `0x0000000e` |
+| `regcontrol` #0xe | `0x080004e2` |
+| `regcontrol` #0xf | `0x0000000e` |
+
+These writes use the indirect address/data pair at ChipCommon
+`0x650/0x654` (chipcontrol) and `0x660/0x664` (regcontrol).
+
+### Source-of-truth addresses (verified against pmu_res_init_disasm.txt)
+
+All addresses below exist in the raw disassembly file:
+- +0x15249 / +0x1524d / +0x15254: `si_pmu_chipcontrol` call setup
+- +0x1526a / +0x1526d / +0x15272 / +0x15275: dep-resolver call & merge
+- +0x15296 / +0x152e4: bit 0x20 gate (package-ID)
+- +0x153a3: `lea 0x61c(%r12),%r13` (max_res_mask ptr)
+- +0x153d9: first MMIO write (transitional max)
+- +0x153e5 / +0x153ed: write min_res_mask (0x618)
+- +0x153f9 / +0x15401: write max_res_mask (0x61c)
+
+### Implications for PMU bisect
+
+Abandon Option-A (0x103) and Option-B (0x101). The correct target
+values are:
+- Don't write min_res_mask (POR is already 0x13b), OR write exactly
+  0x13b if we want to match wl.ko's explicit write.
+- Optionally write max_res_mask = 0x1ff to match wl.ko.
+- More likely culprit for firmware stall: the §6 WARs (regcontrol
+  writes) that test.188 entirely skipped, since Apple hardware
+  needs them per the chip_pkg=0 path.
+
+See RESUME_NOTES POST-TEST.191 and PRE-TEST.192 for next step.
+
+---
+
 ## 1. HT Clock Handshake Mechanism
 
 Contrary to initial hypotheses, bit 9 of the PMU Control register (`pmucontrol`, ChipCommon offset `0x600`) is NOT the HT request handshake bit on BCM4360.
