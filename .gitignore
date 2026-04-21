@@ -3,3 +3,6 @@
 !phase5/work/drivers/**/*.ko
 .qwen/
 phase6/wl.ko
+phase6/*_disasm.txt
+scratch/
+__pycache__/

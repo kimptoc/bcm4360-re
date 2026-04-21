@@ -1,47 +1,53 @@
 #!/usr/bin/env python3
-"""Map relocation call-sites to their containing functions.
+"""Map any address to its containing function using the symbol table.
 
-Usage from phase6/:
-    python3 find_callers.py
-
-Symbol file: wl_function_symbols.txt (in same directory).
+Usage:
+    python3 find_callers.py <addr_hex>
 """
+import sys
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SYMBOLS = os.path.join(HERE, 'wl_function_symbols.txt')
 
+if not os.path.exists(SYMBOLS):
+    print(f"Error: {SYMBOLS} not found.")
+    sys.exit(1)
+
 funcs = []
 with open(SYMBOLS) as f:
     for line in f:
         parts = line.split()
-        addr = int(parts[0], 16)
-        name = parts[1]
-        funcs.append((addr, name))
+        if len(parts) >= 2:
+            try:
+                addr = int(parts[0], 16)
+                name = parts[1]
+                funcs.append((addr, name))
+            except ValueError:
+                continue
 
 funcs.sort(key=lambda x: x[0])
 
-def find_func(call_addr):
-    """Find the function containing the given call address."""
+def find_func(target_addr):
     last = None
     for addr, name in funcs:
-        if addr > call_addr:
+        if addr > target_addr:
             return last
         last = (addr, name)
     return last
 
-all_calls = {
-    'wlc_bmac_corereset': [0x152ac6, 0x26f64, 0x6605d, 0x66561, 0x66b74, 0x69b1d],
-    'wlc_bmac_si_attach': [0x37d77],
-    'wlc_bmac_attach': [0x37f8f],
-    'wlc_hw_attach': [0x69895],
-    'si_attach': [0x66e16, 0x66e8e],
-}
+if len(sys.argv) < 2:
+    print("Usage: python3 find_callers.py <addr_hex>")
+    sys.exit(1)
 
-for target, addrs in all_calls.items():
-    print(f"=== {target} callers ===")
-    for addr in sorted(addrs):
-        func = find_func(addr)
-        if func:
-            print(f"  0x{addr:06x} -> {func[1]} (fn_start=0x{func[0]:06x})")
-    print()
+try:
+    target_addr = int(sys.argv[1], 16)
+except ValueError:
+    print(f"Invalid address: {sys.argv[1]}")
+    sys.exit(1)
+
+func = find_func(target_addr)
+if func:
+    print(f"0x{target_addr:x} is inside {func[1]} (starts at 0x{func[0]:x})")
+else:
+    print(f"0x{target_addr:x} not found in any function.")

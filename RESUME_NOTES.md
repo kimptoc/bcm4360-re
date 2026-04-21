@@ -1,5 +1,78 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.189 (2026-04-21) — hard crash at 23:36:16 during brcmf_pcie_setup; PMU writes implicated (PCIe2 port not reached)
+
+Captured: `phase5/logs/test.189.journalctl.txt` (prior-boot dump, 1593
+lines). Host hard-froze after "setup-entry" probe at 23:36:16 BST;
+required SMC reset. PCIe state clean post-reset (`<MAbort-`).
+
+### Crash sequence
+- 23:36:07 module load
+- 23:36:11 `brcmf_chip_attach` returned successfully — this is where
+  the test.189 PMU writes execute inside `brcmf_chip_setup`:
+  NOILPONW (pmucontrol bit 9), `max_res_mask=0x1ff`, `min_res_mask=0x103`
+- 23:36:11–23:36:15 async fw request, alloc, etc. (no MMIO activity)
+- 23:36:16 `brcmf_pcie_setup` CALLBACK INVOKED ret=0
+- 23:36:16 `setup-entry` probe: **ARM CR4 IOCTL=0x00000021 IOSTATUS=0
+  RESET_CTL=0 CPUHALT=YES** (MMIO still works here — same as test.188)
+- (next expected print: `pre-attach` probe after `msleep(300)`,
+  never appears in journal — hard hang, no further kernel output)
+
+### Interpretation
+- The crash occurred **before** `brcmf_pcie_attach` was called. The
+  only log line is the existing `setup-entry` probe; the subsequent
+  `msleep(300)` and `pre-attach` probe never complete.
+- Therefore the new PCIe2 port code in `pcie.c` (resetcore, DLYPERST
+  WAR, LTR WAR, PM clock, PMCR_REFUP, SBMBX) **cannot be the trigger**
+  — it is never executed.
+- The trigger must be the `chip.c` PMU writes done at 23:36:11. They
+  appear stable for ~5 seconds (chip_attach returns, fw request runs,
+  setup callback's first probe still works), then something internal
+  to the chip reaches a state that wedges the PCIe link during the
+  300 ms msleep or the next MMIO.
+- Plausible root cause: setting `min_res_mask = 0x103` asserts a live
+  request for resources 0 (ALP), 1 (HT), 8 (unknown). Resource 8's
+  timer/dependency value is `0x00000000` in the wl resource table
+  (`phase6/wl_pmu_res_init_analysis.md` §2) — i.e. we asked the PMU
+  to power up a resource that needs no dependencies, which may be a
+  resource the chip doesn't want enabled this early. HT clock request
+  requires the package-ID WARs (bit 0x20 branch, see §6) that test.189
+  did not port — if those WARs gate the regulator programming, the
+  request hangs the PMU state machine.
+
+### Next-step options (bisect before next hardware test)
+A. **Narrow to min_res_mask only.** Keep NOILPONW and `max_res_mask=0x1ff`
+   (neither drives resources on), drop the `min_res_mask=0x103` write.
+   If the crash disappears, confirms active resource request is the
+   trigger. Cheapest experiment.
+B. **Change min_res_mask to 0x101** (ALP + HT only, no bit 8). If A
+   passes and we still want to drive HT, try the 2-bit mask next.
+C. **Port the bit-0x20 package-gate WARs** (regcontrol #6/#0xe writes,
+   per §6.2 corerev<=3 branch) before setting min_res_mask, if they
+   turn out to be prerequisites for the HT request to complete.
+D. **Disable all chip.c PMU writes**, re-enable just the pcie.c PCIe2
+   port to test whether that code alone is safe. This is test.188 + pcie.c
+   port only — useful as a clean baseline for PCIe2 port verification.
+
+### Recommendation
+Option A is the minimal, cheapest bisect. If it runs to the same
+firmware-idle result as test.188, we have proof the PMU writes (not
+the PCIe2 port) are what crashes. Then try B, then C. Defer D unless
+A–C all fail.
+
+### Files
+- Log: `phase5/logs/test.189.journalctl.txt`
+- Crash analysis anchor: search for "setup-entry" — last brcmfmac line
+
+---
+
+## SESSION RESUME (2026-04-21, post-crash + SMC reset)
+
+Host was crashed by test.189; user performed SMC reset before this
+session. `lspci -vvv -s 03:00.0` shows clean state: `<MAbort-`,
+no `>TAbort`, no SERR. Module in `phase5/work/.../brcmfmac/` is the
+test.189 build (commit 950599d). See POST-TEST.189 above for analysis.
+
 ## PRE-TEST.189 (2026-04-21) — conservative PMU + PCIe2 port, built clean
 
 Module rebuilt 2026-04-21, clean (only pre-existing
