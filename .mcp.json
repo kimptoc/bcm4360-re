@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "partner-llm": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--script",
+        "/home/kimptoc/bcm4360-re/mcp/partner_llm_server.py"
+      ]
+    }
+  }
+}
