@@ -1129,6 +1129,13 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		pub->pmucaps = val;
 
 		if (pub->chip == BRCM_CC_4360_CHIP_ID) {
+			/* test.190: bisect test.189 crash — keep NOILPONW and
+			 * max_res_mask (neither actively drives resources) but
+			 * drop the min_res_mask=0x103 write which asserts a live
+			 * request for resources 0/1/8. Hypothesis: that request
+			 * is what wedged the PMU / PCIe link ~5 s later in
+			 * test.189. See RESUME_NOTES POST-TEST.189.
+			 */
 			pmu_ctl = chip->ops->read32(chip->ctx,
 					CORE_CC_REG(pmu->base, pmucontrol));
 			if (pub->pmurev == 1)
@@ -1139,8 +1146,7 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 					CORE_CC_REG(pmu->base, pmucontrol), pmu_ctl);
 			chip->ops->write32(chip->ctx,
 					CORE_CC_REG(pmu->base, max_res_mask), 0x1ff);
-			chip->ops->write32(chip->ctx,
-					CORE_CC_REG(pmu->base, min_res_mask), 0x103);
+			/* test.190: min_res_mask write intentionally removed. */
 		}
 	}
 

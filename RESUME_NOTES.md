@@ -1,5 +1,43 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.190 (2026-04-21) — Option-A bisect: drop min_res_mask only, rebuilt clean
+
+Module rebuilt 2026-04-21 after test.189 crash, clean (only pre-existing
+`brcmf_pcie_write_ram32 defined but not used` warning remains).
+
+### Change vs. test.189 (one file, one hunk)
+`phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/chip.c`
+`brcmf_chip_setup` ~line 1131: removed `min_res_mask = 0x103` write.
+NOILPONW (pmucontrol bit 9) and `max_res_mask = 0x1ff` both kept —
+neither asserts a live resource request. PCIe2 port code in pcie.c
+is unchanged (never reached in test.189, so not the suspect).
+
+### PCIe state pre-test
+`lspci -vvv -s 03:00.0` shows clean: `<MAbort-`, no `>TAbort`, no SERR.
+
+### Hypothesis for test.190
+If test.189 crash was caused by `min_res_mask=0x103` (active request
+for resources 0/1/8) wedging the PMU state machine, test.190 should
+behave like test.188 — firmware idle but host stable, and reach
+`pre-attach` / `post-attach` probes successfully, then EXIT with
+-ENODEV (BCM4360 skip_arm=1 path). If test.190 also crashes, the
+NOILPONW or max_res_mask write is the trigger instead (unlikely
+since neither drives resources on).
+
+### Expected observations
+- brcmfmac loads, chip_attach returns
+- `setup-entry` probe: IOCTL=0x21, CPUHALT=YES (same as test.188/189)
+- `pre-attach` probe fires — the new success signal vs test.189
+- `post-attach` probe fires
+- download_fw_nvram runs, returns -ENODEV (skip_arm path)
+- Module unloads cleanly, host stable, lspci still clean
+
+### Next step
+User runs test.190 (`phase5/work/test-brcmfmac.sh`). Capture journalctl
+to `phase5/logs/test.190.journalctl.txt`, update this file.
+
+---
+
 ## POST-TEST.189 (2026-04-21) — hard crash at 23:36:16 during brcmf_pcie_setup; PMU writes implicated (PCIe2 port not reached)
 
 Captured: `phase5/logs/test.189.journalctl.txt` (prior-boot dump, 1593
