@@ -1,54 +1,87 @@
-# Partner-LLM MCP server
+# MCP servers for BCM4360 RE project
 
-Lets Claude Code invoke Gemini and DeepSeek directly as tools, replacing
-the manual prompt-paste relay workflow.
+Two MCP servers are registered in `../.mcp.json`:
 
-## Tools exposed
+1. **`codex`** — OpenAI Codex CLI's native MCP mode (`codex mcp-server`).
+   Exposes `codex` + `codex-reply` tools. No wrapper code — Codex ships
+   this itself.
 
-- `ask_gemini(prompt, files?, model?, allow_binary?, max_tokens?)`
-- `ask_deepseek(prompt, files?, model?, allow_binary?, max_tokens?)`
+2. **`partner-llm`** — the local Python server in this directory
+   (`partner_llm_server.py`). Exposes three tools:
+   - `ask_deepseek` — API Q&A (needs `DEEPSEEK_API_KEY`)
+   - `dispatch_gemini` — shells to Gemini CLI (sub-auth, no API key)
+   - `dispatch_kilocode` — shells to Kilo Code CLI (own auth)
 
-Both send `prompt` plus optional inlined file content to the respective
-API and return the assistant's response as a string.
+## Authentication (one-time setup per CLI)
 
-## Environment variables required
+Each partner has its own auth. Run each once interactively in a terminal
+before relying on the MCP tool:
 
-Before launching Claude Code, export:
-
+```sh
+codex login          # OAuth to ChatGPT Codex subscription
+gemini auth login    # OAuth to your Google account (AI Pro sub works)
+kilo auth            # Configure Kilo Code providers
 ```
-export GEMINI_API_KEY=...       # from Google AI Studio
+
+For DeepSeek (API key in env):
+
+```sh
 export DEEPSEEK_API_KEY=...     # from platform.deepseek.com
 ```
 
-If a key is missing, the tool call raises a clear runtime error.
+Put env exports in `~/.zshrc` so they persist across sessions.
 
-## Clean-room guard
+## Tool semantics
 
-`allow_binary=False` (default) rejects any file that either:
+### `ask_deepseek`
 
-- has a suffix in the blocklist: `.ko .bin .fw .img .so .a .o .elf .dll .dylib`
-- contains non-UTF-8 bytes
+API-based Q&A — pure prompt → response. Supports file attachments
+(inlined as UTF-8 text). Clean-room guard rejects binary-suffix files
+(`.ko .bin .fw .img .so .a .o .elf .dll .dylib`) and files that fail
+UTF-8 decode unless `allow_binary=True`. 2 MB per-file limit.
 
-To send `phase6/wl.ko` (or similar proprietary binary), call with
-`allow_binary=True` explicitly. Binary content is then transmitted as a
-hex dump. Think twice before doing this — clean-room analysis should
-usually work from plain-text disassembly notes, not from the blob itself.
+### `dispatch_gemini`
 
-## File size limit
+Runs `gemini -p <prompt> --approval-mode {plan|default}` in a working
+directory. `read_only=True` (default) uses `plan` — agent can read files
+but cannot write or run commands. Set `read_only=False` only when you
+explicitly want the agent to modify the tree.
 
-2 MB per attached file. Split large logs before sending.
+Agent reads files itself from `cwd`, so there's no `files` parameter
+and no clean-room guard in this tool — be deliberate about what you
+ask it to read. If you point it at `phase6/wl.ko`, it will read and
+transmit it.
+
+### `dispatch_kilocode`
+
+Runs `kilo run <prompt>` in `cwd`. Kilo Code has broad agent
+capabilities (file writes, command execution) — no read-only mode
+exposed in this wrapper. Scope tasks carefully.
+
+### Codex (via native MCP)
+
+`codex` starts a new Codex session. `codex-reply` continues an existing
+one by thread ID. See Codex CLI docs for full parameter set.
 
 ## How Claude Code picks it up
 
-`.mcp.json` at the project root registers this server. Claude Code
-launches it via `uv run --script mcp/partner_llm_server.py` on session
-start and keeps the process alive for the session. First launch prompts
-you to approve the server; subsequent sessions remember the approval.
+`.mcp.json` at the project root registers both servers. Claude Code
+launches them on session start and keeps the processes alive for the
+session. First launch prompts you to approve each; subsequent sessions
+remember approvals.
 
 ## Adding a new provider
 
-Add a new `@mcp.tool` decorated function in `partner_llm_server.py`.
-For any OpenAI-compatible endpoint, re-use `_openai_compat_chat` with
-a different base URL and API-key env var. Qwen via DashScope would
-follow this pattern (base URL
-`https://dashscope-intl.aliyuncs.com/compatible-mode/v1`).
+Edit `partner_llm_server.py`:
+
+- **Another OpenAI-compat API** (Qwen via DashScope, Mistral, etc.):
+  add a new `@mcp.tool` that calls `_openai_compat_chat` with a
+  different base URL and API-key env var.
+- **Another CLI-based agent**: add a new `@mcp.tool` that calls
+  `_run_cli([binary, ...args])`.
+
+## Files
+
+- `partner_llm_server.py` — FastMCP server, runs as a `uv` inline-deps
+  script.
+- `README.md` — this file.

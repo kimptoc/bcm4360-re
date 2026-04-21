@@ -7,6 +7,10 @@
         "--script",
         "/home/kimptoc/bcm4360-re/mcp/partner_llm_server.py"
       ]
+    },
+    "codex": {
+      "command": "codex",
+      "args": ["mcp-server"]
     }
   }
 }

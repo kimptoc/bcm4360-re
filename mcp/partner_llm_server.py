@@ -7,23 +7,31 @@
 # ///
 """Partner-LLM MCP server for the BCM4360 RE project.
 
-Exposes two tools to Claude Code:
-  - ask_gemini(prompt, files?, model?, allow_binary?, max_tokens?)
+Exposes three tools to Claude Code:
+
   - ask_deepseek(prompt, files?, model?, allow_binary?, max_tokens?)
+      API-based Q&A via DeepSeek's OpenAI-compat endpoint.
+      Text in, text out. Clean-room guard on file attachments.
 
-Both hit OpenAI-compatible endpoints (Google's Gemini compat layer,
-DeepSeek's native OpenAI-shape API) so the code path is identical
-except for base URL and API key env var.
+  - dispatch_gemini(prompt, cwd?, read_only?, timeout_seconds?)
+      Shells out to the Gemini CLI in non-interactive mode. The CLI
+      authenticates via user's Google account (works with a consumer
+      AI Pro subscription — no API key required). Agent can read files
+      in cwd directly, so no attachment param is needed.
 
-Clean-room guard: files with binary content or blocklisted suffixes
-(.ko, .bin, .fw, .img, .so, .a, .o, .elf, .dll, .dylib) are rejected
-unless allow_binary=True is passed explicitly. Prevents accidentally
-sending wl.ko or firmware blobs to a cloud LLM.
+  - dispatch_kilocode(prompt, cwd?, timeout_seconds?)
+      Shells out to the Kilo Code CLI in non-interactive mode. CLI
+      handles its own auth via `kilo auth`.
+
+Codex is NOT in this server — register it directly in .mcp.json via
+its native `codex mcp-server` mode.
 """
 
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Annotated
 
@@ -36,9 +44,9 @@ BINARY_SUFFIX_BLOCKLIST = {
     ".elf", ".dll", ".dylib",
 }
 MAX_FILE_BYTES = 2 * 1024 * 1024
-REQUEST_TIMEOUT_SECONDS = 300.0
+API_TIMEOUT_SECONDS = 300.0
+CLI_DEFAULT_TIMEOUT_SECONDS = 600
 
-GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 
 mcp = FastMCP("partner-llm")
@@ -116,7 +124,7 @@ def _openai_compat_chat(
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    with httpx.Client(timeout=httpx.Timeout(REQUEST_TIMEOUT_SECONDS)) as client:
+    with httpx.Client(timeout=httpx.Timeout(API_TIMEOUT_SECONDS)) as client:
         response = client.post(
             f"{base_url}/chat/completions", json=payload, headers=headers
         )
@@ -125,55 +133,51 @@ def _openai_compat_chat(
     return data["choices"][0]["message"]["content"]
 
 
-@mcp.tool
-def ask_gemini(
-    prompt: Annotated[
-        str,
-        Field(description="Full prompt text to send to Gemini."),
-    ],
-    files: Annotated[
-        list[str] | None,
-        Field(
-            description=(
-                "Absolute paths to files to inline into the prompt as UTF-8 "
-                "text. Files over 2 MB are rejected. Binary files (by suffix "
-                "or content) require allow_binary=True."
-            ),
-        ),
-    ] = None,
-    model: Annotated[
-        str,
-        Field(
-            description=(
-                "Gemini model ID. Examples: 'gemini-2.5-pro', "
-                "'gemini-2.5-flash', 'gemini-2.0-flash-exp'."
-            ),
-        ),
-    ] = "gemini-2.5-pro",
-    allow_binary: Annotated[
-        bool,
-        Field(
-            description=(
-                "If True, binary file content is sent as a hex dump. "
-                "Required for proprietary binary files (e.g. wl.ko). "
-                "Leave False unless you explicitly intend to send binary."
-            ),
-        ),
-    ] = False,
-    max_tokens: Annotated[
-        int,
-        Field(description="Max output tokens. Default 8192."),
-    ] = 8192,
+def _run_cli(
+    argv: list[str],
+    cwd: str | None,
+    timeout_seconds: int,
+    stdin_text: str | None = None,
 ) -> str:
-    """Send a prompt to Google Gemini via its OpenAI-compatible endpoint.
-    Requires GEMINI_API_KEY environment variable."""
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY environment variable is not set.")
-    full_prompt = _build_prompt_with_files(prompt, files or [], allow_binary)
-    return _openai_compat_chat(
-        GEMINI_BASE_URL, api_key, model, full_prompt, max_tokens
-    )
+    binary = argv[0]
+    if shutil.which(binary) is None:
+        raise RuntimeError(
+            f"CLI not found on PATH: {binary!r}. "
+            "Install it or adjust your PATH."
+        )
+    if cwd is not None:
+        p = Path(cwd)
+        if not p.is_absolute():
+            raise ValueError(f"cwd must be an absolute path: {cwd}")
+        if not p.is_dir():
+            raise ValueError(f"cwd is not a directory: {cwd}")
+
+    try:
+        result = subprocess.run(
+            argv,
+            cwd=cwd,
+            input=stdin_text,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(
+            f"{binary} timed out after {timeout_seconds}s. "
+            "Increase timeout_seconds or split the task."
+        ) from e
+
+    out = result.stdout or ""
+    err = result.stderr or ""
+    if result.returncode != 0:
+        return (
+            f"[{binary} exited with code {result.returncode}]\n\n"
+            f"--- stdout ---\n{out}\n\n--- stderr ---\n{err}"
+        )
+    if err.strip():
+        return f"{out}\n\n--- stderr ---\n{err}"
+    return out
 
 
 @mcp.tool
@@ -216,7 +220,8 @@ def ask_deepseek(
         Field(description="Max output tokens. Default 8192."),
     ] = 8192,
 ) -> str:
-    """Send a prompt to DeepSeek. Requires DEEPSEEK_API_KEY environment variable."""
+    """Send a prompt to DeepSeek via its OpenAI-compatible endpoint.
+    Requires DEEPSEEK_API_KEY environment variable."""
     api_key = os.environ.get("DEEPSEEK_API_KEY")
     if not api_key:
         raise RuntimeError("DEEPSEEK_API_KEY environment variable is not set.")
@@ -224,6 +229,100 @@ def ask_deepseek(
     return _openai_compat_chat(
         DEEPSEEK_BASE_URL, api_key, model, full_prompt, max_tokens
     )
+
+
+@mcp.tool
+def dispatch_gemini(
+    prompt: Annotated[
+        str,
+        Field(description="Task / prompt for the Gemini CLI agent."),
+    ],
+    cwd: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Absolute path to run the Gemini CLI in. The agent can read "
+                "(and, unless read_only=True, modify) files under this "
+                "directory. Defaults to the MCP server's cwd (typically the "
+                "project root)."
+            ),
+        ),
+    ] = None,
+    read_only: Annotated[
+        bool,
+        Field(
+            description=(
+                "If True (default), runs Gemini CLI with "
+                "--approval-mode plan (read-only — no file writes, no "
+                "command execution). Set False only when you intend for "
+                "the agent to make changes."
+            ),
+        ),
+    ] = True,
+    model: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Override the default Gemini model. e.g. 'gemini-2.5-pro', "
+                "'gemini-2.5-flash'. None = CLI default."
+            ),
+        ),
+    ] = None,
+    timeout_seconds: Annotated[
+        int,
+        Field(
+            description=(
+                "Max seconds to wait for the CLI to finish. Default 600."
+            ),
+        ),
+    ] = CLI_DEFAULT_TIMEOUT_SECONDS,
+) -> str:
+    """Dispatch a task to the Gemini CLI in non-interactive mode. The CLI
+    authenticates via the user's Google account (e.g. consumer AI Pro
+    subscription) — no API key required. Returns the CLI's captured
+    stdout + stderr.
+
+    User must have run `gemini auth login` at least once."""
+    argv = ["gemini", "-p", prompt]
+    argv.append("--approval-mode")
+    argv.append("plan" if read_only else "default")
+    if model:
+        argv.extend(["-m", model])
+    return _run_cli(argv, cwd, timeout_seconds)
+
+
+@mcp.tool
+def dispatch_kilocode(
+    prompt: Annotated[
+        str,
+        Field(description="Task / message for the Kilo Code agent."),
+    ],
+    cwd: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Absolute path to run Kilo Code in. Defaults to the MCP "
+                "server's cwd (typically the project root)."
+            ),
+        ),
+    ] = None,
+    timeout_seconds: Annotated[
+        int,
+        Field(
+            description=(
+                "Max seconds to wait for the CLI to finish. Default 600."
+            ),
+        ),
+    ] = CLI_DEFAULT_TIMEOUT_SECONDS,
+) -> str:
+    """Dispatch a task to the Kilo Code CLI via `kilo run`. Auth is handled
+    by Kilo Code itself (`kilo auth`). Returns captured stdout + stderr.
+
+    Note: Kilo Code has broader agent capabilities than a pure read-only
+    analysis tool; it can modify files and run commands. Scope the task
+    carefully."""
+    argv = ["kilo", "run", prompt]
+    return _run_cli(argv, cwd, timeout_seconds)
 
 
 if __name__ == "__main__":
