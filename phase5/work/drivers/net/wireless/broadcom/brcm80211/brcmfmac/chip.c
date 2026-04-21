@@ -1177,6 +1177,17 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 			  pub->chip, cc->pub.rev);
 	}
 
+	if (pub->chip == BRCM_CC_4360_CHIP_ID) {
+		u32 max_addr = CORE_CC_REG(pmu->base, max_res_mask);
+		u32 before_max, after_max;
+
+		before_max = chip->ops->read32(chip->ctx, max_addr);
+		chip->ops->write32(chip->ctx, max_addr, 0x1ff);
+		after_max = chip->ops->read32(chip->ctx, max_addr);
+		brcmf_err("BCM4360 test.195: max_res_mask 0x%08x -> 0x%08x (write 0x1ff)\n",
+			  before_max, after_max);
+	}
+
 	/* execute bus core specific setup */
 	if (chip->ops->setup)
 		ret = chip->ops->setup(chip->ctx, pub);

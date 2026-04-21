@@ -1,5 +1,54 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.195 (2026-04-22) — widen max_res_mask from 0x13f (POR) to 0x1ff (wl.ko value)
+
+### Hypothesis
+
+Firmware is running (confirmed in test.194 post-mortem: ARM CR4 CPUHALT=NO
+for 3s after set_active) but stalls on HT-clock polling. `res_state=0x13b`
+and `max_res_mask=0x13f` throughout the dwell — the chip cannot grant
+resources beyond bits 0..5 + bit 8 because max_res_mask forbids them.
+
+Wl.ko's final PMU write programs `max_res_mask = 0x1ff` (bits 0..8). If
+HT clock is driven by one of the bits the POR value of 0x13f masks out
+(namely bits 6 and 7 — 0x40 and 0x80), widening to 0x1ff should allow
+HT to assert and unblock the firmware poll.
+
+### Implementation
+
+One new write in `brcmf_chip_setup` (chip.c) after the PMU WAR block,
+gated on `chip == BCM4360`:
+
+```c
+write(CORE_CC_REG(pmu->base, max_res_mask), 0x1ff);
+```
+
+Logged via `brcmf_err` with read-back before/after for proof.
+
+### Expected outcomes
+
+| Observation | Interpretation |
+|---|---|
+| `max_res_mask 0x0000013f -> 0x000001ff` AND TCM scratch shows CHANGED bytes | HT clock gate was the blocker; firmware advancing |
+| `max_res_mask 0x0000013f -> 0x000001ff` AND res_state grows past 0x13b | resources 6/7 activated; firmware may still stall later |
+| `max_res_mask 0x0000013f -> 0x000001ff` AND everything else identical to test.194 | max widening wasn't the gate; try min widening or OTP |
+| Hard crash | unexpected — widening max_res_mask is documented behavior |
+
+### Build + pre-test
+
+- chip.c edited, built clean
+- PCIe state: (check before running)
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Log → rename to `test.195.journalctl.txt`.
+
+---
+
 ## POST-TEST.194 (2026-04-22) — PCIe2 writes landed cleanly, firmware executes but stalls on HT-clock polling
 
 Log: `phase5/logs/test.194.journalctl.txt` (727 lines visible in dmesg) +
