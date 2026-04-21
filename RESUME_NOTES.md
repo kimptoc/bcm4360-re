@@ -9493,7 +9493,7 @@ Full survey written to `phase6/downstream_survey.md`, committed as ea61dc9.
 
 2. **Missing PMU initialization:** brcmfmac performs no PMU register writes:
    - `BCMA_CC_PMU_CTL` NOILPONW bit (depends on pmurev)
-   - `BCMA_CC_PMU_MINRES_MSK` / `MAXRES_MSK` (0x7ff for BCM4360)
+    - `BCMA_CC_PMU_MINRES_MSK` / `MAXRES_MSK` (unknown for BCM4360 — bcma has no case; must be extracted from wl.ko)
    - No PLL programming (bcma also has none for BCM4360)
 
 3. **BCMA sequence for BCM4360:**
