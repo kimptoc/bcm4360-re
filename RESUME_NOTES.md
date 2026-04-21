@@ -5,6 +5,30 @@
 Module rebuilt 2026-04-21, clean (only pre-existing
 `brcmf_pcie_write_ram32 defined but not used` warning remains).
 
+**Rebuilt again 2026-04-21 after PCIe2-reset fix** — see "Crash-risk
+mitigation" below.
+
+### Crash-risk mitigation (added 2026-04-21 before first run)
+
+Initial port did BAR0 MMIO to the PCIe2 core in `brcmf_pcie_attach`
+without first bringing it out of BCMA reset. That is exactly the
+test.129 crash pattern ("*PCIe2 core is in BCMA reset at this point,
+so any BAR0 MMIO to it causes CTO → MCE → hard crash*").
+
+Fix (one line, `pcie.c` inside the BCM4360 branch of
+`brcmf_pcie_attach`, immediately after `brcmf_chip_get_core` null
+check):
+
+```c
+brcmf_chip_resetcore(core, 0, 0, 0);
+```
+
+`bcma`'s own `pcie2` init runs after `bcma_core_setup` which
+releases the core from reset implicitly. `brcmfmac` does not reset
+PCIe2 elsewhere, so we do it explicitly here before the first MMIO.
+Matches the standard pattern used at chip.c:608 (SR), :666 (sysmem),
+:1312 (D11). Module rebuilt clean after this addition.
+
 **Build command** (correction — CLAUDE.md's `make -C phase5/work` is wrong;
 there's no top-level Makefile there):
 ```

@@ -898,6 +898,14 @@ static void brcmf_pcie_attach(struct brcmf_pciedev_info *devinfo)
 		if (!core)
 			return;
 
+		/* Release PCIe2 from BCMA reset before any BAR0 MMIO to it —
+		 * test.129 proved BAR0 MMIO while the core is in reset causes
+		 * CTO → MCE → hard crash. bcma's own pcie2 init path runs
+		 * after bcma_core_setup which does this implicitly; brcmfmac
+		 * never resets PCIe2 elsewhere, so we do it here.
+		 */
+		brcmf_chip_resetcore(core, 0, 0, 0);
+
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
 
 		if (devinfo->ci->chiprev > 3) {
