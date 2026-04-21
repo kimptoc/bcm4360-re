@@ -1,5 +1,78 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.192 + PRE-TEST.193 (2026-04-22) — WARs ran without crash; diagnostic build needed to confirm side effects
+
+### Test.192 result — no crash, no visible state delta
+
+Log: `phase5/logs/test.192.journalctl.txt` (also `test.192.journalctl.full.txt`,
+972 + 971 lines respectively).
+
+**Good news:** the probe path ran end-to-end, reached firmware download (442233
+bytes to TCM), completed the 3000ms dwell, cleared bus-master, returned clean
+-ENODEV. **No hard crash.**
+
+**Observed state at dwell-3000ms (BASELINE vs WAR-enabled, side-by-side):**
+
+| Register | test.191 (no WARs) | test.192 (WARs) | Delta |
+|---|---|---|---|
+| `CC-clk_ctl_st` | 0x00050040 | 0x00050040 | UNCHANGED |
+| `CC-pmucontrol` pre-release | 0x01770181 | 0x01770181 | same |
+| `CC-pmucontrol` post-dwell | 0x01770381 | 0x01770381 | **same CHANGED bit-0x200** |
+| `CC-pmustatus` | 0x0000002a | 0x0000002a | UNCHANGED |
+| `CC-res_state` | 0x0000013b | 0x0000013b | UNCHANGED |
+| `CC-min_res_mask` | 0x0000013b | 0x0000013b | UNCHANGED |
+| `CC-max_res_mask` | 0x0000013f | 0x0000013f | UNCHANGED |
+| `CC-pmutimer` | 0x0457e14b → ... | 0x0457e14b → ... | (free-running) |
+| All ~30 TCM/D11 scratch regions | all UNCHANGED | all UNCHANGED | UNCHANGED |
+
+Conclusion: **the WAR writes had zero observable effect on any sampled
+register.** Either (a) the writes never executed (gate condition false), or
+(b) they executed but don't produce any side effect we're currently sampling.
+
+### Diagnostic gap
+
+`brcmf_dbg(INFO, "BCM4360 test.192: applied chip_pkg=0 PMU WARs")` was
+silent — INFO-level debug is filtered out of dmesg by default. Every
+previous test's `brcmf_dbg(INFO, ...)` output (e.g. `ccrev=%d pmurev=%d`
+at chip.c:1131) is also missing from test.188/191/192 logs. So I cannot
+distinguish "WARs skipped because `cc->pub.rev ≤ 3`" from "WARs ran but
+had no effect".
+
+### Test.193 — diagnostic upgrade (rebuilt clean, ready to run)
+
+Changed `brcmf_dbg(INFO, ...)` → `brcmf_err(...)` for the test.192 marker,
+added a chip/rev dump before the gate, and added read-back of
+`chipcontrol #1`, `pllcontrol #6`, `pllcontrol #0xf` after the writes to
+prove the indirect address/data pair is actually landing values.
+
+Expected new log lines (all via `brcmf_err` so always print):
+
+```
+BCM4360 test.193: chip=0x4360 ccrev=<N> pmurev=<M> pmucaps=0x<caps>
+BCM4360 test.193: PMU WARs applied — chipcontrol#1 0x<pre>->0x<post> pllcontrol#6=0x080004e2 #0xf=0x0000000e
+```
+(or `PMU WARs SKIPPED` with the reason.)
+
+### Decision tree after test.193
+
+| Log line | Interpretation | Next |
+|---|---|---|
+| `WARs SKIPPED (chip=0x4360 ccrev=<N>)` with N ≤ 3 | gate too strict; wl.ko path does not actually require corerev > 3 for chip_pkg=0 | drop the `ccrev>3` constraint, rebuild |
+| `WARs SKIPPED` with chip ≠ 0x4360 | unexpected chip id match failure — investigate BRCM_CC_4360_CHIP_ID constant | grep the header |
+| `WARs applied` but pllcontrol readbacks show 0x00000000 | write-ignore — wrong offsets or wrong corerev gating in hardware | re-audit, try raw 0x660/0x664 via ops->write32 with absolute offset |
+| `WARs applied` with correct readbacks, state still all UNCHANGED | WARs did land but firmware still blocked by something else | pivot to next gap: PCIe2 init (DLYPERST/DISSPROMLD) or min/max_res_mask widen |
+| `WARs applied` with correct readbacks, res_state or pmustatus CHANGED | first sign of progress; follow the signal | sample additional resources, keep going |
+
+### Run command (same as test.192)
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Expected log: `phase5/logs/test.<N>` (script auto-increments; rename to `test.193.journalctl.txt`).
+
+---
+
 ## PRE-TEST.192 (2026-04-22) — apply chip_pkg=0 PMU WARs (chipcontrol #1 + pllcontrol #6/7/0xe/0xf)
 
 **Status:** chip.c edited, module built clean, NOT YET TESTED on hardware.

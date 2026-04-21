@@ -1131,17 +1131,19 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 	brcmf_dbg(INFO, "ccrev=%d, pmurev=%d, pmucaps=0x%x\n",
 		  cc->pub.rev, pub->pmurev, pub->pmucaps);
 
+	brcmf_err("BCM4360 test.193: chip=0x%x ccrev=%d pmurev=%d pmucaps=0x%x\n",
+		  pub->chip, cc->pub.rev, pub->pmurev, pub->pmucaps);
+
 	if (pub->chip == BRCM_CC_4360_CHIP_ID && cc->pub.rev > 3) {
 		u32 cc_addr;
 		u32 cc_data;
 		u32 pll_addr;
 		u32 pll_data;
+		u32 before_cc1, after_cc1, after_pll6, after_pllf;
 
 		/*
 		 * BCM4360 chip_pkg=0 PMU WARs (see phase6/wl_pmu_res_init_analysis.md §6.2).
-		 * wl.ko writes four indexed values via the indirect register pair at
-		 * chipcregs offsets 0x660/0x664 — in Linux struct naming those fields are
-		 * pllcontrol_addr/pllcontrol_data (NOT regcontrol_*, which live at 0x658/0x65c).
+		 * Hardware offsets 0x660/0x664 = Linux pllcontrol_addr/_data (NOT regcontrol).
 		 */
 		cc_addr  = CORE_CC_REG(pmu->base, chipcontrol_addr);
 		cc_data  = CORE_CC_REG(pmu->base, chipcontrol_data);
@@ -1149,8 +1151,10 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		pll_data = CORE_CC_REG(pmu->base, pllcontrol_data);
 
 		chip->ops->write32(chip->ctx, cc_addr, 1);
-		val = chip->ops->read32(chip->ctx, cc_data);
-		chip->ops->write32(chip->ctx, cc_data, val | 0x800);
+		before_cc1 = chip->ops->read32(chip->ctx, cc_data);
+		chip->ops->write32(chip->ctx, cc_data, before_cc1 | 0x800);
+		chip->ops->write32(chip->ctx, cc_addr, 1);
+		after_cc1 = chip->ops->read32(chip->ctx, cc_data);
 
 		chip->ops->write32(chip->ctx, pll_addr, 6);
 		chip->ops->write32(chip->ctx, pll_data, 0x080004e2);
@@ -1161,8 +1165,16 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		chip->ops->write32(chip->ctx, pll_addr, 0xf);
 		chip->ops->write32(chip->ctx, pll_data, 0x0000000e);
 
-		brcmf_dbg(INFO,
-			  "BCM4360 test.192: applied chip_pkg=0 PMU WARs\n");
+		chip->ops->write32(chip->ctx, pll_addr, 6);
+		after_pll6 = chip->ops->read32(chip->ctx, pll_data);
+		chip->ops->write32(chip->ctx, pll_addr, 0xf);
+		after_pllf = chip->ops->read32(chip->ctx, pll_data);
+
+		brcmf_err("BCM4360 test.193: PMU WARs applied — chipcontrol#1 0x%08x->0x%08x pllcontrol#6=0x%08x #0xf=0x%08x\n",
+			  before_cc1, after_cc1, after_pll6, after_pllf);
+	} else {
+		brcmf_err("BCM4360 test.193: PMU WARs SKIPPED (chip=0x%x ccrev=%d)\n",
+			  pub->chip, cc->pub.rev);
 	}
 
 	/* execute bus core specific setup */
