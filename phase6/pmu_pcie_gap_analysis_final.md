@@ -1,5 +1,14 @@
 # BCM4360 PMU/PCIe Initialization Gap Analysis
 
+> **REVISION 2026-04-21:** Sections 1.4, 3, and 4 below have been
+> corrected after source verification. The original claim that
+> bcma_pmu_resources_init writes MINRES/MAXRES masks for BCM4360
+> was incorrect — bcma has no BCM4360 case in that function.
+> BCM4360 resource-mask values are not available from bcma and
+> must be extracted from wl.ko separately (see
+> phase6/wl_pmu_res_init_analysis.md when available).
+
+
 **Date:** 2026-04-21  
 **Context:** BCM4360 (chip ID 0x4360, PCI 14e4:43a0) firmware loads and ARM core releases from halt, but then idles indefinitely — no TCM writes, no D11 bringup, no mailbox activity. Hypothesis: missing PMU/PLL/PCIe core initialization register writes that bcma driver performs but brcmfmac skips.
 
@@ -29,12 +38,15 @@
 
 ### 1.4 PMU Resources Init (`bcma_pmu_resources_init` — driver_chipcommon_pmu.c:162)
 - **Purpose:** Set PMU minimum/maximum resource masks.
-- **Register writes:**
-  1. **`BCMA_CC_PMU_MINRES_MSK` (offset 0x0618):** Write minimum resource mask (value derived from chip‑specific table).
-  2. **`BCMA_CC_PMU_MAXRES_MSK` (offset 0x061C):** Write maximum resource mask.
-- **Chip‑specific guard:** Switch includes BCM4360 case (line 186) with mask values `0x7ff` (MINRES) and `0x7ff` (MAXRES) (source lines 198,200).
-- **File:line:** `driver_chipcommon_pmu.c:162–229`
-
+- **Register writes for BCM4360:** NONE. The function's switch
+  has cases for BCMA_CHIP_ID_BCM4313 and BCMA_CHIP_ID_BCM43142
+  `min_msk=0` and `max_msk=0`. The subsequent writes at lines
+  197–200 are gated by `if (min_msk)` / `if (max_msk)` and are
+  therefore skipped for BCM4360.
+- **Implication:** The PMU resource masks required to grant HT
+  clock on BCM4360 are NOT available from bcma. They must be
+  extracted from `wl.ko`'s `si_pmu_res_init` / `si_pmu_res_request`.
+- **File:line:** `driver_chipcommon_pmu.c:162–207`
 ### 1.5 PMU Workarounds (`bcma_pmu_workarounds` — driver_chipcommon_pmu.c:230)
 - **Purpose:** Apply chip‑specific PMU workarounds.
 - **Register writes:** No BCM4360‑specific workaround found in the function (no case for BCM4360).
@@ -85,14 +97,17 @@
 |----------|--------------|----------|------------------|-------------|-----------------|
 | `BCMA_CC_PMU_CTL` (NOILPONW) | 0x0600 | Clear if pmurev==1, else set 0x00000200 | After PMU detect | driver_chipcommon_pmu.c:298–301 | **Missing** |
 | `BCMA_CC_PMU_CTL` (PLL_UPD) | 0x0600 | Set 0x00000400 after PLL programming | After PLL init | driver_chipcommon_pmu.c:143 (in pll_init) | **Missing** |
-| `BCMA_CC_PMU_MINRES_MSK` | 0x0618 | 0x7ff (for BCM4360) | Resources init | driver_chipcommon_pmu.c:198 | **Missing** |
-| `BCMA_CC_PMU_MAXRES_MSK` | 0x061C | 0x7ff (for BCM4360) | Resources init | driver_chipcommon_pmu.c:200 | **Missing** |
 | `BCMA_CORE_PCIE2_CLK_CONTROL` | 0x0000 | Clear DLYPERST (0x0100), set DISSPROMLD (0x0200) | PCIe2 init (rev>3) | driver_pcie2.c:52–60 | **Missing** |
 | `BCMA_CORE_PCIE2_CONFIGINDADDR/DATA` | 0x120/0x124 | LTR config (addr=0xD4, data with LTRENAB) | PCIe2 init | driver_pcie2.c:60–101 | **Missing** |
 | `BCMA_CORE_PCIE2_LTR_STATE` | 0x01A0 | ACTIVE (2) → SLEEP (0) | PCIe2 init | driver_pcie2.c:96,101 | **Missing** |
 | `PCIE2_PVT_REG_PM_CLK_PERIOD` | via config | Calculated PM clock period | PCIe2 init | driver_pcie2.c:153–155 | **Missing** |
 | `PCIE2_PMCR_REFUP` | via config | 0x1f | PCIe2 init | driver_pcie2.c:134–135 | **Missing** |
 | `PCIE2_SBMBX` | via config | 1 << 0 | PCIe2 init | driver_pcie2.c:140–141 | **Missing** |
+
+**PMU resource masks (MINRES_MSK / MAXRES_MSK) are intentionally
+omitted from this table because bcma does not supply BCM4360-
+specific values. See revision banner at top and
+phase6/wl_pmu_res_init_analysis.md.**
 
 **Note:** The entire PCIe2 core initialization is skipped because `brcmf_pcie_attach` returns early for BCM4360 (pcie.c:895). All PCIe2 writes are therefore missing.
 
@@ -102,7 +117,13 @@
 
 1. **`BCMA_CORE_PCIE2_CLK_CONTROL` (DLYPERST/DISSPROMLD)** — Highest priority. BCM4360‑specific workaround for rev>3; directly controls PCIe core clock gating and reset delay. Firmware may be waiting for this clock to be stable.
 2. **`BCMA_CC_PMU_CTL` (NOILPONW)** — PMU control bit that determines whether ILP clock stays on during wait states. If firmware expects ILP to be on but it's off, core may hang.
-3. **`BCMA_CC_PMU_MINRES_MSK` / `MAXRES_MSK`** — PMU resource masks grant HT/ALP requests. Firmware flips PMUControl bit‑9 (HT request) and stalls; missing grant could cause infinite wait.
+3. **PMU resource-mask grant for HT clock** — bcma does not
+   provide BCM4360 mask values; they must come from wl.ko
+   disassembly (pending). Firmware flips PMUControl bit-9
+   (HT request) and stalls, so missing HT grant remains a
+   top-ranked hypothesis, but the concrete MINRES/MAXRES
+   values are not yet known. Effort required before this
+   can be ported.
 4. **`BCMA_CORE_PCIE2_LTR_STATE` (ACTIVE→SLEEP)** — LTR (Latency Tolerance Reporting) handshake required before PCIe link can enter low‑power states. Missing LTR may block PCIe transactions.
 5. **`PCIE2_PVT_REG_PM_CLK_PERIOD`** — Clock period for power‑management timers. Incorrect period could cause timeouts in firmware wait loops.
 
