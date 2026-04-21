@@ -404,7 +404,7 @@ Priority-ordered from the code review of `d6d1b98`:
 6. **Clean-room framing not restated in NOTES.md** — add a one-line
    reminder at the top: *extract register writes as offsets+values,
    not instruction sequences; never transcribe disassembly blocks*.
-7. **Option F (OpenWrt / Asahi / SDK-leak patch survey) deferred but
+7. **Option F (OpenWrt / Asahi / SDK-leak patch survey) completed** — report generated in `phase6/pmu_pcie_gap_analysis_final.md`. Identified missing PMU/PCIe2 register writes.
    independent** — pure reading, zero host risk, can run in parallel
    with phase 6. Pick up opportunistically.
 8. **No prioritisation inside NOTES.md "what to look for next".** My
@@ -482,7 +482,7 @@ pinning 5.15.
 5. **Disassemble `si_pmu_chip_init`, then `si_pmu_pll_init`,
    `si_pmu_res_init`** (concern 8 priority order).
 6. **Add clean-room reminder header to `phase6/NOTES.md`** (concern 6).
-7. **Option F survey** (concern 7) — opportunistic parallel reading.
+7. **Option F survey completed** — report generated in `phase6/pmu_pcie_gap_analysis_final.md`. Identified missing PMU/PCIe2 register writes.
 
 ---
 

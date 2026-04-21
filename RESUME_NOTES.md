@@ -9473,3 +9473,40 @@ request) and spins waiting for HT clock; without host‑side PMU resource mask
 and PLL configuration, the firmware can never proceed.
 
 Full survey written to `phase6/downstream_survey.md`, committed as ea61dc9.
+
+## ANALYSIS.001 (2026-04-21) — BCM4360 PMU/PCIe init gap analysis
+
+**Hypothesis:** brcmfmac skips PCIe2 core bring‑up and PMU resource‑mask writes that bcma driver performs for BCM4360, causing firmware to stall after ARM release.
+
+**Sources surveyed:**
+- Asahi Linux bcma driver (`driver_chipcommon_pmu.c`, `driver_pcie2.c`)
+- Upstream brcmfmac (`chip.c`, `pcie.c`)
+- OpenWrt broadcom‑wl package (presence of BCM4360 firmware, no driver patches found)
+- Broadcom‑sta variants (broadcom‑wl, debian, aur) — not examined in detail (deferred)
+
+**Findings:**
+
+1. **Missing PCIe2 core initialization:** brcmfmac's `brcmf_pcie_attach` returns early for BCM4360 (pcie.c:895), skipping all PCIe2 register writes:
+   - `PCIE2_CLK_CONTROL` DLYPERST/DISSPROMLD workaround (BCM4360 rev>3)
+   - LTR (Latency Tolerance Reporting) configuration
+   - Power‑management clock‑period, PMCR_REFUP, SBMBX writes
+
+2. **Missing PMU initialization:** brcmfmac performs no PMU register writes:
+   - `BCMA_CC_PMU_CTL` NOILPONW bit (depends on pmurev)
+   - `BCMA_CC_PMU_MINRES_MSK` / `MAXRES_MSK` (0x7ff for BCM4360)
+   - No PLL programming (bcma also has none for BCM4360)
+
+3. **BCMA sequence for BCM4360:**
+   - `bcma_pmu_early_init` → `bcma_pmu_init` → `bcma_pmu_pll_init` → `bcma_pmu_resources_init` (sets resource masks) → `bcma_pmu_workarounds` (none for BCM4360)
+   - `bcma_core_pcie2_init` → sets reqsize=1024, applies clock‑delay workaround (rev>3), configures LTR, PM‑clock period, PMCR_REFUP, SBMBX.
+
+**Ranked missing writes (most likely to unblock firmware):**
+1. PCIE2_CLK_CONTROL DLYPERST/DISSPROMLD (BCM4360‑specific workaround)
+2. BCMA_CC_PMU_CTL NOILPONW (PMU control bit)
+3. BCMA_CC_PMU_MINRES_MSK / MAXRES_MSK (resource grants)
+4. PCIE2_LTR_STATE (ACTIVE→SLEEP handshake)
+5. PCIE2_PVT_REG_PM_CLK_PERIOD (timer period)
+
+**Next step:** Implement PCIe2 core bring‑up in brcmfmac, starting with the clock‑control workaround.
+
+**Deliverable:** `phase6/pmu_pcie_gap_analysis_final.md`
