@@ -40,6 +40,7 @@
 - **Purpose:** Set PMU minimum/maximum resource masks.
 - **Register writes for BCM4360:** NONE. The function's switch
   has cases for BCMA_CHIP_ID_BCM4313 and BCMA_CHIP_ID_BCM43142
+  only. BCM4360 falls through to the default branch where
   `min_msk=0` and `max_msk=0`. The subsequent writes at lines
   197–200 are gated by `if (min_msk)` / `if (max_msk)` and are
   therefore skipped for BCM4360.
@@ -47,6 +48,7 @@
   clock on BCM4360 are NOT available from bcma. They must be
   extracted from `wl.ko`'s `si_pmu_res_init` / `si_pmu_res_request`.
 - **File:line:** `driver_chipcommon_pmu.c:162–207`
+
 ### 1.5 PMU Workarounds (`bcma_pmu_workarounds` — driver_chipcommon_pmu.c:230)
 - **Purpose:** Apply chip‑specific PMU workarounds.
 - **Register writes:** No BCM4360‑specific workaround found in the function (no case for BCM4360).
