@@ -19,7 +19,7 @@ compare against the existing `brcmfmac` codebase.
 > documentation. Do not copy disassembly structure directly into driver code.
 > See README.md and CLAUDE.md for full guidelines (ref: issue #12).
 
-## Current Status (2026-04-20)
+## Current Status (2026-04-21)
 
 **Active phase:** Phase 5.2 — probe-path stability regression recovery after
 hard-crash sessions (tests 149–157).
@@ -158,24 +158,55 @@ and loops silently in an exception vector, or it polls for a
 prerequisite (register write, PMU resource, specific shared-RAM word)
 that `brcmf_chip_set_active` does not satisfy on this chip.
 
-**Next boundary:** test.187 — TCM instruction-region snapshot around
-`resetintr` (0xb80ef000 → TCM offset 0xef000) combined with fine-grain
-(20 ms) sampling of D11 mac_ctl and the CR4 wrapper during the 3 s
-post-set_active dwell. Two questions:
-  (1) does the reset-vector region get mutated by firmware (hint at
-      self-modification / panic-handler writes)?
-  (2) does any transient firmware MMIO activity get missed by the
-      coarse 500/1500/3000 ms grid?
-If both negative: escalate to re-halt + CR4-wrapper fault-register
-inspection + TCM panic-log area scan.
+- **test.187 CLEAN RUN, probe A skipped:** `resetintr_offset = 0xb80ef000
+  - 0xb8000000 = 0xef000` exceeds `ramsize = 0xa0000`, so the reset
+  vector is outside TCM (likely in IMEM / CR4-internal region). Probe A
+  skipped; test became essentially a re-run of 186d. All other signals
+  match prior baseline. Download-path integrity not yet checked.
+- **test.188 NULL RESULT (all hypotheses at this probe granularity
+  exhausted):** Replaced probe A with probe D (256-point firmware-image
+  integrity check) and added two-tier fine-grain CR4/D11 sampling
+  (10 × 5 ms, then 30 × 50 ms, ordered *before* the dwell per
+  feedback_qwen.md option 2a).
+  - **Probe D:** all 256 TCM samples MATCH `fw->data`. Download path
+    is clean — corruption falsified.
+  - **Tier-1 (~100-150 ms, 5 ms grain):** ARM IOCTL=0x01, IOSTATUS=0,
+    every sample identical. No transient firmware activity.
+  - **Tier-2 (~150-1650 ms, 50 ms grain):** same — silent.
+  - **Dwell-3000 ms:** same — silent.
+  - **IOSTATUS=0x00000000 at every probe:** no wrapper-level fault
+    bits. If firmware has faulted, the wrapper doesn't see it.
+  - **fw[0] = 0xb80ef000:** the reset vector IS the first word of
+    the firmware image. ARM boots from VA 0xb80ef000, which is in
+    IMEM or a CR4-internally-mapped region (outside TCM).
+  - Net: whatever happens to the ARM happens within <20 ms of
+    `brcmf_chip_set_active` returning, without writing anything
+    observable through TCM, D11, mailboxint, or the CR4 wrapper.
 
-**Parallel path (clean-room):** study the proprietary `wl` driver's
-reset sequence to identify register writes between our
-`brcmf_chip_set_active` and the observably-working Broadcom reset —
-candidates include additional PMU resource requests, D11 wrapper
-pre-release prep, or a shared-RAM handshake slot not currently
-populated. Any findings must be documented as observed behaviour
-and re-implemented clean, never transcribed from disassembly.
+### Next-step ladder (all prior-granularity probes exhausted)
+
+Further progress requires a different observation modality. Options in
+rough order of effort-vs-yield, documented in POST-TEST.188:
+
+- **B. Clean-room study of proprietary `wl` reset sequence** — identify
+  register writes `wl` performs that brcmfmac does not (PMU, PLL, D11
+  prep, shared-RAM handshake). Static disassembly / string analysis only
+  on this host (`wl` won't load on kernel 6.12.80 per §Tools). Legally
+  safest and likely highest yield.
+- **F. OpenWrt / Asahi / SDK-leak patch survey** for BCM4360-specific
+  init register writes missing from upstream. Cheap; concrete diffs.
+- **C. IMEM / reset-vector inspection via BAR2 beyond TCM** — BAR2 is
+  2 MB; TCM fills low 640 KB. Try a read-only sample at offset 0xef000
+  (above ramsize) before and after `set_active`. Determines whether
+  IMEM is BAR2-mapped and potentially exposes the reset-vector
+  instructions.
+- **A. ARM architectural fault registers (DFSR/IFSR/DFAR/IFAR)** —
+  biggest project; defer.
+- **D. Firmware UART console** — undocumented on Mac hardware; lowest
+  priority.
+
+**Recommendation:** pursue B and F in parallel (both offline / no host
+risk); fall back to C as a quick hardware probe if B/F come up empty.
 
 **Re-entering the old 5.2 investigation:** once the probe-path restore is
 complete (i.e. firmware download and ARM release can run without host crash),

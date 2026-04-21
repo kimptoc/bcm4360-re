@@ -2,6 +2,18 @@
 
 ## POST-TEST.188 (2026-04-21) — firmware truly idle; fine-grain tiers + integrity check both NULL; exception/spin-loop confirmed
 
+Captured artifacts:
+- `phase5/logs/test.188.stage0`
+- `phase5/logs/test.188.stage0.stream`
+- `phase5/logs/test.188.stage0.raw.log`
+- `phase5/logs/test.188.journalctl.txt` (1046 lines)
+
+Result: **clean run, host stable, returned -ENODEV as designed.**
+Module build re-verified clean (frame-size warning resolved; only
+pre-existing `brcmf_pcie_write_ram32 defined but not used` warning
+remains). Test ran with tier-1/tier-2 ordered BEFORE the coarse dwell
+per option 2(a).
+
 ### Observations
 
 Firmware image was released (CPUHALT YES→NO at 20 ms post-set_active).
@@ -31,6 +43,16 @@ handler that writes a wrapper-level status register — the spin-loop
 must be a *clean infinite loop*, not an active fault state visible
 through the BCMA AI wrapper.
 
+**Additional finding — fw[0] is the reset vector:**
+`fw-sample[0x00000] = 0xb80ef000 vs 0xb80ef000 MATCH`. The first 32-bit
+word of the firmware image IS `resetintr` (0xb80ef000). This is the
+ARM's boot-time jump target. `brcmf_chip_set_active` writes this value
+into a CR4 register so the ARM boots from 0xb80ef000. That VA is at
+TCM offset 0xef000, but ramsize = 0xa0000 so this VA lies **outside
+TCM** — most likely in IMEM (2 MB BAR2 region beyond TCM) or a CR4
+internally-mapped region. This explains why test.187's probe A (reading
+TCM at offset 0xef000) read garbage / out-of-range.
+
 ### Hypothesis Assessment
 - **Firmware-integrity 256 MATCH:** download-path corruption **FALSIFIED**
 - **Tier-1/tier-2 ALL UNCHANGED:** firmware makes **zero observable
@@ -49,11 +71,48 @@ makes zero forward progress. The fine-grain window (~100–1650 ms)
 eliminates the possibility that firmware makes a brief advance and
 stalls between the old 500/1500/3000 ms sampling grid points.
 
-### Next steps
-Clean-room cross-reference against proprietary `wl` driver reset
-sequence is now the primary remaining avenue of attack. We need to
-observe what registers `wl` writes between `brcmf_chip_set_active` and
-successful firmware boot that the open-source driver does not.
+### Next steps — ranked
+
+Every currently-testable hypothesis at this probe granularity has been
+falsified. Further progress requires moving to a different observation
+modality. Options in rough order of effort-vs-yield:
+
+**B. Clean-room cross-reference of proprietary `wl` driver reset sequence**
+vs `brcmf_chip_set_active`. The ARM faults within <20 ms of release —
+almost always means a missing prerequisite register write. BCM4360 has
+a complex PMU/PLL bring-up. Document the register writes `wl` performs
+between firmware download and ARM release that brcmfmac does not,
+then re-implement clean. Legally safest and likely highest yield.
+Constraint: `wl` fails to load on this host kernel 6.12.80 per
+PLAN.md §Tools, so dynamic tracing may need an older kernel / sibling
+machine; static disassembly + string analysis remains viable here.
+
+**F. OpenWrt / kernel-fork survey for BCM4360 quirks.** Cheap search
+through known downstream patches (OpenWrt, Asahi Linux, Broadcom SDK
+leaks) for BCM4360-specific init register writes missing from upstream
+brcmfmac. Concrete, testable diffs.
+
+**C. IMEM / reset-vector inspection via BAR2 beyond TCM.** BAR2 is 2 MB;
+TCM fills the low 640 KB (ramsize). The remaining 1.4 MB of BAR2 may
+map IMEM or CR4-internal memory that includes VA 0xb80ef000. Attempt a
+short read-only BAR2 sample at offset 0xef000 (above ramsize) pre- and
+post-set_active. If it reads valid instruction bytes, we gain direct
+visibility into firmware's reset-vector region. If it reads 0xffffffff
+/ CTO, we learn that IMEM is not BAR2-mapped on this chip.
+
+**A. ARM architectural fault registers (DFSR / IFSR / DFAR / IFAR).**
+Would give direct fault type + address, definitively identifying the
+failing instruction. Requires reaching CR4 coprocessor regs through
+either a CoreSight/DAP window or a wrapper route. Biggest research
+project of the five; defer until B/F/C are exhausted.
+
+**D. Firmware UART / serial console.** Broadcom firmwares can emit
+diagnostic text over UART. GPIO mapping and voltage levels undocumented
+for BCM4360 on Mac hardware; physical-layer risk. Low priority.
+
+**Recommendation:** B and F in parallel (both are offline / research-
+only; no host risk). C as a quick hardware probe once its safety is
+confirmed (read-only, small window). A and D remain backlog.
 
 ---
 
