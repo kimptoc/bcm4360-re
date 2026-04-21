@@ -1,5 +1,95 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.191 (2026-04-22) — CHIP IS HEALTHY; live PMU state invalidates test.189 mask values
+
+Captured: `phase5/logs/test.191.journalctl.txt` (current-boot dump, 972
+lines). **No crash.** Module loaded, traversed the full test.188 path,
+reached `dwell-3000ms` fine-grain tier, returned -ENODEV (skip_arm=1).
+PCIe clean post-test, module unloaded cleanly.
+
+### Decision-tree outcome: "chip healthy" branch
+
+All milestone probes fired in order:
+- `halt ARM CR4` → `halt done` (1 s later — slow but successful)
+- `chip_attach returned successfully`
+- `setup-entry`, `pre-attach`, `post-attach` probes all fired
+- `download_fw_nvram` returned `-19` (ENODEV, expected skip_arm=1 exit)
+- Module unloaded cleanly, lspci clean
+
+Conclusion: the test.190 early crash at `halt ARM CR4` was NOT a
+persistent chip-state problem. Either post-SMC-reset state was
+genuinely bad at that moment and has since cleared, OR the
+test.189/190 build somehow influenced behavior before the PMU writes
+ran (unlikely — but not fully ruled out). Either way, we now have a
+working baseline to continue from.
+
+### CRITICAL finding: chip sets its own PMU res_masks
+
+Pre-release snapshot (host did NO PMU writes) on BCM4360:
+```
+CC-pmucontrol = 0x01770181
+CC-pmustatus  = 0x0000002a
+CC-res_state  = 0x0000013b   ← resources 0,1,3,4,5,8 enabled
+CC-min_res_mask = 0x0000013b ← firmware-set default (NOT 0x103!)
+CC-max_res_mask = 0x0000013f ← firmware-set default (NOT 0x1ff!)
+```
+
+After 3 s dwell:
+```
+CC-pmucontrol = 0x01770381 (bit 0x200 set = NOILPONW toggled ON)
+CC-min_res_mask = 0x0000013b (unchanged — firmware isn't overwriting)
+CC-max_res_mask = 0x0000013f (unchanged)
+```
+
+**Implications**:
+1. test.189's `min_res_mask=0x103` was *removing* resources 3, 4, 5
+   (which the chip's own firmware relies on). That write was actively
+   harmful, not helpful. This likely explains why test.189 hung.
+2. test.189's `max_res_mask=0x1ff` was a superset of 0x13f — should
+   have been benign in isolation.
+3. test.189's NOILPONW write was trying to force a bit the firmware
+   sets on its own ~3 s after attach. Likely redundant at best.
+4. Gemini re-anchor cc5d525 of the wl disassembly — the 0x103 and
+   0x1ff masks attributed to the BCM4360 path — is WRONG for this
+   chip. Either they belong to a different code path, or the
+   anchoring was off-by-one. Needs re-investigation before any more
+   PMU writes are added.
+
+### What this means for the PMU-bisect plan
+Abandon the test.189/190 bisect direction entirely. The Option-A/B/C
+plan in POST-TEST.189 is based on wrong target values. We now have
+ground truth from the live chip:
+- min_res_mask target = **0x13b** (not 0x103, not 0x101)
+- max_res_mask target = **0x13f** (not 0x1ff)
+- NOILPONW = managed by firmware; host write is not required
+
+### Next step — test.192 direction
+Two candidates:
+
+**A.** Write the *correct* masks (0x13b / 0x13f) from chip.c and
+observe whether firmware progresses past its idle loop. This is the
+one-variable-at-a-time change. If firmware still idles, host-side
+PMU writes are not the missing piece. If firmware advances, we've
+found part of the fix.
+
+**B.** Revisit the actual test.188 blocker — firmware sits in a
+spin loop / exception handler. The 3-second dwell showed NO TCM
+changes (all `UNCHANGED` in the sampled range) and no D11
+progression. The missing piece is probably NOT PMU at all — it's
+whatever mailbox/doorbell the firmware expects before advancing.
+Revisit `phase6/wl_pmu_res_init_analysis.md` to audit whether we
+mis-anchored other parts of the wl disassembly too.
+
+Recommend **B first** (a re-anchoring audit) to avoid another round
+of wrong-target writes before the next hardware test.
+
+### Files
+- Log: `phase5/logs/test.191.journalctl.txt`
+- Baseline anchor: search for "CC-min_res_mask" — first pre-release
+  snapshot line (around line 452)
+
+---
+
 ## PRE-TEST.191 (2026-04-21) — revert to test.188 baseline for chip-state sanity check
 
 ### Rationale
