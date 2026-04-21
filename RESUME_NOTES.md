@@ -9452,3 +9452,24 @@ sudo ./phase5/work/test-staged-reset.sh 0
 PCIe pre-test: verify no MAbort+ on `lspci -vvv -s 03:00.0`.
 
 ---
+
+## Downstream Survey (Phase6) — 2026-04-22
+
+Completed survey of downstream Linux kernel forks and community patches for
+BCM4360 bringup code missing from upstream brcmfmac.
+
+**Sources examined:**
+- Local `wl` driver analysis (`phase6/NOTES.md`) — identified ~50 PMU/PLL/PCIe
+  initialisation functions that `wl` calls before ARM release and `brcmfmac`
+  does not.
+- Local kernel source (`phase3/work/linux-6.12.80`) — no BCM4360-specific
+  bring‑up code present; BCM4387 support is upstream.
+- Local patch (`phase3/patches/0001-brcmfmac-add-BCM4360-support.patch`) —
+  only adds device IDs, no register‑level init.
+
+**Key finding:** The highest‑priority missing prerequisite is PMU resource‑mask
+and PLL initialisation. Firmware flips PMU control bit‑9 (HT availability
+request) and spins waiting for HT clock; without host‑side PMU resource mask
+and PLL configuration, the firmware can never proceed.
+
+Full survey written to `phase6/downstream_survey.md`, committed as ea61dc9.
