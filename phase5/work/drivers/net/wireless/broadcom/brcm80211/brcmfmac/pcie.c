@@ -888,12 +888,47 @@ static void brcmf_pcie_attach(struct brcmf_pciedev_info *devinfo)
 
 	pr_emerg("BCM4360 test.128: brcmf_pcie_attach ENTRY\n");
 
-	/* test.129: BCM4360 — skip BAR1 window sizing; PCIe2 core is in BCMA reset at this
-	 * point, so any BAR0 MMIO to it causes CTO → MCE → hard crash. BAR2 is used for
-	 * firmware download, not BAR1, so this config is unnecessary for BCM4360.
+	/* test.194: BCM4360 — apply the minimal bcma pcie2 init writes that are
+	 * NOT already gated out by our chiprev=3, pcie2_rev=1 silicon:
+	 *   - PCIe2 SBMBX (0x098) = 0x1   (unconditional in bcma)
+	 *   - PCIe2 PMCR_REFUP (0x1814) |= 0x1f (unconditional in bcma)
+	 * Probe PCIe2 MMIO liveness first to avoid the CTO/MCE crash that the
+	 * original bypass was added to prevent. If the CLK_CONTROL read returns
+	 * 0xffffffff or 0 we abort without doing any writes.
 	 */
 	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
-		pr_emerg("BCM4360 test.129: brcmf_pcie_attach bypassed for BCM4360\n");
+		u32 clk_ctrl, pmcr;
+
+		brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
+		clk_ctrl = brcmf_pcie_read_reg32(devinfo, 0x0);
+		pr_emerg("BCM4360 test.194: PCIe2 CLK_CONTROL probe = 0x%08x\n",
+			  clk_ctrl);
+
+		if (clk_ctrl == 0xffffffff || clk_ctrl == 0) {
+			pr_emerg("BCM4360 test.194: PCIe2 looks dead, skipping writes\n");
+			return;
+		}
+
+		/* SBMBX (indirect config @ 0x098) = 0x1 */
+		brcmf_pcie_write_reg32(devinfo,
+				       BRCMF_PCIE_PCIE2REG_CONFIGADDR, 0x098);
+		brcmf_pcie_write_reg32(devinfo,
+				       BRCMF_PCIE_PCIE2REG_CONFIGDATA, 0x1);
+		pr_emerg("BCM4360 test.194: SBMBX write done\n");
+
+		/* PMCR_REFUP (indirect config @ 0x1814) |= 0x1f */
+		brcmf_pcie_write_reg32(devinfo,
+				       BRCMF_PCIE_PCIE2REG_CONFIGADDR, 0x1814);
+		pmcr = brcmf_pcie_read_reg32(devinfo,
+					     BRCMF_PCIE_PCIE2REG_CONFIGDATA);
+		brcmf_pcie_write_reg32(devinfo,
+				       BRCMF_PCIE_PCIE2REG_CONFIGADDR, 0x1814);
+		brcmf_pcie_write_reg32(devinfo,
+				       BRCMF_PCIE_PCIE2REG_CONFIGDATA,
+				       pmcr | 0x1f);
+		pr_emerg("BCM4360 test.194: PMCR_REFUP 0x%08x -> 0x%08x\n",
+			  pmcr, pmcr | 0x1f);
+
 		return;
 	}
 

@@ -1,5 +1,80 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.194 (2026-04-22) — minimal PCIe2 init (SBMBX + PMCR_REFUP) re-enabled with liveness probe
+
+**Status:** pcie.c edited, module built clean, ready to run.
+
+### Hypothesis
+
+After ruling out PMU WARs in test.193, next candidate is the PCIe2 core
+bring-up that `brcmf_pcie_attach` currently bypasses entirely for BCM4360.
+Auditing bcma's `bcma_core_pcie2_init` against our actual silicon
+(chiprev=3, pcie2 core rev=1) eliminates 4 of 6 workarounds (DLYPERST, LTR,
+crwlpciegen2, crwlpciegen2-gated) because their revision gates aren't met.
+
+The only UNCONDITIONAL writes bcma does are:
+- `PCIE2_SBMBX (0x098) = 0x1` — PCIe2 soft-mbox kick
+- `PCIE2_PMCR_REFUP (0x1814) |= 0x1f` — power-management refup timing
+
+If either of these is what gets PCIe2 to assert the signal the ARM CR4
+firmware is polling, we may see first-ever TCM/D11 state change.
+
+### Implementation (pcie.c brcmf_pcie_attach)
+
+Replaced the full `if (BCM4360) return;` bypass with:
+1. `brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2)`
+2. Read `BCMA_CORE_PCIE2_CLK_CONTROL` (offset 0x0 of PCIe2 core) as a
+   liveness probe. If it reads back `0xFFFFFFFF` or `0x00000000`, abort
+   without doing any writes (PCIe2 core is dead/in reset).
+3. Otherwise, perform the two writes via the indirect-config addr/data
+   register pair (`CONFIGADDR = 0x120`, `CONFIGDATA = 0x124`):
+   - `CONFIGADDR = 0x098; CONFIGDATA = 0x1`   (SBMBX)
+   - `CONFIGADDR = 0x1814; DATA = read | 0x1f`  (PMCR_REFUP RMW)
+
+All steps emit `pr_emerg` so output is visible without INFO debug enabled.
+
+### Safety notes
+
+- The original bypass was added to avoid a CTO→MCE crash caused by accessing
+  PCIe2 MMIO while the PCIe2 core is in BCMA reset. The bypass condition was
+  discovered empirically. Current flow (test.188 baseline + test.193 PMU WARs)
+  has already successfully accessed BAR0 MMIO many times in buscore_reset /
+  chip_attach / reset_device-bypass paths. The liveness probe catches the
+  legacy failure mode if it returns.
+- If the CLK_CONTROL probe returns an anomalous value (e.g. 0xDEADBEEF or a
+  very bit-stuck pattern), that still indicates some form of "alive" and we
+  will proceed with writes. The 0x0 / 0xFFFFFFFF guard is specifically for
+  "device response missing" (CTO hardware default).
+- The writes are to indirect config space via the on-chip CONFIGADDR/DATA
+  pair; they do not touch PCIe link parameters and cannot break the bus.
+
+### Decision tree
+
+| Observation | Meaning | Next |
+|---|---|---|
+| Probe returns 0xffffffff or 0 | PCIe2 core in reset — writes skipped | Need to release PCIe2 BCMA reset first (test.195) |
+| Probe returns real value, writes succeed, firmware boots (TCM CHANGED) | PMCR_REFUP/SBMBX was the gate | Follow firmware startup, enable remaining probe steps |
+| Probe returns real value, writes succeed, firmware still silent | PCIe2 unconditional writes not the blocker either | Pivot to OTP init (option B) or D11 core (option C) |
+| Hard crash | Something in the write path trips the CTO regression | Restore bypass, investigate core reset state |
+
+### Pre-test checklist
+
+1. Build status: REBUILT CLEAN
+2. PCIe state: MAbort-, CommClk+, link up x1/2.5GT/s (verified before test.193)
+3. Hypothesis stated: see above
+4. Plan committed and pushed: this commit
+5. Filesystem synced in commit step
+
+### Run command
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Log → rename to `test.194.journalctl.txt`.
+
+---
+
 ## POST-TEST.193 (2026-04-22) — WARs confirmed landing but produce no firmware progress → PMU WARs ruled out as blocker
 
 Log: `phase5/logs/test.193.journalctl.txt` (974 lines) + `.full.txt`.
