@@ -1,9 +1,18 @@
 #!/usr/bin/env python3
-"""Map relocation call-sites to their containing functions."""
-import sys
+"""Map relocation call-sites to their containing functions.
+
+Usage from phase6/:
+    python3 find_callers.py
+
+Symbol file: wl_function_symbols.txt (in same directory).
+"""
+import os
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+SYMBOLS = os.path.join(HERE, 'wl_function_symbols.txt')
 
 funcs = []
-with open('/tmp/wl_funcs.txt') as f:
+with open(SYMBOLS) as f:
     for line in f:
         parts = line.split()
         addr = int(parts[0], 16)
