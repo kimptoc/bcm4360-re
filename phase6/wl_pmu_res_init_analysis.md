@@ -122,3 +122,60 @@ The code confirms the following:
 - **Register Offset:** It polls the register at offset `0x608` relative to the ChipCommon core's base address, which corresponds to `pmustatus`.
 - **Mask Value:** The mask is passed as an argument (`edx`) by the caller. For waiting on HT clock, the caller would use `0x4`.
 - **Polling Loop:** The function implements a standard polling loop with a timeout, repeatedly reading the register and checking the bits against the mask until the condition is met or the timeout expires.
+
+## 6. Package-ID Gate (bit 0x20) WAR Analysis
+
+This section details the static analysis of the package ID gate found in `si_pmu_res_init`, which triggers different hardware workarounds (WARs) based on bit 0x20 of the `sih->chip_pkg` field.
+
+### 6.1. Disassembly Anchor and Verification
+
+The analysis is anchored at `si_pmu_res_init` (wl.ko + `0x14cab`). Within this function, after chip-specific branches, code paths for BCM4352 and BCM4360 converge. A check on `sih->corerev` determines which gate to use:
+- For `corerev <= 3`, the check is at `wl.ko+0x15296`.
+- For `corerev > 3`, the check is at `wl.ko+0x152e4`.
+
+Both gates test bit 0x20 of the `%al` register, which holds the value of `sih->chip_pkg` loaded at `wl.ko+0x15291`.
+
+### 6.2. Branch: Bit 0x20 is CLEAR
+
+This branch executes a series of chip-specific WAR writes. The behavior differs by `corerev`.
+
+#### For `corerev <= 3` (path at `wl.ko+0x1529e`)
+
+The code performs two writes to the PMU `regcontrol` registers. This involves writing a register number to `pmu_regcontrol_addr` (offset `0x660`) and then writing a value to `pmu_regcontrol_data` (offset `0x664`).
+
+| Offset (wl.ko) | Action                                    | Register        | Value          |
+|----------------|-------------------------------------------|-----------------|----------------|
+| `+0x152b3`     | Set `regcontrol` address                  | `regcontrol` #6 | -              |
+| `+0x152be`     | Write value                               | `regcontrol` #6 | `0x09048562`   |
+| `+0x152cb`     | Set `regcontrol` address                  | `regcontrol` #0xe | -              |
+| `+0x152d8`     | Write value (via jmp to `+0x1538c`)       | `regcontrol` #0xe | `0x09048562`   |
+
+#### For `corerev > 3` (path at `wl.ko+0x152ea`)
+
+This path is more complex, involving writes to both `chipcontrol` and `regcontrol` registers.
+
+| Offset (wl.ko) | Action                                    | Register          | Value / Mask         |
+|----------------|-------------------------------------------|-------------------|----------------------|
+| `+0x1530c`     | Read-modify-write `chipcontrol` register 1  | `chipcontrol` #1  | `val | 0x800`        |
+| `+0x15339`     | Write `regcontrol` register 6             | `regcontrol` #6   | `0x080004e2`         |
+| `+0x15353`     | Write `regcontrol` register 7             | `regcontrol` #7   | `0x0000000e`         |
+| `+0x1536d`     | Write `regcontrol` register 14 (0xe)      | `regcontrol` #0xe | `0x080004e2`         |
+| `+0x15387`     | Write `regcontrol` register 15 (0xf)      | `regcontrol` #0xf | `0x0000000e`         |
+
+### 6.3. Branch: Bit 0x20 is SET
+
+In both `corerev` cases, if bit 0x20 of `sih->chip_pkg` is set, the code jumps to `wl.ko+0x15399`. This is the default fall-through path for this block, effectively skipping the WAR writes. This suggests that hardware with this bit set does not require these specific workarounds.
+
+### 6.4. Portability Assessment
+
+- **Bit 0x20 CLEAR branch:** The register writes are directly portable. The logic involves indirect writes via `addr`/`data` register pairs (`chipcontrol` at `0x650`/`0x654`, `regcontrol` at `0x660`/`0x664`), which can be implemented in `brcmfmac` using existing chip access functions. No complex logic is required, only a sequence of writes.
+- **Bit 0x20 SET branch:** This path involves no new writes, so it is the default behavior and requires no changes to port.
+
+The primary unknown is which package type is used in the target Mac hardware.
+
+### 6.5. Recommendation for Stage-2 Port
+
+1.  **Investigation:** The immediate priority is to determine the `sih->chip_pkg` value on the target hardware. This could be done by logging the value from a running `wl` driver or by dumping the `sii` state. Without this information, any implementation is speculative.
+2.  **Default Implementation:** Given that the "bit is set" path is the non-WAR path, `brcmfmac` should initially assume this state, as it represents the "do nothing" case and is safer.
+3.  **Conditional Implementation:** For stage-2, a module parameter should be added to `brcmfmac` to allow forcing the "bit is clear" WARs. This will enable testing both paths to see if the workarounds are necessary for stability or performance on the target hardware. The WARs should be implemented in a dedicated function, guarded by this parameter and the BCM4360 chip ID.
+
