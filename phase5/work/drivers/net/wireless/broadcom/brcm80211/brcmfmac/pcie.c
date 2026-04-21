@@ -2049,10 +2049,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 * succeeds on BCM4360 — ARM CR4 IOCTL 0x21 → 0x01 (CPUHALT YES→NO),
 		 * host stable for 30 s. Now extend the post-release observation to
 		 * detect firmware-originated TCM writes: snapshot TCM[0x0..0x1c]
-		 * + NVRAM marker before release, then re-read with a diff at
-		 * dwell-500ms, dwell-1500ms, dwell-3000ms. BusMaster still cleared.
-		 * Still no sharedram polling and no advance into normal attach; we
-		 * release fw/nvram and return -ENODEV.
+		 * + NVRAM marker before release, then fine-grain tier-1 (~100-150 ms)
+		 * and tier-2 (~150-1650 ms) for transient activity, then re-read
+		 * with a diff at dwell-3000 ms for late-persistence state.
+		 * BusMaster still cleared. Still no sharedram polling and no
+		 * advance into normal attach; we release fw/nvram and return -ENODEV.
 		 */
 		pr_emerg("BCM4360 test.188: before post-fw msleep(100)\n");
 		msleep(100);
@@ -2193,11 +2194,10 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pr_emerg("BCM4360 test.188: INTERNAL_MEM core not found — resetcore skipped (expected on BCM4360)\n");
 			}
 		}
-
 		{
 			bool sa_rc;
-			static const u32 dwell_labels_ms[] = { 500, 1500, 3000 };
-			static const u32 dwell_increments_ms[] = { 400, 1000, 1500 };
+			static const u32 dwell_labels_ms[] = { 3000 };
+			static const u32 dwell_increments_ms[] = { 1250 };
 			u32 d;
 			u32 j;
 
@@ -2260,6 +2260,63 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						      "post-set-active-100ms");
 			brcmf_pcie_probe_d11_state(devinfo,
 						   "post-set-active-100ms");
+
+			/* test.188: Two-tier fine-grain sampling BEFORE the
+			 * coarse dwell grid.  Previous layout (tests 184–187)
+			 * had no activity at 500/1500/3000 ms, so those samples
+			 * are dropped.  Tiers now run at their intended windows:
+			 *   tier-1: ~100-150 ms (10 × 5 ms) -- catch early fault
+			 *   tier-2: ~150-1650 ms (30 × 50 ms) -- catch mid-range
+			 *   dwell 3000 ms: late persistence check
+			 *
+			 * Timing note: 100 ms comes from 20+30+20+80+20 ms of
+			 * set_active machinery before tier-1 starts.
+			 */
+
+			/* Tier 1: 5 ms granularity (~100-150 ms post-set_active) */
+			pr_emerg("BCM4360 test.188: tier-1 fine-grain ~100-150 ms (10 × 5 ms)\n");
+			for (i = 0; i < 10; i++) {
+				u32 k;
+				mdelay(5);
+				brcmf_pcie_probe_armcr4_state(devinfo, "tier1");
+				brcmf_pcie_probe_d11_state(devinfo, "tier1");
+
+				/* Subset of fw-integrity region every other
+				 * sample (16 of 256 points) */
+				if (fw->size >= 1024 && fw_sample_offsets &&
+				    (i % 2 == 0)) {
+					for (k = 0; k < 16; k++) {
+						u32 idx = k * 16;
+						if (idx >= nr_fw_samples) break;
+						u32 offset = fw_sample_offsets[idx];
+						u32 val = brcmf_pcie_read_ram32(devinfo, offset);
+						u32 fw_val = get_unaligned_le32(fw->data + offset);
+						pr_emerg("BCM4360 test.188: tier1-t+%ums fw-sample[0x%05x]=0x%08x vs 0x%08x %s\n",
+							100 + (i+1)*5, offset, val, fw_val,
+							val == fw_val ? "MATCH" : "MISMATCH");
+					}
+				}
+			}
+
+			/* Tier 2: 50 ms granularity (~150-1650 ms post-set_active) */
+			pr_emerg("BCM4360 test.188: tier-2 fine-grain ~150-1650 ms (30 × 50 ms)\n");
+			for (i = 0; i < 30; i++) {
+				mdelay(50);
+				brcmf_pcie_probe_armcr4_state(devinfo, "tier2");
+				brcmf_pcie_probe_d11_state(devinfo, "tier2");
+
+				/* Minimal fw sampling during tier 2
+				 * (first sample only, every 5th) */
+				if (fw->size >= 1024 && fw_sample_offsets &&
+				    (i % 5 == 0)) {
+					u32 offset = fw_sample_offsets[0];
+					u32 val = brcmf_pcie_read_ram32(devinfo, offset);
+					u32 fw_val = get_unaligned_le32(fw->data + offset);
+					pr_emerg("BCM4360 test.188: tier2-t+%ums fw-sample[0x%05x]=0x%08x vs 0x%08x %s\n",
+						150 + i*50, offset, val, fw_val,
+						val == fw_val ? "MATCH" : "MISMATCH");
+				}
+			}
 
 			/* test.188: extended post-release observation.
 			 * Re-read TCM[0x0..0x1c] and the NVRAM marker at each
@@ -2359,53 +2416,9 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				}
 			}
 		}
-
-		/* test.188: Two-tier fine-grain sampling after ARM release */
-		pr_emerg("BCM4360 test.188: starting two-tier fine-grain sampling\n");
-		
-		/* Tier 1: 0-50 ms at 5 ms intervals (immediate fault detection) */
-		pr_emerg("BCM4360 test.188: Tier 1 - 0-50 ms at 5 ms intervals\n");
-		for (i = 0; i < 10; i++) {
-			u32 j;
-			mdelay(5);
-			brcmf_pcie_probe_armcr4_state(devinfo, "tier1");
-			brcmf_pcie_probe_d11_state(devinfo, "tier1");
-			
-			/* Also sample a subset of fw region during fine-grain */
-			if (fw->size >= 1024 && fw_sample_offsets && (i % 2 == 0)) {  /* Every other sample */
-				for (j = 0; j < 16; j++) {  /* Sample 16 of 256 points */
-					u32 idx = j * 16;
-					if (idx >= nr_fw_samples) break;
-					u32 offset = fw_sample_offsets[idx];
-					u32 val = brcmf_pcie_read_ram32(devinfo, offset);
-					u32 fw_val = get_unaligned_le32(fw->data + offset);
-					pr_emerg("BCM4360 test.188: tier1-t+%ums fw-sample[0x%05x]=0x%08x vs 0x%08x %s\n",
-						(i+1)*5, offset, val, fw_val,
-						val == fw_val ? "MATCH" : "MISMATCH");
-				}
-			}
-		}
-		
-		/* Tier 2: 50-1550 ms at 50 ms intervals (mid-dwell transient detection) */
-		pr_emerg("BCM4360 test.188: Tier 2 - 50-1550 ms at 50 ms intervals\n");
-		for (i = 0; i < 30; i++) {
-			mdelay(50);
-			brcmf_pcie_probe_armcr4_state(devinfo, "tier2");
-			brcmf_pcie_probe_d11_state(devinfo, "tier2");
-			
-			/* Minimal fw sampling during tier 2 (just check for major changes) */
-			if (fw->size >= 1024 && fw_sample_offsets && (i % 5 == 0)) {  /* Every 5th sample */
-				u32 offset = fw_sample_offsets[0];  /* Just first sample */
-				u32 val = brcmf_pcie_read_ram32(devinfo, offset);
-				u32 fw_val = get_unaligned_le32(fw->data + offset);
-				pr_emerg("BCM4360 test.188: tier2-t+%ums fw-sample[0x%05x]=0x%08x vs 0x%08x %s\n",
-					50 + i*50, offset, val, fw_val,
-					val == fw_val ? "MATCH" : "MISMATCH");
-			}
-		}
 		/* test.188: set_active ran with BusMaster ENABLED (set
-		 * above before the call). The dwell loop already sampled
-		 * CR4/D11/TCM/NVRAM/CC at 500/1500/3000 ms. Sample
+		 * above before the call). Tiers ran at ~100-1650 ms then
+		 * 3000 ms dwell sampled late-persistence state. Sample
 		 * mailboxint one final time, then pci_clear_master before
 		 * returning -ENODEV so the chip is in a safe state.
 		 */
@@ -2438,7 +2451,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		brcmf_fw_nvram_free(nvram);
 		kfree(pre_fw_sample);
 		kfree(fw_sample_offsets);
-		pr_emerg("BCM4360 test.188: released fw/nvram after BM-before-set_active + dwell + BM-clear; returning -ENODEV\n");
+		pr_emerg("BCM4360 test.188: released fw/nvram after BM-before-set_active + tiers + 3000ms dwell + BM-clear; returning -ENODEV\n");
 		return -ENODEV;
 	} else {
 		brcmf_pcie_copy_mem_todev(devinfo, devinfo->ci->rambase,

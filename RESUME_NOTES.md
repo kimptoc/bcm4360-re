@@ -9273,62 +9273,60 @@ test.187: dwell-3000ms resetintr offset 0xef000 out of range, skipping
 
 ---
 
-## PRE-TEST.188 (2026-04-20) — firmware-integrity check + fine-grain CR4/D11 sampling
+## PRE-TEST.188 (2026-04-21) — firmware-integrity check + fine-grain CR4/D11 sampling (reordered)
 
 ### Hypothesis
-Firmware ARM is released (CPUHALT YES→NO) but produces zero observable
-MMIO/TCM activity across ≥ 3 s of dwell time (tests 184–187). The
-leading hypothesis is that firmware faults very early — either at the
-jump to `resetintr` (0xb80ef000) or during its first few instructions —
-and enters an exception/spin-loop that touches no peripheral registers,
-no TCM, and no doorbells. test.187's probe A (TCM snapshot around
-resetintr) was skipped because `resetintr_offset = 0xef000 > ramsize
-= 0xa0000`; the `0xb8000000` VA-base assumption is wrong for BCM4360.
+ARM is released (CPUHALT YES→NO) but produces zero observable MMIO/TCM
+activity across ≥ 3 s of dwell time (tests 184–187). Likely causes:
+(1) firmware early exception/spin-loop; (2) missing register writes
+specific to BCM4360 that proprietary `wl` performs.
 
-test.188 replaces the skipped probe with two orthogonal probes that
-add *new signal* rather than re-collect known data:
-- **Probe D (firmware integrity):** samples the entire firmware-image
-  region (TCM[0..fw->size]) at 256 evenly-spaced offsets, comparing
-  each BAR2 readback against the original `fw->data` bytes. Rules out
-  download-path corruption as the cause of the exception-loop.
-- **Two-tier fine-grain CR4/D11 sampling:** 10 samples at 5 ms
-  intervals (0–50 ms) + 30 samples at 50 ms intervals (50–1550 ms).
-  Catches transient firmware activity missed by the coarse
-  500/1500/3000 ms grid that has been used since test.184.
+Leading hypothesis: early exception/spin-loop.
 
 ### Predictions
-- **If firmware image is intact AND no transient activity:** exception/
-  spin-loop hypothesis strengthens. Firmware is running but doing
-  nothing observable. Next: inspect CR4 wrapper fault/exception
-  registers, or do clean-room cross-reference against proprietary
-  `wl` driver reset sequence.
-- **If fw-image vs TCM mismatch at ANY of 256 offsets:** download
-  corruption confirmed. Either `memcpy_toio` replacement or BAR2
-  write path is introducing byte-level errors. Investigation shifts
-  to write-path integrity (timing, alignment, byte order).
-- **If fine-grain sampling catches transient activity (any TCM write,
-  D11 release, pmucontrol change beyond bit-9, mailboxint assertion):**
-  firmware is making some forward progress before stalling. Focus
-  probe window around that activity with higher density.
-- **If CR4 fault registers are non-zero:** direct confirmation of
-  exception handler. Fault address + type will identify the failing
-  instruction.
+- **All 256 integrity samples MATCH + all tier-1/tier-2 UNCHANGED:**
+  firmware image intact, but firmware truly idle. Next: inspect
+  CR4 wrapper fault/exception registers, or cross-reference against
+  proprietary `wl` driver reset sequence.
+- **ANY firmware-image vs TCM mismatch:** download-path corruption
+  confirmed. Investigation shifts to write-path integrity (timing,
+  alignment, byte order of the `iowrite32` loop).
+- **Fine-grain sampling catches transient activity** (any TCM write,
+  D11 release, pmucontrol change beyond bit-9, mailboxint assertion):
+  firmware makes partial forward progress before stalling. Focus
+  subsequent probes around the time-of-first-activity window.
+- **CR4 wrapper IOSTATUS shows non-zero fault/error bits:** wrapper-
+  level fault state visible; follow up with dedicated ARM-
+  architectural fault-register probe.
+
+### Timing (relative to `brcmf_chip_set_active`)
+
+```
+  set_active (≈ 70 ms)
+  → 20 ms post-probe
+  → 80 ms post-probe
+  → tier-1: 10 × 5 ms  ≈ ~100–150 ms      (catch early fault)
+  → tier-2: 30 × 50 ms ≈ ~150–1650 ms      (catch mid-range)
+  → dwell-3000 ms      ≈ ~1650–3000 ms      (late persistence)
+  → cleanup + -ENODEV
+```
+
+### What changed in pcie.c
+1. Removed test.187 residue (`pre_resetintr[64]`, `resetintr_offset`).
+2. Added fw-integrity probe D (256 samples).
+3. **Reordered fine-grain tiers to run BEFORE the dwell grid**
+   (feedback_qwen.md option 2a). Dropped 500/1500 ms dwell samples;
+   kept 3000 ms only. Total in-module time ≈ 4.6 s.
+4. Relabelled breadcrumbs: test.186d → test.188.
 
 ### Risk
-Read-only BAR2 reads + minimal state-machine probes. No write
-operations beyond existing firmware-download path. Two-tier sampling
-adds ~40 MMIO reads; negligible. Module early-returns -ENODEV;
-`pci_clear_master` always executed.
+Read-only BAR2 reads + minimal state-machine probes. No writes
+beyond existing firmware-download path. Module early-returns
+-ENODEV; `pci_clear_master` always executed.
 
-### What was changed in pcie.c
-1. **Probe D — firmware-integrity check:** 256 samples across firmware
-   region comparing TCM readback with `fw->data` (heap-allocated
-   sample arrays via kcalloc to avoid stack overflow).
-2. **Two-tier fine-grain sampling:** 0–50 ms at 5 ms intervals +
-   50–1550 ms at 50 ms intervals; samples ARM CR4 and D11 wrapper.
-3. **Code cleanup:** removed test.187 residue (`pre_resetintr[64]`,
-   `resetintr_offset`) that was always skipped; global-relabelled
-   breadcrumbs from test.186d → test.188.
+### Build status
+Module rebuilt clean. Frame-size warning resolved; only pre-existing
+`brcmf_pcie_write_ram32 defined but not used` warning remains.
 
 ### Run command
 ```

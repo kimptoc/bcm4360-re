@@ -113,7 +113,7 @@ echo "Flush complete." | tee -a "$LOG"
 
 if [ "$STAGE" -eq 0 ]; then
     SKIP_ARM=1
-    WAIT_SECS=45  # test.188: dwell grid + tier-1 (50ms) + tier-2 (1500ms) ≈ 4.5s in-module; leave generous slack
+    WAIT_SECS=45  # test.188: tiers (~1600 ms) + 3000 ms dwell ≈ 4.6 s in-module; generous slack
 else
     SKIP_ARM=0
     WAIT_SECS=60
