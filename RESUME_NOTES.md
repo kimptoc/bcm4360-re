@@ -1,5 +1,52 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.191 (2026-04-21) — revert to test.188 baseline for chip-state sanity check
+
+### Rationale
+Test.190 hung at `halt ARM CR4` — a point test.188 traversed in ~3 ms
+and where the test.190 code change (min_res_mask removal) cannot have
+executed yet. Timestamps in test.190 also showed ~500 ms between every
+printk, pointing to systemic slowness (dirty PCIe or kernel throttle).
+Before resuming the PMU bisect we need a **clean baseline sanity check**
+to decide whether the chip/PCIe is still healthy after two hard-crash
++ SMC-reset cycles.
+
+### Change
+`git checkout 2c23fc9^ -- phase5/work/.../chip.c phase5/work/.../pcie.c`
+— reverts *only* the two source files that test.189/test.190 modified,
+back to the test.188 state. RESUME_NOTES and everything else untouched.
+
+### Build status
+Rebuilt 2026-04-21, clean (only the pre-existing
+`brcmf_pcie_write_ram32 defined but not used` warning remains).
+
+### PCIe state pre-test
+`lspci -vvv -s 03:00.0` is clean: `<MAbort-`, no `>TAbort`, no SERR.
+
+### Hypothesis for test.191
+Test.191 runs the exact code test.188 ran. Outcomes:
+
+| Outcome | Interpretation | Next move |
+|---|---|---|
+| Reaches `pre-attach`/`post-attach`, exits -ENODEV (like test.188 did) | Chip is healthy. test.190 early crash was driven by the remaining PMU writes (NOILPONW / max_res_mask=0x1ff) or subtle timing. | Retry Option-A with fresh bisect. |
+| Hangs at `halt ARM CR4` again | Chip is in persistent post-SMC-reset bad state. SMC reset is insufficient. | Full power cycle (battery drain) before any further testing. Code bisect cannot conclude on current chip. |
+| Hangs at some *other* new point | Further diagnostic needed — capture and analyze. | Document and reconsider. |
+
+### Expected observations if healthy (matches test.188)
+- brcmfmac loads, chip_attach returns (halt ARM CR4 completes in ms)
+- `setup-entry` probe fires: IOCTL=0x21, CPUHALT=YES
+- firmware request succeeds (async via udev)
+- `pre-attach` probe fires
+- `post-attach` probe fires
+- download_fw_nvram returns -ENODEV (skip_arm=1 path)
+- Module unloads cleanly, lspci still clean
+
+### Next step
+User runs test.191 (`phase5/work/test-brcmfmac.sh`). Capture
+journalctl to `phase5/logs/test.191.journalctl.txt`, update this file.
+
+---
+
 ## POST-TEST.190 (2026-04-21) — hard crash EARLIER than test.189, at halt ARM CR4; min_res_mask bisect inconclusive
 
 Captured: `phase5/logs/test.190.journalctl.txt` (prior-boot dump, 1077

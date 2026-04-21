@@ -885,96 +885,15 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 static void brcmf_pcie_attach(struct brcmf_pciedev_info *devinfo)
 {
 	u32 config;
-	u32 chipstatus;
-	u32 devstsctr2;
-	u32 alp_khz;
-	u32 pm_value;
-	struct brcmf_core *core;
 
 	pr_emerg("BCM4360 test.128: brcmf_pcie_attach ENTRY\n");
 
+	/* test.129: BCM4360 — skip BAR1 window sizing; PCIe2 core is in BCMA reset at this
+	 * point, so any BAR0 MMIO to it causes CTO → MCE → hard crash. BAR2 is used for
+	 * firmware download, not BAR1, so this config is unnecessary for BCM4360.
+	 */
 	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
-		core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_PCIE2);
-		if (!core)
-			return;
-
-		/* Release PCIe2 from BCMA reset before any BAR0 MMIO to it —
-		 * test.129 proved BAR0 MMIO while the core is in reset causes
-		 * CTO → MCE → hard crash. bcma's own pcie2 init path runs
-		 * after bcma_core_setup which does this implicitly; brcmfmac
-		 * never resets PCIe2 elsewhere, so we do it here.
-		 */
-		brcmf_chip_resetcore(core, 0, 0, 0);
-
-		brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
-
-		if (devinfo->ci->chiprev > 3) {
-			config = brcmf_pcie_read_reg32(devinfo, 0x0000);
-			config &= ~0x0100;
-			config |= 0x0200;
-			brcmf_pcie_write_reg32(devinfo, 0x0000, config);
-			brcmf_pcie_read_reg32(devinfo, 0x0000);
-		}
-
-		if (core->rev >= 2 && core->rev != 10 && core->rev <= 13) {
-			brcmf_pcie_write_reg32(devinfo, BRCMF_PCIE_PCIE2REG_CONFIGADDR,
-					       0x0d4);
-			devstsctr2 = brcmf_pcie_read_reg32(devinfo,
-					       BRCMF_PCIE_PCIE2REG_CONFIGDATA);
-			if (devstsctr2 & 0x400) {
-				brcmf_pcie_write_reg32(devinfo,
-					       BRCMF_PCIE_PCIE2REG_CONFIGADDR, 0x844);
-				brcmf_pcie_write_reg32(devinfo,
-					       BRCMF_PCIE_PCIE2REG_CONFIGDATA, 0x883c883c);
-				brcmf_pcie_write_reg32(devinfo,
-					       BRCMF_PCIE_PCIE2REG_CONFIGADDR, 0x848);
-				brcmf_pcie_write_reg32(devinfo,
-					       BRCMF_PCIE_PCIE2REG_CONFIGDATA, 0x88648864);
-				brcmf_pcie_write_reg32(devinfo,
-					       BRCMF_PCIE_PCIE2REG_CONFIGADDR, 0x84c);
-				brcmf_pcie_write_reg32(devinfo,
-					       BRCMF_PCIE_PCIE2REG_CONFIGDATA, 0x90039003);
-
-				brcmf_pcie_write_reg32(devinfo,
-					       BRCMF_PCIE_PCIE2REG_CONFIGADDR, 0x0d4);
-				brcmf_pcie_write_reg32(devinfo,
-					       BRCMF_PCIE_PCIE2REG_CONFIGDATA,
-					       devstsctr2 | 0x400);
-
-				brcmf_pcie_write_reg32(devinfo, 0x01a0, 0x2);
-				usleep_range(1000, 2000);
-				brcmf_pcie_write_reg32(devinfo, 0x01a0, 0x0);
-				usleep_range(1000, 2000);
-			}
-		}
-
-		if (core->rev <= 13) {
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-			chipstatus = READCC32(devinfo, chipstatus);
-			brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
-			alp_khz = (chipstatus & 0x1) ? 40000 : 20000;
-			pm_value = (1000000 * 2) / alp_khz;
-
-			brcmf_pcie_write_reg32(devinfo, BRCMF_PCIE_PCIE2REG_CONFIGADDR,
-					       0x184c);
-			brcmf_pcie_write_reg32(devinfo, BRCMF_PCIE_PCIE2REG_CONFIGDATA,
-					       pm_value);
-		}
-
-		brcmf_pcie_write_reg32(devinfo, BRCMF_PCIE_PCIE2REG_CONFIGADDR,
-				       0x1814);
-		config = brcmf_pcie_read_reg32(devinfo,
-				       BRCMF_PCIE_PCIE2REG_CONFIGDATA);
-		brcmf_pcie_write_reg32(devinfo, BRCMF_PCIE_PCIE2REG_CONFIGDATA,
-				       config | 0x1f);
-
-		brcmf_pcie_write_reg32(devinfo, BRCMF_PCIE_PCIE2REG_CONFIGADDR,
-				       0x0098);
-		brcmf_pcie_write_reg32(devinfo, BRCMF_PCIE_PCIE2REG_CONFIGDATA,
-				       0x1);
-
-		device_wakeup_enable(&devinfo->pdev->dev);
-		pr_emerg("BCM4360 test.189: brcmf_pcie_attach applied conservative PCIe2 init\n");
+		pr_emerg("BCM4360 test.129: brcmf_pcie_attach bypassed for BCM4360\n");
 		return;
 	}
 
@@ -1038,22 +957,6 @@ static int brcmf_pcie_exit_download_state(struct brcmf_pciedev_info *devinfo,
 		core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_INTERNAL_MEM);
 		if (core)
 			brcmf_chip_resetcore(core, 0, 0, 0);
-	}
-
-	if (devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
-		u32 pmu_st;
-		int retries;
-
-		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
-		retries = 0;
-		do {
-			msleep(10);
-			pmu_st = READCC32(devinfo, pmustatus);
-			retries++;
-		} while (!(pmu_st & 0x04) && retries < 10);
-
-		if (!(pmu_st & 0x04))
-			return -ETIMEDOUT;
 	}
 
 	if (!brcmf_chip_set_active(devinfo->ci, resetintr))
