@@ -1106,6 +1106,7 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 	struct brcmf_core *pmu;
 	u32 base;
 	u32 val;
+	u32 pmu_ctl;
 	int ret = 0;
 
 	pub = &chip->pub;
@@ -1126,6 +1127,21 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 					CORE_CC_REG(pmu->base, pmucapabilities));
 		pub->pmurev = val & PCAP_REV_MASK;
 		pub->pmucaps = val;
+
+		if (pub->chip == BRCM_CC_4360_CHIP_ID) {
+			pmu_ctl = chip->ops->read32(chip->ctx,
+					CORE_CC_REG(pmu->base, pmucontrol));
+			if (pub->pmurev == 1)
+				pmu_ctl &= ~0x200;
+			else
+				pmu_ctl |= 0x200;
+			chip->ops->write32(chip->ctx,
+					CORE_CC_REG(pmu->base, pmucontrol), pmu_ctl);
+			chip->ops->write32(chip->ctx,
+					CORE_CC_REG(pmu->base, max_res_mask), 0x1ff);
+			chip->ops->write32(chip->ctx,
+					CORE_CC_REG(pmu->base, min_res_mask), 0x103);
+		}
 	}
 
 	brcmf_dbg(INFO, "ccrev=%d, pmurev=%d, pmucaps=0x%x\n",

@@ -1,5 +1,60 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.189 (2026-04-21) — conservative PMU + PCIe2 port, built clean
+
+Module rebuilt 2026-04-21, clean (only pre-existing
+`brcmf_pcie_write_ram32 defined but not used` warning remains).
+
+**Build command** (correction — CLAUDE.md's `make -C phase5/work` is wrong;
+there's no top-level Makefile there):
+```
+make -C /lib/modules/$(uname -r)/build \
+     M=/home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac \
+     modules
+```
+
+**PCIe state** (`lspci -vvv -s 03:00.0`): clean — `<MAbort-`, no dirty
+state from prior crash.
+
+### Files changed (vs. test.188)
+- `phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/chip.c`
+  `brcmf_chip_setup` ~line 1102: BCM4360 branch adds NOILPONW write
+  (rev-dependent per bcma_pmu_init), max_res_mask=0x1ff,
+  min_res_mask=0x103 (matches wl per Gemini re-anchor cc5d525).
+- `phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c`
+  `brcmf_pcie_attach` ~line 885: replaces BCM4360 early-return with
+  bcma_core_pcie2_init port — DLYPERST WAR (dead code for chiprev=3
+  but kept for parity), LTR WAR, PM clock period, PMCR_REFUP, SBMBX.
+  `brcmf_pcie_exit_download_state` ~line 1024: adds pmustatus bit-2
+  (PST_HTAVAIL) poll for BCM4360 before brcmf_chip_set_active.
+
+Full diff + rationale: `phase5/notes/test_189_implementation_plan.md`
+(commit cd169ac). All magic numbers verified against bcma source.
+
+### Hypothesis for test.189
+
+Firmware stalls in test.188 because brcmfmac never performs the PMU
+and PCIe2 prerequisites bcma does. Four layers are introduced at
+once; the observation pattern decides which was the blocker:
+
+| Layer becomes active | Expected observable if this was the blocker |
+|---|---|
+| PMU_CTL (NOILPONW) | test.188's firmware-idle signature disappears (any TCM/D11/mailbox change) |
+| PCIe2 core init | D11 leaves reset (RESET_CTL=0) or mailbox fires |
+| res_masks (min=0x103 / max=0x1ff) | `pmustatus` bit 2 (HAVEHT) reaches 1; firmware advances |
+| HT poll pre-set_active | Previous intermittent progress becomes repeatable |
+
+`0x3fffffff` mask override explicitly excluded — Gemini re-anchor
+cc5d525 refuted it for BCM4360 (belongs to BCM4314 path in
+si_pmu_chipcontrol, not us).
+
+### Next step
+User runs test.189 (`phase5/work/test-brcmfmac.sh`) per CLAUDE.md
+post-test procedure. Capture journalctl, update this file with
+observations against the hypothesis table above.
+
+---
+
 ## POST-TEST.188 (2026-04-21) — firmware truly idle; fine-grain tiers + integrity check both NULL; exception/spin-loop confirmed
 
 Captured artifacts:
