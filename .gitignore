@@ -1,1 +1,5 @@
 .claude/
+*.ko
+!phase5/work/drivers/**/*.ko
+.qwen/
+phase6/wl.ko
