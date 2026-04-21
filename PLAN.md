@@ -353,6 +353,139 @@ Patches to `linux-wireless@vger.kernel.org` and `brcm80211@lists.linux.dev`.
 
 ---
 
+## Phase 6: Clean-room `wl` analysis ← **IN PROGRESS (parallel to 5.2)**
+
+**Goal:** Identify the register writes the proprietary `wl` driver performs
+during BCM4360 bringup that `brcmfmac` does not — specifically between
+firmware download and the point firmware reaches normal operation.
+Executes option B from the POST-TEST.188 next-step ladder.
+
+### 6.1 — Symbol-level survey ✅ FIRST PASS
+
+Commit `d6d1b98`, `phase6/NOTES.md`.
+
+- `wl.ko` extracted (broadcom-sta-6.30.223.271-59, 7.3 MB, merged
+  PCI/PCIe driver, supports 4350/4352/4360).
+- Call chain mapped: `wl_pci_probe → wlc_attach → wlc_bmac_attach →
+  wlc_hw_attach → wlc_bmac_corereset`.
+- Gaps identified (present in `wl`, absent from `brcmfmac`):
+  - `si_pmu_*` family (`si_pmu_chip_init`, `si_pmu_pll_init`,
+    `si_pmu_res_init`, `si_pmu_waitforclk`, `si_pmu_spuravoid`, …).
+  - `do_4360_pcie2_war` — BCM4360-specific WAR, called from
+    `si_pci_sleep` and `wlc_bmac_4360_pcie2_war`.
+  - OTP/NVRAM path via `otp_init` + `otp_nvread`; brcmfmac bypasses
+    this with hardcoded 228 B NVRAM text.
+- Concrete hypothesis link: test.188's observed pmucontrol bit-9 flip
+  (firmware *requesting* a PMU resource) + `wl`'s PMU init path
+  absent from brcmfmac ⇒ firmware's request never gets host-side
+  acknowledgement.
+
+### 6.2 — Review concerns (to address)
+
+Priority-ordered from the code review of `d6d1b98`:
+
+1. **Extract register-level detail** — current findings are symbol-level
+   only. Without "wl writes 0xV to ChipCommon+0xOFF at these call sites"
+   we can't reimplement or compare. **Start here**: disassemble
+   `do_4360_pcie2_war` (small, BCM4360-specific, two call-sites) and
+   document its register writes as offsets + values in plain language.
+   Then `si_pmu_chip_init`. Commit a per-function markdown for each.
+2. **Reproducibility of `find_callers.py`** — depends on
+   `/tmp/wl_funcs.txt` which is not committed. Either commit the symbol
+   list to `phase6/symbols/` or teach the script to regenerate it from
+   `wl.ko` via `nm` / `objdump` at runtime.
+3. **Side-by-side `wl` vs `brcmfmac` comparison table missing.**
+   Listing wl's bringup sequence next to brcmfmac's `brcmf_chip_set_active`
+   in a single table makes the gap concrete and auditable.
+4. **`do_4360_pcie2_war` detail is the hottest lead**, not yet
+   disassembled — promote to next action per concern 1.
+5. **Kernel 6.12.80 constraint on `wl`** — see §6.3; can likely be
+   lifted via NixOS boot params, unblocking dynamic tracing.
+6. **Clean-room framing not restated in NOTES.md** — add a one-line
+   reminder at the top: *extract register writes as offsets+values,
+   not instruction sequences; never transcribe disassembly blocks*.
+7. **Option F (OpenWrt / Asahi / SDK-leak patch survey) deferred but
+   independent** — pure reading, zero host risk, can run in parallel
+   with phase 6. Pick up opportunistically.
+8. **No prioritisation inside NOTES.md "what to look for next".** My
+   suggested order: `do_4360_pcie2_war` → `si_pmu_chip_init` →
+   `si_pmu_pll_init` → `si_pmu_res_init` → `si_gci_init` →
+   `pcicore_up/hwup` → `si_pcieclkreq`.
+
+### 6.3 — Getting `wl` to load on this host (investigation)
+
+**Current blocker:** on kernel 6.12.80 the module load fails with
+*"Unpatched return thunk"*. Origin: since ~v5.19 the kernel's
+`apply_returns()` validates that every `ret` in a loaded module is
+annotated so retbleed / Spectre-v2 mitigations can patch it. `wl.ko`
+(vintage ~2014, compiled without `-mfunction-return=thunk-extern`) has
+bare returns and is refused.
+
+**Why we want `wl` loaded:** once running we can `mmiotrace` a full
+chip-attach run and diff the MMIO write stream against `brcmfmac`'s —
+that is a direct list of missing writes, obtained in minutes instead
+of weeks of static disassembly.
+
+**Paths to enable (NixOS-specific):**
+
+- **Boot param `retbleed=off` (simplest).** Add to NixOS config:
+  ```nix
+  boot.kernelParams = [ "retbleed=off" ];
+  ```
+  This disables the runtime return-thunk check. Likely sufficient.
+  More aggressive alternatives: `"spectre_v2=off"` or
+  `"mitigations=off"`. Security cost: the machine becomes vulnerable
+  to Spectre-v2 / retbleed side-channel attacks — acceptable on a
+  dedicated RE lab host with no sensitive workload, **unacceptable**
+  on a machine that also handles personal/credentialed work.
+- **Pin an older kernel that predates the check.** e.g.
+  ```nix
+  boot.kernelPackages = pkgs.linuxPackages_5_15;
+  ```
+  `wl` loaded cleanly on 5.x historically. Downside: loses newer
+  kernel features; our brcmfmac patches must be re-tested on 5.15.
+  Heavier change than a boot-param flip.
+- **Rebuild `wl` with return-thunk compiler flag.** nixpkgs
+  `broadcom_sta` is already a source build — a patch adding
+  `EXTRA_CFLAGS += -mfunction-return=thunk-extern` to its kbuild
+  invocation *may* produce a module that passes the check. Needs
+  experimental confirmation; the proprietary assembly blobs inside
+  `wl` may not tolerate the flag.
+- **Binary-patch `wl.ko`.** Rewrite `ret` → `jmp __x86_return_thunk`
+  throughout the module. Technically possible, high effort, fragile.
+
+**Recommended approach:** try **boot param `retbleed=off`** first.
+Cost: one line of NixOS config, one reboot. If `modprobe wl` then
+succeeds, we have dynamic tracing available. If not, fall back to
+pinning 5.15.
+
+**Safety envelope for dynamic tracing once `wl` loads:**
+- Confirm BCM4360 at 03:00.0 is unbound from `brcmfmac` before
+  loading `wl`.
+- Enable `mmiotrace` on BAR0/BAR2 ranges first, then `modprobe wl`.
+- Capture one clean attach cycle to log, unload, rebind `brcmfmac`.
+- Treat the trace log as reference data only — re-implement clean,
+  do not transcribe MMIO sequences 1:1 without understanding the
+  *why* of each write.
+
+### 6.4 — Recommended next actions (ordered)
+
+1. **Disassemble `do_4360_pcie2_war`** (concern 1 + concern 4).
+   Document register writes in plain language in
+   `phase6/do_4360_pcie2_war.md`. Smallest scope, BCM4360-specific,
+   most-likely directly-testable driver patch.
+2. **Commit symbol list + fix `find_callers.py`** (concern 2).
+3. **Try `boot.kernelParams = [ "retbleed=off" ]` in NixOS config**
+   (concern 5). If `wl` loads, dynamic tracing probably makes 4-8
+   above much easier; if it doesn't, revert and continue static.
+4. **Build side-by-side `wl` vs `brcmfmac` bringup table** (concern 3).
+5. **Disassemble `si_pmu_chip_init`, then `si_pmu_pll_init`,
+   `si_pmu_res_init`** (concern 8 priority order).
+6. **Add clean-room reminder header to `phase6/NOTES.md`** (concern 6).
+7. **Option F survey** (concern 7) — opportunistic parallel reading.
+
+---
+
 ## Tools and Environment
 
 - **OS:** NixOS, kernel 6.12.x
@@ -362,7 +495,13 @@ Patches to `linux-wireless@vger.kernel.org` and `brcm80211@lists.linux.dev`.
 - **Key tools:** `ftrace`, `mmiotrace`, `trace-cmd`, `binwalk`, `objdump`,
   `readelf`, Ghidra (firmware analysis)
 - **`wl` proprietary driver:** fails to load on kernel 6.12.80
-  ("Unpatched return thunk") — cannot be used as a live reference on this host.
+  with *"Unpatched return thunk"* (post-v5.19 `apply_returns()`
+  retbleed check; `wl.ko` compiled without `-mfunction-return=thunk-extern`
+  has bare returns). Workaround is plausible — boot NixOS with
+  `kernelParams = [ "retbleed=off" ]`, or pin `linuxPackages_5_15`.
+  See §6.3 for the full path and safety envelope. Once loaded, `wl`
+  enables live `mmiotrace` + `ftrace` capture of chip bringup —
+  potentially orders of magnitude faster than static disassembly.
 
 ## Success Criteria
 
