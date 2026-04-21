@@ -1,5 +1,62 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.188 (2026-04-21) — firmware truly idle; fine-grain tiers + integrity check both NULL; exception/spin-loop confirmed
+
+### Observations
+
+Firmware image was released (CPUHALT YES→NO at 20 ms post-set_active).
+After that point, **zero changes** were observed across the entire
+monitoring window up to 3000 ms:
+
+| Probe | Time Window | Result |
+|---|---|---|
+| ARM CR4 (IOCTL/IOSTATUS/RESET_CTL) | 20ms → 3000ms | **IDENTICAL every sample**: IOCTL=0x01, IOSTATUS=0x00000000, RESET_CTL=0x00 |
+| D11 wrapper | 20ms → 3000ms | **UNCHANGED**: IOCTL=0x07, RESET_CTL=0x01 (never released) |
+| TCM[0x0000..0x001C] (8 dwords) | dwell-3000ms | **ALL UNCHANGED** |
+| Wide-TCM (15 points: 0x00000..0x60000) | dwell-3000ms | **ALL UNCHANGED** |
+| Tail-TCM (14 dwords: ramsize-64..ramsize-4) | dwell-3000ms | **ALL UNCHANGED** |
+| NVRAM marker (ramsize-4) | dwell-3000ms | **UNCHANGED** 0xffc70038 |
+| 256-point firmware integrity | dwell-3000ms | **ALL MATCH** (TCM readback == fw->data) |
+| Tier-1 CR4/D11 fine-grain | ~100-150ms | **ALL IDENTICAL** (no transient) |
+| Tier-2 CR4/D11 fine-grain | ~150-1650ms | **ALL IDENTICAL** (no transient) |
+| Tier-1 fw-integrity subset | ~100-150ms | **ALL MATCH** |
+| Tier-2 fw-integrity subset | ~150-1650ms | **ALL MATCH** |
+| CC backplane (8 regs) | dwell-3000ms | clk_ctl_st UNCHANGED; pmucontrol bit-9 flipped (0x01770181→0x01770381, expected); pmustatus UNCHANGED; pmuwatchdog=0; all others UNCHANGED |
+| mailboxint (final) | end | 0x00000000 — no doorbells |
+| pci_clear_master | end | PCI_COMMAND=0x0002 (BM OFF); MMIO guard responsive |
+
+**Critical:** `IOSTATUS=0x00000000` at every tier sample. The ARM CR4
+wrapper reports **no fault/error bits**. This rules out an exception
+handler that writes a wrapper-level status register — the spin-loop
+must be a *clean infinite loop*, not an active fault state visible
+through the BCMA AI wrapper.
+
+### Hypothesis Assessment
+- **Firmware-integrity 256 MATCH:** download-path corruption **FALSIFIED**
+- **Tier-1/tier-2 ALL UNCHANGED:** firmware makes **zero observable
+  progress** in the ~100–1650 ms window. Previously could have been
+  missed by 500/1500/3000 grid — that possibility now eliminated.
+- **IOSTATUS=0x00000000:** wrapper-level exception **not visible**.
+  Firmware either (a) stuck in clean infinite loop (no MMIO, no TCM
+  writes, no exception status bits); or (b) faulting at a hardware
+  level that doesn't update wrapper registers.
+- **All TCM/D11/NVRAM/mailboxint UNCHANGED:** firmware has written
+  nothing, sent no doorbells, released no cores.
+
+### Conclusion
+ARM is released, clock is ticking (PMU clock advances), but firmware
+makes zero forward progress. The fine-grain window (~100–1650 ms)
+eliminates the possibility that firmware makes a brief advance and
+stalls between the old 500/1500/3000 ms sampling grid points.
+
+### Next steps
+Clean-room cross-reference against proprietary `wl` driver reset
+sequence is now the primary remaining avenue of attack. We need to
+observe what registers `wl` writes between `brcmf_chip_set_active` and
+successful firmware boot that the open-source driver does not.
+
+---
+
 ## POST-TEST.186d (2026-04-20) — BusMaster ON before set_active made no difference; DMA-stall falsified; exception/spin-loop is the leading hypothesis
 
 Captured artifacts:
