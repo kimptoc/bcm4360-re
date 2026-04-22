@@ -1,5 +1,41 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-SMC-RESET CHECK (2026-04-22 15:43 BST) — chip backplane STILL dead
+
+User reports an SMC reset was performed and the host has rebooted (uptime
+~1 min, boot at 15:42). Pre-test hardware verification:
+
+- `lspci -vvv -s 03:00.0`: Link up, 2.5GT/s x1, MAbort-, SERR-, CommClk+,
+  config space readable (vendor 0x14e4 dev 0x43a0 chiprev 0x03)
+- DevSta showed `CorrErr+ UnsupReq+` latched from earlier — cleared via
+  `setpci CAP_EXP+0xa.w=0x000f` (W1C). Now reads clean.
+- `/sys/bus/pci/devices/0000:03:00.0/enable` was 0; set to 1.
+  power_state now reports D0.
+- **`dd if=...resource0 bs=4 count=1` still returns "Input/output error"
+  immediately.** Chip-internal backplane is not responding to MMIO even
+  though PCIe link is up and the device is enabled.
+
+This is the same symptom as the test.225 abort. The SMC reset that was
+done did not restore chip backplane responsiveness.
+
+Hypothesis: the SMC reset performed may have been the quick variant
+(power+ctrl+shift+option for 10s) rather than the full drain-to-zero
+required for this dead-chip mode. On Apple silicon laptops the drain-to-0
+procedure is: shut down → unplug power → drain battery to 0% (leave it
+overnight or several hours unplugged) → reconnect power → boot. Quick SMC
+resets often don't clear chip-internal state from BCM4360 hangs.
+
+**Action required from user**: confirm the type of SMC reset performed.
+If it was a quick reset, the full drain-to-0 may still be required.
+Alternatively, we can wait some hours with the host powered off to see
+if chip-internal state decays naturally.
+
+No code/plan changes — test.225 module build is still ready to run when
+BAR0 comes back. Pre-check guard in test-brcmfmac.sh will continue to
+refuse insmod while BAR0 is dead, which is the safe default.
+
+---
+
 ## TEST.225 ABORTED (2026-04-22 15:40 BST) — BAR0 dead; SMC reset required before retry
 
 The test-brcmfmac.sh pre-check (BAR0 MMIO read via
