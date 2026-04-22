@@ -1,5 +1,55 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.220 RERUN (2026-04-22 post-crash) — rerun the wider-mask learning probe
+
+System crashed between commit `ae29e57` (test.220 PRE code) and the first
+run of test.220. Boot -2 journal ended 10:44:18 with the module still
+at test.218/219 markers — test.220 code was compiled (brcmfmac.ko
+vermagic matches current kernel 6.12.80, `strings` shows test.220
+markers) but never insmodded. Boot -1 was a short clean boot with no
+brcmfmac activity. Current boot 0 shows PCIe clean: `<MAbort- >SERR-
+CommClk- LnkSta Speed 2.5GT/s x1`.
+
+Per user instruction (no SMC reset done): proceeding with test.220.
+BCM4360 may carry whatever state the last test.219 run left it in —
+but that state is `HAVEHT(17)=0, ALP_AVAIL=YES, FORCEHT latched in CC
+only`, not a crash state. The test-brcmfmac.sh pre-MMIO check will
+distinguish CTO (device dead) from UR (device alive but rejecting) via
+timing, aborting safely if needed.
+
+### Hypothesis (unchanged from original PRE-TEST.220 below)
+
+Writing `0xffffffff` to both CC.min_res_mask and CC.max_res_mask:
+- (A) brings up more bits in pmustatus, including HAVEHT → proceed past
+  ramstbydis; make the wider mask permanent; or
+- (B) leaves pmustatus = 0x2a unchanged → PMU resource dependency
+  tables must be programmed (Phase 6 from wl.ko).
+
+Expected log signatures:
+- `BCM4360 test.220: max_res_mask 0x0000017f -> 0xffffffff`
+- `BCM4360 test.220: min_res_mask 0x0000017f -> 0xXXXXXXXX`
+  — the read-back XXXXXXXX tells us which bits the hardware actually
+  implements in this register
+- pmustatus samples from the existing dwell probe reveal which bits
+  come UP under the wider mask
+
+### Build state (verified)
+
+- `phase5/work/drivers/.../chip.c` lines ~1183–1211 contain the
+  `0xffffffff` writes (BCM4360 branch)
+- `brcmfmac.ko` built 10:43 Apr 22, vermagic 6.12.80 matches running
+  kernel; `strings` confirms `BCM4360 test.220` markers
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.220.{run,journalctl,journalctl.full}.txt`.
+
+---
+
 ## POST-TEST.219 (2026-04-22) — FORCEHT latches but HAVEHT never comes up
 
 Decision tree branch **(B)** confirmed.
