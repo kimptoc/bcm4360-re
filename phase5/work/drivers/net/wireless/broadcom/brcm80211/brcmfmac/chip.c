@@ -1193,7 +1193,7 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		before_max = chip->ops->read32(chip->ctx, max_addr);
 		chip->ops->write32(chip->ctx, max_addr, 0xffffffff);
 		after_max = chip->ops->read32(chip->ctx, max_addr);
-		pr_emerg("BCM4360 test.222: max_res_mask 0x%08x -> 0x%08x (wrote 0xffffffff)\n",
+		pr_emerg("BCM4360 test.223: max_res_mask 0x%08x -> 0x%08x (wrote 0xffffffff)\n",
 			  before_max, after_max);
 
 		/* test.220: also widen min_res_mask.
@@ -1208,8 +1208,29 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		before_min = chip->ops->read32(chip->ctx, min_addr);
 		chip->ops->write32(chip->ctx, min_addr, 0xffffffff);
 		after_min = chip->ops->read32(chip->ctx, min_addr);
-		pr_emerg("BCM4360 test.222: min_res_mask 0x%08x -> 0x%08x (wrote 0xffffffff — learning probe)\n",
+		pr_emerg("BCM4360 test.223: min_res_mask 0x%08x -> 0x%08x (wrote 0xffffffff — learning probe)\n",
 			  before_min, after_min);
+
+		/* test.223: give the PMU time to promote resources before the
+		 * caller does any more bus traffic.  test.222 hung mid-way
+		 * through root-port ASPM disable — the suspected cause is
+		 * the endpoint being unresponsive while the PMU runs up-
+		 * sequences for newly-requested rails. 20 ms is well past
+		 * typical PMU transition delays (PMU_MAX_TRANSITION_DLY is
+		 * 15 us, but we add margin for resource chain depth).
+		 */
+		msleep(20);
+
+		{
+			u32 pmustatus, res_state;
+
+			pmustatus = chip->ops->read32(chip->ctx,
+				CORE_CC_REG(pmu->base, pmustatus));
+			res_state = chip->ops->read32(chip->ctx,
+				CORE_CC_REG(pmu->base, res_state));
+			pr_emerg("BCM4360 test.223: post-settle pmustatus=0x%08x res_state=0x%08x\n",
+				  pmustatus, res_state);
+		}
 	}
 
 	/* execute bus core specific setup */

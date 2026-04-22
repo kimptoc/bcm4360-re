@@ -1,5 +1,110 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-CRASH / PRE-TEST.223 (2026-04-22 15:00 BST) — add PMU settle delay + readback to stop ASPM-time bus hang
+
+### test.222 forensics (boot -1, 14:41:07 → 14:51:22)
+
+`phase5/logs/test.222.run.txt` is **empty** — the test-brcmfmac.sh
+helper never got to write to its log file. journalctl from the crash
+boot shows the brcmfmac load did make progress:
+
+```
+14:51:18 test.193: PMU WARs applied — chipcontrol#1 0x00000210->0x00000a10 ...
+14:51:18 test.222: max_res_mask 0x0000013f -> 0xffffffff (wrote 0xffffffff)
+14:51:19 test.222: min_res_mask 0x0000013b -> 0xffffffff (wrote 0xffffffff — learning probe)
+14:51:20 test.119: brcmf_chip_attach returned successfully
+14:51:21 test.158: BusMaster cleared after chip_attach
+14:51:22 test.158: ASPM disabled; LnkCtl before=0x0143 after=0x0140 ...
+14:51:22 test.188: root port 0000:00:1c.2 LnkCtl before=0x0040 ASPM=0x0 ...
+14:51:22 test.188: root-port pci_disable_link_state returned — reading LnkCtl
+[ SILENCE — machine hung ]
+```
+
+No oops / BUG / call-trace. The host froze between
+`pci_disable_link_state returned` on the root port and the readback
+of the root-port `LnkCtl` immediately after.
+
+### Crash cause hypothesis (differs from test.221 cause)
+
+test.221 survived this exact point and reached the fw-sample loop,
+where pr_emerg flooding killed the host. test.222 hung **earlier**,
+during root-port ASPM transition, so the root cause is not log
+volume.
+
+The wider PMU mask write `min_res_mask = 0xffffffff` forces the PMU
+to bring up **every** implemented resource, running ramp/up
+sequences for each. During this power-rail churn the endpoint is
+likely unresponsive to config-space / bus traffic. We follow the
+mask writes with:
+
+- read-back of max and min masks (two MMIO reads)
+- `brcmf_chip_setup` returns immediately
+- `pci_clear_master` (config write)
+- `pci_disable_link_state` on endpoint (config writes via root port)
+- `pci_disable_link_state` on root port (config writes on parent)
+- read-back of root-port `LnkCtl`
+
+If the endpoint's link is in L1 during any of this and the PMU is
+busy powering rails, the LTR/ASPM state transition can stall.
+test.221 got lucky on timing; test.222 did not.
+
+### Change for test.223 (minimal, diagnostic + soft settle)
+
+1. After writing `max_res_mask = 0xffffffff` and `min_res_mask =
+   0xffffffff`, **`msleep(20)`** to let the PMU finish promoting
+   resources before any more bus traffic.
+2. After the sleep, read `pmustatus` and `res_state` once each and
+   emit a single `pr_emerg` with both values. This gives us the
+   first-ever look at what the PMU actually brought up when asked
+   unconditionally (key data for narrowing the mask in later tests).
+3. Bump the two mask-write markers `test.222` → `test.223` so we
+   can grep-confirm the new module loaded.
+4. Keep `nr_fw_samples=16` in pcie.c — log-volume fix still needed.
+
+No change to the mask values themselves. No change to flow order.
+Just give the chip a moment to catch up before the ASPM state
+transition.
+
+### Decision tree
+
+| Observation | Interpretation | Next |
+|---|---|---|
+| Host survives past ASPM, reaches firmware download | Settle delay was the fix; capture new pmustatus/res_state data | Use the captured bits to narrow the mask |
+| Host survives, pmustatus/res_state = 0x13b/0x13f (no change) | Wider mask didn't promote anything after all — test.221 HAVEHT was a transient | Re-check test.221 HAVEHT capture; consider narrower mask |
+| Host survives, pmustatus shows many new bits SET | Jackpot — capture and narrow in test.224 | Shrink mask to only-bits-set pattern |
+| Host hangs at same point | Settle delay insufficient; PMU ramp longer than 20ms | Try msleep(50–100) or gate mask writes earlier |
+| Host hangs later (e.g. fw-sample loop) | Progress — diagnose new hang separately | Follow the new failure |
+
+### Build state
+
+- chip.c: adding msleep(20) + pmustatus/res_state readback after
+  the pair of mask writes; bumping test.222 → test.223 markers.
+- pcie.c: unchanged from test.222 (nr_fw_samples=16).
+- Expected rebuild: clean.
+
+### Pre-test hardware state
+
+- `lspci -vvv -s 03:00.0` (current boot 0): MAbort-, SERR-,
+  DevSta clean, LnkSta 2.5GT/s x1, LnkCtl ASPM Disabled, CommClk-.
+  Note: user confirmed **no SMC reset** between the test.222 crash
+  and this boot — just a cold reboot. PCIe state nonetheless
+  reports clean, matching prior boot pattern.
+- brcmfmac not loaded (`lsmod` empty).
+
+### Run plan
+
+```bash
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Expected artifacts:
+- `phase5/logs/test.223.run.txt`
+- `phase5/logs/test.223.journalctl.txt` (post-run grep)
+- `phase5/logs/test.223.journalctl.full.txt` (post-run full boot dump)
+- On crash: capture from `journalctl -k -b -1` next boot.
+
+---
+
 ## PRE-TEST.222 (2026-04-22 14:50 BST) — re-run wider-mask probe with reduced log volume
 
 ### What changed vs test.221
