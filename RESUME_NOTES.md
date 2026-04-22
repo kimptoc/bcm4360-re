@@ -1,5 +1,239 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.224 (2026-04-22 15:10 BST) — narrow mask to observed 0x7ff + pre-download HAVEHT capture
+
+### What changed vs test.223
+
+**chip.c (`brcmf_chip_setup` PMU block)**:
+- `max_res_mask` write `0xffffffff` → **`0x000007ff`** (observed achievable set)
+- `min_res_mask` write `0xffffffff` → **`0x000007ff`** (same)
+- Markers `test.223` → `test.224` (both mask lines + the post-settle
+  readback line)
+- Readback message now includes `(expect 0x2e / 0x7ff)` so we can
+  eyeball-confirm the identical hardware state
+
+**pcie.c (`brcmf_pcie_setup` just before download)**:
+- Added `brcmf_pcie_probe_d11_clkctlst(devinfo, "pre-download")` right
+  after the existing `brcmf_pcie_probe_armcr4_state(devinfo, "pre-download")`
+- This reads CR4 + 0x1e0 and D11 + 0x1e0 clk_ctl_st BEFORE the 442 KB
+  BAR2 burst. Test.221 proved HAVEHT=YES from inside `download_fw_nvram`
+  at the "pre-set-active" sampling; test.223 never reached that because
+  the burst hung. The new probe captures the same bit pattern at the
+  earliest safe point
+
+No other code changes. `nr_fw_samples` still 16 (from test.222).
+
+### Build state (just verified)
+
+- `brcmfmac.ko` rebuilt clean; markers `test.224: max_res_mask`,
+  `test.224: min_res_mask`, `test.224: post-settle pmustatus` all
+  present in `strings brcmfmac.ko`
+- One harmless `-Wunused-function` warning on `brcmf_pcie_write_ram32`
+  (same as before)
+- Kernel 6.12.80 vermagic match
+
+### Pre-test hardware state
+
+- Boot 0 `lspci -vvv -s 03:00.0`: `MAbort- SERR- LnkSta 2.5GT/s x1
+  ASPM Disabled` — link up, no dirty state flags
+- **No SMC reset between test.223 crash and current boot** (user
+  confirmed in conversation). BCM4360 may retain internal state from
+  the test.223 hang — relevance unclear, PCIe cfg looks clean but
+  chip-internal PMU state could still be transient. See Risk note
+  below
+- `lsmod | grep brcm` → empty (no prior brcmfmac this boot)
+
+### Hypothesis
+
+1. Narrower `0x7ff` mask is hardware-equivalent to `0xffffffff` on
+   this silicon (bits 11+ unimplemented). Expected readback
+   `pmustatus=0x2e res_state=0x7ff` matches test.223.
+2. The new `probe_d11_clkctlst("pre-download")` will emit
+   `test.218: pre-download CR4 clk_ctl_st=0x0703xxxx [HAVEHT(17)=YES
+   ALP_AVAIL(16)=YES ...]` — same pattern test.221 saw from the
+   deeper "pre-set-active" probe.
+3. Download burst behaviour is uncertain — may repeat the
+   test.223 hang, may complete (test.221 sample) depending on
+   chip-internal state.
+
+### Decision tree
+
+| Observation | Interpretation | Next |
+|---|---|---|
+| pmustatus=0x2e res_state=0x7ff + probe HAVEHT=YES + download completes | Jackpot: narrow mask works, no burst hang. Compare post-release TCM with test.188 nr_fw_samples=16 loop | follow firmware startup probes |
+| HAVEHT=YES but download still hangs | Burst hang reproducible regardless of mask width; need to mitigate burst (e.g. throttle MMIO rate, split into smaller chunks, or investigate why test.221 succeeded here) | test.225: throttled MMIO download |
+| HAVEHT=NO pre-download | Mask 0x7ff narrower than expected OR silicon needs additional bit | capture pmustatus/res_state actual; try 0xffffffff again for comparison |
+| Chip PMU state different vs test.223 (res_state ≠ 0x7ff) | Chip-internal state was dirty post-test.223 crash; SMC reset needed to reset PMU memory | halt, request SMC reset |
+
+### Risk note — chip state may be dirty
+
+Cold reboot does not power-cycle the M.2 slot. Any PMU / ARM CR4 /
+backplane state set during test.223 may persist into this boot even
+though the host's view of the chip (lspci) looks clean. Two possible
+outcomes:
+
+- **Best case**: chip is effectively in POR (PMU internal latches
+  cleared by link-down/link-up cycle). Test.224 behaves like running
+  on fresh silicon, probably mirrors test.223 up to the "pre-download"
+  probe.
+- **Worst case**: BCM4360 retains PMU mask values and/or partial
+  up-sequence state. The wide mask from test.223 might still be
+  "requested" at POR, skewing our baseline readback (would expect to
+  see pre_max already `0x7ff` or `0xffffffff`, not `0x13f`).
+- **Crash case**: the chip is in a state where even early MMIO hangs.
+  Would show as no progress past test.158 BAR0 probe.
+
+The pre_max / pre_min values in the first two log lines of test.224
+are the cheapest tell for this: if they read `0x7ff`/`0x7ff` instead
+of the expected `0x13f`/`0x13b`, the chip has retained test.223's mask
+and we should stop and request an SMC reset before going further.
+
+### Run command (same script)
+
+```bash
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Expected artifacts: `phase5/logs/test.224.run.txt`,
+`phase5/logs/test.224.journalctl.txt`,
+`phase5/logs/test.224.journalctl.full.txt`. On crash → capture from
+`journalctl -k -b -1` next boot.
+
+---
+
+## POST-TEST.223 (2026-04-22 15:05 BST) — msleep fix worked past ASPM, captured first-ever PMU state, but fw-download hang
+
+### Summary
+
+Test.223 is a partial success. The `msleep(20)` + readback change
+landed as planned and the host survived past the test.222 ASPM-time
+hang. We captured the first-ever post-wide-mask PMU state and ran
+all the way through chip_attach, ASPM disable, PCIe2 setup, fw
+request, setup callback, raminfo, and the "pre-download" ARM CR4
+probe. Then the host hung silently — the next `pr_emerg`
+("test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)")
+never appeared in the journal. Cold reboot only (no SMC reset).
+
+Logs captured: `phase5/logs/test.223.journalctl.txt` (95 lines,
+grep-filtered) and `phase5/logs/test.223.journalctl.full.txt`
+(1203 lines, whole boot -1).
+
+### Key log lines from test.223 (boot -1, 14:53:12 → 15:01:32)
+
+```
+15:01:21 test.193: chip=0x4360 ccrev=43 pmurev=17 pmucaps=0x10a22b11
+15:01:21 test.193: PMU WARs applied — chipcontrol#1 0x00000210->0x00000a10
+         pllcontrol#6=0x080004e2 #0xf=0x0000000e
+15:01:21 test.223: max_res_mask 0x0000013f -> 0xffffffff (wrote 0xffffffff)
+15:01:21 test.223: min_res_mask 0x0000013b -> 0xffffffff (wrote 0xffffffff — learning probe)
+15:01:21 test.223: post-settle pmustatus=0x0000002e res_state=0x000007ff  ★ new data ★
+15:01:21 test.119: brcmf_chip_attach returned successfully
+15:01:22 test.158: BusMaster cleared after chip_attach
+15:01:23 test.158: ASPM disabled; LnkCtl before=0x0143 after=0x0140           ← survived test.222 hang point
+15:01:24 test.188: root port ... LnkCtl after=0x0040                          ← survived
+15:01:29 test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0
+15:01:32 test.128: brcmf_pcie_attach ENTRY
+15:01:32 test.194: PCIe2 CLK_CONTROL probe = 0x00000182
+15:01:32 test.194: SBMBX write done
+15:01:32 test.194: PMCR_REFUP 0x00051852 -> 0x0005185f
+15:01:32 test.128: after brcmf_pcie_attach
+15:01:32 test.130: after brcmf_chip_get_raminfo
+15:01:32 test.188: post-raminfo ARM CR4 IOCTL=0x21 IOSTATUS=0 RESET_CTL=0 CPUHALT=YES
+15:01:32 test.130: after brcmf_pcie_adjust_ramsize
+15:01:32 test.188: pre-download ARM CR4 IOCTL=0x21 IOSTATUS=0 RESET_CTL=0 CPUHALT=YES
+[ SILENCE — machine hung ]
+```
+
+No oops / BUG / MCE / AER in the log (kernel booted with `pci=noaer`,
+so AER is suppressed anyway). Pure silent hang.
+
+### First-ever wide-mask PMU state (★ key data ★)
+
+| Reg | Default (test.191..220) | Post-wide-mask (test.223) | Delta (new bits set) |
+|---|---|---|---|
+| pmustatus | 0x2a | 0x2e | +bit 2 |
+| res_state | 0x13b | 0x7ff | +bits 2, 6, 7, 9, 10 (i.e. +0x6c4) |
+
+`res_state=0x7ff` = bits 0..10 all asserted. Writing `0xffffffff` vs
+`0x7ff` would produce the same hardware outcome — bits 11+ aren't
+implemented on this silicon. **The useful narrow mask is 0x7ff.**
+
+Interpretation:
+- Baseline 0x13b = bits 0,1,3,4,5,8. The five NEW resources PMU brought
+  up are at bits 2, 6, 7, 9, 10.
+- Test.221 proved that with this wider mask the ARM CR4 `clk_ctl_st`
+  reads **HAVEHT=YES, ALP_AVAIL=YES**. So one of the five new bits
+  (2/6/7/9/10) is the HT-clock-backing resource we've been missing.
+- Narrowing from 0xffffffff to 0x7ff is safe (same resources). Further
+  narrowing (e.g. to `0x13b | 0x40` = 0x17b) would bisect which bit
+  actually enables HT. Not required yet — 0x7ff is the clean ask.
+
+### Why the fw-download hang?
+
+Rough sequence after `test.188: pre-download ARM CR4`:
+
+1. `pr_emerg("BCM4360 test.163: before brcmf_pcie_download_fw_nvram")`
+2. `mdelay(300)`
+3. `brcmf_pcie_download_fw_nvram` — **442 KB BAR2 MMIO burst** into TCM
+   (CPU→device posted writes, no DMA)
+
+The "test.163" pr_emerg never reached the journal. Two candidates:
+
+- **(a)** The pr_emerg itself printed but wasn't drained to console
+  before the host wedged. Hang is inside `download_fw_nvram` when the
+  long MMIO burst trips bus unresponsiveness caused by the wide PMU
+  mask having promoted a resource (D11 / BP-on-HT / ALP) that is now
+  contending for the backplane.
+- **(b)** Something between the two `pr_emerg` calls is doing hidden
+  work. Reading pcie.c:4637–4640, there is nothing but the pr_emerg
+  and a `mdelay`. So (a) is by far the more plausible explanation.
+
+No evidence of a chip-side fault — flow progressed much further than
+any prior test. The blocker is now a **host-side MMIO backpressure**
+issue during the 442 KB burst, not a chip init gap.
+
+### What worked (record for future)
+
+- `msleep(20)` after the pair of wide mask writes was sufficient to
+  let PMU settle before the ASPM state transition on the root port
+  (test.222 hung here; test.223 did not).
+- Readback of `pmustatus`/`res_state` via `brcmf_pcie_read_reg32` after
+  the delay landed cleanly and produced the key 0x2e/0x7ff data point.
+- Wide mask writes themselves are benign at probe time. The hang is
+  correlated with sustained MMIO traffic later.
+
+### Next hypothesis — narrow mask + bisect HAVEHT bit
+
+Plan for test.224 (PRE section being drafted now):
+
+1. Change both mask writes from `0xffffffff` → `0x7ff` (exact
+   observed-achievable resource set). No hardware behaviour change
+   vs. test.223 expected, but it's the clean ask and sets up further
+   bisection.
+2. Keep msleep(20) + readback. Expect same `pmustatus=0x2e
+   res_state=0x7ff` — if we see a different value, the write width
+   actually matters.
+3. Add a second probe_armcr4_state call AFTER mask settle to confirm
+   HAVEHT latches the same as test.221 (this is the regression check).
+4. Do NOT attempt fw-download yet — too risky until we've mitigated
+   the burst-time hang. Harness can early-return before download
+   (via `bcm4360_skip_arm=1` path already present) to keep the host
+   alive while we iterate on the mask.
+
+If test.224 is clean with 0x7ff and HAVEHT latches, test.225 can
+bisect (0x13b | 0x40 first — bit 6 is the most likely HT backer
+based on bcma conventions).
+
+### Crash-boot hardware state
+
+- Boot 0 `lspci -vvv -s 03:00.0`: `MAbort- SERR- CommClk- LnkSta
+  2.5GT/s x1 ASPM Disabled` — link still up, clean. No SMC reset
+  between boot -1 crash and boot 0.
+- No brcmfmac loaded (`lsmod | grep brcm` empty). mt76/mt76x02_*
+  present on unrelated USB card.
+
+---
+
 ## POST-CRASH / PRE-TEST.223 (2026-04-22 15:00 BST) — add PMU settle delay + readback to stop ASPM-time bus hang
 
 ### test.222 forensics (boot -1, 14:41:07 → 14:51:22)

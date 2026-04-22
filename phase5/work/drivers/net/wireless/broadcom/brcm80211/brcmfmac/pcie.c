@@ -4635,6 +4635,13 @@ static void brcmf_pcie_setup(struct device *dev, int ret,
 	 */
 
 	brcmf_pcie_probe_armcr4_state(devinfo, "pre-download");
+	/* test.224: capture CR4+D11 clk_ctl_st at the earliest point
+	 * where all devinfo/core state is available. Test.221 only saw
+	 * HAVEHT=YES from deep inside download_fw_nvram; test.223 never
+	 * reached that point because the 442KB BAR2 burst hung. This
+	 * probe runs before the burst — if HAVEHT=YES here, we have
+	 * pre-download confirmation even if the burst later hangs. */
+	brcmf_pcie_probe_d11_clkctlst(devinfo, "pre-download");
 	pr_emerg("BCM4360 test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)\n");
 	mdelay(300);
 	ret = brcmf_pcie_download_fw_nvram(devinfo, fw, nvram, nvram_len);

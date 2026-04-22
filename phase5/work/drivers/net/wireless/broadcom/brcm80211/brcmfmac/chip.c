@@ -1185,39 +1185,31 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		u32 before_max, after_max;
 		u32 before_min, after_min;
 
-		/* test.220: widen max_res_mask to 0xffffffff as a learning
-		 * probe.  The PMU register is typically masked to the chip's
-		 * implemented resource bits, so the read-back tells us
-		 * exactly which resource bits exist on BCM4360.
+		/* test.224: narrow mask to 0x7ff (the implemented-bit set
+		 * observed in test.223 when we wrote 0xffffffff). res_state
+		 * rose from 0x13b default to 0x7ff with the wide mask, which
+		 * means bits 11+ are unimplemented; writing 0x7ff is the
+		 * clean ask and produces identical hardware state.
+		 *
+		 * Keeping the max widen first, then min widen. Intent is to
+		 * reduce any PMU-internal machinery around "probing bits I
+		 * don't have" while preserving HAVEHT (test.221 confirmed
+		 * HAVEHT=YES with this resource set).
 		 */
 		before_max = chip->ops->read32(chip->ctx, max_addr);
-		chip->ops->write32(chip->ctx, max_addr, 0xffffffff);
+		chip->ops->write32(chip->ctx, max_addr, 0x7ff);
 		after_max = chip->ops->read32(chip->ctx, max_addr);
-		pr_emerg("BCM4360 test.223: max_res_mask 0x%08x -> 0x%08x (wrote 0xffffffff)\n",
+		pr_emerg("BCM4360 test.224: max_res_mask 0x%08x -> 0x%08x (wrote 0x000007ff)\n",
 			  before_max, after_max);
 
-		/* test.220: also widen min_res_mask.
-		 * Test.219 proved 0x17f leaves bits 0/2/4/6/8 stuck DOWN in
-		 * pmustatus despite being requested — PMU is gating them on
-		 * dependencies our patch doesn't satisfy, so HAVEHT never
-		 * comes up and ramstbydis times out.  Writing 0xffffffff is
-		 * a *learning probe*: read-back shows implemented bits,
-		 * pmustatus shows which ones the PMU is willing to bring up
-		 * when asked unconditionally.
-		 */
 		before_min = chip->ops->read32(chip->ctx, min_addr);
-		chip->ops->write32(chip->ctx, min_addr, 0xffffffff);
+		chip->ops->write32(chip->ctx, min_addr, 0x7ff);
 		after_min = chip->ops->read32(chip->ctx, min_addr);
-		pr_emerg("BCM4360 test.223: min_res_mask 0x%08x -> 0x%08x (wrote 0xffffffff — learning probe)\n",
+		pr_emerg("BCM4360 test.224: min_res_mask 0x%08x -> 0x%08x (wrote 0x000007ff)\n",
 			  before_min, after_min);
 
-		/* test.223: give the PMU time to promote resources before the
-		 * caller does any more bus traffic.  test.222 hung mid-way
-		 * through root-port ASPM disable — the suspected cause is
-		 * the endpoint being unresponsive while the PMU runs up-
-		 * sequences for newly-requested rails. 20 ms is well past
-		 * typical PMU transition delays (PMU_MAX_TRANSITION_DLY is
-		 * 15 us, but we add margin for resource chain depth).
+		/* test.223 showed msleep(20) was sufficient to survive the
+		 * root-port ASPM transition (test.222 hang point) — keep it.
 		 */
 		msleep(20);
 
@@ -1228,7 +1220,7 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 				CORE_CC_REG(pmu->base, pmustatus));
 			res_state = chip->ops->read32(chip->ctx,
 				CORE_CC_REG(pmu->base, res_state));
-			pr_emerg("BCM4360 test.223: post-settle pmustatus=0x%08x res_state=0x%08x\n",
+			pr_emerg("BCM4360 test.224: post-settle pmustatus=0x%08x res_state=0x%08x (expect 0x2e / 0x7ff)\n",
 				  pmustatus, res_state);
 		}
 	}
