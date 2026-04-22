@@ -1,5 +1,121 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.219 (2026-04-22) — force FORCEHT to bring up HT clock
+
+### What POST-TEST.218 just delivered (ROOT CAUSE LOCATED)
+
+Test.218 ran cleanly, no crash. **HAVEHT (bit 17) is stuck CLEAR
+chip-wide, throughout the dwell, even pre-halt** — that is the missing
+condition firmware is waiting on in ramstbydis.
+
+ARM CR4 clk_ctl_st = **0x04050040** for every probe (52 samples,
+3-second window):
+
+```
+bit 0  FORCEALP   = no
+bit 1  FORCEHT    = no
+bit 6  ?          = SET   (pre-existing, chip-wide; also set on CC)
+bit 16 ALP_AVAIL  = YES   (always-on low-power clock available)
+bit 17 HAVEHT     = no    ← THE MISSING ACK
+bit 18 ?          = set   (chip-specific)
+bit 19 BP_ON_HT   = no
+bit 26 ?          = set   (CR4-specific)
+```
+
+ChipCommon clk_ctl_st = **0x00050040** (same minus the CR4-specific
+bit 26) UNCHANGED across all 12 dwell ticks. So:
+- HT clock is **never enabled chip-wide** during the firmware-active
+  window
+- ALP works (the always-on clock — what ARM CR4 boots from)
+- Firmware boots on ALP, runs ramstbydis, sets bit 6, polls HAVEHT (HT
+  acknowledge), times out because HT was never requested/granted
+
+Why HT is missing: `min_res_mask = 0x17f` (bits 0-7) forces a set of
+PMU resources, but **none of them request HT_AVAIL** for BCM4360. HT
+needs the PLL up; the PLL needs power gated by a higher PMU resource
+(roughly bit 8-12 on BCM4360 — exact bit needs confirmation).
+
+D11 expectedly IN_RESET throughout (same as test.217 — firmware never
+gets far enough to bring D11 out of reset).
+
+### Implementation plan for test.219
+
+Two-explanation distinguisher: does writing FORCEHT (bit 1) of
+ChipCommon clk_ctl_st before `chip_set_active` bring HAVEHT up?
+
+- (A) After write, ChipCommon HAVEHT = YES → HT clock is just unrequested.
+  Driver's job is to request it (FORCEHT or proper PMU min_res_mask). If
+  ARM CR4 HAVEHT also comes up, ramstbydis should succeed and firmware
+  should advance past the assert.
+- (B) After write, ChipCommon HAVEHT stays CLEAR → HT request is gated
+  by a PMU resource we haven't forced. Need to enumerate PMU resources
+  for BCM4360 and find HT_AVAIL bit, then OR it into min_res_mask.
+
+Implementation in chip.c next to the existing `min_res_mask=0x17f`
+patch (BCM4360-specific block):
+
+```c
+/* test.219: force HT clock by setting FORCEHT (bit 1) of ChipCommon
+ * clk_ctl_st. Test.218 proved HAVEHT stuck CLEAR throughout, which is
+ * what firmware (ramstbydis) is timing out on.
+ */
+{
+    u32 ccs_addr = CORE_CC_REG(pmu->base, clk_ctl_st);
+    /* But pmu->base is for PMU regs. CC clk_ctl_st is in CC core
+     * regs, not PMU. Need ChipCommon base, not pmu->base. */
+    ...
+}
+```
+
+Actually safer to do this from pcie.c via `brcmf_pcie_select_core
+(BCMA_CORE_CHIPCOMMON) + WRITECC32(clk_ctl_st, ...)`. Add it
+immediately before `brcmf_chip_set_active` so the FORCEHT write happens
+right before firmware release.
+
+Sequence:
+1. Sample CC + CR4 clk_ctl_st pre-write (already done as
+   `pre-set-active` probe)
+2. WRITECC32(clk_ctl_st, ccs_now | BIT(1))     ← test.219 intervention
+3. Sample CC + CR4 clk_ctl_st post-write to confirm HAVEHT comes up
+4. Call brcmf_chip_set_active as normal
+5. Existing dwell probes record the rest
+
+`min_res_mask = 0x17f` patch retained. Test marker .218 → .219.
+
+### Decision tree
+
+| After FORCEHT write | Interpretation | Next |
+|---|---|---|
+| CC HAVEHT(17) → 1, CR4 HAVEHT → 1, **firmware ASSERT gone** (different PC or no ASSERT) | root cause confirmed; HT clock was the missing condition | clean up — make FORCEHT a permanent driver-side step; explore proper PMU resource setting; advance to next firmware blocker |
+| CC HAVEHT → 1, CR4 HAVEHT → 1, but ramstbydis still asserts at 0x000641cb | HAVEHT alone isn't the polled bit; firmware checks something else | re-decode the SET-bit operation in ramstbydis; check bit 6 vs bit 17 vs others |
+| CC HAVEHT stays 0 after FORCEHT | HT request gated by missing PMU resource | enumerate BCM4360 PMU resources; find HT_AVAIL bit; OR into min_res_mask |
+| Crash / SLVERR after write | timing-sensitive — defer FORCEHT write to a later point | write after set_active instead |
+
+### Build/run
+
+```
+make -C /home/kimptoc/bcm4360-re/phase5/work    # via kbuild
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.219.{run,journalctl,journalctl.full}.txt`.
+
+---
+
+## POST-TEST.218 (2026-04-22) — see PRE-TEST.219 above
+
+ROOT CAUSE LOCATED. ARM CR4 clk_ctl_st HAVEHT (bit 17) stuck CLEAR
+throughout dwell. ChipCommon clk_ctl_st identical (HAVEHT=0). HT clock
+is never enabled chip-wide; firmware (ramstbydis) times out polling for
+HT acknowledge. Test.219 intervenes by writing FORCEHT before
+set_active.
+
+Bonus: EROM dump in chip_init showed slot[0]=0x18002000 = ARM CR4 base
+(NOT D11 base 0x18001000), correctly identifying which core firmware
+was polling — see PRE-TEST.218 discussion of the EROM data.
+
+---
+
 ## PRE-TEST.218 (2026-04-22) — sample ARM CR4 clk_ctl_st (the actually-polled register)
 
 ### What POST-TEST.217 + EROM dump together delivered (BIG pivot)
