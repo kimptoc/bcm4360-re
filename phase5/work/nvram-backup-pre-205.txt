@@ -1,0 +1,17 @@
+# BCM4360 NVRAM for MacBookPro11,1 (Apple 106b:0112)
+# Minimal configuration — boardtype/rev will be updated once SPROM is read
+sromrev=11
+boardtype=0x0552
+boardrev=0x1101
+boardflags=0x10401001
+boardflags2=0x00000002
+boardflags3=0x00000000
+boardnum=0
+macaddr=00:1C:B3:01:12:01
+ccode=X0
+regrev=0
+vendid=0x14e4
+devid=0x43a0
+xtalfreq=40000
+aa2g=7
+aa5g=7

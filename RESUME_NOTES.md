@@ -1,5 +1,61 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.205 (2026-04-22) — add ramstbydis=0 to NVRAM, compare assert against test.204
+
+### Hypothesis
+
+Test.204 found the string "ramstbydis" (RAM Standby Disable) in the
+firmware's literal pool nearby the assert call site. Our current NVRAM
+file is missing this key. If the firmware reads ramstbydis from NVRAM
+during init and the line-397 assert path branches on its value, then
+adding `ramstbydis=0` (or `=1`) will change the assert outcome.
+
+### Implementation
+
+**No code changes** — pure NVRAM modification. Keep the same dump
+configuration as test.204 so we can compare the trap region byte-for-
+byte. Bump the test marker to test.205 so log lines are tagged.
+
+**chip.c** — bump marker `test.204` → `test.205`.
+**pcie.c** — only the test.204 → test.205 label rename. Same
+`dump_ranges[]` as test.204.
+**NVRAM** — append `ramstbydis=0` to
+`/lib/firmware/brcm/brcmfmac4360-pcie.txt` (preserve existing keys).
+
+### Build + pre-test
+
+- Module rebuilt clean.
+- PCIe state: clean post-test.204.
+- NVRAM backed up to `phase5/work/nvram-backup-pre-205.txt` first.
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.205.journalctl.full.txt`.
+
+### Pre-arranged decision tree (read after test runs)
+
+- **Same `line 397` assert AND same `v = 43`** → ramstbydis didn't
+  affect this code path. Revert NVRAM, then dump `0x64100..0x64160`
+  in test.206 to find r6's source.
+
+- **Same `line 397` assert AND DIFFERENT `v = N`** → the asserted
+  value depends on ramstbydis (or downstream code that consumed
+  ramstbydis). Keep ramstbydis in NVRAM and try other values
+  (`=1`) in test.206.
+
+- **Different line / file** → great news, we passed line 397.
+  Document the new assert and start the same investigative cycle
+  on it.
+
+- **No assert at all, console buffer extends past 0x97070** →
+  best case. Read the new console messages to see how far init got.
+
+---
+
 ## POST-TEST.204 (2026-04-22) — BREAKTHROUGH 5: "ramstbydis" identified — likely NVRAM key
 
 Logs: `phase5/logs/test.204.journalctl.full.txt`. Run text:

@@ -2524,7 +2524,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				u32 lo = dump_ranges[j][0];
 				u32 hi = dump_ranges[j][1];
 
-				pr_emerg("BCM4360 test.204: dump range 0x%05x..0x%05x\n",
+				pr_emerg("BCM4360 test.205: dump range 0x%05x..0x%05x\n",
 					 lo, hi);
 				for (addr = lo; addr < hi; addr += 16) {
 					u32 w[4];
@@ -2541,7 +2541,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							(char)c : '.';
 					}
 					ascii[16] = '\0';
-					pr_emerg("BCM4360 test.204: 0x%05x: %08x %08x %08x %08x | %s\n",
+					pr_emerg("BCM4360 test.205: 0x%05x: %08x %08x %08x %08x | %s\n",
 						 addr, w[0], w[1], w[2], w[3],
 						 ascii);
 				}
