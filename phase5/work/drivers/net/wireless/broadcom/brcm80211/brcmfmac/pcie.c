@@ -116,6 +116,18 @@ static int bcm4360_test237_extended_dwells;
 module_param(bcm4360_test237_extended_dwells, int, 0644);
 MODULE_PARM_DESC(bcm4360_test237_extended_dwells, "BCM4360 test.237: extend post-set_active dwell ladder to t+30s (1=extended, 0=short t+100..t+1000)");
 
+/* BCM4360 test.238: ultra-extended dwell ladder to bracket wedge beyond
+ * t+30s. Test.237 landed t+25000ms as the last journald breadcrumb —
+ * either the wedge is inside [t+25s, t+30s) with live-flush tail cutoff,
+ * or the wedge is further out (≥t+40s) with full tail-truncation. Fine-
+ * grain through the suspect window (t+26..t+30s, 1s steps) and extend
+ * out to t+120s to tell these apart. Sub-second and coarser dwells
+ * preserved for sanity. Pair with bcm4360_test236_force_seed=1.
+ * Default 0 (off; use test237 or short ladder). */
+static int bcm4360_test238_ultra_dwells;
+module_param(bcm4360_test238_ultra_dwells, int, 0644);
+MODULE_PARM_DESC(bcm4360_test238_ultra_dwells, "BCM4360 test.238: ultra-extended dwell ladder to t+120s with 1s fine-grain through [t+25..t+30] window (1=ultra, 0=off)");
+
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
  * stage=1: write IOCTL = FGC|CLK (coredisable in_reset_configure step)
@@ -2656,6 +2668,62 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pr_emerg("BCM4360 test.235: SKIPPING brcmf_chip_set_active (zero+verify-only run; test.230 baseline)\n");
 				msleep(1000);
 				pr_emerg("BCM4360 test.235: 1000 ms dwell done (no fw activation); proceeding to BM-clear + release\n");
+			} else if (bcm4360_test238_ultra_dwells) {
+				pr_emerg("BCM4360 test.238: calling brcmf_chip_set_active resetintr=0x%08x (ultra-extended ladder t+120s)\n",
+					 resetintr);
+				mdelay(10);
+				if (!brcmf_chip_set_active(devinfo->ci, resetintr))
+					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned FALSE\n");
+				else
+					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned TRUE\n");
+				mdelay(100);
+				pr_emerg("BCM4360 test.238: t+100ms dwell\n");
+				mdelay(200);
+				pr_emerg("BCM4360 test.238: t+300ms dwell\n");
+				mdelay(200);
+				pr_emerg("BCM4360 test.238: t+500ms dwell\n");
+				mdelay(200);
+				pr_emerg("BCM4360 test.238: t+700ms dwell\n");
+				mdelay(300);
+				pr_emerg("BCM4360 test.238: t+1000ms dwell\n");
+				msleep(500);
+				pr_emerg("BCM4360 test.238: t+1500ms dwell\n");
+				msleep(500);
+				pr_emerg("BCM4360 test.238: t+2000ms dwell\n");
+				msleep(1000);
+				pr_emerg("BCM4360 test.238: t+3000ms dwell\n");
+				msleep(2000);
+				pr_emerg("BCM4360 test.238: t+5000ms dwell\n");
+				msleep(5000);
+				pr_emerg("BCM4360 test.238: t+10000ms dwell\n");
+				msleep(5000);
+				pr_emerg("BCM4360 test.238: t+15000ms dwell\n");
+				msleep(5000);
+				pr_emerg("BCM4360 test.238: t+20000ms dwell\n");
+				msleep(5000);
+				pr_emerg("BCM4360 test.238: t+25000ms dwell\n");
+				/* Fine-grain through the suspect [t+25s, t+30s] window. */
+				msleep(1000);
+				pr_emerg("BCM4360 test.238: t+26000ms dwell\n");
+				msleep(1000);
+				pr_emerg("BCM4360 test.238: t+27000ms dwell\n");
+				msleep(1000);
+				pr_emerg("BCM4360 test.238: t+28000ms dwell\n");
+				msleep(1000);
+				pr_emerg("BCM4360 test.238: t+29000ms dwell\n");
+				msleep(1000);
+				pr_emerg("BCM4360 test.238: t+30000ms dwell\n");
+				/* Extend past t+30s to distinguish fw-timeout from late-wedge. */
+				msleep(5000);
+				pr_emerg("BCM4360 test.238: t+35000ms dwell\n");
+				msleep(10000);
+				pr_emerg("BCM4360 test.238: t+45000ms dwell\n");
+				msleep(15000);
+				pr_emerg("BCM4360 test.238: t+60000ms dwell\n");
+				msleep(30000);
+				pr_emerg("BCM4360 test.238: t+90000ms dwell\n");
+				msleep(30000);
+				pr_emerg("BCM4360 test.238: t+120000ms dwell done (proceeding to BM-clear + release)\n");
 			} else if (bcm4360_test237_extended_dwells) {
 				pr_emerg("BCM4360 test.237: calling brcmf_chip_set_active resetintr=0x%08x (extended-dwell ladder)\n",
 					 resetintr);

@@ -338,6 +338,93 @@ not sub-second timing.
 ---
 
 
+## PRE-TEST.238 (2026-04-23 00:4x BST, boot 0 post-SMC-reset from test.237) — ultra-extended dwell ladder to t+120s with 1s fine-grain through [t+25..t+30s] window
+
+### Hypothesis
+
+Test.237 bounded the wedge moment to [t+25s, t+40-45s]. Two
+very-different mechanisms fit the evidence:
+
+**A. "Fw fixed timeout at ~t+30s"** — journal was flushing live by
+t+10s (per-second timestamps for t+10/15/20/25), so tail-truncation
+was likely seconds at most. Wedge would be at t+30s ±1-2s. Mechanism:
+fw waits N seconds for some host-side response (IRQ / doorbell /
+shared-struct read) then fires an internal trap/watchdog.
+
+**B. "Wedge is later (≥t+40s), full tail-truncation"** — if the
+kernel buffer pressure came back at wedge time, the ~15-20s budget
+applies and the actual wedge could be at t+40-45s. Mechanism:
+similar to A but different deadline.
+
+Both models predict fw wedges the PCIe bus eventually; but the exact
+deadline matters for whether we're racing a fw watchdog vs. a fw
+heartbeat timer vs. something else.
+
+**Discriminator:** run a ladder that is fine-grain through
+[t+25..t+30s] (1s steps) AND extends to t+120s. Expected patterns:
+
+| Last landed breadcrumb | Interpretation |
+|---|---|
+| t+26/27/28/29/30s cuts (e.g., t+28 lands, t+29 doesn't) | **Model A confirmed** — fw timeout bracket. Pivots plan to "build shared-struct fast enough to race the timeout" |
+| t+30s lands, cuts in [t+35..t+45s] | **Model B (timeout slightly later)** — still within the set_active-tripped bus-crash model, ~5s slack |
+| Lands past t+45s (e.g., t+60 lands, t+90 cuts) | Wedge is NOT fixed-timeout; possibly conditional on a future host action (e.g., `rmmod`) or intermittent |
+| All 23 breadcrumbs land + clean BM-clear + -ENODEV | **Extraordinary** — long wait somehow avoids the wedge (maybe fw self-heals if untouched long enough?) |
+
+### Code change
+
+1. New module param `bcm4360_test238_ultra_dwells` (default 0).
+2. New `else if` branch before test.237 in the set_active chain.
+   Ladder: t+100, 300, 500, 700, 1000, 1500, 2000, 3000, 5000, 10000,
+   15000, 20000, 25000, 26000, 27000, 28000, 29000, 30000, 35000, 45000,
+   60000, 90000, 120000 ms (23 post-set_active breadcrumbs).
+3. Existing test.235, test.237, test.234 paths preserved.
+
+### Run sequence
+
+```bash
+# single run this boot
+sudo insmod phase5/work/.../brcmutil.ko
+sudo insmod phase5/work/.../brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1
+# ladder runs ~121 s post-set_active; probe return adds ~1 s
+sleep 240
+# host may be wedged; if so, SMC reset
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+Budget is 2× max dwell (advisor). Sysctls: nmi_watchdog=1,
+hardlockup_panic=1, softlockup_panic=1, softlockup_all_cpu_backtrace=1.
+
+### Hardware state (boot 0, post-SMC-reset)
+
+- Boot 0 started 2026-04-23 00:35:43 BST.
+- `lspci -vvv -s 03:00.0`: Control Mem+ BusMaster+, MAbort-, fast-UR.
+- No modules loaded. Clean post-SMC-reset idiom.
+
+### Build status — REBUILT CLEAN
+
+`brcmfmac.ko` rebuilt 2026-04-23 ~00:4x BST. `strings` confirms
+`bcm4360_test238_ultra_dwells` module param + all 23 new test.238
+breadcrumbs. Pre-existing unused-variable warnings unchanged.
+
+### Expected artifacts
+
+- `phase5/logs/test.238.run.txt` — PRE + harness output
+- `phase5/logs/test.238.journalctl.full.txt` — full boot journal
+- `phase5/logs/test.238.journalctl.txt` — filtered subset
+
+### Pre-test checklist (CLAUDE.md)
+
+1. Build status: REBUILT CLEAN above.
+2. PCIe state: clean per above.
+3. Hypothesis: bracket fw-timeout vs. late-wedge (A vs. B), above.
+4. Plan: in this block; commit+push+sync before insmod.
+5. Filesystem sync on commit.
+
+---
+
+
 ## POST-TEST.237 (2026-04-23 00:32 BST, boot -1 — wedged at ~t+25-45 s post-set_active, SMC reset required) — extended dwell ladder landed 13 breadcrumbs; fw runs for tens of seconds under seed
 
 ### Summary
