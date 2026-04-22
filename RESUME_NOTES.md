@@ -1,5 +1,33 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## TEST.225 ABORTED (2026-04-22 15:40 BST) — BAR0 dead; SMC reset required before retry
+
+The test-brcmfmac.sh pre-check (BAR0 MMIO read via
+`/sys/bus/pci/devices/0000:03:00.0/resource0`) reported **"FATAL: BAR0
+MMIO Completion Timeout (56 ms) — device dead"** and refused to
+insmod — a safety feature to prevent a sure-thing host hard-crash.
+Manual `dd` against the sysfs BAR0 resource returned "Input/output
+error" immediately, confirming the chip backplane is gone even though
+PCIe config-space reports link up (LnkSta 2.5GT/s x1, no MAbort/SERR,
+DevSta clean).
+
+This matches the PRE-TEST.225 risk note — no SMC reset between
+test.223, test.224, and the current boot. Three consecutive crash
+boots have left chip-internal state in a dead window despite a clean
+host reboot. Standard MacBook SMC reset procedure (drain battery to 0%,
+leave powered off a few minutes, recharge, boot) is required before
+test.225 can run. No code or plan changes — when BAR0 is alive again
+we can re-run the same module build.
+
+**Action required from user**: SMC reset (drain-to-0 procedure), boot,
+verify `dd if=/sys/bus/pci/devices/0000:03:00.0/resource0 bs=4 count=1`
+succeeds, then re-run `sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh`.
+
+No journal captured this time — the test script aborted pre-insmod, so
+there's nothing to grep.
+
+---
+
 ## PRE-TEST.225 (2026-04-22 15:35 BST) — pinpoint download hang: 4 KB chunks + readback verify
 
 ### What changed vs test.224
