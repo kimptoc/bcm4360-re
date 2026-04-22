@@ -1,0 +1,275 @@
+Apr 22 21:36:38 nixos kernel: ACPI: LAPIC_NMI (acpi_id[0x01] high edge lint[0x1])
+Apr 22 21:36:38 nixos kernel: ACPI: LAPIC_NMI (acpi_id[0x02] high edge lint[0x1])
+Apr 22 21:36:38 nixos kernel: ACPI: LAPIC_NMI (acpi_id[0x03] high edge lint[0x1])
+Apr 22 21:36:38 nixos kernel: ACPI: LAPIC_NMI (acpi_id[0x04] high edge lint[0x1])
+Apr 22 21:36:38 nixos kernel: ACPI: LAPIC_NMI (acpi_id[0x05] high edge lint[0x1])
+Apr 22 21:36:38 nixos kernel: ACPI: LAPIC_NMI (acpi_id[0x06] high edge lint[0x1])
+Apr 22 21:36:38 nixos kernel: ACPI: LAPIC_NMI (acpi_id[0x07] high edge lint[0x1])
+Apr 22 21:36:38 nixos kernel: ACPI: LAPIC_NMI (acpi_id[0x08] high edge lint[0x1])
+Apr 22 21:36:38 nixos kernel: NMI watchdog: Enabled. Permanently consumes one hw-PMU counter.
+Apr 22 21:36:38 nixos kernel: acpi PNP0A08:00: _OSC: OS assumes control of [PCIeHotplug SHPCHotplug AER PCIeCapability LTR DPC]
+Apr 22 21:36:38 nixos kernel: pcieport 0000:00:1c.0: Enabling MPC IRBNCE
+Apr 22 21:36:38 nixos kernel: pcieport 0000:00:1c.0: Intel PCH root port ACS workaround enabled
+Apr 22 21:36:38 nixos kernel: pcieport 0000:00:1c.1: Enabling MPC IRBNCE
+Apr 22 21:36:38 nixos kernel: pcieport 0000:00:1c.1: Intel PCH root port ACS workaround enabled
+Apr 22 21:36:38 nixos kernel: pcieport 0000:00:1c.2: Enabling MPC IRBNCE
+Apr 22 21:36:38 nixos kernel: pcieport 0000:00:1c.2: Intel PCH root port ACS workaround enabled
+Apr 22 21:36:38 nixos kernel: pcieport 0000:00:1c.4: Enabling MPC IRBNCE
+Apr 22 21:36:38 nixos kernel: pcieport 0000:00:1c.4: Intel PCH root port ACS workaround enabled
+Apr 22 21:36:38 nixos kernel: pcieport 0000:00:1c.5: Enabling MPC IRBNCE
+Apr 22 21:36:38 nixos kernel: pcieport 0000:00:1c.5: Intel PCH root port ACS workaround enabled
+Apr 22 21:36:38 nixos kernel: pcieport 0000:06:00.0: pciehp: Slot #0 AttnBtn- PwrCtrl- MRL- AttnInd- PwrInd- HotPlug+ Surprise+ Interlock- NoCompl+ IbPresDis- LLActRep+
+Apr 22 21:36:38 nixos kernel: pcieport 0000:06:03.0: enabling device (0000 -> 0003)
+Apr 22 21:36:38 nixos kernel: pcieport 0000:06:03.0: pciehp: Slot #3 AttnBtn- PwrCtrl- MRL- AttnInd- PwrInd- HotPlug+ Surprise+ Interlock- NoCompl+ IbPresDis- LLActRep+
+Apr 22 21:36:38 nixos kernel: pcieport 0000:06:04.0: pciehp: Slot #4 AttnBtn- PwrCtrl- MRL- AttnInd- PwrInd- HotPlug+ Surprise+ Interlock- NoCompl+ IbPresDis- LLActRep+
+Apr 22 21:36:38 nixos kernel: pcieport 0000:06:05.0: enabling device (0000 -> 0003)
+Apr 22 21:36:38 nixos kernel: pcieport 0000:06:05.0: pciehp: Slot #5 AttnBtn- PwrCtrl- MRL- AttnInd- PwrInd- HotPlug+ Surprise+ Interlock- NoCompl+ IbPresDis- LLActRep+
+Apr 22 21:36:38 nixos kernel: pcieport 0000:06:06.0: pciehp: Slot #6 AttnBtn- PwrCtrl- MRL- AttnInd- PwrInd- HotPlug+ Surprise+ Interlock- NoCompl+ IbPresDis- LLActRep+
+Apr 22 21:36:40 nixos kernel: pcieport 0000:00:1c.0: Enabling MPC IRBNCE
+Apr 22 21:36:40 nixos kernel: pcieport 0000:00:1c.0: Intel PCH root port ACS workaround enabled
+Apr 22 21:52:18 nixos kernel: NMI watchdog: Enabled. Permanently consumes one hw-PMU counter.
+Apr 22 21:52:32 nixos kernel: brcmfmac: loading out-of-tree module taints kernel.
+Apr 22 21:52:32 nixos kernel: brcmfmac: BCM4360 test.188: module_init entry — extended post-release TCM sampling
+Apr 22 21:52:32 nixos kernel: brcmfmac: BCM4360 test.156: before brcmf_core_init()
+Apr 22 21:52:32 nixos kernel: brcmfmac: BCM4360 test.155: brcmf_core_init() entry
+Apr 22 21:52:33 nixos kernel: brcmfmac: BCM4360 test.155: before brcmf_sdio_register()
+Apr 22 21:52:33 nixos kernel: brcmfmac: BCM4360 test.155: after brcmf_sdio_register() err=0
+Apr 22 21:52:34 nixos kernel: brcmfmac: BCM4360 test.155: post-SDIO sync (before PCI)
+Apr 22 21:52:34 nixos kernel: brcmfmac: BCM4360 test.155: before brcmf_pcie_register()
+Apr 22 21:52:35 nixos kernel: brcmfmac: BCM4360 test.188: brcmf_pcie_register() entry
+Apr 22 21:52:35 nixos kernel: brcmfmac: BCM4360 test.188: before pci_register_driver
+Apr 22 21:52:36 nixos kernel: brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=000000002b5f8a42)
+Apr 22 21:52:36 nixos kernel: brcmfmac: BCM4360 test.158: probe entry flush done — proceeding
+Apr 22 21:52:37 nixos kernel: brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+Apr 22 21:52:38 nixos kernel: brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+Apr 22 21:52:38 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+Apr 22 21:52:39 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+Apr 22 21:52:39 nixos kernel: brcmfmac: BCM4360 test.158: before brcmf_chip_attach
+Apr 22 21:52:39 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffd2bf01400000
+Apr 22 21:52:40 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+Apr 22 21:52:40 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+Apr 22 21:52:41 nixos kernel: brcmfmac: BCM4360 test.218: core[1 ] id=0x800:rev43  base=0x18000000 wrap=0x18100000
+Apr 22 21:52:41 nixos kernel: brcmfmac: BCM4360 test.218: core[2 ] id=0x812:rev42  base=0x18001000 wrap=0x18101000
+Apr 22 21:52:42 nixos kernel: brcmfmac: BCM4360 test.218: core[3 ] id=0x83e:rev2   base=0x18002000 wrap=0x18102000
+Apr 22 21:52:42 nixos kernel: brcmfmac: BCM4360 test.218: core[4 ] id=0x83c:rev1   base=0x18003000 wrap=0x18103000
+Apr 22 21:52:43 nixos kernel: brcmfmac: BCM4360 test.218: core[5 ] id=0x81a:rev17  base=0x18004000 wrap=0x18104000
+Apr 22 21:52:43 nixos kernel: brcmfmac: BCM4360 test.218: core[6 ] id=0x135:rev0   base=0x00000000 wrap=0x18108000
+Apr 22 21:52:44 nixos kernel: brcmfmac: BCM4360 test.218: host-side enumerated 6 cores total
+Apr 22 21:52:45 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+Apr 22 21:52:45 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.188: post-145 ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.125: after reset, before get_raminfo
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.125: get_raminfo returning 0
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.193: chip=0x4360 ccrev=43 pmurev=17 pmucaps=0x10a22b11
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.193: PMU WARs applied — chipcontrol#1 0x00000210->0x00000a10 pllcontrol#6=0x080004e2 #0xf=0x0000000e
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.224: max_res_mask 0x0000013f -> 0x000007ff (wrote 0x000007ff)
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.224: min_res_mask 0x0000013b -> 0x000007ff (wrote 0x000007ff)
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.224: post-settle pmustatus=0x0000002e res_state=0x000007ff (expect 0x2e / 0x7ff)
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.158: about to pci_clear_master (config-space write)
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.158: BusMaster cleared after chip_attach
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.158: about to read LnkCtl before ASPM disable
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.158: LnkCtl read before=0x0143 — disabling ASPM
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.158: pci_disable_link_state returned — reading LnkCtl
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.158: ASPM disabled; LnkCtl before=0x0143 after=0x0140 ASPM-bits-after=0x0
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.188: root port 0000:00:1c.2 LnkCtl before=0x0040 ASPM=0x0 CLKREQ=off — disabling L0s/L1/CLKPM
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.188: root-port pci_disable_link_state returned — reading LnkCtl
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.188: root port 0000:00:1c.2 LnkCtl after=0x0040 ASPM=0x0 CLKREQ=off
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.159: before PCIE2 core/reginfo setup
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.159: reginfo selected (pcie2 rev=1)
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.159: pcie_bus_dev allocated
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.159: settings allocated (BCM4360 dummy path)
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.159: bus allocated
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.159: msgbuf allocated
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.159: struct wiring done — before pci_pme_capable
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.159: after pci_pme_capable wowl=1
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.160: drvdata set — before brcmf_alloc
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.160: brcmf_alloc complete — wiphy allocated
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.160: OTP read bypassed — OTP not needed
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.160: before prepare_fw_request
+Apr 22 21:52:46 nixos kernel: brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.160: firmware request prepared
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.161: calling brcmf_fw_get_firmwares — async callback expected
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.161: brcmf_fw_get_firmwares returned 0 (async/success; callback will fire)
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.188: pci_register_driver returned ret=0
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.155: after brcmf_pcie_register() err=0
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.155: post-PCI sync (skipping USB)
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.156: after brcmf_core_init() err=0
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.188: setup-entry ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.188: pre-attach ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.128: before brcmf_pcie_attach
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.128: brcmf_pcie_attach ENTRY
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.194: PCIe2 CLK_CONTROL probe = 0x00000182
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.194: SBMBX write done
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.194: PMCR_REFUP 0x00051852 -> 0x0005185f
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.128: after brcmf_pcie_attach
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.188: post-attach ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.134: post-attach before fw-ptr-extract
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.134: after kfree(fwreq)
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.130: before brcmf_chip_get_raminfo
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.125: get_raminfo returning 0
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.130: after brcmf_chip_get_raminfo
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.188: post-raminfo ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.130: after brcmf_pcie_adjust_ramsize
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.188: pre-download ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.218: pre-download CR4 clk_ctl_st=0x07030040 [HAVEHT(17)=YES ALP_AVAIL(16)=YES BP_ON_HT(19)=no  bit6=SET FORCEHT(1)=no  FORCEALP(0)=no ]
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.218: pre-download D11 IN_RESET=YES (RST=0x00000001) — clk_ctl_st SKIPPED
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.142: enter_download_state — confirming ARM CR4 reset state
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.142: ARM CR4 state RESET_CTL=0x00000000 IN_RESET=NO/BAD IOCTL=0x0001 CPUHALT=NO FGC=NO CLK=YES
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffd2bf01400000
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.138: pre-BAR2-ioread32 (tcm=ffffd2bf01400000)
+Apr 22 21:52:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.138: post-BAR2-ioread32 = 0x00dd4384 (real value — BAR2 accessible)
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.188: pre-halt ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.188: pre-halt D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.218: pre-halt CR4 clk_ctl_st=0x07030040 [HAVEHT(17)=YES ALP_AVAIL(16)=YES BP_ON_HT(19)=no  bit6=SET FORCEHT(1)=no  FORCEALP(0)=no ]
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.218: pre-halt D11 IN_RESET=YES (RST=0x00000001) — clk_ctl_st SKIPPED
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.188: re-halting ARM CR4 via brcmf_chip_set_passive
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.188: post-halt ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.188: starting chunked fw write, total_words=110558 (442233 bytes) tail=1 wbase=ffffd2bf01400000
+Apr 22 21:52:46 nixos kernel: brcmfmac: BCM4360 test.225: wrote 1024 words (4096 bytes) last=0xb19c6018 readback=0xb19c6018 OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 2048 words (8192 bytes) last=0x224c2100 readback=0x224c2100 OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 3072 words (12288 bytes) last=0x48240800 readback=0x48240800 OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 4096 words (16384 bytes) last=0x6aa84634 readback=0x6aa84634 OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 5120 words (20480 bytes) last=0xf8f4f7fc readback=0xf8f4f7fc OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 6144 words (24576 bytes) last=0x43f8e92d readback=0x43f8e92d OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 7168 words (28672 bytes) last=0xf894fc8f readback=0xf894fc8f OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 8192 words (32768 bytes) last=0xea25084f readback=0xea25084f OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 9216 words (36864 bytes) last=0xf0090e12 readback=0xf0090e12 OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 10240 words (40960 bytes) last=0x0202ea83 readback=0x0202ea83 OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 11264 words (45056 bytes) last=0xf0028a99 readback=0xf0028a99 OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 12288 words (49152 bytes) last=0x460d4604 readback=0x460d4604 OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 13312 words (53248 bytes) last=0xfca4f007 readback=0xfca4f007 OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 14336 words (57344 bytes) last=0x0a32bdf8 readback=0x0a32bdf8 OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 15360 words (61440 bytes) last=0xfd18f7f1 readback=0xfd18f7f1 OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 16384 words (65536 bytes) last=0x0218f8d8 readback=0x0218f8d8 OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 17408 words (69632 bytes) last=0x2002d1d7 readback=0x2002d1d7 OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 18432 words (73728 bytes) last=0xb2b6082a readback=0xb2b6082a OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 19456 words (77824 bytes) last=0xe01a4615 readback=0xe01a4615 OK
+Apr 22 21:52:47 nixos kernel: brcmfmac: BCM4360 test.225: wrote 20480 words (81920 bytes) last=0xd00b0f00 readback=0xd00b0f00 OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 21504 words (86016 bytes) last=0x4318ea4f readback=0x4318ea4f OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 22528 words (90112 bytes) last=0x3088f8d4 readback=0x3088f8d4 OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 23552 words (94208 bytes) last=0x4b18d00d readback=0x4b18d00d OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 24576 words (98304 bytes) last=0xf8b4fd19 readback=0xf8b4fd19 OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 25600 words (102400 bytes) last=0x4e2db570 readback=0x4e2db570 OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 26624 words (106496 bytes) last=0x220682ab readback=0x220682ab OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 27648 words (110592 bytes) last=0xf8b1bf8a readback=0xf8b1bf8a OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 28672 words (114688 bytes) last=0xf7e4fca5 readback=0xf7e4fca5 OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 29696 words (118784 bytes) last=0x90009601 readback=0x90009601 OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 30720 words (122880 bytes) last=0x683bd011 readback=0x683bd011 OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 31744 words (126976 bytes) last=0x460249ce readback=0x460249ce OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 32768 words (131072 bytes) last=0xf7e16184 readback=0xf7e16184 OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 33792 words (135168 bytes) last=0x3094f8d4 readback=0x3094f8d4 OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 34816 words (139264 bytes) last=0x6380f44f readback=0x6380f44f OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 35840 words (143360 bytes) last=0x46294620 readback=0x46294620 OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 36864 words (147456 bytes) last=0xd1352800 readback=0xd1352800 OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 37888 words (151552 bytes) last=0x490bfd19 readback=0x490bfd19 OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 38912 words (155648 bytes) last=0xfb39f00e readback=0xfb39f00e OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 39936 words (159744 bytes) last=0xf2404620 readback=0xf2404620 OK
+Apr 22 21:52:48 nixos kernel: brcmfmac: BCM4360 test.225: wrote 40960 words (163840 bytes) last=0x23004620 readback=0x23004620 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 41984 words (167936 bytes) last=0xd1362e01 readback=0xd1362e01 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 43008 words (172032 bytes) last=0x2901e03f readback=0x2901e03f OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 44032 words (176128 bytes) last=0xd8532b0a readback=0xd8532b0a OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 45056 words (180224 bytes) last=0x713af240 readback=0x713af240 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 46080 words (184320 bytes) last=0x21f8f641 readback=0x21f8f641 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 47104 words (188416 bytes) last=0x1122f640 readback=0x1122f640 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 48128 words (192512 bytes) last=0x10daf8b4 readback=0x10daf8b4 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 49152 words (196608 bytes) last=0x21004620 readback=0x21004620 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 50176 words (200704 bytes) last=0x4620fd19 readback=0x4620fd19 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 51200 words (204800 bytes) last=0x705a3201 readback=0x705a3201 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 52224 words (208896 bytes) last=0xebc844c4 readback=0xebc844c4 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 53248 words (212992 bytes) last=0xfb4af7f3 readback=0xfb4af7f3 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 54272 words (217088 bytes) last=0xe027d12d readback=0xe027d12d OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 55296 words (221184 bytes) last=0x46283172 readback=0x46283172 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 56320 words (225280 bytes) last=0x462b6859 readback=0x462b6859 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 57344 words (229376 bytes) last=0xb29272e2 readback=0xb29272e2 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 58368 words (233472 bytes) last=0xfd18f7c7 readback=0xfd18f7c7 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 59392 words (237568 bytes) last=0xf7ff4621 readback=0xf7ff4621 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 60416 words (241664 bytes) last=0xf8d4feb5 readback=0xf8d4feb5 OK
+Apr 22 21:52:49 nixos kernel: brcmfmac: BCM4360 test.225: wrote 61440 words (245760 bytes) last=0x9a04fd19 readback=0x9a04fd19 OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 62464 words (249856 bytes) last=0xf8c4fcb6 readback=0xf8c4fcb6 OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 63488 words (253952 bytes) last=0xfd9af7fe readback=0xfd9af7fe OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 64512 words (258048 bytes) last=0x00043142 readback=0x00043142 OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 65536 words (262144 bytes) last=0x30002075 readback=0x30002075 OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 66560 words (266240 bytes) last=0x74786561 readback=0x74786561 OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 67584 words (270336 bytes) last=0x75746552 readback=0x75746552 OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 68608 words (274432 bytes) last=0x706d6f63 readback=0x706d6f63 OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 69632 words (278528 bytes) last=0x0000002c readback=0x0000002c OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 70656 words (282624 bytes) last=0xa3c26161 readback=0xa3c26161 OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 71680 words (286720 bytes) last=0xcd500e7f readback=0xcd500e7f OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 72704 words (290816 bytes) last=0x500e7fcd readback=0x500e7fcd OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 73728 words (294912 bytes) last=0x66726576 readback=0x66726576 OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 74752 words (299008 bytes) last=0x666f202e readback=0x666f202e OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 75776 words (303104 bytes) last=0x706f7473 readback=0x706f7473 OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 76800 words (307200 bytes) last=0x00780062 readback=0x00780062 OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 77824 words (311296 bytes) last=0x78303a72 readback=0x78303a72 OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 78848 words (315392 bytes) last=0x74207265 readback=0x74207265 OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 79872 words (319488 bytes) last=0x2079656b readback=0x2079656b OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 80896 words (323584 bytes) last=0x5f435052 readback=0x5f435052 OK
+Apr 22 21:52:50 nixos kernel: brcmfmac: BCM4360 test.225: wrote 81920 words (327680 bytes) last=0x00000046 readback=0x00000046 OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 82944 words (331776 bytes) last=0x68705f63 readback=0x68705f63 OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 83968 words (335872 bytes) last=0x6f632020 readback=0x6f632020 OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 84992 words (339968 bytes) last=0x63615f6e readback=0x63615f6e OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 86016 words (344064 bytes) last=0x6c77000a readback=0x6c77000a OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 87040 words (348160 bytes) last=0x04910070 readback=0x04910070 OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 88064 words (352256 bytes) last=0x00000000 readback=0x00000000 OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 89088 words (356352 bytes) last=0x00000000 readback=0x00000000 OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 90112 words (360448 bytes) last=0x2020000a readback=0x2020000a OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 91136 words (364544 bytes) last=0x00050011 readback=0x00050011 OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 92160 words (368640 bytes) last=0x00805555 readback=0x00805555 OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 93184 words (372736 bytes) last=0x00000000 readback=0x00000000 OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 94208 words (376832 bytes) last=0x00000000 readback=0x00000000 OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 95232 words (380928 bytes) last=0x0054bead readback=0x0054bead OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 96256 words (385024 bytes) last=0x00634c06 readback=0x00634c06 OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 97280 words (389120 bytes) last=0x16bc00a4 readback=0x16bc00a4 OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 98304 words (393216 bytes) last=0x06ff08ec readback=0x06ff08ec OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 99328 words (397312 bytes) last=0x00000cef readback=0x00000cef OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 100352 words (401408 bytes) last=0x0fbc1f78 readback=0x0fbc1f78 OK
+Apr 22 21:52:51 nixos kernel: brcmfmac: BCM4360 test.225: wrote 101376 words (405504 bytes) last=0x00000000 readback=0x00000000 OK
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.225: wrote 102400 words (409600 bytes) last=0x4607fcc9 readback=0x4607fcc9 OK
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.225: wrote 103424 words (413696 bytes) last=0x1037f894 readback=0x1037f894 OK
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.225: wrote 104448 words (417792 bytes) last=0x429f0303 readback=0x429f0303 OK
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.225: wrote 105472 words (421888 bytes) last=0x61a22004 readback=0x61a22004 OK
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.225: wrote 106496 words (425984 bytes) last=0xf8d4f8f5 readback=0xf8d4f8f5 OK
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.225: wrote 107520 words (430080 bytes) last=0xfa5ffeed readback=0xfa5ffeed OK
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.225: wrote 108544 words (434176 bytes) last=0x3044f882 readback=0x3044f882 OK
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.225: wrote 109568 words (438272 bytes) last=0x46200db9 readback=0x46200db9 OK
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: all 110558 words written, before tail (tail=1)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: tail 1 bytes written at offset 442232
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: fw write complete (442233 bytes)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: before post-fw msleep(100)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: after post-fw msleep(100)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: host resetintr=0xb80ef000 before NVRAM
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: pre-NVRAM write address=0x9ff1c len=228 naddr=ffffd2bf0149ff1c
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: post-NVRAM write done (228 bytes)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: NVRAM marker at ramsize-4 = 0xffc70038 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: TCM[0x0000]=0xb80ef000 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: TCM[0x0004]=0xb82ef000 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: TCM[0x0008]=0xb839f000 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: TCM[0x000c]=0xb844f000 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: TCM[0x0010]=0xb852f000 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: TCM[0x0014]=0xb860f000 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: TCM[0x0018]=0xb86ef000 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: TCM[0x001c]=0xb87cf000 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x00000]=0xb80ef000 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x04000]=0x2c004798 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x08000]=0x44460902 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x0c000]=0x46984616 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x10000]=0x46324639 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x14000]=0x459868e3 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x18000]=0x42ab317c (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x1c000]=0x480ffd17 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x20000]=0xa84af8f3 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x24000]=0x2b027973 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x28000]=0x1129f640 (pre-release snapshot)
+Apr 22 21:52:52 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x2c000]=0xf0084643 (pre-release snapshot)

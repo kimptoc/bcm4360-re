@@ -1,0 +1,44 @@
+=== test.232 PRE sysctls (2026-04-22 21:51 BST, boot 0 post-SMC-reset) ===
+  nmi_watchdog=1
+  hardlockup_panic=1
+  softlockup_panic=1
+  panic=30
+
+=== test.232 PRE lspci ===
+  	Control: I/O- Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+  	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+  		Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=2 PME-
+  		DevSta:	CorrErr+ NonFatalErr- FatalErr- UnsupReq+ AuxPwr+ TransPend-
+  		LnkCtl:	ASPM L0s L1 Enabled; RCB 64 bytes, LnkDisable- CommClk+
+  		LnkSta:	Speed 2.5GT/s, Width x1
+  		LnkCtl2: Target Link Speed: 2.5GT/s, EnterCompliance- SpeedDis-
+  		LnkSta2: Current De-emphasis Level: -3.5dB, EqualizationComplete- EqualizationPhase1-
+  		Status:	InProgress-
+  			Status:	NegoPending- InProgress-
+
+=== test.232 PRE BAR0 timing ===
+
+=== test.232 PRE pstore ===
+  total 0
+  drwxr-x--- 2 root root 0 Apr 22 21:36 .
+  drwxr-xr-x 6 root root 0 Apr 22 21:36 ..
+
+=== test.232 PRE module state ===
+
+=== test.232 PRE .ko strings (sorted) ===
+  -rw-r--r-- 1 kimptoc users 14250696 Apr 22 21:49 /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko
+  0brcmfmac: BCM4360 test.232: post-skip MMIO guard mailboxint=0x%08x (endpoint still responsive)
+  0brcmfmac: BCM4360 test.232: post-skip PCI_COMMAND=0x%04x BM=%s (expect OFF)
+  0brcmfmac: BCM4360 test.232: SKIPPING pci_set_master 
+=== test.232 harness run start Wed 22 Apr 21:52:32 BST 2026 ===
+=== Phase 5: brcmfmac BCM4360 test ===
+Log: /home/kimptoc/bcm4360-re/phase5/work/../logs/test.9
+
+Firmware: -rw-r--r-- 1 root root 442233 Apr 22 08:32 /lib/firmware/brcm/brcmfmac4360-pcie.bin
+NVRAM:    # BCM4360 NVRAM for MacBookPro11,1 (Apple 106b:0112)
+
+Pre-test: checking BAR0 MMIO (resource0)...
+BAR0 MMIO: Unsupported Request (6ms) — device alive, SBR in probe should fix. Proceeding.
+
+Loading patched brcmfmac modules...
+Modules loaded. Waiting 15s for probe + FW init timeout + debug dump...
