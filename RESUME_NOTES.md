@@ -1,5 +1,45 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PROCEEDING WITH TEST.225 (2026-04-22 15:45 BST) — fast-UR confirmed, chip safe
+
+Re-checked the post-SMC-reset state with the **same timing logic** the
+test script uses, not just a bare dd. Result: BAR0 dd returns
+"Input/output error" but in **32 ms** elapsed (bash overhead included).
+The test script's threshold is 40 ms — under that = fast Unsupported
+Request, meaning the chip IS alive and the kernel-side SBR in probe
+will recover it. Over 40 ms = slow Completion Timeout (dead chip,
+hard-crash risk).
+
+Earlier confusion: a bare `dd` returning I/O error looks alarming, but
+that's the **expected** state for an unconfigured BCM4360 — the chip
+responds "no" fast (UR), which is the safe state, distinct from the
+56 ms slow-CTO state that aborted test.225 last time. The quick SMC
+reset DID work this time.
+
+### Build state (just verified)
+- `brcmfmac.ko` 14.3 MB, mtime 15:25 — already rebuilt for test.225
+- `strings` confirms `BCM4360 test.225` markers in the binary
+- Kernel 6.12.80 vermagic match (per prior session)
+
+### Pre-test hardware state
+- Boot 0 of 1 (uptime ~3 min, this is the post-SMC-reset boot)
+- `lspci -vvv -s 03:00.0`: 2.5GT/s x1, MAbort-, SERR-, CommClk+
+- DevSta clean (cleared via setpci W1C earlier)
+- BAR0 dd: 32 ms = fast UR = safe to insmod
+- `lsmod | grep brcm` empty
+
+### Plan
+Run test.225 as designed in the original PRE-TEST.225 entry below: 4 KB
+chunks (1024 words) with per-chunk readback verify, to pinpoint where
+the test.224 firmware-download hang occurs (~131 KB into a 442 KB
+download). Decision tree, hypotheses, and run command unchanged.
+
+```bash
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+---
+
 ## POST-SMC-RESET CHECK (2026-04-22 15:43 BST) — chip backplane STILL dead
 
 User reports an SMC reset was performed and the host has rebooted (uptime
