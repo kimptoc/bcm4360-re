@@ -1,5 +1,120 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.224 (2026-04-22 15:20 BST) — narrow mask works; download now hangs at 131 KB / 442 KB (new failure mode)
+
+### Summary
+
+Test.224 reached the furthest point of any test to date. Narrow PMU
+mask `0x7ff` behaved identically to the `0xffffffff` wide mask
+(`pmustatus=0x2e res_state=0x7ff`), HAVEHT=YES persisted through
+pre-download and pre-halt probes, the download actually started and
+ran for ~2 seconds before hanging at chunk 8 of 27 — 32768 words /
+131072 bytes (~30% through the 442233-byte firmware).
+
+Logs captured: `phase5/logs/test.224.journalctl.txt` (117 lines),
+`phase5/logs/test.224.journalctl.full.txt` (1237 lines).
+
+### Key log lines from test.224 (boot -1, 15:16:56 → 15:17:12)
+
+```
+15:16:59 test.224: max_res_mask 0x0000013f -> 0x000007ff (wrote 0x000007ff)
+15:16:59 test.224: min_res_mask 0x0000013b -> 0x000007ff (wrote 0x000007ff)
+15:16:59 test.224: post-settle pmustatus=0x0000002e res_state=0x000007ff (expect 0x2e / 0x7ff)
+15:17:08 test.218: pre-download CR4 clk_ctl_st=0x07030040
+          [HAVEHT(17)=YES ALP_AVAIL(16)=YES BP_ON_HT(19)=no ...]
+15:17:08 test.218: pre-download D11 IN_RESET=YES (RST=0x00000001)
+15:17:08 test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)
+15:17:09 test.138: post-BAR2-ioread32 = 0x03cd4384 (real value — BAR2 accessible)
+15:17:10 test.188: pre-halt CR4 clk_ctl_st=0x07030040 [HAVEHT=YES ALP_AVAIL=YES ...]
+15:17:10 test.188: starting chunked fw write, total_words=110558 (442233 bytes)
+15:17:10 test.188: wrote 4096 words (16384 bytes)
+15:17:10 test.188: wrote 8192 words (32768 bytes)
+15:17:10 test.188: wrote 12288 words (49152 bytes)
+15:17:11 test.188: wrote 16384 words (65536 bytes)
+15:17:12 test.188: wrote 20480 words (81920 bytes)
+15:17:12 test.188: wrote 24576 words (98304 bytes)
+15:17:12 test.188: wrote 28672 words (114688 bytes)
+15:17:12 test.188: wrote 32768 words (131072 bytes)
+[ SILENCE — machine hung ]
+```
+
+No oops / BUG / MCE / AER. Clean hang.
+
+### Interpretation
+
+1. **Narrow mask = wide mask on this silicon** (confirmed). The
+   achievable resource set is bits 0..10 (`0x7ff`); anything wider is a
+   no-op. Drop `0xffffffff` from future writes.
+2. **HAVEHT is stable** across the full probe sequence (pre-download,
+   pre-halt, consistently `0x07030040`). The breakthrough holds.
+3. **Download now progresses** — test.223 never got this far; test.221
+   hung on log volume, not the burst itself. This is the **first time**
+   we have concrete evidence of firmware words reaching TCM.
+4. **New failure mode**: host hangs between chunk 8 (wrote at 15:17:12)
+   and chunk 9 (should have written at ~15:17:12 + 50 ms delay +
+   16 KB of iowrite32s). Each chunk has a `mdelay(50)` after it, so
+   the inner `iowrite32` burst is ~4 ms at PCIe write latency — the
+   hang is almost certainly inside the 9th chunk's iowrite32 burst, at
+   some address between 0x20000 and 0x24000 in BAR2 window
+   (rambase=0x0 + 131072 = 0x20000).
+
+### What test.224 does NOT tell us
+
+- Whether it's the **address** of the write (TCM block boundary?) or
+  the **cumulative count** of writes that triggers the hang.
+- Whether the bus itself died or only BAR2 writes are being rejected
+  (no readback probe after each chunk).
+- Whether the PMU state has drifted during the download (no
+  clk_ctl_st probe inside the loop).
+- Whether HT clock is still present when the hang occurs.
+
+### Next hypothesis — test.225 plan
+
+Add three probes to the chunk loop to pinpoint the hang and
+distinguish "bus dead" from "TCM writes silently dropped":
+
+1. **BAR0 readback after each chunk** — read the ChipCommon ID register
+   (`0x18000000` via BAR0). If this still returns `0x15034360` after
+   chunk 8 but hangs on chunk 9, the BAR0 backplane is alive and only
+   BAR2 writes are failing. If BAR0 read itself hangs → bus death.
+2. **Read-back verify** the last word written in each chunk — detects
+   silent drops.
+3. **Halve `chunk_words` to 2048** (8 KB per chunk) — finer hang
+   location, `mdelay(50)` per chunk gives the chip ~2× more recovery
+   time per MB of transfer.
+4. (Optional) Probe ARM CR4 `clk_ctl_st` at the start of each chunk,
+   not just pre/post download — confirm HAVEHT stays up.
+
+Minimal diagnostic change — if the hang is address-correlated we'll
+see it at a specific byte offset; if time-correlated, at a specific
+elapsed interval since download start.
+
+### Decision tree for test.225
+
+| Observation | Interpretation | Next |
+|---|---|---|
+| BAR0 readback survives past hang, only BAR2 hangs | TCM window gone — possibly a PMU resource or clock dropped mid-download | Sample clk_ctl_st / res_state every chunk; correlate |
+| BAR0 readback also hangs | Whole backplane dead — PCIe link still up but chip-internal bus stopped | Try throttling further (chunk_words=1024) |
+| Download completes | Chunk size or cadence was the issue — compare with test.224 to see what changed | Proceed to firmware release / post-download verification |
+| Hang moves to same byte offset (e.g. 0x20000) | Address-correlated: TCM block boundary, specific memory cell | Map TCM; test a read before the problematic offset |
+| Hang moves with different timing | Time-correlated: cumulative effect (backpressure, clock, thermal) | Try a longer mid-download delay |
+
+### Risk — chip state not cleanly reset
+
+No SMC reset between test.223, test.224, and current boot 0. The
+first two PMU mask writes we'll do in test.225 will log
+`0x13f -> 0x7ff` and `0x13b -> 0x7ff` — if baseline reads show
+`0x7ff` already, the chip has retained prior mask state and SMC
+reset is needed for a clean run.
+
+### Pre-test.225 hardware state (current boot 0)
+
+- `lspci -vvv -s 03:00.0`: LnkCtl ASPM Disabled, LnkSta 2.5GT/s x1,
+  MAbort-, SERR-, CommClk-. Link up, no dirty state.
+- `lsmod | grep brcm` empty.
+
+---
+
 ## PRE-TEST.224 (2026-04-22 15:10 BST) — narrow mask to observed 0x7ff + pre-download HAVEHT capture
 
 ### What changed vs test.223
