@@ -1,0 +1,588 @@
+=== test.235 PRE sysctls (2026-04-22 23:5x BST, boot 0) ===
+  nmi_watchdog=0
+  hardlockup_panic=0
+  softlockup_panic=0
+  panic=0
+
+=== test.235 PRE lspci ===
+  	Control: I/O- Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+  	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+
+=== test.235 PRE BAR0 timing ===
+  exit=1 elapsed=22ms
+
+=== test.235 PRE pstore ===
+  total 0
+  drwxr-x--- 2 root root 0 Apr 22 23:41 .
+  drwxr-xr-x 6 root root 0 Apr 22 23:41 ..
+
+=== test.235 PRE module state ===
+  cfg80211             1413120  5 mt76,mt76x02_lib,mac80211,mt76x02_usb,mt76x2_common
+  rfkill                 40960  3 bluetooth,cfg80211
+
+=== test.235 PRE .ko strings (test.235 lines + module param) ===
+  -rw-r--r-- 1 kimptoc users 14262288 Apr 22 23:51 /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko
+  0brcmfmac: BCM4360 test.235: 1000 ms dwell done (no fw activation); proceeding to BM-clear + release
+  0brcmfmac: BCM4360 test.235: SKIPPING brcmf_chip_set_active (zero+verify-only run; test.230 baseline)
+  bcm4360_test235_skip_set_active
+  __param_bcm4360_test235_skip_set_active
+  __param_str_bcm4360_test235_skip_set_active
+  parm=bcm4360_reset_stage:BCM4360: staged reset (0=read-only, 1=IOCTL, 2=+RESET_CTL, 3=+final IOCTL)
+  parm=bcm4360_skip_arm:BCM4360: skip ARM release (1=skip, 0=normal)
+  parm=bcm4360_test235_skip_set_active:BCM4360 test.235: skip brcmf_chip_set_active after zero+verify (1=skip, 0=normal test.234 path)
+  parmtype=bcm4360_test235_skip_set_active:int
+  __UNIQUE_ID_bcm4360_test235_skip_set_active1058
+  __UNIQUE_ID_bcm4360_test235_skip_set_activetype1057
+
+=== test.235 RUN (boot 0, 2026-04-22 23:52:32 BST) ===
+  insmod brcmfmac.ko bcm4360_test235_skip_set_active=1
+  modules loaded; sleeping 5s for probe path
+
+=== test.235 dmesg (post-insmod, pre-rmmod) ===
+  [  676.832728] brcmfmac: BCM4360 test.193: PMU WARs applied — chipcontrol#1 0x00000210->0x00000a10 pllcontrol#6=0x080004e2 #0xf=0x0000000e
+  [  676.834585] brcmfmac: BCM4360 test.224: max_res_mask 0x0000013f -> 0x000007ff (wrote 0x000007ff)
+  [  676.836423] brcmfmac: BCM4360 test.224: min_res_mask 0x0000013b -> 0x000007ff (wrote 0x000007ff)
+  [  676.858451] brcmfmac: BCM4360 test.224: post-settle pmustatus=0x0000002e res_state=0x000007ff (expect 0x2e / 0x7ff)
+  [  676.858515] brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+  [  677.160361] brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+  [  677.160472] brcmfmac: BCM4360 test.158: about to pci_clear_master (config-space write)
+  [  677.464363] brcmfmac 0000:03:00.0: BCM4360 test.158: BusMaster cleared after chip_attach
+  [  677.768386] brcmfmac: BCM4360 test.158: about to read LnkCtl before ASPM disable
+  [  678.072455] brcmfmac: BCM4360 test.158: LnkCtl read before=0x0143 — disabling ASPM
+  [  678.376421] brcmfmac: BCM4360 test.158: pci_disable_link_state returned — reading LnkCtl
+  [  678.680384] brcmfmac 0000:03:00.0: BCM4360 test.158: ASPM disabled; LnkCtl before=0x0143 after=0x0140 ASPM-bits-after=0x0
+  [  678.984439] brcmfmac 0000:03:00.0: BCM4360 test.188: root port 0000:00:1c.2 LnkCtl before=0x0040 ASPM=0x0 CLKREQ=off — disabling L0s/L1/CLKPM
+  [  679.288433] brcmfmac: BCM4360 test.188: root-port pci_disable_link_state returned — reading LnkCtl
+  [  679.592398] brcmfmac 0000:03:00.0: BCM4360 test.188: root port 0000:00:1c.2 LnkCtl after=0x0040 ASPM=0x0 CLKREQ=off
+  [  680.200394] brcmfmac 0000:03:00.0: BCM4360 test.159: before PCIE2 core/reginfo setup
+  [  680.504375] brcmfmac 0000:03:00.0: BCM4360 test.159: reginfo selected (pcie2 rev=1)
+  [  680.808319] brcmfmac 0000:03:00.0: BCM4360 test.159: pcie_bus_dev allocated
+  [  681.112400] brcmfmac 0000:03:00.0: BCM4360 test.159: settings allocated (BCM4360 dummy path)
+  [  681.416495] brcmfmac 0000:03:00.0: BCM4360 test.159: bus allocated
+  [  681.720322] brcmfmac 0000:03:00.0: BCM4360 test.159: msgbuf allocated
+  [  682.024389] brcmfmac 0000:03:00.0: BCM4360 test.159: struct wiring done — before pci_pme_capable
+  [  682.328338] brcmfmac 0000:03:00.0: BCM4360 test.159: after pci_pme_capable wowl=1
+  [  682.632321] brcmfmac 0000:03:00.0: BCM4360 test.160: drvdata set — before brcmf_alloc
+  [  682.936504] brcmfmac 0000:03:00.0: BCM4360 test.160: brcmf_alloc complete — wiphy allocated
+  [  683.241355] brcmfmac 0000:03:00.0: BCM4360 test.160: OTP read bypassed — OTP not needed
+  [  683.544423] brcmfmac 0000:03:00.0: BCM4360 test.160: before prepare_fw_request
+  [  683.848368] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+  [  683.848374] brcmfmac 0000:03:00.0: BCM4360 test.160: firmware request prepared
+  [  684.152423] brcmfmac: BCM4360 test.161: calling brcmf_fw_get_firmwares — async callback expected
+  [  684.456413] brcmfmac 0000:03:00.0: BCM4360 test.161: brcmf_fw_get_firmwares returned 0 (async/success; callback will fire)
+  [  684.760561] brcmfmac: BCM4360 test.188: pci_register_driver returned ret=0
+  [  684.760643] brcmfmac: BCM4360 test.155: after brcmf_pcie_register() err=0
+  [  684.810715] brcmfmac: BCM4360 test.155: post-PCI sync (skipping USB)
+  [  684.810751] brcmfmac: BCM4360 test.156: after brcmf_core_init() err=0
+  [  685.117944] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+  [  685.121559] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+  [  685.121572] brcmfmac: BCM4360 test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0
+  [  685.121702] brcmfmac: BCM4360 test.188: setup-entry ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+  [  685.424453] brcmfmac: BCM4360 test.188: pre-attach ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+  [  685.424522] brcmfmac: BCM4360 test.128: before brcmf_pcie_attach
+  [  685.424551] brcmfmac: BCM4360 test.128: brcmf_pcie_attach ENTRY
+  [  685.424628] brcmfmac: BCM4360 test.194: PCIe2 CLK_CONTROL probe = 0x00000182
+  [  685.424662] brcmfmac: BCM4360 test.194: SBMBX write done
+  [  685.430645] brcmfmac: BCM4360 test.194: PMCR_REFUP 0x00051852 -> 0x0005185f
+  [  685.436650] brcmfmac: BCM4360 test.128: after brcmf_pcie_attach
+  [  685.443308] brcmfmac: BCM4360 test.188: post-attach ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+  [  685.748916] brcmfmac: BCM4360 test.134: post-attach before fw-ptr-extract
+  [  686.048983] brcmfmac: BCM4360 test.134: after kfree(fwreq)
+  [  686.349040] brcmfmac: BCM4360 test.130: before brcmf_chip_get_raminfo
+  [  686.649111] brcmfmac: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+  [  686.649156] brcmfmac: BCM4360 test.125: get_raminfo returning 0
+  [  686.649183] brcmfmac: BCM4360 test.130: after brcmf_chip_get_raminfo
+  [  686.649268] brcmfmac: BCM4360 test.188: post-raminfo ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+  [  686.949348] brcmfmac: BCM4360 test.130: after brcmf_pcie_adjust_ramsize
+  [  687.249467] brcmfmac: BCM4360 test.188: pre-download ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+  [  687.249589] brcmfmac: BCM4360 test.218: pre-download CR4 clk_ctl_st=0x07030040 [HAVEHT(17)=YES ALP_AVAIL(16)=YES BP_ON_HT(19)=no  bit6=SET FORCEHT(1)=no  FORCEALP(0)=no ]
+  [  687.249709] brcmfmac: BCM4360 test.218: pre-download D11 IN_RESET=YES (RST=0x00000001) — clk_ctl_st SKIPPED
+  [  687.249748] brcmfmac: BCM4360 test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)
+  [  687.551744] brcmfmac: BCM4360 test.142: enter_download_state — confirming ARM CR4 reset state
+  [  687.551880] brcmfmac: BCM4360 test.142: ARM CR4 state RESET_CTL=0x00000000 IN_RESET=NO/BAD IOCTL=0x0001 CPUHALT=NO FGC=NO CLK=YES
+  [  687.852002] brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffd44f01400000
+  [  687.852008] brcmfmac 0000:03:00.0: BCM4360 test.138: pre-BAR2-ioread32 (tcm=ffffd44f01400000)
+  [  688.152110] brcmfmac 0000:03:00.0: BCM4360 test.138: post-BAR2-ioread32 = 0x03cd4384 (real value — BAR2 accessible)
+  [  688.452240] brcmfmac: BCM4360 test.233: PRE-READ TCM[0x90000]=0xa42709e1 TCM[0x90004]=0x90dd4512 (expect 0 fresh, 0xDEADBEEF/0xCAFEBABE if preserved)
+  [  688.452432] brcmfmac: BCM4360 test.188: pre-halt ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+  [  688.452554] brcmfmac: BCM4360 test.188: pre-halt D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+  [  688.452607] brcmfmac: BCM4360 test.218: pre-halt CR4 clk_ctl_st=0x07030040 [HAVEHT(17)=YES ALP_AVAIL(16)=YES BP_ON_HT(19)=no  bit6=SET FORCEHT(1)=no  FORCEALP(0)=no ]
+  [  688.454679] brcmfmac: BCM4360 test.218: pre-halt D11 IN_RESET=YES (RST=0x00000001) — clk_ctl_st SKIPPED
+  [  688.507008] brcmfmac: BCM4360 test.188: re-halting ARM CR4 via brcmf_chip_set_passive
+  [  688.657353] brcmfmac: BCM4360 test.188: post-halt ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+  [  688.707415] brcmfmac: BCM4360 test.188: starting chunked fw write, total_words=110558 (442233 bytes) tail=1 wbase=ffffd44f01400000
+  [  688.758086] brcmfmac: BCM4360 test.225: wrote 1024 words (4096 bytes) last=0xb19c6018 readback=0xb19c6018 OK
+  [  688.808758] brcmfmac: BCM4360 test.225: wrote 2048 words (8192 bytes) last=0x224c2100 readback=0x224c2100 OK
+  [  688.859417] brcmfmac: BCM4360 test.225: wrote 3072 words (12288 bytes) last=0x48240800 readback=0x48240800 OK
+  [  688.910080] brcmfmac: BCM4360 test.225: wrote 4096 words (16384 bytes) last=0x6aa84634 readback=0x6aa84634 OK
+  [  688.960748] brcmfmac: BCM4360 test.225: wrote 5120 words (20480 bytes) last=0xf8f4f7fc readback=0xf8f4f7fc OK
+  [  689.011416] brcmfmac: BCM4360 test.225: wrote 6144 words (24576 bytes) last=0x43f8e92d readback=0x43f8e92d OK
+  [  689.062074] brcmfmac: BCM4360 test.225: wrote 7168 words (28672 bytes) last=0xf894fc8f readback=0xf894fc8f OK
+  [  689.112724] brcmfmac: BCM4360 test.225: wrote 8192 words (32768 bytes) last=0xea25084f readback=0xea25084f OK
+  [  689.163392] brcmfmac: BCM4360 test.225: wrote 9216 words (36864 bytes) last=0xf0090e12 readback=0xf0090e12 OK
+  [  689.214033] brcmfmac: BCM4360 test.225: wrote 10240 words (40960 bytes) last=0x0202ea83 readback=0x0202ea83 OK
+  [  689.264677] brcmfmac: BCM4360 test.225: wrote 11264 words (45056 bytes) last=0xf0028a99 readback=0xf0028a99 OK
+  [  689.315344] brcmfmac: BCM4360 test.225: wrote 12288 words (49152 bytes) last=0x460d4604 readback=0x460d4604 OK
+  [  689.365984] brcmfmac: BCM4360 test.225: wrote 13312 words (53248 bytes) last=0xfca4f007 readback=0xfca4f007 OK
+  [  689.416636] brcmfmac: BCM4360 test.225: wrote 14336 words (57344 bytes) last=0x0a32bdf8 readback=0x0a32bdf8 OK
+  [  689.467290] brcmfmac: BCM4360 test.225: wrote 15360 words (61440 bytes) last=0xfd18f7f1 readback=0xfd18f7f1 OK
+  [  689.517957] brcmfmac: BCM4360 test.225: wrote 16384 words (65536 bytes) last=0x0218f8d8 readback=0x0218f8d8 OK
+  [  689.568621] brcmfmac: BCM4360 test.225: wrote 17408 words (69632 bytes) last=0x2002d1d7 readback=0x2002d1d7 OK
+  [  689.619287] brcmfmac: BCM4360 test.225: wrote 18432 words (73728 bytes) last=0xb2b6082a readback=0xb2b6082a OK
+  [  689.669979] brcmfmac: BCM4360 test.225: wrote 19456 words (77824 bytes) last=0xe01a4615 readback=0xe01a4615 OK
+  [  689.720644] brcmfmac: BCM4360 test.225: wrote 20480 words (81920 bytes) last=0xd00b0f00 readback=0xd00b0f00 OK
+  [  689.771285] brcmfmac: BCM4360 test.225: wrote 21504 words (86016 bytes) last=0x4318ea4f readback=0x4318ea4f OK
+  [  689.821938] brcmfmac: BCM4360 test.225: wrote 22528 words (90112 bytes) last=0x3088f8d4 readback=0x3088f8d4 OK
+  [  689.872596] brcmfmac: BCM4360 test.225: wrote 23552 words (94208 bytes) last=0x4b18d00d readback=0x4b18d00d OK
+  [  689.923256] brcmfmac: BCM4360 test.225: wrote 24576 words (98304 bytes) last=0xf8b4fd19 readback=0xf8b4fd19 OK
+  [  689.973924] brcmfmac: BCM4360 test.225: wrote 25600 words (102400 bytes) last=0x4e2db570 readback=0x4e2db570 OK
+  [  690.024570] brcmfmac: BCM4360 test.225: wrote 26624 words (106496 bytes) last=0x220682ab readback=0x220682ab OK
+  [  690.075264] brcmfmac: BCM4360 test.225: wrote 27648 words (110592 bytes) last=0xf8b1bf8a readback=0xf8b1bf8a OK
+  [  690.125964] brcmfmac: BCM4360 test.225: wrote 28672 words (114688 bytes) last=0xf7e4fca5 readback=0xf7e4fca5 OK
+
+=== test.235 rmmod ===
+  rmmod: ERROR: Module brcmfmac is in use
+
+=== test.235 POST module state ===
+  brcmfmac              507904  1
+  brcmutil               16384  1 brcmfmac
+  cfg80211             1413120  6 mt76,mt76x02_lib,brcmfmac,mac80211,mt76x02_usb,mt76x2_common
+  rfkill                 40960  3 bluetooth,cfg80211
+
+=== test.235 POST lspci ===
+  	Control: I/O- Mem+ BusMaster- SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+  	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+
+=== test.235 POST BAR0 timing ===
+  exit=1 elapsed=20ms
+
+=== test.235 done (2026-04-22 23:52:49 BST) ===
+
+=== test.235 RETRY rmmod (proper order) ===
+  rmmod: ERROR: Module brcmfmac_wcc is not currently loaded
+
+=== test.235 POST-RMMOD module state ===
+
+=== test.235 dmesg (all brcmfmac/test/235/234) ===
+  [  674.664663] brcmfmac: loading out-of-tree module taints kernel.
+  [  674.670956] brcmfmac: BCM4360 test.188: module_init entry — extended post-release TCM sampling
+  [  674.671049] brcmfmac: BCM4360 test.156: before brcmf_core_init()
+  [  674.671078] brcmfmac: BCM4360 test.155: brcmf_core_init() entry
+  [  674.671106] brcmfmac: BCM4360 test.155: before brcmf_sdio_register()
+  [  674.671134] brcmfmac: BCM4360 test.155: after brcmf_sdio_register() err=0
+  [  674.722902] brcmfmac: BCM4360 test.155: post-SDIO sync (before PCI)
+  [  674.722934] brcmfmac: BCM4360 test.155: before brcmf_pcie_register()
+  [  674.722960] brcmfmac: BCM4360 test.188: brcmf_pcie_register() entry
+  [  675.024390] brcmfmac: BCM4360 test.188: before pci_register_driver
+  [  675.328337] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=00000000ec395a13)
+  [  675.632272] brcmfmac: BCM4360 test.158: probe entry flush done — proceeding
+  [  675.936333] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+  [  675.936395] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+  [  675.936595] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+  [  676.448536] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+  [  676.448590] brcmfmac: BCM4360 test.158: before brcmf_chip_attach
+  [  676.752721] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffd44f01400000
+  [  676.752777] brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+  [  676.803366] brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+  [  676.803855] brcmfmac: BCM4360 test.218: core[1 ] id=0x800:rev43  base=0x18000000 wrap=0x18100000
+  [  676.803899] brcmfmac: BCM4360 test.218: core[2 ] id=0x812:rev42  base=0x18001000 wrap=0x18101000
+  [  676.803941] brcmfmac: BCM4360 test.218: core[3 ] id=0x83e:rev2   base=0x18002000 wrap=0x18102000
+  [  676.808864] brcmfmac: BCM4360 test.218: core[4 ] id=0x83c:rev1   base=0x18003000 wrap=0x18103000
+  [  676.813391] brcmfmac: BCM4360 test.218: core[5 ] id=0x81a:rev17  base=0x18004000 wrap=0x18104000
+  [  676.815181] brcmfmac: BCM4360 test.218: core[6 ] id=0x135:rev0   base=0x00000000 wrap=0x18108000
+  [  676.816856] brcmfmac: BCM4360 test.218: host-side enumerated 6 cores total
+  [  676.818777] brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+  [  676.820464] brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+  [  676.822217] brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+  [  676.823931] brcmfmac 0000:03:00.0: BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)
+  [  676.826308] brcmfmac 0000:03:00.0: BCM4360 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0
+  [  676.826411] brcmfmac: BCM4360 test.188: post-145 ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+  [  676.826467] brcmfmac: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+  [  676.826507] brcmfmac: BCM4360 test.125: after reset, before get_raminfo
+  [  676.826547] brcmfmac: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+  [  676.828767] brcmfmac: BCM4360 test.125: get_raminfo returning 0
+  [  676.830783] brcmfmac: BCM4360 test.193: chip=0x4360 ccrev=43 pmurev=17 pmucaps=0x10a22b11
+  [  676.832728] brcmfmac: BCM4360 test.193: PMU WARs applied — chipcontrol#1 0x00000210->0x00000a10 pllcontrol#6=0x080004e2 #0xf=0x0000000e
+  [  676.834585] brcmfmac: BCM4360 test.224: max_res_mask 0x0000013f -> 0x000007ff (wrote 0x000007ff)
+  [  676.836423] brcmfmac: BCM4360 test.224: min_res_mask 0x0000013b -> 0x000007ff (wrote 0x000007ff)
+  [  676.858451] brcmfmac: BCM4360 test.224: post-settle pmustatus=0x0000002e res_state=0x000007ff (expect 0x2e / 0x7ff)
+  [  676.858515] brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+  [  677.160361] brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+  [  677.160472] brcmfmac: BCM4360 test.158: about to pci_clear_master (config-space write)
+  [  677.464363] brcmfmac 0000:03:00.0: BCM4360 test.158: BusMaster cleared after chip_attach
+  [  677.768386] brcmfmac: BCM4360 test.158: about to read LnkCtl before ASPM disable
+  [  678.072455] brcmfmac: BCM4360 test.158: LnkCtl read before=0x0143 — disabling ASPM
+  [  678.376421] brcmfmac: BCM4360 test.158: pci_disable_link_state returned — reading LnkCtl
+  [  678.680384] brcmfmac 0000:03:00.0: BCM4360 test.158: ASPM disabled; LnkCtl before=0x0143 after=0x0140 ASPM-bits-after=0x0
+  [  678.984439] brcmfmac 0000:03:00.0: BCM4360 test.188: root port 0000:00:1c.2 LnkCtl before=0x0040 ASPM=0x0 CLKREQ=off — disabling L0s/L1/CLKPM
+  [  679.288433] brcmfmac: BCM4360 test.188: root-port pci_disable_link_state returned — reading LnkCtl
+  [  679.592398] brcmfmac 0000:03:00.0: BCM4360 test.188: root port 0000:00:1c.2 LnkCtl after=0x0040 ASPM=0x0 CLKREQ=off
+  [  680.200394] brcmfmac 0000:03:00.0: BCM4360 test.159: before PCIE2 core/reginfo setup
+  [  680.504375] brcmfmac 0000:03:00.0: BCM4360 test.159: reginfo selected (pcie2 rev=1)
+  [  680.808319] brcmfmac 0000:03:00.0: BCM4360 test.159: pcie_bus_dev allocated
+  [  681.112400] brcmfmac 0000:03:00.0: BCM4360 test.159: settings allocated (BCM4360 dummy path)
+  [  681.416495] brcmfmac 0000:03:00.0: BCM4360 test.159: bus allocated
+  [  681.720322] brcmfmac 0000:03:00.0: BCM4360 test.159: msgbuf allocated
+  [  682.024389] brcmfmac 0000:03:00.0: BCM4360 test.159: struct wiring done — before pci_pme_capable
+  [  682.328338] brcmfmac 0000:03:00.0: BCM4360 test.159: after pci_pme_capable wowl=1
+  [  682.632321] brcmfmac 0000:03:00.0: BCM4360 test.160: drvdata set — before brcmf_alloc
+  [  682.936504] brcmfmac 0000:03:00.0: BCM4360 test.160: brcmf_alloc complete — wiphy allocated
+  [  683.241355] brcmfmac 0000:03:00.0: BCM4360 test.160: OTP read bypassed — OTP not needed
+  [  683.544423] brcmfmac 0000:03:00.0: BCM4360 test.160: before prepare_fw_request
+  [  683.848368] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+  [  683.848374] brcmfmac 0000:03:00.0: BCM4360 test.160: firmware request prepared
+  [  684.152423] brcmfmac: BCM4360 test.161: calling brcmf_fw_get_firmwares — async callback expected
+  [  684.456413] brcmfmac 0000:03:00.0: BCM4360 test.161: brcmf_fw_get_firmwares returned 0 (async/success; callback will fire)
+  [  684.760561] brcmfmac: BCM4360 test.188: pci_register_driver returned ret=0
+  [  684.760643] brcmfmac: BCM4360 test.155: after brcmf_pcie_register() err=0
+  [  684.810715] brcmfmac: BCM4360 test.155: post-PCI sync (skipping USB)
+  [  684.810751] brcmfmac: BCM4360 test.156: after brcmf_core_init() err=0
+  [  685.117944] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+  [  685.121559] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+  [  685.121572] brcmfmac: BCM4360 test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0
+  [  685.121702] brcmfmac: BCM4360 test.188: setup-entry ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+  [  685.424453] brcmfmac: BCM4360 test.188: pre-attach ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+  [  685.424522] brcmfmac: BCM4360 test.128: before brcmf_pcie_attach
+  [  685.424551] brcmfmac: BCM4360 test.128: brcmf_pcie_attach ENTRY
+  [  685.424628] brcmfmac: BCM4360 test.194: PCIe2 CLK_CONTROL probe = 0x00000182
+  [  685.424662] brcmfmac: BCM4360 test.194: SBMBX write done
+  [  685.430645] brcmfmac: BCM4360 test.194: PMCR_REFUP 0x00051852 -> 0x0005185f
+  [  685.436650] brcmfmac: BCM4360 test.128: after brcmf_pcie_attach
+  [  685.443308] brcmfmac: BCM4360 test.188: post-attach ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+  [  685.748916] brcmfmac: BCM4360 test.134: post-attach before fw-ptr-extract
+  [  686.048983] brcmfmac: BCM4360 test.134: after kfree(fwreq)
+  [  686.349040] brcmfmac: BCM4360 test.130: before brcmf_chip_get_raminfo
+  [  686.649111] brcmfmac: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+  [  686.649156] brcmfmac: BCM4360 test.125: get_raminfo returning 0
+  [  686.649183] brcmfmac: BCM4360 test.130: after brcmf_chip_get_raminfo
+  [  686.649268] brcmfmac: BCM4360 test.188: post-raminfo ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+  [  686.949348] brcmfmac: BCM4360 test.130: after brcmf_pcie_adjust_ramsize
+  [  687.249467] brcmfmac: BCM4360 test.188: pre-download ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+  [  687.249589] brcmfmac: BCM4360 test.218: pre-download CR4 clk_ctl_st=0x07030040 [HAVEHT(17)=YES ALP_AVAIL(16)=YES BP_ON_HT(19)=no  bit6=SET FORCEHT(1)=no  FORCEALP(0)=no ]
+  [  687.249709] brcmfmac: BCM4360 test.218: pre-download D11 IN_RESET=YES (RST=0x00000001) — clk_ctl_st SKIPPED
+  [  687.249748] brcmfmac: BCM4360 test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)
+  [  687.551744] brcmfmac: BCM4360 test.142: enter_download_state — confirming ARM CR4 reset state
+  [  687.551880] brcmfmac: BCM4360 test.142: ARM CR4 state RESET_CTL=0x00000000 IN_RESET=NO/BAD IOCTL=0x0001 CPUHALT=NO FGC=NO CLK=YES
+  [  687.852002] brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffd44f01400000
+  [  687.852008] brcmfmac 0000:03:00.0: BCM4360 test.138: pre-BAR2-ioread32 (tcm=ffffd44f01400000)
+  [  688.152110] brcmfmac 0000:03:00.0: BCM4360 test.138: post-BAR2-ioread32 = 0x03cd4384 (real value — BAR2 accessible)
+  [  688.452240] brcmfmac: BCM4360 test.233: PRE-READ TCM[0x90000]=0xa42709e1 TCM[0x90004]=0x90dd4512 (expect 0 fresh, 0xDEADBEEF/0xCAFEBABE if preserved)
+  [  688.452432] brcmfmac: BCM4360 test.188: pre-halt ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+  [  688.452554] brcmfmac: BCM4360 test.188: pre-halt D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+  [  688.452607] brcmfmac: BCM4360 test.218: pre-halt CR4 clk_ctl_st=0x07030040 [HAVEHT(17)=YES ALP_AVAIL(16)=YES BP_ON_HT(19)=no  bit6=SET FORCEHT(1)=no  FORCEALP(0)=no ]
+  [  688.454679] brcmfmac: BCM4360 test.218: pre-halt D11 IN_RESET=YES (RST=0x00000001) — clk_ctl_st SKIPPED
+  [  688.507008] brcmfmac: BCM4360 test.188: re-halting ARM CR4 via brcmf_chip_set_passive
+  [  688.657353] brcmfmac: BCM4360 test.188: post-halt ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+  [  688.707415] brcmfmac: BCM4360 test.188: starting chunked fw write, total_words=110558 (442233 bytes) tail=1 wbase=ffffd44f01400000
+  [  688.758086] brcmfmac: BCM4360 test.225: wrote 1024 words (4096 bytes) last=0xb19c6018 readback=0xb19c6018 OK
+  [  688.808758] brcmfmac: BCM4360 test.225: wrote 2048 words (8192 bytes) last=0x224c2100 readback=0x224c2100 OK
+  [  688.859417] brcmfmac: BCM4360 test.225: wrote 3072 words (12288 bytes) last=0x48240800 readback=0x48240800 OK
+  [  688.910080] brcmfmac: BCM4360 test.225: wrote 4096 words (16384 bytes) last=0x6aa84634 readback=0x6aa84634 OK
+  [  688.960748] brcmfmac: BCM4360 test.225: wrote 5120 words (20480 bytes) last=0xf8f4f7fc readback=0xf8f4f7fc OK
+  [  689.011416] brcmfmac: BCM4360 test.225: wrote 6144 words (24576 bytes) last=0x43f8e92d readback=0x43f8e92d OK
+  [  689.062074] brcmfmac: BCM4360 test.225: wrote 7168 words (28672 bytes) last=0xf894fc8f readback=0xf894fc8f OK
+  [  689.112724] brcmfmac: BCM4360 test.225: wrote 8192 words (32768 bytes) last=0xea25084f readback=0xea25084f OK
+  [  689.163392] brcmfmac: BCM4360 test.225: wrote 9216 words (36864 bytes) last=0xf0090e12 readback=0xf0090e12 OK
+  [  689.214033] brcmfmac: BCM4360 test.225: wrote 10240 words (40960 bytes) last=0x0202ea83 readback=0x0202ea83 OK
+  [  689.264677] brcmfmac: BCM4360 test.225: wrote 11264 words (45056 bytes) last=0xf0028a99 readback=0xf0028a99 OK
+  [  689.315344] brcmfmac: BCM4360 test.225: wrote 12288 words (49152 bytes) last=0x460d4604 readback=0x460d4604 OK
+  [  689.365984] brcmfmac: BCM4360 test.225: wrote 13312 words (53248 bytes) last=0xfca4f007 readback=0xfca4f007 OK
+  [  689.416636] brcmfmac: BCM4360 test.225: wrote 14336 words (57344 bytes) last=0x0a32bdf8 readback=0x0a32bdf8 OK
+  [  689.467290] brcmfmac: BCM4360 test.225: wrote 15360 words (61440 bytes) last=0xfd18f7f1 readback=0xfd18f7f1 OK
+  [  689.517957] brcmfmac: BCM4360 test.225: wrote 16384 words (65536 bytes) last=0x0218f8d8 readback=0x0218f8d8 OK
+  [  689.568621] brcmfmac: BCM4360 test.225: wrote 17408 words (69632 bytes) last=0x2002d1d7 readback=0x2002d1d7 OK
+  [  689.619287] brcmfmac: BCM4360 test.225: wrote 18432 words (73728 bytes) last=0xb2b6082a readback=0xb2b6082a OK
+  [  689.669979] brcmfmac: BCM4360 test.225: wrote 19456 words (77824 bytes) last=0xe01a4615 readback=0xe01a4615 OK
+  [  689.720644] brcmfmac: BCM4360 test.225: wrote 20480 words (81920 bytes) last=0xd00b0f00 readback=0xd00b0f00 OK
+  [  689.771285] brcmfmac: BCM4360 test.225: wrote 21504 words (86016 bytes) last=0x4318ea4f readback=0x4318ea4f OK
+  [  689.821938] brcmfmac: BCM4360 test.225: wrote 22528 words (90112 bytes) last=0x3088f8d4 readback=0x3088f8d4 OK
+  [  689.872596] brcmfmac: BCM4360 test.225: wrote 23552 words (94208 bytes) last=0x4b18d00d readback=0x4b18d00d OK
+  [  689.923256] brcmfmac: BCM4360 test.225: wrote 24576 words (98304 bytes) last=0xf8b4fd19 readback=0xf8b4fd19 OK
+  [  689.973924] brcmfmac: BCM4360 test.225: wrote 25600 words (102400 bytes) last=0x4e2db570 readback=0x4e2db570 OK
+  [  690.024570] brcmfmac: BCM4360 test.225: wrote 26624 words (106496 bytes) last=0x220682ab readback=0x220682ab OK
+  [  690.075264] brcmfmac: BCM4360 test.225: wrote 27648 words (110592 bytes) last=0xf8b1bf8a readback=0xf8b1bf8a OK
+  [  690.125964] brcmfmac: BCM4360 test.225: wrote 28672 words (114688 bytes) last=0xf7e4fca5 readback=0xf7e4fca5 OK
+  [  690.176657] brcmfmac: BCM4360 test.225: wrote 29696 words (118784 bytes) last=0x90009601 readback=0x90009601 OK
+  [  690.227325] brcmfmac: BCM4360 test.225: wrote 30720 words (122880 bytes) last=0x683bd011 readback=0x683bd011 OK
+  [  690.278003] brcmfmac: BCM4360 test.225: wrote 31744 words (126976 bytes) last=0x460249ce readback=0x460249ce OK
+  [  690.328659] brcmfmac: BCM4360 test.225: wrote 32768 words (131072 bytes) last=0xf7e16184 readback=0xf7e16184 OK
+  [  690.379358] brcmfmac: BCM4360 test.225: wrote 33792 words (135168 bytes) last=0x3094f8d4 readback=0x3094f8d4 OK
+  [  690.430005] brcmfmac: BCM4360 test.225: wrote 34816 words (139264 bytes) last=0x6380f44f readback=0x6380f44f OK
+  [  690.480648] brcmfmac: BCM4360 test.225: wrote 35840 words (143360 bytes) last=0x46294620 readback=0x46294620 OK
+  [  690.531308] brcmfmac: BCM4360 test.225: wrote 36864 words (147456 bytes) last=0xd1352800 readback=0xd1352800 OK
+  [  690.581970] brcmfmac: BCM4360 test.225: wrote 37888 words (151552 bytes) last=0x490bfd19 readback=0x490bfd19 OK
+  [  690.632665] brcmfmac: BCM4360 test.225: wrote 38912 words (155648 bytes) last=0xfb39f00e readback=0xfb39f00e OK
+  [  690.683331] brcmfmac: BCM4360 test.225: wrote 39936 words (159744 bytes) last=0xf2404620 readback=0xf2404620 OK
+  [  690.733987] brcmfmac: BCM4360 test.225: wrote 40960 words (163840 bytes) last=0x23004620 readback=0x23004620 OK
+  [  690.784648] brcmfmac: BCM4360 test.225: wrote 41984 words (167936 bytes) last=0xd1362e01 readback=0xd1362e01 OK
+  [  690.835293] brcmfmac: BCM4360 test.225: wrote 43008 words (172032 bytes) last=0x2901e03f readback=0x2901e03f OK
+  [  690.885945] brcmfmac: BCM4360 test.225: wrote 44032 words (176128 bytes) last=0xd8532b0a readback=0xd8532b0a OK
+  [  690.936591] brcmfmac: BCM4360 test.225: wrote 45056 words (180224 bytes) last=0x713af240 readback=0x713af240 OK
+  [  690.987237] brcmfmac: BCM4360 test.225: wrote 46080 words (184320 bytes) last=0x21f8f641 readback=0x21f8f641 OK
+  [  691.037911] brcmfmac: BCM4360 test.225: wrote 47104 words (188416 bytes) last=0x1122f640 readback=0x1122f640 OK
+  [  691.088562] brcmfmac: BCM4360 test.225: wrote 48128 words (192512 bytes) last=0x10daf8b4 readback=0x10daf8b4 OK
+  [  691.139234] brcmfmac: BCM4360 test.225: wrote 49152 words (196608 bytes) last=0x21004620 readback=0x21004620 OK
+  [  691.192316] brcmfmac: BCM4360 test.225: wrote 50176 words (200704 bytes) last=0x4620fd19 readback=0x4620fd19 OK
+  [  691.242959] brcmfmac: BCM4360 test.225: wrote 51200 words (204800 bytes) last=0x705a3201 readback=0x705a3201 OK
+  [  691.293623] brcmfmac: BCM4360 test.225: wrote 52224 words (208896 bytes) last=0xebc844c4 readback=0xebc844c4 OK
+  [  691.344318] brcmfmac: BCM4360 test.225: wrote 53248 words (212992 bytes) last=0xfb4af7f3 readback=0xfb4af7f3 OK
+  [  691.394994] brcmfmac: BCM4360 test.225: wrote 54272 words (217088 bytes) last=0xe027d12d readback=0xe027d12d OK
+  [  691.445692] brcmfmac: BCM4360 test.225: wrote 55296 words (221184 bytes) last=0x46283172 readback=0x46283172 OK
+  [  691.496341] brcmfmac: BCM4360 test.225: wrote 56320 words (225280 bytes) last=0x462b6859 readback=0x462b6859 OK
+  [  691.547014] brcmfmac: BCM4360 test.225: wrote 57344 words (229376 bytes) last=0xb29272e2 readback=0xb29272e2 OK
+  [  691.597689] brcmfmac: BCM4360 test.225: wrote 58368 words (233472 bytes) last=0xfd18f7c7 readback=0xfd18f7c7 OK
+  [  691.648344] brcmfmac: BCM4360 test.225: wrote 59392 words (237568 bytes) last=0xf7ff4621 readback=0xf7ff4621 OK
+  [  691.699008] brcmfmac: BCM4360 test.225: wrote 60416 words (241664 bytes) last=0xf8d4feb5 readback=0xf8d4feb5 OK
+  [  691.749661] brcmfmac: BCM4360 test.225: wrote 61440 words (245760 bytes) last=0x9a04fd19 readback=0x9a04fd19 OK
+  [  691.800331] brcmfmac: BCM4360 test.225: wrote 62464 words (249856 bytes) last=0xf8c4fcb6 readback=0xf8c4fcb6 OK
+  [  691.850987] brcmfmac: BCM4360 test.225: wrote 63488 words (253952 bytes) last=0xfd9af7fe readback=0xfd9af7fe OK
+  [  691.901656] brcmfmac: BCM4360 test.225: wrote 64512 words (258048 bytes) last=0x00043142 readback=0x00043142 OK
+  [  691.952314] brcmfmac: BCM4360 test.225: wrote 65536 words (262144 bytes) last=0x30002075 readback=0x30002075 OK
+  [  692.002971] brcmfmac: BCM4360 test.225: wrote 66560 words (266240 bytes) last=0x74786561 readback=0x74786561 OK
+  [  692.053633] brcmfmac: BCM4360 test.225: wrote 67584 words (270336 bytes) last=0x75746552 readback=0x75746552 OK
+  [  692.104328] brcmfmac: BCM4360 test.225: wrote 68608 words (274432 bytes) last=0x706d6f63 readback=0x706d6f63 OK
+  [  692.155012] brcmfmac: BCM4360 test.225: wrote 69632 words (278528 bytes) last=0x0000002c readback=0x0000002c OK
+  [  692.205678] brcmfmac: BCM4360 test.225: wrote 70656 words (282624 bytes) last=0xa3c26161 readback=0xa3c26161 OK
+  [  692.256348] brcmfmac: BCM4360 test.225: wrote 71680 words (286720 bytes) last=0xcd500e7f readback=0xcd500e7f OK
+  [  692.307031] brcmfmac: BCM4360 test.225: wrote 72704 words (290816 bytes) last=0x500e7fcd readback=0x500e7fcd OK
+  [  692.357686] brcmfmac: BCM4360 test.225: wrote 73728 words (294912 bytes) last=0x66726576 readback=0x66726576 OK
+  [  692.408344] brcmfmac: BCM4360 test.225: wrote 74752 words (299008 bytes) last=0x666f202e readback=0x666f202e OK
+  [  692.459037] brcmfmac: BCM4360 test.225: wrote 75776 words (303104 bytes) last=0x706f7473 readback=0x706f7473 OK
+  [  692.509724] brcmfmac: BCM4360 test.225: wrote 76800 words (307200 bytes) last=0x00780062 readback=0x00780062 OK
+  [  692.560414] brcmfmac: BCM4360 test.225: wrote 77824 words (311296 bytes) last=0x78303a72 readback=0x78303a72 OK
+  [  692.611082] brcmfmac: BCM4360 test.225: wrote 78848 words (315392 bytes) last=0x74207265 readback=0x74207265 OK
+  [  692.661743] brcmfmac: BCM4360 test.225: wrote 79872 words (319488 bytes) last=0x2079656b readback=0x2079656b OK
+  [  692.712401] brcmfmac: BCM4360 test.225: wrote 80896 words (323584 bytes) last=0x5f435052 readback=0x5f435052 OK
+  [  692.763068] brcmfmac: BCM4360 test.225: wrote 81920 words (327680 bytes) last=0x00000046 readback=0x00000046 OK
+  [  692.813736] brcmfmac: BCM4360 test.225: wrote 82944 words (331776 bytes) last=0x68705f63 readback=0x68705f63 OK
+  [  692.864394] brcmfmac: BCM4360 test.225: wrote 83968 words (335872 bytes) last=0x6f632020 readback=0x6f632020 OK
+  [  692.915036] brcmfmac: BCM4360 test.225: wrote 84992 words (339968 bytes) last=0x63615f6e readback=0x63615f6e OK
+  [  692.965692] brcmfmac: BCM4360 test.225: wrote 86016 words (344064 bytes) last=0x6c77000a readback=0x6c77000a OK
+  [  693.016339] brcmfmac: BCM4360 test.225: wrote 87040 words (348160 bytes) last=0x04910070 readback=0x04910070 OK
+  [  693.066988] brcmfmac: BCM4360 test.225: wrote 88064 words (352256 bytes) last=0x00000000 readback=0x00000000 OK
+  [  693.117657] brcmfmac: BCM4360 test.225: wrote 89088 words (356352 bytes) last=0x00000000 readback=0x00000000 OK
+  [  693.168299] brcmfmac: BCM4360 test.225: wrote 90112 words (360448 bytes) last=0x2020000a readback=0x2020000a OK
+  [  693.218960] brcmfmac: BCM4360 test.225: wrote 91136 words (364544 bytes) last=0x00050011 readback=0x00050011 OK
+  [  693.269621] brcmfmac: BCM4360 test.225: wrote 92160 words (368640 bytes) last=0x00805555 readback=0x00805555 OK
+  [  693.320267] brcmfmac: BCM4360 test.225: wrote 93184 words (372736 bytes) last=0x00000000 readback=0x00000000 OK
+  [  693.370937] brcmfmac: BCM4360 test.225: wrote 94208 words (376832 bytes) last=0x00000000 readback=0x00000000 OK
+  [  693.421607] brcmfmac: BCM4360 test.225: wrote 95232 words (380928 bytes) last=0x0054bead readback=0x0054bead OK
+  [  693.472296] brcmfmac: BCM4360 test.225: wrote 96256 words (385024 bytes) last=0x00634c06 readback=0x00634c06 OK
+  [  693.522947] brcmfmac: BCM4360 test.225: wrote 97280 words (389120 bytes) last=0x16bc00a4 readback=0x16bc00a4 OK
+  [  693.573613] brcmfmac: BCM4360 test.225: wrote 98304 words (393216 bytes) last=0x06ff08ec readback=0x06ff08ec OK
+  [  693.624267] brcmfmac: BCM4360 test.225: wrote 99328 words (397312 bytes) last=0x00000cef readback=0x00000cef OK
+  [  693.674941] brcmfmac: BCM4360 test.225: wrote 100352 words (401408 bytes) last=0x0fbc1f78 readback=0x0fbc1f78 OK
+  [  693.725625] brcmfmac: BCM4360 test.225: wrote 101376 words (405504 bytes) last=0x00000000 readback=0x00000000 OK
+  [  693.776293] brcmfmac: BCM4360 test.225: wrote 102400 words (409600 bytes) last=0x4607fcc9 readback=0x4607fcc9 OK
+  [  693.826950] brcmfmac: BCM4360 test.225: wrote 103424 words (413696 bytes) last=0x1037f894 readback=0x1037f894 OK
+  [  693.877609] brcmfmac: BCM4360 test.225: wrote 104448 words (417792 bytes) last=0x429f0303 readback=0x429f0303 OK
+  [  693.928269] brcmfmac: BCM4360 test.225: wrote 105472 words (421888 bytes) last=0x61a22004 readback=0x61a22004 OK
+  [  693.978940] brcmfmac: BCM4360 test.225: wrote 106496 words (425984 bytes) last=0xf8d4f8f5 readback=0xf8d4f8f5 OK
+  [  694.029613] brcmfmac: BCM4360 test.225: wrote 107520 words (430080 bytes) last=0xfa5ffeed readback=0xfa5ffeed OK
+  [  694.080297] brcmfmac: BCM4360 test.225: wrote 108544 words (434176 bytes) last=0x3044f882 readback=0x3044f882 OK
+  [  694.130990] brcmfmac: BCM4360 test.225: wrote 109568 words (438272 bytes) last=0x46200db9 readback=0x46200db9 OK
+  [  694.181615] brcmfmac: BCM4360 test.188: all 110558 words written, before tail (tail=1)
+  [  694.231657] brcmfmac: BCM4360 test.188: tail 1 bytes written at offset 442232
+  [  694.281699] brcmfmac: BCM4360 test.188: fw write complete (442233 bytes)
+  [  694.281734] brcmfmac: BCM4360 test.188: before post-fw msleep(100)
+  [  694.384184] brcmfmac: BCM4360 test.188: after post-fw msleep(100)
+  [  694.384223] brcmfmac: BCM4360 test.188: host resetintr=0xb80ef000 before NVRAM
+  [  694.384258] brcmfmac: BCM4360 test.188: pre-NVRAM write address=0x9ff1c len=228 naddr=ffffd44f0149ff1c
+  [  694.384380] brcmfmac: BCM4360 test.188: post-NVRAM write done (228 bytes)
+  [  694.384414] brcmfmac: BCM4360 test.188: NVRAM marker at ramsize-4 = 0xffc70038 (pre-release snapshot)
+  [  694.386805] brcmfmac: BCM4360 test.188: TCM[0x0000]=0xb80ef000 (pre-release snapshot)
+  [  694.388998] brcmfmac: BCM4360 test.188: TCM[0x0004]=0xb82ef000 (pre-release snapshot)
+  [  694.391163] brcmfmac: BCM4360 test.188: TCM[0x0008]=0xb839f000 (pre-release snapshot)
+  [  694.393355] brcmfmac: BCM4360 test.188: TCM[0x000c]=0xb844f000 (pre-release snapshot)
+  [  694.395796] brcmfmac: BCM4360 test.188: TCM[0x0010]=0xb852f000 (pre-release snapshot)
+  [  694.398947] brcmfmac: BCM4360 test.188: TCM[0x0014]=0xb860f000 (pre-release snapshot)
+  [  694.401203] brcmfmac: BCM4360 test.188: TCM[0x0018]=0xb86ef000 (pre-release snapshot)
+  [  694.403273] brcmfmac: BCM4360 test.188: TCM[0x001c]=0xb87cf000 (pre-release snapshot)
+  [  694.405343] brcmfmac: BCM4360 test.188: wide-TCM[0x00000]=0xb80ef000 (pre-release snapshot)
+  [  694.407382] brcmfmac: BCM4360 test.188: wide-TCM[0x04000]=0x2c004798 (pre-release snapshot)
+  [  694.409453] brcmfmac: BCM4360 test.188: wide-TCM[0x08000]=0x44460902 (pre-release snapshot)
+  [  694.411894] brcmfmac: BCM4360 test.188: wide-TCM[0x0c000]=0x46984616 (pre-release snapshot)
+  [  694.414613] brcmfmac: BCM4360 test.188: wide-TCM[0x10000]=0x46324639 (pre-release snapshot)
+  [  694.416591] brcmfmac: BCM4360 test.188: wide-TCM[0x14000]=0x459868e3 (pre-release snapshot)
+  [  694.418568] brcmfmac: BCM4360 test.188: wide-TCM[0x18000]=0x42ab317c (pre-release snapshot)
+  [  694.420576] brcmfmac: BCM4360 test.188: wide-TCM[0x1c000]=0x480ffd17 (pre-release snapshot)
+  [  694.422584] brcmfmac: BCM4360 test.188: wide-TCM[0x20000]=0xa84af8f3 (pre-release snapshot)
+  [  694.424498] brcmfmac: BCM4360 test.188: wide-TCM[0x24000]=0x2b027973 (pre-release snapshot)
+  [  694.426444] brcmfmac: BCM4360 test.188: wide-TCM[0x28000]=0x1129f640 (pre-release snapshot)
+  [  694.429101] brcmfmac: BCM4360 test.188: wide-TCM[0x2c000]=0xf0084643 (pre-release snapshot)
+  [  694.431635] brcmfmac: BCM4360 test.188: wide-TCM[0x30000]=0xf996f7fe (pre-release snapshot)
+  [  694.434352] brcmfmac: BCM4360 test.188: wide-TCM[0x34000]=0xf0002800 (pre-release snapshot)
+  [  694.436299] brcmfmac: BCM4360 test.188: wide-TCM[0x38000]=0x2bff2269 (pre-release snapshot)
+  [  694.436338] brcmfmac: BCM4360 test.188: wide-TCM[0x3c000]=0xb004f8d4 (pre-release snapshot)
+  [  694.436422] brcmfmac: BCM4360 test.188: wide-TCM[0x40000]=0x34333231 (pre-release snapshot)
+  [  694.436457] brcmfmac: BCM4360 test.188: wide-TCM[0x44000]=0x00040160 (pre-release snapshot)
+  [  694.436546] brcmfmac: BCM4360 test.188: wide-TCM[0x48000]=0x0a776f6c (pre-release snapshot)
+  [  694.438368] brcmfmac: BCM4360 test.188: wide-TCM[0x4c000]=0x000a7825 (pre-release snapshot)
+  [  694.440132] brcmfmac: BCM4360 test.188: wide-TCM[0x50000]=0x0004eeb8 (pre-release snapshot)
+  [  694.441921] brcmfmac: BCM4360 test.188: wide-TCM[0x54000]=0x203a6425 (pre-release snapshot)
+  [  694.443743] brcmfmac: BCM4360 test.188: wide-TCM[0x58000]=0x5f6f7370 (pre-release snapshot)
+  [  694.445534] brcmfmac: BCM4360 test.188: wide-TCM[0x5c000]=0x0034005b (pre-release snapshot)
+  [  694.447296] brcmfmac: BCM4360 test.188: wide-TCM[0x60000]=0x06000972 (pre-release snapshot)
+  [  694.448964] brcmfmac: BCM4360 test.188: wide-TCM[0x64000]=0x4808b920 (pre-release snapshot)
+  [  694.450601] brcmfmac: BCM4360 test.188: wide-TCM[0x68000]=0x25003088 (pre-release snapshot)
+  [  694.452239] brcmfmac: BCM4360 test.188: wide-TCM[0x6c000]=0x008d65f8 (pre-release snapshot)
+  [  694.453844] brcmfmac: BCM4360 test.188: wide-TCM[0x70000]=0x80c980e2 (pre-release snapshot)
+  [  694.455419] brcmfmac: BCM4360 test.188: wide-TCM[0x74000]=0x20e86158 (pre-release snapshot)
+  [  694.456931] brcmfmac: BCM4360 test.188: wide-TCM[0x78000]=0xcc9ce141 (pre-release snapshot)
+  [  694.458411] brcmfmac: BCM4360 test.188: wide-TCM[0x7c000]=0x405ae2a0 (pre-release snapshot)
+  [  694.459892] brcmfmac: BCM4360 test.188: wide-TCM[0x80000]=0x981353f8 (pre-release snapshot)
+  [  694.461342] brcmfmac: BCM4360 test.188: wide-TCM[0x84000]=0x8efbc98d (pre-release snapshot)
+  [  694.462729] brcmfmac: BCM4360 test.188: wide-TCM[0x88000]=0x77d733fb (pre-release snapshot)
+  [  694.464085] brcmfmac: BCM4360 test.188: wide-TCM[0x8c000]=0x35c5fcc3 (pre-release snapshot)
+  [  694.465381] brcmfmac: BCM4360 test.188: wide-TCM[0x90000]=0xa42709e1 (pre-release snapshot)
+  [  694.466615] brcmfmac: BCM4360 test.188: wide-TCM[0x94000]=0x464c65ed (pre-release snapshot)
+  [  694.467819] brcmfmac: BCM4360 test.188: wide-TCM[0x98000]=0x15f3b94d (pre-release snapshot)
+  [  694.468991] brcmfmac: BCM4360 test.188: wide-TCM[0x9c000]=0xf79d69d9 (pre-release snapshot)
+  [  694.496781] brcmfmac: BCM4360 test.197: fine-TCM pre-release snapshot complete (16384 cells, base=0x90000 stride=4)
+  [  694.496861] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffc0]=0x7600303d (pre-release snapshot)
+  [  694.496896] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffc4]=0x69646e65 (pre-release snapshot)
+  [  694.496984] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffc8]=0x78303d64 (pre-release snapshot)
+  [  694.497019] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffcc]=0x34653431 (pre-release snapshot)
+  [  694.498249] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffd0]=0x76656400 (pre-release snapshot)
+  [  694.499359] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffd4]=0x303d6469 (pre-release snapshot)
+  [  694.500438] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffd8]=0x61333478 (pre-release snapshot)
+  [  694.501487] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffdc]=0x74780030 (pre-release snapshot)
+  [  694.502505] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffe0]=0x72666c61 (pre-release snapshot)
+  [  694.503492] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffe4]=0x343d7165 (pre-release snapshot)
+  [  694.504509] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffe8]=0x30303030 (pre-release snapshot)
+  [  694.505558] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffec]=0x32616100 (pre-release snapshot)
+  [  694.506577] brcmfmac: BCM4360 test.188: tail-TCM[0x9fff0]=0x00373d67 (pre-release snapshot)
+  [  694.507594] brcmfmac: BCM4360 test.188: tail-TCM[0x9fff4]=0x67356161 (pre-release snapshot)
+  [  694.508612] brcmfmac: BCM4360 test.188: tail-TCM[0x9fff8]=0x0000373d (pre-release snapshot)
+  [  694.509661] brcmfmac: BCM4360 test.188: tail-TCM[0x9fffc]=0xffc70038 (pre-release snapshot)
+  [  694.510742] brcmfmac: BCM4360 test.188: fw-sample[0x00000]=0xb80ef000 (TCM) vs 0xb80ef000 (fw->data) MATCH
+  [  694.511821] brcmfmac: BCM4360 test.188: fw-sample[0x0732c]=0xf7f921d5 (TCM) vs 0xf7f921d5 (fw->data) MATCH
+  [  694.512900] brcmfmac: BCM4360 test.188: fw-sample[0x0e654]=0x2301827b (TCM) vs 0x2301827b (fw->data) MATCH
+  [  694.513979] brcmfmac: BCM4360 test.188: fw-sample[0x15980]=0x4620b91e (TCM) vs 0x4620b91e (fw->data) MATCH
+  [  694.515059] brcmfmac: BCM4360 test.188: fw-sample[0x1cca8]=0x7b237b62 (TCM) vs 0x7b237b62 (fw->data) MATCH
+  [  694.516077] brcmfmac: BCM4360 test.188: fw-sample[0x23fd4]=0xf8130a8b (TCM) vs 0xf8130a8b (fw->data) MATCH
+  [  694.517128] brcmfmac: BCM4360 test.188: fw-sample[0x2b2fc]=0xf895345e (TCM) vs 0xf895345e (fw->data) MATCH
+  [  694.518174] brcmfmac: BCM4360 test.188: fw-sample[0x32628]=0xbbdaf7ff (TCM) vs 0xbbdaf7ff (fw->data) MATCH
+  [  694.519222] brcmfmac: BCM4360 test.188: fw-sample[0x39950]=0xda032b00 (TCM) vs 0xda032b00 (fw->data) MATCH
+  [  694.520271] brcmfmac: BCM4360 test.188: fw-sample[0x40c7c]=0x2e636463 (TCM) vs 0x2e636463 (fw->data) MATCH
+  [  694.521381] brcmfmac: BCM4360 test.188: fw-sample[0x47fa4]=0x6c626174 (TCM) vs 0x6c626174 (fw->data) MATCH
+  [  694.522461] brcmfmac: BCM4360 test.188: fw-sample[0x4f2d0]=0x4d5f5445 (TCM) vs 0x4d5f5445 (fw->data) MATCH
+  [  694.523509] brcmfmac: BCM4360 test.188: fw-sample[0x565f8]=0xffd0ffd0 (TCM) vs 0xffd0ffd0 (fw->data) MATCH
+  [  694.524526] brcmfmac: BCM4360 test.188: fw-sample[0x5d924]=0xa70787ff (TCM) vs 0xa70787ff (fw->data) MATCH
+  [  694.525576] brcmfmac: BCM4360 test.188: fw-sample[0x64c4c]=0x00989680 (TCM) vs 0x00989680 (fw->data) MATCH
+  [  694.526656] brcmfmac: BCM4360 test.188: fw-sample[0x6bf78]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+  [  694.527746] brcmfmac: BCM4360 test.188: CC-clk_ctl_st=0x01030040 (pre-release snapshot)
+  [  694.528786] brcmfmac: BCM4360 test.188: CC-pmucontrol=0x01770181 (pre-release snapshot)
+  [  694.529822] brcmfmac: BCM4360 test.188: CC-pmustatus=0x0000002e (pre-release snapshot)
+  [  694.530879] brcmfmac: BCM4360 test.188: CC-res_state=0x000007ff (pre-release snapshot)
+  [  694.531923] brcmfmac: BCM4360 test.188: CC-pmutimer=0x01605151 (pre-release snapshot)
+  [  694.532937] brcmfmac: BCM4360 test.188: CC-min_res_mask=0x000007ff (pre-release snapshot)
+  [  694.533957] brcmfmac: BCM4360 test.188: CC-max_res_mask=0x000007ff (pre-release snapshot)
+  [  694.534979] brcmfmac: BCM4360 test.188: CC-pmuwatchdog=0x00000000 (pre-release snapshot)
+  [  694.536007] brcmfmac: BCM4360 test.226: past pre-release snapshot — entering INTERNAL_MEM lookup
+  [  694.542189] brcmfmac: BCM4360 test.226: after brcmf_chip_get_core(INTERNAL_MEM) = 0000000000000000
+  [  694.549185] brcmfmac: BCM4360 test.188: INTERNAL_MEM core not found — resetcore skipped (expected on BCM4360)
+  [  694.550351] brcmfmac: BCM4360 test.226: past INTERNAL_MEM block — entering pre-set-active probes
+  [  694.558249] brcmfmac: BCM4360 test.188: pre-set-active ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+  [  694.558371] brcmfmac: BCM4360 test.188: pre-set-active D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+  [  694.558493] brcmfmac: BCM4360 test.218: pre-set-active CR4 clk_ctl_st=0x07030040 [HAVEHT(17)=YES ALP_AVAIL(16)=YES BP_ON_HT(19)=no  bit6=SET FORCEHT(1)=no  FORCEALP(0)=no ]
+  [  694.558612] brcmfmac: BCM4360 test.218: pre-set-active D11 IN_RESET=YES (RST=0x00000001) — clk_ctl_st SKIPPED
+  [  694.559878] brcmfmac: BCM4360 test.226: past pre-set-active probes — before 50ms pre-BM delay
+  [  694.617134] brcmfmac: BCM4360 test.226: before pre-BM mailboxint MMIO read
+  [  694.623230] brcmfmac: BCM4360 test.188: pre-BM PCI_COMMAND=0x0002 BM=OFF MMIO guard mailboxint=0x00000000
+  [  694.623288] brcmfmac: BCM4360 test.226: before pci_set_master
+  [  694.629130] brcmfmac: BCM4360 test.226: after pci_set_master
+  [  694.635176] brcmfmac: BCM4360 test.188: pci_set_master done; PCI_COMMAND=0x0006 BM=ON (before set_active)
+  [  694.636597] brcmfmac: BCM4360 test.188: post-BM-on MMIO guard mailboxint=0x00000000 (endpoint still responsive)
+  [  694.637906] brcmfmac: BCM4360 test.226: past BusMaster dance — entering FORCEHT block
+  [  694.645116] brcmfmac: BCM4360 test.226: before FORCEHT select_core+READCC32
+  [  694.652272] brcmfmac: BCM4360 test.219: FORCEHT write CC clk_ctl_st pre=0x01030040 post=0x010b0042 [HAVEHT(17)=YES ALP_AVAIL(16)=YES FORCEHT(1)=YES]
+  [  694.653736] brcmfmac: BCM4360 test.226: past FORCEHT write — before 2ms+probe+20ms+set_active
+  [  694.663189] brcmfmac: BCM4360 test.218: post-FORCEHT-write CR4 clk_ctl_st=0x070b0040 [HAVEHT(17)=YES ALP_AVAIL(16)=YES BP_ON_HT(19)=YES bit6=SET FORCEHT(1)=no  FORCEALP(0)=no ]
+  [  694.666203] brcmfmac: BCM4360 test.218: post-FORCEHT-write D11 IN_RESET=YES (RST=0x00000001) — clk_ctl_st SKIPPED
+  [  694.687659] brcmfmac: BCM4360 test.219: calling brcmf_chip_set_active resetintr=0xb80ef000 (FORCEHT pre-applied)
+  [  694.717711] brcmfmac: BCM4360 test.234: PRE-ZERO scan [0x9fe00..0x9ff1c) 71 dwords
+  [  694.717750] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe00]=0x1c0861a2
+  [  694.717778] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe04]=0x8ea81de1
+  [  694.717806] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe08]=0xebc09731
+  [  694.719214] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe0c]=0x7b227b23
+  [  694.720636] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe10]=0xc4b409a7
+  [  694.722086] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe14]=0xeba2d000
+  [  694.723497] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe18]=0x3e6da94d
+  [  694.725071] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe1c]=0xb7ad6bae
+  [  694.726596] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe20]=0x1d9522f9
+  [  694.728127] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe24]=0xe6f20132
+  [  694.729659] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe28]=0x0bb91c6f
+  [  694.731194] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe2c]=0xde3cc9f8
+  [  694.731198] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe30]=0xeb20452c
+  [  694.731201] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe34]=0x1da991aa
+  [  694.731203] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe38]=0x21323bf8
+  [  694.731205] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe3c]=0xf1f5d5f6
+  [  694.731207] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe40]=0xe993d3bc
+  [  694.731209] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe44]=0xcfc5ed35
+  [  694.731211] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe48]=0xf784a2ae
+  [  694.731212] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe4c]=0x6ce7e38d
+  [  694.731214] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe50]=0x808b62f8
+  [  694.739863] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe54]=0x50b8568f
+  [  694.739866] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe58]=0x55320d5b
+  [  694.739868] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe5c]=0x88c8c797
+  [  694.739870] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe60]=0x15c817b1
+  [  694.739871] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe64]=0x421188fe
+  [  694.739873] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe68]=0x7e07bf96
+  [  694.739875] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe6c]=0x7a942239
+  [  694.739877] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe70]=0x1d363c43
+  [  694.739879] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe74]=0xd2ef90b0
+  [  694.739881] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe78]=0x21ccb7ad
+  [  694.739882] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe7c]=0xabbd76fa
+  [  694.755175] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe80]=0x727e4e5a
+  [  694.756512] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe84]=0x75b23b85
+  [  694.757841] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe88]=0xff39c8f2
+  [  694.759204] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe8c]=0x3490dea5
+  [  694.760564] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe90]=0x347ac27f
+  [  694.761917] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe94]=0xe903465d
+  [  694.763253] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe98]=0x7ecaee57
+  [  694.764600] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fe9c]=0xbfdbcea7
+  [  694.765955] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fea0]=0xb4e2cdd7
+  [  694.767238] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fea4]=0x48c4a5ec
+  [  694.768472] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fea8]=0x1efee9fe
+  [  694.769669] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9feac]=0xfc97f385
+  [  694.770825] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9feb0]=0x809e4337
+  [  694.771981] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9feb4]=0xc46021c9
+  [  694.773110] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9feb8]=0xe3b2f7c7
+  [  694.774230] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9febc]=0x9c4cef71
+  [  694.775327] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fec0]=0x9fb59e09
+  [  694.776430] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fec4]=0x68981243
+  [  694.777517] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fec8]=0xb9b5e295
+  [  694.778555] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fecc]=0xdf713734
+  [  694.779566] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fed0]=0xa80df8c7
+  [  694.780542] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fed4]=0x548a46c6
+  [  694.781477] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fed8]=0x8969ffde
+  [  694.782398] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fedc]=0x8810294b
+  [  694.783294] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fee0]=0x1c686849
+  [  694.784162] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fee4]=0x9562bae0
+  [  694.785015] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fee8]=0xfe3ad24b
+  [  694.785874] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9feec]=0xf1d7ee93
+  [  694.786738] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fef0]=0xd494a6c2
+  [  694.787587] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fef4]=0x73c11bb9
+  [  694.788426] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fef8]=0xd6d6f996
+  [  694.789315] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9fefc]=0x2d82bbc2
+  [  694.790219] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9ff00]=0x397edd47
+  [  694.791154] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9ff04]=0xa1f2f4fc
+  [  694.792105] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9ff08]=0x9d3c7ab6
+  [  694.793044] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9ff0c]=0xdeeec807
+  [  694.793047] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9ff10]=0x5fb374ff
+  [  694.793049] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9ff14]=0x48c7493e
+  [  694.793051] brcmfmac: BCM4360 test.234: pre-zero TCM[0x9ff18]=0xb0abd52b
+  [  694.793052] brcmfmac: BCM4360 test.234: pre-zero scan 71/71 non-zero
+  [  694.793053] brcmfmac: BCM4360 test.234: zeroing TCM[0x9fe00..0x9ff1c)
+  [  694.793178] brcmfmac: BCM4360 test.234: zero verify 0/71 non-zero (expect 0)
+  [  694.795916] brcmfmac: BCM4360 test.235: SKIPPING brcmf_chip_set_active (zero+verify-only run; test.230 baseline)
+  [  695.846969] brcmfmac: BCM4360 test.235: 1000 ms dwell done (no fw activation); proceeding to BM-clear + release
+  [  695.847035] brcmfmac: BCM4360 test.188: final PCIE2 mailboxint=0x00000001 (D2H bits would be 0x10000+, FN0 bits 0x0100/0x0200)
+  [  695.847095] brcmfmac: BCM4360 test.188: pci_clear_master done; PCI_COMMAND=0x0002 BM=OFF
+  [  695.847135] brcmfmac: BCM4360 test.188: post-BM-clear MMIO guard mailboxint=0x00000001 (endpoint alive after BM-off)
+  [  695.847213] brcmfmac: BCM4360 test.188: released fw/nvram after BM-before-set_active + tiers + 3000ms dwell + BM-clear; returning -ENODEV
+  [  695.848315] brcmfmac: BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+  [  696.150918] brcmfmac: BCM4360 test.163: fw released; returning from setup (state still DOWN)
+  [  710.386975] brcmfmac: BCM4360 test.161: remove() short-circuit — state=0 != UP; skipping MMIO cleanup
+  [  710.699343] brcmfmac: BCM4360 test.161: remove() short-circuit complete

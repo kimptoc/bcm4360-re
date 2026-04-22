@@ -5,9 +5,49 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23, after test.234 wedge → deciding next direction)
+## Current state (2026-04-22, after test.235 — cheap-tier zero of [0x9FE00..0x9FF1C) does NOT prevent wedge)
 
-**Latest outcome (test.234):** Test wedged. Same tail-truncation
+**Latest outcome (test.235):** All breadcrumbs landed cleanly (test.230
+baseline, no wedge). Pre-zero scan reported **71/71 non-zero** dwords
+in [0x9FE00..0x9FF1C) — every cell had random-looking SRAM-PUF-style
+data (e.g. 0x1c0861a2, 0xebc09731, 0xf1f5d5f6 …). Zero loop wrote
+zeros, verify returned **0/71 non-zero**, confirming TCM writes to
+this range succeed and that the region went to all-zero. Then
+SKIPPING set_active per the new `bcm4360_test235_skip_set_active=1`
+module param, 1000 ms dwell done, BM-clear, -ENODEV, clean rmmod,
+host alive post-test, BAR0 fast-UR (20 ms), no pstore.
+
+Combined with test.234 wedging on the IDENTICAL code path WITH
+set_active enabled (tail-truncation hid the breadcrumbs but
+test.233's within-boot TCM persistence + this run's verify-pass
+prove zeros were in the region when test.234's set_active was
+called):
+
+**Conclusion (cheap tier, narrow region): zeroing
+[0x9FE00..0x9FF1C) does NOT prevent the post-set_active wedge.**
+
+Implications:
+- The "fw dereferences fingerprint in this 284-byte slot as a DMA
+  target" hypothesis is falsified for this specific region.
+- Either fw reads elsewhere (other TCM region), or the wedge has
+  no dependence on that pointer-style read at all.
+- The pre-zero values look like wide-distribution random bytes
+  with no pointer-like structure (no 0xffff... high words, no low
+  PCI BAR0-style values), so it's plausible fw doesn't treat them
+  as pointers and the wedge is independent of TCM contents in
+  this slot.
+
+Pre-zero scan dwords (raw — 71 non-zero, all in [0x9FE00..0x9FF1C)):
+captured in `phase5/logs/test.235.journalctl.txt`. Worth keeping
+because they're the first observation of this previously-untouched
+TCM region's power-on contents.
+
+**Hardware state (boot 0, 23:53 BST post-rmmod):** lspci Mem+
+BusMaster-, MAbort-, fast-UR — clean. No SMC reset needed.
+
+---
+
+**Prior outcome (test.234):** Test wedged. Same tail-truncation
 pattern as test.231/232. Last journald line at 23:12:50 BST was
 `BCM4360 test.158: BusMaster cleared after chip_attach` — that's
 inside `brcmf_pcie_attach` BEFORE `brcmf_pcie_download_fw_nvram`
