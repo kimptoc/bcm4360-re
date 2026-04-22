@@ -5,17 +5,40 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-22, after test.233 → entering test.234)
+## Current state (2026-04-23, after test.234 wedge → deciding next direction)
 
-**Next test:** test.234 — zero TCM[0x9FE00..0x9FF1C] before
-`brcmf_chip_set_active`, cheapest-tier shared-memory-struct probe
-(advisor-staged). Code change pending; plan in PRE-TEST.234 below.
+**Latest outcome (test.234):** Test wedged. Same tail-truncation
+pattern as test.231/232. Last journald line at 23:12:50 BST was
+`BCM4360 test.158: BusMaster cleared after chip_attach` — that's
+inside `brcmf_pcie_attach` BEFORE `brcmf_pcie_download_fw_nvram`
+even starts. **Zero test.234 breadcrumbs landed in journald** (no
+PRE-ZERO scan, no zeroing log, no verify, no set_active call/return,
+no dwells). The retained test.233 PRE-READ continuity log also
+didn't land. So we cannot tell from this run alone whether:
+- the zero loop ran or completed
+- set_active was called
+- the wedge point shifted relative to test.231/232
+
+This is the **expected** journald blackout behavior (tail loss
+~15-20s) and matches every prior set_active-enabled run. Host had
+to be SMC-reset + rebooted (~28 min downtime). PCIe state on this
+boot (boot 0, started 23:41:20 BST) is clean — Mem+ BusMaster+,
+MAbort-, CommClk+. No pstore (watchdog frozen by bus stall, as before).
+
+**Conclusion forced by this run:** test.234 cannot be interpreted
+on its own. We need a logging transport that survives the wedge
+window. Per test.233, TCM survives within-boot SBR+rmmod+insmod
+(Run 2) but is wiped by SMC reset (Run 3). And we *always* need
+SMC reset to recover from the wedge. So the next test must
+**decompose** the experiment into observable pieces — at minimum,
+a test.235 that runs the zero+verify path **without** set_active
+(test.230 baseline) so we can confirm the zero loop works at all,
+then a separate run that adds set_active back. Detailed plan in
+PRE-TEST.235 (next).
 
 ---
 
-
-
-**Latest outcome (test.233):** TCM persistence probe answered the
+**Prior outcome (test.233):** TCM persistence probe answered the
 advisor-blocking question. 3 runs on test.230 baseline (set_active
 SKIPPED, no wedge). Wrote 0xDEADBEEF/0xCAFEBABE magic to
 TCM[0x90000/4] in each run, pre-read the same offsets at probe
