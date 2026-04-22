@@ -1,5 +1,74 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.202 (2026-04-22) — read hndrte_cons descriptor + decode assert call site
+
+### Hypothesis
+
+Two cheap additional dumps will give us:
+
+1. **`hndrte_cons` descriptor at `0x96f60`** (4 rows): ring metadata
+   — base pointer, size, current write index. Confirmed via test.201
+   that `0x62af0` (chip-info field) holds `0x00096f60`, which sits
+   immediately below the console text we found at `0x97000`. Standard
+   Broadcom layout has a small descriptor struct preceding the
+   ring buffer, with fields like `{vcons_in, vcons_out, log_base,
+   log_idx, log_buf, log_buf_size, log_idx2, ...}`.
+
+2. **Assert call-site context at `0x6418c..0x641b8`** (4 rows): the
+   literal-pool / instructions immediately before the `MOVW r1,#0x18d`
+   we already located at `0x641b8`. ARM Thumb-2 LDR-from-PC commonly
+   appears just before such call sites to load `r0`, `r2`, `r3` with
+   pointers to the format string + arguments. From the literals we
+   can identify *which* value is being checked.
+
+### Implementation
+
+**chip.c** — bump marker `test.201` → `test.202`. PMU still 0x17f.
+
+**pcie.c** — replace `dump_ranges[]`:
+
+| Range              | Purpose                                              | Rows |
+|--------------------|------------------------------------------------------|-----:|
+| `0x6418c..0x641e0` | Assert call-site (extends prior, +instructions)      |    6 |
+| `0x62a80..0x62b00` | Chip-info struct (proven useful, keep)               |    8 |
+| `0x96f40..0x96fc0` | hndrte_cons descriptor (8 rows centered on 0x96f60)  |    8 |
+| `0x97000..0x97200` | Console ring                                         |   32 |
+| `0x9cc00..0x9d000` | Trap data + assert text                              |   64 |
+
+Total = 118 rows ≈ 24 ms. Slight increase over test.201 (108 rows).
+
+### Build + pre-test
+
+- About to rebuild module.
+- Last PCIe state clean post-test.201.
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.202.journalctl.full.txt`.
+
+### Expected outcomes
+
+- **`hndrte_cons` descriptor decoded**: we'll see a small struct
+  with pointers to `log_buf` (likely `0x97000`), a `log_buf_size`
+  (likely `0x200` = 512 B = 32 rows we've been dumping), a
+  `log_idx` write pointer that tells us *exactly* where the next
+  message will land (and therefore where the *latest* message
+  ended). This eliminates pattern-matching guesswork.
+
+- **Literal-pool decode**: the LDR offsets in `0x6418c..0x641b8`
+  point to an address pool (typically just past the function end,
+  before the next function starts). With the literals + the values
+  at those addresses, we can identify what global variable / what
+  check is being performed. This may directly tell us *what* the
+  assert is checking (e.g., a chip-rev allowlist, a feature flag,
+  a function-pointer that should have been initialized).
+
+---
+
 ## POST-TEST.201 (2026-04-22) — BREAKTHROUGH 4: 0x62a98 is the chip-info struct, not code
 
 Logs: `phase5/logs/test.201.journalctl.full.txt` (use the `.full.txt`).
