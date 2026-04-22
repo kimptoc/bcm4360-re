@@ -1182,9 +1182,9 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		u32 before_max, after_max;
 
 		before_max = chip->ops->read32(chip->ctx, max_addr);
-		chip->ops->write32(chip->ctx, max_addr, 0x1ff);
+		chip->ops->write32(chip->ctx, max_addr, 0x17f);
 		after_max = chip->ops->read32(chip->ctx, max_addr);
-		brcmf_err("BCM4360 test.195: max_res_mask 0x%08x -> 0x%08x (write 0x1ff)\n",
+		brcmf_err("BCM4360 test.196: max_res_mask 0x%08x -> 0x%08x (write 0x17f — bisect: bit 6 only)\n",
 			  before_max, after_max);
 	}
 

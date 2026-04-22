@@ -2231,8 +2231,20 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		}
 		{
 			bool sa_rc;
-			static const u32 dwell_labels_ms[] = { 3000 };
-			static const u32 dwell_increments_ms[] = { 1250 };
+			/* test.196: 12 × 250 ms = 3000 ms dwell, low-poll
+			 * harness (replaces the single 1250 ms + heavy MMIO
+			 * storm that crashed test.195 once HT resources came
+			 * up). Each tick samples ChipCommon backplane only
+			 * (safe even with HT clock active).
+			 */
+			static const u32 dwell_labels_ms[] = {
+				250, 500, 750, 1000, 1250, 1500,
+				1750, 2000, 2250, 2500, 2750, 3000
+			};
+			static const u32 dwell_increments_ms[] = {
+				250, 250, 250, 250, 250, 250,
+				250, 250, 250, 250, 250, 250
+			};
 			u32 d;
 			u32 j;
 
@@ -2390,48 +2402,17 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							"CHANGED");
 				}
 
-				for (j = 0; j < ARRAY_SIZE(wide_offsets); j++) {
-					u32 offset = wide_offsets[j];
-					u32 val = brcmf_pcie_read_ram32(devinfo,
-									offset);
-
-					pr_emerg("BCM4360 test.188: dwell-%ums wide-TCM[0x%05x]=0x%08x (was 0x%08x) %s\n",
-						 dwell_labels_ms[d], offset,
-						 val, pre_wide[j],
-						 val == pre_wide[j] ?
-							"UNCHANGED" :
-							"CHANGED");
-				}
-
-				for (j = 0; j < ARRAY_SIZE(pre_tail); j++) {
-					u32 offset = devinfo->ci->ramsize -
-						     64 + j * 4;
-					u32 val = brcmf_pcie_read_ram32(devinfo,
-									offset);
-
-					pr_emerg("BCM4360 test.188: dwell-%ums tail-TCM[0x%05x]=0x%08x (was 0x%08x) %s\n",
-						 dwell_labels_ms[d], offset,
-						 val, pre_tail[j],
-						 val == pre_tail[j] ?
-							"UNCHANGED" :
-							"CHANGED");
-				}
-				/* test.188: resample firmware region during dwell */
-				if (fw->size >= 1024 && fw_sample_offsets) {
-					for (j = 0; j < nr_fw_samples; j++) {
-						u32 offset = fw_sample_offsets[j];
-						u32 val = brcmf_pcie_read_ram32(devinfo, offset);
-						u32 fw_val = get_unaligned_le32(fw->data + offset);
-						pr_emerg("BCM4360 test.188: dwell-%ums fw-sample[0x%05x]=0x%08x (TCM) vs 0x%08x (fw->data) was 0x%08x %s\n",
-							dwell_labels_ms[d], offset,
-							val, fw_val, pre_fw_sample[j],
-							(val == pre_fw_sample[j]) ? "UNCHANGED" :
-							(val == fw_val) ? "REVERTED" : "CHANGED");
-					}
-				} else {
-					pr_emerg("BCM4360 test.188: dwell-%ums firmware too small (%zu bytes), skipping\n",
-						dwell_labels_ms[d], fw->size);
-				}
+				/* test.196: wide-TCM, tail-TCM, and full
+				 * fw-sample scans during dwell are DISABLED.
+				 * test.195 crashed mid-dwell (sample ~56/271)
+				 * once HT resources became active — the heavy
+				 * indirect-MMIO storm collides with the chip's
+				 * post-HT clock-domain transition. Only the
+				 * cheap CC backplane sample below remains for
+				 * mid-dwell visibility. A single end-of-dwell
+				 * fw-sample scan runs after the full dwell
+				 * (see post-dwell block below the loop).
+				 */
 
 				{
 					u32 bp_now[BRCMF_BP_REG_COUNT];
@@ -2449,6 +2430,37 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 								"UNCHANGED" :
 								"CHANGED");
 				}
+			}
+
+			/* test.196: single end-of-dwell fw-sample + wide-TCM
+			 * scan AFTER the dwell completes. test.195 lost this
+			 * data because the per-tick scan crashed mid-dwell;
+			 * doing it once at the end gives us definitive
+			 * "did firmware ever write TCM?" evidence with
+			 * minimal exposure to clock-transition windows.
+			 */
+			if (fw->size >= 1024 && fw_sample_offsets) {
+				u32 changed = 0, reverted = 0, unchanged = 0;
+				for (j = 0; j < nr_fw_samples; j++) {
+					u32 offset = fw_sample_offsets[j];
+					u32 val = brcmf_pcie_read_ram32(devinfo, offset);
+					u32 fw_val = get_unaligned_le32(fw->data + offset);
+					if (val == pre_fw_sample[j])
+						unchanged++;
+					else if (val == fw_val)
+						reverted++;
+					else
+						changed++;
+				}
+				pr_emerg("BCM4360 test.196: post-dwell fw-sample summary: %u UNCHANGED, %u REVERTED, %u CHANGED (of %u)\n",
+					 unchanged, reverted, changed, nr_fw_samples);
+			}
+			for (j = 0; j < ARRAY_SIZE(wide_offsets); j++) {
+				u32 offset = wide_offsets[j];
+				u32 val = brcmf_pcie_read_ram32(devinfo, offset);
+				if (val != pre_wide[j])
+					pr_emerg("BCM4360 test.196: post-dwell wide-TCM[0x%05x]=0x%08x (was 0x%08x) CHANGED\n",
+						 offset, val, pre_wide[j]);
 			}
 		}
 		/* test.188: set_active ran with BusMaster ENABLED (set

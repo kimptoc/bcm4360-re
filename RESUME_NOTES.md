@@ -1,5 +1,71 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.196 (2026-04-22) — bisect res 6 vs 7 (try bit 6 only, max_res_mask=0x17f) + drastically reduce dwell-time MMIO
+
+### Hypothesis
+
+Test.195 proved widening `max_res_mask` activates resources 6 and 7 (first
+ever res_state movement on this chip), but the simultaneous activation
+combined with the heavy TCM-poll harness caused an unrecoverable freeze
+~half-way through the 3000 ms dwell. Two unknowns to separate:
+
+1. Which resource (6 or 7) destabilised the chip when its clock domain came
+   live? Bit 6 only (`max_res_mask=0x17f`) lets us test bit 6 in isolation.
+2. Is the freeze caused by the resources themselves, or by the MMIO storm
+   the dwell-poll harness produces under a live HT clock? A drastically
+   slimmer harness (no fw-sample / wide-TCM / tail-TCM scans during dwell)
+   eliminates the harness as a confound — if the chip still freezes with
+   bit 6 only and a slim harness, the resource is the gun.
+
+### Implementation
+
+**chip.c** — single-line change:
+- `max_res_mask` write changes from `0x1ff` → `0x17f` (drop bit 7)
+- Marker line updated: `BCM4360 test.196: max_res_mask 0x... -> 0x... (write 0x17f — bisect: bit 6 only)`
+
+**pcie.c** — slim the dwell harness:
+- Dwell stays 3000 ms total but is now split into 12 × 250 ms ticks.
+- Each tick does ONLY: ARM/D11 wrapper probes (single MMIO each),
+  TCM[0..0x1c] head scan (8 cheap reads), and the existing CC backplane
+  sample (8 CC-only reads incl res_state, min_res_mask, max_res_mask,
+  pmustatus, clk_ctl_st, pmucontrol, pmutimer, pmuwatchdog).
+- The crashy heavy-MMIO loops (wide-TCM 40-read scan, tail-TCM 16-read
+  scan, full fw-sample 256-read scan) are REMOVED from per-tick dwell.
+- A SINGLE end-of-dwell summary scan runs after all ticks: full
+  fw-sample (256 reads) reduced to a 3-bucket count (UNCHANGED /
+  REVERTED / CHANGED) plus wide-TCM scan that only logs CHANGED entries.
+
+### Expected outcomes
+
+| Observation | Interpretation | Next |
+|---|---|---|
+| `max_res_mask 0x13f -> 0x17f` AND `res_state` advances to 0x17b (bit 6 only) | bit 6 alone activates cleanly; chip survives the dwell | follow up with bit 7 alone (`max_res_mask=0x1bf`) and confirm which destabilises |
+| `res_state 0x17b` AND fw-sample summary shows CHANGED count > 0 | firmware finally writing TCM with HT clock alone | analyse what changed; pivot to per-region tracking |
+| `res_state 0x17b` AND fw-sample all UNCHANGED, no crash | bit 6 unblocks resources but firmware still stalls; need more (min_res_mask widen, NVRAM, OTP) | widen min_res_mask to 0x17b in test.197 |
+| Hard crash again with bit 6 alone and slim harness | bit 6 itself destabilises the chip independent of MMIO load | bit 7 alone next (`0x1bf`); if both crash, problem is the resources colliding with our PCIe state |
+| `res_state` does NOT change to 0x17b | something else changed; investigate (or harness regression) | re-read code path |
+
+### Build + pre-test
+
+- chip.c, pcie.c edited; module built clean (one pre-existing unused-function
+  warning unrelated to this change).
+- PCIe state (verified post crash + SMC reset, current boot 0):
+  - `MAbort-`, `CommClk+`, `LnkSta` Speed 2.5GT/s Width x1 — clean
+  - `UESta` all clear; `CESta` AdvNonFatalErr+ (benign accumulator)
+  - `DevSta` `CorrErr+ UnsupReq+` — benign post-boot noise
+- No brcmfmac currently loaded.
+- Hypothesis stated above.
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Log → rename to `test.196.journalctl.txt`.
+
+---
+
 ## POST-TEST.195 (2026-04-22) — max_res_mask widening WORKED (resources 6+7 asserted) but chip became unstable mid-dwell → hard crash (SMC reset required)
 
 Logs: `phase5/logs/test.195.journalctl.txt` (792 brcmfmac lines) + `test.195.journalctl.full.txt` (2123 lines, full boot). Captured from journalctl boot -1 history after recovery — boot ended mid-dwell with no panic/MCE in dmesg (silent freeze).
