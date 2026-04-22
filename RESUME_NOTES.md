@@ -1,5 +1,201 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.212 (2026-04-22) — find the CALLER of asserting function 0x64028
+
+### What POST-TEST.211 just resolved
+
+The three BL targets inside the asserting function (0x64028) are now identified:
+
+| Target | Behavior | Implication |
+|---|---|---|
+| `0x9956` (helper_A) | `LDR.W r0, [r0, #0xcc]; BX LR` | Tiny getter — fetches a 32-bit field at offset +0xcc from a struct pointer |
+| `0x9968` (helper_B) | Table-search loop returning **0x11 as the "not-found" sentinel** | The CMP r0, #0x11 in the asserting fn is "not-found check", **NOT pmurev=17 detection** |
+| `0x11E8` (helper_C) | Function with stack frame, calls printf-style logger | Debug log helper — invoked with ("hndarm.c", #0xdf=223) to log a warning |
+
+Critical reframe: the assert path is **not gated on chip-rev** — it's gated on
+whether a *table lookup* succeeded. The polling loop at 0x6419e..0x641b8
+runs regardless and times out independently.
+
+### Why finding the caller matters
+
+We now know the function body but not what kicks it off. Three possibilities,
+each implies a different driver-side fix:
+
+1. **Called once during PMU init** — caller passes (chip_struct, bit_id, mask)
+   for some PMU resource the firmware should bring up. If caller's args are
+   wrong (driver-side state), we can intercept upstream.
+2. **Called from a workqueue / timer** — caller is firmware self-managed,
+   nothing the driver can change. Then the only fix is unblocking the polling
+   loop's hardware dependency (e.g., the bit at `r3 & 0x80000` not coming on
+   may be linked to a clock/PMU resource the host hasn't enabled).
+3. **Called from interrupt handler** — caller stack is a snapshot of an IRQ
+   path. Less likely given function signature complexity.
+
+### Hypothesis for test.212
+
+Given the assert string "ramstbydis" + the polling loop pattern + the fact
+that this fires near the start of firmware boot (no console output is
+written before assertion), I expect: **caller is in early boot init,
+likely a "ramstandby disable" config function called from `_main`/`hndrte_main`
+or `pmu_init`**. The call should be statically resolvable as a single
+direct BL/B.W targeting 0x64029 (Thumb bit set).
+
+### Implementation plan
+
+Pure dump expansion — no driver behavior change. Statically scan firmware
+text for instruction encodings whose computed target = 0x64029.
+
+For Thumb-2 BL targeting 0x64028 (as Thumb pointer 0x64029), the byte
+encoding depends on the instruction's address (signed PC-relative offset).
+We have to either (a) dump a wide region and scan for the *value* 0x00064029
+(matches function-pointer table entries), or (b) write an offline tool
+to compute encoded BL bytes for each potential caller address.
+
+**Approach (a) — dump wide and grep for 0x00064029:**
+Add three modest dump regions covering the most likely caller locations
+(early boot text):
+
+| Range | Purpose | Size |
+|---|---|---|
+| `{0x40400, 0x40660}` | Code immediately before the `_to.hndrte_arm.c` strings (hndrte main/init?) | 608 B / 38 rows |
+| `{0x64280, 0x64500}` | Code immediately after asserting function (likely sibling functions in same compilation unit) | 608 B / 38 rows |
+| `{0x40000, 0x40400}` | First page of code area (boot entry?) | 1024 B / 64 rows |
+
+Cost: +140 dump rows ≈ 35ms additional MMIO. Acceptable.
+
+After this dump, we can grep the captured words for `00064029` (function-pointer
+table) AND statically decode visible BL/B.W instructions to compute targets.
+
+### Decision tree
+
+| Find | Interpretation | Next |
+|---|---|---|
+| Direct BL/B.W to 0x64028 in dumped range | caller located | trace caller's setup; identify what it passes as r0/r1/r2 |
+| Function-pointer entry `0x00064029` in dumped range | indirect call via vtable | dump pointer table; trace its construction |
+| Neither found | caller is elsewhere in firmware | widen dump or pivot to **Approach (b)**: compile offline tool to brute-force scan all dumps for BL targets matching 0x64028 |
+
+### Run command
+
+```
+make -C /home/kimptoc/bcm4360-re/phase5/work    # via kbuild — see reference memory
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.212.{run,journalctl,journalctl.full}.txt`.
+
+---
+
+## POST-TEST.211 (2026-04-22) — three BL helpers decoded; helper_B is a table-search returning 0x11 sentinel
+
+Logs: `phase5/logs/test.211.{run,journalctl,journalctl.full}.txt`. Test ran
+cleanly — no crash. Same firmware (4352pci).
+
+### Static BL decode confirmed by live dump
+
+| BL | Predicted target | Found function entry at target |
+|---|---|---|
+| 0x64032 | 0x9956 | `LDR.W r0, [r0, #0xcc]; BX LR` (4 bytes) |
+| 0x6403e | 0x9968 | `PUSH {r4-r6, lr}; ...` (search loop) |
+| 0x6404c | 0x11E8 | `PUSH {r4, r7, lr}; SUB SP, #0x0c; ADD r7, SP, #8; ...` |
+
+All three targets land exactly on real Thumb function entry points — confirms
+the BL decode methodology is correct.
+
+### Helper_A at 0x9956 — trivial getter
+
+```
+0x9956: f8d0 00cc    LDR.W r0, [r0, #0xcc]    ; load value at offset 204 from struct
+0x995a: 4770         BX LR                    ; return
+```
+
+Used by the asserting function with `r0 = r4 = arg0` (struct pointer).
+Reads field at +0xcc into r0 — the result is then saved in r8 and passed
+as arg2 to helper_B at 0x6403e.
+
+### Helper_B at 0x9968 — table search returning 0x11 on not-found
+
+```
+0x9968: b570              PUSH {r4-r6, lr}
+0x996a: f8d0 50d0         LDR.W r5, [r0, #0xd0]    ; r5 = max iteration count from struct +0xd0
+0x9970: 2000              MOVS r0, #0              ; loop index = 0
+0x9972: 4603              MOV r3, r0
+0x9974: e008              B.N  0x9988               ; jump to loop test
+0x9976: f8d4 ????         LDR.W r? , [r4, #?]      ; load table entry
+0x997a: 60d4              STR r4, [r2, #0x0c]       ; store
+0x997c: 428e              CMP r6, r1                ; compare entry to search key (r1=arg1)
+0x997e: d102              BNE.N skip
+0x9980: 4293              CMP r3, r2
+0x9982: d005              BEQ.N return-found
+0x9984: 3301              ADDS r3, #1
+0x9986: 3001              ADDS r0, #1               ; ++index
+0x9988: 3404              ADDS r4, #4               ; ++table_ptr
+0x998a: 42a8              CMP r0, r5                ; index < limit?
+0x998c: d3f4              BCC.N -24                 ; loop back
+0x998e: 2011              MOVS r0, #0x11           ; set return = 0x11 (NOT-FOUND sentinel)
+0x9990: bd70              POP {r4-r6, pc}
+```
+
+**Major reframe:** the `CMP r0, #0x11` at 0x64040 in the asserting function is
+checking for helper_B's "not-found" sentinel — **NOT** checking pmurev==17.
+Earlier hypothesis (test.210) that this gates on chip rev was wrong.
+
+### Helper_C at 0x11E8 — printf-style logger
+
+```
+0x11e8: b590              PUSH {r4, r7, lr}
+0x11ea: b083              SUB SP, SP, #0x0c
+0x11ec: af02              ADD r7, SP, #8           ; r7 = frame pointer
+0x11ee: 4603              MOV r3, r0               ; r3 = orig arg0
+0x11f0: 460c              MOV r4, r1
+0x11f2: 4622              MOV r2, r4               ; r2 = orig arg1
+0x11f4: 4619              MOV r1, r3               ; r1 = orig arg0 (file ptr)
+0x11f6: 4807              LDR r0, [PC, #0x1c]      ; r0 = format string ptr
+0x11f8: 4673              MOV r3, lr               ; r3 = lr (return-addr arg?)
+0x11fa: 9700              STR r7, [SP, #0]          ; stack arg
+0x11fc: f7ff fc18         BL  <printer>            ; tail call into printer
+... continues with restore + return ...
+```
+
+The signature is: `helper_C(file_str, line_num)` → calls inner printer with
+format string. At call site (0x6404c) it gets `("hndarm.c", 0xdf=223)` —
+**a debug log call** at line 223 of hndarm.c. Not the assert; just an info-level
+log emitted when helper_B returned not-found.
+
+### Updated picture of asserting function flow
+
+```
+PUSH {r4-r10, lr}
+r4=arg0(struct*), r5=arg1, r6=arg2
+r0 = helper_A(r4)              ; r0 = *(r4 + 0xcc)
+r8 = r0
+r0 = helper_B(r4, r5, 0)       ; table search; returns 0x11 if not found
+r9 = r0
+if (r0 == 0x11) {              ; not found case
+   helper_C("hndarm.c", 223);  ; log warning
+}
+... (continues regardless) ...
+... (eventually: polling loop with r7 as retry counter) ...
+if (r7 exhausted) ASSERT("ramstbydis", line 397);
+POP {r4-r10, pc}
+```
+
+### So the assert root cause is NOT the table-search miss
+
+It's the polling loop timing out — exact bit polled: `r3 & 0x80000` after
+loading r3 from `[r4, #0x4c]` (or possibly from a chip register through
+indirect path). Need test.212 to find the *caller* of this whole function
+to know what register/bit is being polled and what the firmware expected
+to come up.
+
+### Other state
+
+- All other dump regions (chip-info, trap data, NVRAM) unchanged from test.210
+- fine-TCM scan: 7 cells CHANGED — same as test.210 (firmware ran briefly,
+  ticked timestamps in console area, asserted)
+- Trap data at 0x9cfe0 unchanged: `18002000 00062a98 000a0000 000641cb`
+
+---
+
 ## PRE-TEST.211 (2026-04-22) — decode BL targets in asserting function; identify what it polls
 
 ### Context
