@@ -2380,7 +2380,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		pr_emerg("BCM4360 test.226: past INTERNAL_MEM block — entering pre-set-active probes\n");
 		msleep(5);
 		{
-			bool sa_rc;
+			bool sa_rc __maybe_unused = false;
 			/* test.196: 12 × 250 ms = 3000 ms dwell, low-poll
 			 * harness (replaces the single 1250 ms + heavy MMIO
 			 * storm that crashed test.195 once HT resources came
@@ -2486,36 +2486,21 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			pr_emerg("BCM4360 test.219: calling brcmf_chip_set_active resetintr=0x%08x (FORCEHT pre-applied)\n",
 				 resetintr);
 			mdelay(30);
-			pr_emerg("BCM4360 test.226: immediately before brcmf_chip_set_active()\n");
-			msleep(5);
-			sa_rc = brcmf_chip_set_active(devinfo->ci,
-						      resetintr);
-			pr_emerg("BCM4360 test.226: immediately after brcmf_chip_set_active() returned\n");
-			msleep(5);
-			pr_emerg("BCM4360 test.188: brcmf_chip_set_active returned %s\n",
-				 sa_rc ? "true" : "false");
-
-			/* test.229 Option A: binary discriminator for the
-			 * post-set_active wedge observed in test.228.
+			/* test.230: skip brcmf_chip_set_active entirely to
+			 * decide whether firmware activation is the sole
+			 * trigger for the bus-wide wedge confirmed in test.229
+			 * (H2). If host survives this path, fw activation is
+			 * the cause; if it wedges anyway, something in the
+			 * pre-set_active sequence is responsible.
 			 *
-			 * test.228 captured "brcmf_chip_set_active returned
-			 * true" for the first time and then the host wedged
-			 * bus-wide (no NMI, empty pstore, ~2 min auto-reboot).
-			 * The next action was the first MMIO probe at 0x408
-			 * (ARM CR4 IOCTL), which could be the trigger (H1:
-			 * host-initiated MMIO hang) or innocent of it (H2:
-			 * firmware-initiated bus stall).
-			 *
-			 * This test skips all post-set_active probes
-			 * (probe_armcr4_state, probe_d11_state,
-			 * probe_d11_clkctlst, tier-1/2 fine-grain, 3000 ms
-			 * dwell). If host does NOT wedge and driver returns
-			 * -ENODEV cleanly, H1 is confirmed; if it still
-			 * wedges, H2.
+			 * Post-set_active probe block remains at #if 0 below
+			 * so we don't reintroduce the H1/H2 ambiguity we just
+			 * resolved.
 			 */
-			pr_emerg("BCM4360 test.229: SKIPPING post-set_active probes — msleep(1000) before BM-clear\n");
+			pr_emerg("BCM4360 test.230: SKIPPING brcmf_chip_set_active — resetintr=0x%08x NOT written to CR4\n",
+				 resetintr);
 			msleep(1000);
-			pr_emerg("BCM4360 test.229: 1000 ms dwell done; proceeding to BM-clear + release\n");
+			pr_emerg("BCM4360 test.230: 1000 ms dwell done (no fw activation); proceeding to BM-clear + release\n");
 #if 0
 			mdelay(20);
 			brcmf_pcie_probe_armcr4_state(devinfo,
