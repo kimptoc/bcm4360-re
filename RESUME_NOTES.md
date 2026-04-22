@@ -1,5 +1,130 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.204 (2026-04-22) — BREAKTHROUGH 5: "ramstbydis" identified — likely NVRAM key
+
+Logs: `phase5/logs/test.204.journalctl.full.txt`. Run text:
+`phase5/logs/test.204.run.txt`. Test ran cleanly — no crash.
+
+### Result 1: string region decoded literally
+
+Bytes at `0x40660..0x406c0`:
+
+```
+0x40660: "..._to\0hndrte_arm.c\0hndarm.c\0ramstbydis\0pciedngl_isr"
+                                      ^0x40671          ^0x4067a
+0x406a0: "pciedngl_isr called\n%s: invalid IS..."
+```
+
+Confirmed:
+- `0x40671` = `"hndarm.c\0"` (9 bytes including terminator) — matches
+  the assert literal-pool ptr ✓
+- `0x4067a` = **`"ramstbydis\0"`** (11 bytes) — this is the second
+  literal-pool pointer
+
+`"ramstbydis"` is a known Broadcom **NVRAM variable name**: "RAM
+Standby Disable". It controls whether the ARM core can enter
+RAM-standby low-power state. **Our NVRAM file
+(`/lib/firmware/brcm/brcmfmac4360-pcie.txt`) does NOT contain
+this key.** When the firmware looks it up and finds it absent,
+behaviour depends on the firmware build — some default value
+might be used, or a fault path triggered.
+
+Other nearby strings: `hndrte_arm.c` (sister file), `pciedngl_isr`
+(PCIe dongle interrupt handler), `%s: invalid IS...` (truncated —
+"invalid Interrupt Status"?) — all unrelated to the assert path,
+just adjacent in the const-string section.
+
+### Result 2: chip-info struct lower half
+
+Bytes at `0x62a00..0x62a80`:
+
+```
+0x62a00:  00000000 00000000 18002000 00000002
+0x62a10..0x62a78:  all zeros
+```
+
+So the literal-pool pointers `0x62a08` and `0x62a0c` target:
+- `*0x62a08 = 0x18002000`  ← AXI/AI core base (matches the core
+  table we already saw at 0x62b20)
+- `*0x62a0c = 0x00000002`  ← small integer (index? count? state?)
+
+If r6 is loaded from `0x62a0c`, then `r6 = 2`, and `CMP r6, #9`
+→ unequal, BNE fires. Whether the assert is on the BNE-taken or
+fall-through path needs us to confirm the conditional sense; but
+either way `r6 = 2` ≠ `9`, so the conditional doesn't match the
+"all good" expected case.
+
+### Result 3: pre-CMP code
+
+Bytes at `0x64160..0x6418c`:
+
+```
+0x64160:  4834 b920  f240 1165  f79d f83e  4620 f7a5
+0x64170:  4b34 fbf9  682b 6018  f042 681a  601a 0202
+0x64180:  f8c3 2200  696b 21e0  dd05 2a27  21e0 f8d3
+```
+
+Visible patterns (clean-room: high-level only):
+- `0x64160`: `LDR r0, [pc, #0xd0]` then `CBNZ` form (b920) — early
+  null/zero check.
+- `f240 1165`: MOVW r1, #0x1165 — another constant load
+- Multiple `f79d` patterns — repeated BL calls into nearby
+  functions (one per `f79d` halfword at the start of an
+  instruction pair)
+- `682b`, `681a`, `696b` — `LDR r3, [r5]`, `LDR r2, [r3]`,
+  `LDR r3, [r5, #0x14]` — chained struct-field reads
+- `f8c3 2200`: `STR r2, [r3, #0x200]` — writing to a far offset
+- `21e0`: `MOV r1, #0xe0` — preparing a register
+- `dd05`: `BLE.N` — backward conditional branch
+
+So r6 isn't loaded by a single visible LDR in this range; it
+appears earlier (or is computed). I'll widen one more time to
+`0x64100..0x64160` in the next test if needed. But the more
+productive next step is to **test the ramstbydis hypothesis
+directly** by modifying the NVRAM file.
+
+### What "v = 43, wd_msticks = 32" actually tells us
+
+Re-reading the assert text in light of "ramstbydis" being a key:
+
+```
+ASSERT in file hndarm.c line 397 (ra 000641cb, fa 0009cfe0)
+v = 43, wd_msticks = 32
+```
+
+`v = 43` matches our `ccrev = 43`. `wd_msticks = 32` is the
+watchdog tick value. So this assert is in a routine that has both
+`ccrev` and `wd_msticks` in scope and prints them — likely an
+**HW init / watchdog setup** routine. The presence of `ramstbydis`
+in the literal pool nearby strongly suggests this routine is
+configuring power management based on the `ramstbydis` NVRAM
+variable, and asserting because something it expected to find
+(maybe a particular core state, or `ramstbydis` set explicitly)
+is missing.
+
+### Plan for test.205 — direct test of the NVRAM hypothesis
+
+Cheapest informative change: **add `ramstbydis=0` to NVRAM**, run.
+Outcomes:
+
+1. **Same assert at line 397** → ramstbydis isn't directly
+   triggering the assert; it's in scope as a side effect. Move on
+   to identifying r6's source via a wider code dump.
+
+2. **Different assert (different line, different `v = N`)** →
+   we've moved past the line-397 check. Whatever new assert
+   appears tells us the next missing thing.
+
+3. **No assert, firmware progresses** → ramstbydis was the gate.
+   We'd see different console buffer contents (more init lines).
+
+Will also try `ramstbydis=1` if 0 doesn't change anything.
+
+NVRAM is host-supplied so this is fully under our control — no
+firmware modification, no large excerpts committed.
+
+---
+
 ## PRE-TEST.204 (2026-04-22) — extend chip-info down + read strings + pre-CMP code
 
 ### Hypothesis
