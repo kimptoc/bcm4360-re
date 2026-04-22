@@ -1,5 +1,116 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.202 (2026-04-22) — console buffer mapped + assert call site decoded
+
+Logs: `phase5/logs/test.202.journalctl.full.txt`. Run text:
+`phase5/logs/test.202.run.txt`. Test ran cleanly — no crash.
+
+### Result 1: hndrte_cons buffer geometry
+
+The dump at `0x96f40..0x96fc0` reveals that the actual log buffer
+starts at `0x96f78`, **not** at `0x97000` as we assumed in test.200:
+
+```
+0x96f40: 00000010 00000000 00000000 00000b05
+0x96f50: 00000000 00000001 00000010 00000000
+0x96f60: 00000000 00000000 00000000 00000000   ← chip-info pointed here
+0x96f70: 00004000 00000000 6e756f46 68632064   ← buf_size=0x4000, idx=0, then "Foun"
+0x96f80: "ip type AI (0x15"
+0x96f90: "034360)\r\n125888."
+0x96fa0: "000 Chipc: rev 4"
+0x96fb0: "3, caps 0x586800"
+... (continuing into 0x97000)
+```
+
+So the descriptor near `0x96f60` carries (probable layout):
+
+- `0x96f70 = log_buf_size = 0x4000` (16384 B)
+- `0x96f74 = log_idx = 0`
+- `0x96f78..0x9af78 = log_buf` (16 KB ring)
+
+The log content visible across `0x96f78..0x97070` is only ~248 B —
+the firmware emits boot messages + the assert and halts, leaving
+the rest of the buffer as zeros. So the duplicate text we saw at
+`0x9cdb0..0x9cdf0` in test.199/200 is from a **second sink** (the
+firmware exception handler's trap console), not a different copy of
+the main ring buffer.
+
+The 32-byte block at `0x96f40..0x96f60` is some other descriptor
+(value `0x00000b05` at `0x96f4c` is suggestive — possibly a
+counter or reserved-bytes field). Not investigating further now.
+
+### Result 2: assert call site decoded
+
+The dump at `0x6418c..0x641e0` is dense Thumb-2 instructions. The
+key sequence around the BL to the assert handler (LR=0x641cb in
+the trap data, so BL ends at 0x641ca):
+
+```
+... (preceding compare/branch logic) ...
+0x641b0:  2e09 d101              ← CMP r6,#9 ; BNE.N <skip>
+... 
+0x641c0:  481c                   ← LDR r0, [pc,#0x70]   (load format-string ptr)
+0x641c2:  f240 118d              ← MOVW r1, #0x18d      (= 397, line number)
+0x641c6:  f79d f80f              ← BL  <assert_handler> (LR = 0x641ca)
+0x641ca:  ...                    ← (next instruction)
+```
+
+This means the *failing check immediately above the assert call* is
+a `CMP r6, #9` followed by a `BNE`. r6 holds *some 4-bit-or-so
+field of the chip-info struct* — most likely a sub-revision /
+package-variant code that this firmware build expects to equal 9
+for the BCM4360 it's looking for, but our chip reports a different
+value. The LDR at 0x641c0 reads the format string from offset 0x70
+past PC, so the literal pool starts around `0x64234`.
+
+### What is r6 = 9 testing?
+
+Speculation, ranked by likelihood:
+
+1. **Chip-package-variant code**: BCM4360 has multiple package
+   variants (4360A, 4360B, etc.). The chip-info struct at
+   `0x62a98..` includes some bytes we haven't decoded yet (`0x14e4`
+   = vendor ID, `0x4360` = chipid). One field around there might
+   be a "package code" the firmware checks against an expected
+   value.
+
+2. **Chiprev sub-field**: ccrev=43 = 0x2b = 0b101011. Bits[3:0] = 9.
+   So `r6 = ccrev & 0xf = 9` would actually pass this check —
+   meaning the BNE branches around the assert and *something else*
+   triggers the assert. Possible if the "v=43" in the printf uses
+   a different value than r6.
+
+3. **A device-tree / flash-region read** that returned a value the
+   firmware deems wrong (e.g., a strap or OTP read).
+
+Hypothesis (2) is intriguing because if `ccrev & 0xf == 9` is the
+test and 43 & 0xf = 11 (= 0xb) — *that's* what we have, and 11 ≠ 9.
+So the assert *does* fire because our ccrev's low nibble is 0xb,
+not 0x9. This suggests the firmware was built for a chip whose
+ccrev's low nibble is 9 (e.g., ccrev 25, 41, 57, ...) and our
+ccrev=43 isn't in the supported set. **This is testable** by
+reading the literal pool to see what format string we're emitting —
+if the format is `"v = %d"` and the value in the printf is r6, then
+we'd see "v = 11", not "v = 43". But we *see* "v = 43" → so the
+printf variable is *not* r6 directly. The actual asserted condition
+might be at a different register, with r6=9 being something else.
+
+### Plan for test.203
+
+1. **Read the literal pool at `0x64200..0x64280`** — this contains
+   the format-string address + any other values LDR'd by the
+   assert call. Decode literally what `r0`, `r2`, `r3` hold by
+   the time the BL fires.
+
+2. **Read the chip-info struct's neighbours at `0x62b00..0x62b80`** —
+   we may find related per-chip configuration fields. Especially
+   interesting: any byte that == 9 (or 0xb) so we can confirm
+   what r6 was loaded from.
+
+Both reads are <16 rows total (~3 ms). Easy add.
+
+---
+
 ## PRE-TEST.202 (2026-04-22) — read hndrte_cons descriptor + decode assert call site
 
 ### Hypothesis
