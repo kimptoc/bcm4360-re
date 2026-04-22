@@ -1,0 +1,24 @@
+=== test.237 PRE (2026-04-23 00:32:01 BST) ===
+=== sysctls arming ===
+1
+1
+1
+30
+
+=== lspci PRE ===
+	Control: I/O- Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+
+=== BAR0 timing PRE ===
+  exit=0 elapsed=22ms
+
+=== modules PRE ===
+cfg80211             1413120  5 mt76,mt76x02_lib,mac80211,mt76x02_usb,mt76x2_common
+rfkill                 40960  3 bluetooth,cfg80211
+
+=== insmod (force_seed=1, extended_dwells=1) ===
+2026-04-23 00:32:01.853 BST
+2026-04-23 00:32:12.108 BST
+insmod exit=0
+
+=== sleeping 45s for extended dwell ladder + probe return ===
