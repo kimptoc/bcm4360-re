@@ -2027,7 +2027,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		static const u32 dump_ranges[][2] = {
 			{0x40660, 0x406c0},	/* strings */
 			{0x40700, 0x41000},	/* test.214: PCIe-dongle string slab (no fmt match) */
-			{0x41000, 0x42000},	/* test.215: continue hunt "v = %d, wd_msticks = %d" fmt */
+			{0x41000, 0x42000},	/* test.215: AI core / olmsg / rpc strings (no fmt match) */
+			{0x01000, 0x02000},	/* test.216: helper_C @ 0x11e8 + delay @ 0x1adc */
 			{0x40000, 0x40400},	/* early boot/init code */
 			{0x40400, 0x40660},	/* code immediately before strings */
 			{0x64280, 0x64500},	/* code immediately after asserting function */
@@ -2527,7 +2528,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				u32 lo = dump_ranges[j][0];
 				u32 hi = dump_ranges[j][1];
 
-				pr_emerg("BCM4360 test.215: dump range 0x%05x..0x%05x\n",
+				pr_emerg("BCM4360 test.216: dump range 0x%05x..0x%05x\n",
 					 lo, hi);
 				for (addr = lo; addr < hi; addr += 16) {
 					u32 w[4];
@@ -2544,7 +2545,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							(char)c : '.';
 					}
 					ascii[16] = '\0';
-					pr_emerg("BCM4360 test.215: 0x%05x: %08x %08x %08x %08x | %s\n",
+					pr_emerg("BCM4360 test.216: 0x%05x: %08x %08x %08x %08x | %s\n",
 						 addr, w[0], w[1], w[2], w[3],
 						 ascii);
 				}

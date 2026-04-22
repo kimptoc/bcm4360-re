@@ -1,5 +1,156 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.216 (2026-04-22) — dump early TCM (0x01000..0x02000) to find helper_C + format string
+
+### What POST-TEST.215 just delivered (HUGE — full ramstbydis decode)
+
+Test.215 with `min_res_mask=0x17f` patch and dump range `0x41000..0x42000`.
+Same trap as before (PC 0x000641cb, "v = 43, wd_msticks = 32"). Behavior
+unchanged. But the code/data analysis broke open the function.
+
+**Format string `"v = %d, wd_msticks = %d"` STILL not found.** 0x41000..0x42000
+contained:
+- AI core wrapper register format strings (0x41000-0x4147f) — extension of test.214 area
+- `ai_core_disable` function name string at 0x41488
+- `bcm_olmsg` (offload message) subsystem strings (0x41490-0x41b2f)
+- `bcm_rpc_*` (inter-CPU RPC) subsystem strings (0x41b30-0x41ff0)
+
+So the format string is NOT in the firmware's "main rodata" string slab
+(0x40000-0x42000). Two remaining places to hunt:
+- **Early TCM 0x01000-0x02000**: where helper_C (0x011E8) and the delay
+  function (0x01ADC) live. printk-style helpers often have their format
+  strings inline near the function.
+- **Later string region 0x42000+**: bcm_rpc strings continue past 0x42000
+
+### MAJOR BREAKTHROUGH: ramstbydis function fully decoded
+
+By cross-referencing the literal pool entries at 0x64234..0x6423c and
+disassembling 0x64180..0x641cf:
+
+| Address | Literal | Meaning |
+|---|---|---|
+| 0x64234 | 0x00040671 | → "hndarm.c\0" (file name) |
+| 0x64238 | 0x0004067a | → "ramstbydis\0" (function name — confirmed!) |
+| 0x6423c | 0x00017fff | (mask or threshold value, TBD) |
+
+**Disassembled flow of asserting function `ramstbydis(arg0=r4, arg1=r5)`:**
+
+```
+0x64180  MOVS  r2, #0
+0x64182  STR.W r2, [r3, #0x1e0]          ; clear something at off 0x1e0
+0x64186  LDR   r2, [r4, #0x14]           ; r2 = chip_info[0x14] = ccrev (43)
+0x64188  CMP   r2, #39                   ; ccrev <= 39?
+0x6418a  BLE   0x64198                   ; if so, skip set-bit step
+0x6418c  LDR.W r2, [r3, #0x1e0]          ; (ccrev > 39 path) read register
+0x64190  ORR.W r2, r2, #0x40             ; SET bit 6
+0x64194  STR.W r2, [r3, #0x1e0]          ; write back — initiates the action
+0x64198  MOVW  r6, #0x4E29               ; loop counter = 20009
+0x6419c  B     0x641a6                   ; skip first delay
+0x6419e  MOVS  r0, #10                   ; delay arg = 10 (µs)
+0x641a0  BL    0x01ADC                   ; delay 10 µs (helper at 0x01ADC)
+0x641a4  SUBS  r6, r6, #10               ; counter -= 10
+0x641a6  LDR   r3, [r5, #0]              ; reload base addr
+0x641a8  LDR.W r2, [r3, #0x1e0]          ; read polled register
+0x641ac  TST   r2, #0x20000              ; check bit 17
+0x641b0  BNE   0x641b6                   ; if SET, exit loop
+0x641b2  CMP   r6, #9                    ; counter check
+0x641b4  BNE   0x6419e                   ; if r6 != 9, loop
+0x641b6  LDR.W r3, [r3, #0x1e0]          ; re-read register
+0x641ba  TST   r3, #0x20000              ; re-test bit 17
+0x641be  BNE   0x641ca                   ; if STILL SET, branch out (no assert)
+0x641c0  LDR   r0, [PC, #0x70]           ; r0 = "hndarm.c"
+0x641c2  MOVW  r1, #397                  ; r1 = 397 (line)
+0x641c6  BL    0x011E8                   ; call helper_C — ASSERT path
+0x641ca  LDR   r3, [r4, #0x48]           ; (post-assert; trap ra ends here)
+0x641cc  TST   r3, #0x100
+```
+
+### What this tells us
+
+1. **The function is called twice with two pointers** — `arg0=r4` (chip_info
+   struct ptr 0x62a98) and `arg1=r5` (some other base — `*r5` = base address
+   of a core whose register at offset 0x1e0 we poll).
+
+2. **For BCM4360 (ccrev=43 > 39): the function FIRST sets bit 6** of
+   `[*r5 + 0x1e0]`, **then waits up to 20 ms** for bit 17 of the same
+   register to become SET (poll every 10 µs, max 2000 iterations).
+
+3. **The assert fires when bit 17 stays CLEAR** for the full 20 ms timeout —
+   i.e., the action initiated by setting bit 6 never produces the bit-17 ack.
+
+4. **`v = 43` is `chip_info[0x14] = ccrev`** — loaded into r2 by the LDR at
+   0x64186. This value gates the ccrev>39 path. v in the assert message is
+   diagnostic context: "I'm in the ccrev>39 branch, ccrev was 43".
+
+5. **`wd_msticks = 32`** — likely a global watchdog tick count (2000 polls
+   × 10 µs = 20000 µs = 20 ms ≈ 32 ticks at 1.6 ms/tick — the firmware
+   watchdog interval).
+
+6. **Function name is literally `ramstbydis`** (confirmed via literal pool).
+   Searches in `wl.ko` disassembly for this symbol should locate the source.
+
+### What we still need
+
+- **What register at offset 0x1e0 of `*r5`?** Knowing `r5` (arg1 of
+   ramstbydis) tells us which subsystem hangs. Candidates:
+   - D11 base 0x18002000 — register `D11_*_0x1e0` (TBD)
+   - PMU PLL ctrl block (within ChipCommon)
+   - Some other backplane core
+- Need to find the CALLER of ramstbydis (where it gets r4, r5 args from).
+   The function is at 0x64028..0x6422a; callers will load both pointers
+   then `BL 0x64028`. Need to dump callers (in 0x40000-0x60000 code area).
+
+### Implementation plan for test.216
+
+**One probe + one chip_info[0x48] interpretation:**
+
+1. **Dump early TCM 0x01000..0x02000** (4 KB, ~256 dump lines). Goals:
+   - Locate helper_C function body (at 0x011E8)
+   - Locate delay function body (at 0x01ADC)
+   - Find any rodata literals near these helpers — esp. "v = %d, wd_msticks
+     = %d" or similar format templates
+   - Identify symbol that matches "wd_msticks" global
+
+2. **Decode chip_info[0x48] = 0x00008a4d**: 35405 Hz ≈ ILP clock measured
+   frequency (nominal 32768, +8% drift). If true, this is the firmware's
+   measured ILP rate used for delay loops. Document it as a candidate
+   interpretation; can verify later by comparing to PMU IlpCycleCount reg.
+
+`min_res_mask=0x17f` patch retained. Test marker .215 → .216. One new
+dump_ranges entry.
+
+### Decision tree
+
+| Find | Interpretation | Next |
+|---|---|---|
+| `"v = %d, wd_msticks = %d"` literal in 0x01000..0x02000 | format string located | trace its caller (likely helper_C); decode helper_C wraps printf |
+| Helper code visible but no v/wd_msticks string | format is elsewhere (BSS data init? or 0x42000+) | dump those next |
+| Different format like "%s assert: v=%d wdms=%d" | partial match — same vars, different wording | shift hunt to broader rodata |
+
+### Build/run
+
+```
+make -C /home/kimptoc/bcm4360-re/phase5/work    # via kbuild
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.216.{run,journalctl,journalctl.full}.txt`.
+
+---
+
+## POST-TEST.215 (2026-04-22) — see PRE-TEST.216 above for full decode
+
+Same trap behavior as .211/.212/.213/.214 (PC 0x641cb, "v = 43, wd_msticks =
+32"). All findings fold into PRE-TEST.216. Two highlights worth pulling out:
+
+- **`ramstbydis` (function name) confirmed via literal pool entry at 0x64238**
+  pointing to TCM[0x4067a] = "ramstbydis\0". This is the canonical Broadcom
+  name for the function.
+- **`v = ccrev = 43`** definitively identified via LDR at 0x64186 from
+  chip_info[0x14].
+
+---
+
 ## PRE-TEST.215 (2026-04-22) — widen format-string hunt + dump chip-info struct in detail
 
 ### What POST-TEST.214 just delivered
