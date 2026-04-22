@@ -101,6 +101,30 @@ Safe to insmod after a test.226 build.
 
 ---
 
+## PRE-TEST.226 READY (2026-04-22 19:42 BST) — build + state verified, insmod next
+
+### Build state
+- `brcmfmac.ko` rebuilt at 19:40, 14.27 MB
+- `strings` counts 12 × `BCM4360 test.226:` markers in the binary
+- No new warnings from the kbuild run
+
+### Hardware state immediately before insmod
+- `lspci -vvv -s 03:00.0`: MAbort-, SERR-, DEVSEL=fast
+- `enable=0`, `power_state=unknown`
+- BAR0 `dd resource0` timing: 21 / 19 / 19 ms — fast-UR, well under 40 ms
+- `lsmod | grep brcm`: empty
+
+Hypothesis: one of the 12 test.226 markers will print and the next one
+won't — pinpointing the wedge location within the ~100-line block
+between CC-res_state and the first tier1 probe. If all 12 print, the
+wedge is downstream of set_active (in tier1 dwell or firmware-resume
+handling) and test.227 will walk breadcrumbs into that region.
+
+### Run
+```bash
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
 ## PRE-TEST.226 (2026-04-22 19:35 BST) — pinpoint the post-snapshot wedge with msleep-spaced breadcrumbs
 
 ### Objective
