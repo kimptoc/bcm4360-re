@@ -1,5 +1,114 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.207 (2026-04-22) — NVRAM delivery confirmed; r6 source partly identified
+
+Logs: `phase5/logs/test.207.journalctl.full.txt`. Run text:
+`phase5/logs/test.207.run.txt`. Test ran cleanly — no crash.
+
+### Result 1: NVRAM IS reaching firmware
+
+Dump at `0x9ff00..0xa0000` shows our entire NVRAM content
+present in TCM:
+
+```
+0x9ff10: "rev=11.boardsromrev=11.boardtype=0x0552.boardrev=0x1101"
+0x9ff50: "boardflags=0x10401001.boardflags2=0x00000002..."
+0x9ff80: "boardflags3=0x00000000.boardnum=0.macaddr=00:1C:B3:01:12:01"
+0x9ffb0: "ccode=X0.regrev=0.vendid=0x14e4.devid=0x43a0.xtalfreq=40000"
+0x9ffe0: "aa2g=7.aa5g=7..."
+0x9fffc: ffc70038            ← NVRAM CRC/length trailer (matches the
+                                value our log-marker reports)
+```
+
+So the firmware *is* receiving our NVRAM at the canonical TCM-top
+location (the host driver downloaded it correctly). The
+`ramstbydis` tests (test.205/206) were valid — the assert path
+just doesn't depend on it.
+
+This also confirms our NVRAM file is being preserved as ASCII
+text, not transformed into a binary table (which is what some
+older Broadcom NVRAM formats use). Good baseline.
+
+### Result 2: code at 0x64100-0x64160 (wider context)
+
+Observed-behavior summary (clean-room, no instruction excerpts):
+
+- The function entry begins around `0x64100` and uses r5 as a
+  **struct base register** (numerous `STR/LDR Rn, [r5, #imm]`
+  with offsets like 0x10, 0x14, 0x40, 0x74, 0xe0, 0xe8).
+- r6 is **decremented** (subtract-with-flags by 1 at `0x6411e`)
+  and **stored** to `[r5, #0x10]` immediately after at `0x64120`.
+- r7 is computed by **subtracting 0x40** from the function's
+  first argument (at `0x6410c`).
+- Multiple compares against constants 7, 12, 0xe0 (on r7) and 9
+  (on r6, the one we already knew about) suggest a small
+  state-machine or table-driven dispatch.
+- A `CMP r6, #0` at `0x64140` followed by `BNE.N` (backward)
+  forms a loop — r6 is a loop counter that decrements.
+
+### Synthesis
+
+The asserting routine appears to:
+1. Receive the chip-info struct via r5 (or load it).
+2. Initialize r6 with some small value (probably from a struct
+   field — load not visible in current dump window) and r7 from
+   an arg.
+3. Walk a small table or per-core loop, decrementing r6 and
+   updating struct fields at `[r5, #0x10]`, `[r5, #0x14]`, etc.
+4. After the loop, check `r6 == 9` — if not equal, fire the
+   assert (line 397).
+
+Combined with the chip-info struct showing **6 populated AXI
+core slots** (test.203: cores at 0x18000000, 0x18001000,
+0x18002000, 0x18003000, 0x18004000 — 5 slots used + 1 starting
+slot), and the assert wanting r6=9 — **the firmware is checking
+that 9 cores were enumerated** but our chip only enumerated 6.
+
+This isn't a value we can change via NVRAM. It's a chip
+**enumeration-table mismatch**: the firmware build expects to
+find 9 distinct AI cores, but the BCM4360 silicon only exposes
+6 (or whatever count we measure). So this firmware was built
+for a chip variant with more peripherals/cores than we have.
+
+### Implications
+
+- This is the "wrong firmware for this chip" failure mode. Our
+  brcmfmac4360-pcie.bin is from a Linux distro firmware
+  package; it might be built for a different BCM4360 sub-variant
+  (e.g., the dual-band MIMO variant vs. the single-band variant).
+- Possible solutions:
+  - Try a different firmware binary (e.g., from macOS, or from
+    a different vendor's brcmfmac release that targets this
+    Apple-specific variant).
+  - Confirm the core count is what we think — by reading the
+    PCIe core enumeration ourselves and comparing.
+
+### Plan for test.208
+
+Two complementary probes:
+
+1. **Read the chip-info core table more thoroughly**: dump
+   `0x62b80..0x62c00` (8 rows, 32 bytes) — the table extends
+   past where we currently dump. Want to see if there's a
+   "core count" field at a struct offset we can directly
+   inspect. Also re-dump `0x62b00..0x62b80` to verify the
+   core-ID values (we may have mis-identified some).
+
+2. **Confirm core count by host-side enumeration**: in
+   chip.c, also log the count of cores brcmf's own enumeration
+   logic finds. We already have `chip->cores` populated — print
+   the number. Compare against what the firmware expects (9?).
+
+Cost: small dump (+8 rows) + 1 log line in chip.c.
+
+If host-side enumeration also finds 6, we're confident the chip
+has 6 cores and the firmware expects 9 — so we need a different
+firmware binary. If host-side finds 9 but the firmware's table
+shows 6, the firmware enumeration is wrong (a firmware bug or
+config mismatch we may be able to influence).
+
+---
+
 ## PRE-TEST.207 (2026-04-22) — verify NVRAM-blob in TCM + widen code dump
 
 ### Hypothesis (3 things being tested)
