@@ -38,11 +38,26 @@ runs ≥700 ms past set_active before wedging.
 
 **Conclusion:** The Apple-style random_seed footer/buffer
 ([0x9fe14..0x9ff1c), magic `0xfeedc0de`, length `0x100`) was a
-missing piece. Fw reads it early in its activation path; without
-it, fw wedges almost immediately (possibly before completing its
-own reset sequence). With it present, fw executes further — but
-wedges again within ~1 s of set_active, pointing to a **second
-missing piece** further along the initialisation path.
+missing piece. Direct evidence: fw ran **≥700 ms post-set_active**
+under the seed (four dwell breadcrumbs landed); test.234 without
+seed had zero post-set_active breadcrumbs flush before the wedge
+cut the journal mid-fw-download-sequence.
+
+**Wedge moment (inferred, not directly observed):** applying the
+same ~15-20 s journald tail-truncation budget symmetrically:
+test.234's last flushed line was `test.158: BusMaster cleared`
+(~15-20 s before the wedge, which under the regular flow lands
+at roughly the set_active call). Run B's last flushed line was
+`t+700ms dwell`, so under the same budget the wedge happened at
+**t+15-20 s post-set_active-return**. That's an order-of-magnitude
+shift compared to test.234 — fw now has time to run real init
+code, attempt handshakes, run timers — not "die on first bad
+DMA read."
+
+This changes the theory weighting: a ~15-20 s delay before wedge
+looks more like an fw internal watchdog/timeout firing (fw is
+waiting on something that never arrives) than a null-pointer-DMA
+(which would wedge sub-second).
 
 Most likely next-target: the shared-memory / ringinfo structure.
 Upstream brcmfmac's `brcmf_pcie_init_share` + `pcie_shared` struct
@@ -205,14 +220,23 @@ for the discriminator ladder.
 
 **Planned test.237 direction:**
 Before committing to the full `brcmf_pcie_init_share` implementation,
-consider a cheap timing-discriminator run: same code path as test.236
-Run B but with extended dwell breadcrumbs (t=1.5s, 2s, 3s, 5s, 10s
-if host still alive). That test isolates whether the observed
-"wedge shifted later" is (a) a genuine fw-progress gain from the
-seed, or (b) an artefact of slower-journald-freeze-on-this-run.
-Logic: if (a), the new dwell breadcrumbs land at higher t values; if
-(b), the breadcrumbs cut at the same t as Run B regardless. Cost:
-one module param + dwell-list edit, one wedge cycle + SMC reset.
+run a cheap timing-discriminator: same code path as test.236 Run B
+but extend the dwell ladder past t+10s (t=1.5s, 2s, 3s, 5s, 10s,
+15s, 20s, 25s, 30s) to bracket the inferred ~15-20 s wedge moment.
+
+Two purposes:
+1. Direct measurement of the wedge moment — if t+15s and t+20s land
+   but t+25s doesn't, we've pinned the wedge to a ~5 s window and
+   can further bisect.
+2. Discriminator against "journald-flush-variance" counter-hypothesis
+   (unlikely per the breadcrumb-required-to-execute argument but
+   worth ruling out): if the wedge is actually still ~1 s post-
+   set_active, the extended dwells all simply never execute, and
+   the breadcrumbs cut at t+700ms regardless.
+
+Optional: pair with a `force_seed=0` control run at matching dwell
+points for the cleanest A/B comparison. Cost: one extra wedge
+cycle + SMC reset. Defer if Run B already shows late breadcrumbs.
 
 **Logging transport status (updated after test.233):**
 - journald: drops ~15–20 s of tail when host loses userspace (confirmed tests 226/227/231/232).
