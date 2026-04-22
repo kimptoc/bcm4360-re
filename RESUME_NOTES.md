@@ -206,6 +206,150 @@ not sub-second timing.
 ---
 
 
+## PRE-TEST.236 (2026-04-23 00:0x BST, boot 0 same as test.235) — force the upstream Apple-style random_seed write before `brcmf_chip_set_active`
+
+### Hypothesis (NEW lead, found by code-reading after test.235)
+
+Code review of `brcmf_pcie_download_fw_nvram` revealed two facts that
+together make the random_seed write a strong candidate for the wedge
+trigger:
+
+1. **The live BCM4360 path returns `-ENODEV` at line 2887** (after fw
+   download + dwell + tier probes + BM-clear). The post-return code at
+   lines 2899-2959 — which contains the only `if (devinfo->otp.valid)`
+   block that does the random_seed write — is **dead code on our
+   path**. NVRAM is actually written earlier at lines ~2256-2287, and
+   no random_seed write exists in the live path.
+
+2. **Upstream gates the seed write on `devinfo->otp.valid`**, which
+   is FALSE on our path because OTP read is bypassed (test.124, line
+   ~5347-5355: `OTP read bypassed — OTP not needed`). Even if the
+   dead code WERE reached, the seed write would still be skipped.
+
+3. **The upstream comment is Apple-specific:** *"Some Apple chips/
+   firmwares expect a buffer of random data to be present before
+   NVRAM"*. BCM4360 in MacBookPro11,1 is an Apple board.
+
+   Layout (computed for our 228-byte NVRAM, ramsize=0xa0000):
+   - NVRAM: [0x9FF1C..0xA0000)  (228 B, ends at ramsize-0)
+   - Seed footer (8 B, magic 0xfeedc0de + length 0x100): [0x9FF14..0x9FF1C)
+   - Random bytes (256 B): [0x9FE14..0x9FF14)
+
+   This means our test.234 zero range [0x9FE00..0x9FF1C) overlaps
+   the *entire* seed area — fw, on every prior wedge run, has read
+   either uninitialised SRAM-PUF garbage there (test.234) or zeros
+   (would-be test.234-with-zeros via test.235 baseline). It has
+   never seen the magic 0xfeedc0de footer that signals "random
+   buffer present".
+
+If fw conditionally:
+- requires the seed (e.g. for crypto / WPA-key derivation),
+- panics or stalls when the magic is absent,
+- waits indefinitely on a DMA / mailbox handshake driven by seed,
+
+…then providing it should change the post-set_active behaviour (no
+wedge / wedge shifts later / different journald cutoff).
+
+### Code change
+
+1. New module param `bcm4360_test236_force_seed` (default 0).
+2. In `brcmf_pcie_download_fw_nvram`, immediately after the existing
+   live NVRAM write (post `post-NVRAM write done` log, before NVRAM
+   marker readback): **if `force_seed`**:
+   - Compute `footer_addr = address - sizeof(footer)` where `address
+     = ramsize - nvram_len = 0x9FF1C`.
+   - Write footer (length=0x100, magic=0xfeedc0de) via
+     `brcmf_pcie_copy_mem_todev` (BCM4360-safe iowrite32 helper).
+   - Write 256 random bytes at `footer_addr - 256` via the existing
+     `brcmf_pcie_provide_random_bytes` (also routes through the safe
+     copy helper).
+   - Verify the footer landed by reading length and magic words back.
+   - Log addresses, magic, lengths.
+3. Wrap the existing test.234 zero block in
+   `if (!bcm4360_test236_force_seed) { ... }` so it doesn't
+   overwrite the seed when force_seed=1.
+
+### Two-run protocol (per advisor; uses test.235's existing param)
+
+**Run A — verify seed write is BCM4360-safe (no wedge expected):**
+```bash
+sudo insmod brcmfmac.ko \
+     bcm4360_test235_skip_set_active=1 \
+     bcm4360_test236_force_seed=1
+sleep 5; sudo rmmod brcmfmac
+```
+Expected breadcrumbs:
+- `test.236: writing random_seed footer at TCM[0x9ff14] magic=0xfeedc0de len=0x100`
+- `test.236: writing random_seed buffer at TCM[0x9fe14] (256 bytes)`
+- `test.236: seed footer readback length=0x00000100 magic=0xfeedc0de`
+- existing test.235 SKIPPING + dwell-done lines
+
+**Run B — same boot, test if seed prevents wedge:**
+```bash
+sudo rmmod brcmfmac_wcc; sudo rmmod brcmfmac
+sudo insmod brcmfmac.ko \
+     bcm4360_test235_skip_set_active=0 \
+     bcm4360_test236_force_seed=1
+sleep 15  # wedge-window
+```
+Per test.233 Run 2, TCM persists across the within-boot rmmod/insmod +
+probe-start SBR, so the seed Run A wrote should still be in TCM when
+Run B's set_active fires. (Run B re-writes it anyway via the same
+code path, so this is belt-and-braces.)
+
+### Decision tree
+
+| Run A outcome | Run B outcome | Interpretation | Next |
+|---|---|---|---|
+| All breadcrumbs land, footer readback magic=0xfeedc0de | Wedge stops or breadcrumbs land further than test.231/234 | **Random_seed was the missing piece.** Major finding. | Restore conditional seed write properly (don't depend on otp.valid for BCM4360); progress to next blocker |
+| All breadcrumbs land, footer readback magic=0xfeedc0de | Wedge identical to test.234 (cuts at "BusMaster cleared after chip_attach" or similar) | Seed not the missing piece (or not enough on its own). | Look at OTHER pieces in upstream pre-set_active path: shared-memory struct, ringinfo_addr, mailbox; or revisit OTP bypass |
+| All breadcrumbs land, but readback wrong magic (e.g. 0x00000000) | n/a | TCM write to that range failed / wrong addr math. | Fix address calc or write helper |
+| Wedge in Run A | n/a | Seed write itself wedges — surprising; copy_mem_todev should be safe | Investigate copy_mem_todev path or addr |
+
+### Expected artifacts
+
+- `phase5/logs/test.236.runA.run.txt` + journals (no wedge expected)
+- `phase5/logs/test.236.runB.run.txt` + journals (wedge possible)
+
+### Hardware state
+
+- Boot 0 (started 2026-04-22 23:41:20 BST), still alive after test.235.
+- `lspci -vvv -s 03:00.0`: Mem+ BusMaster-, MAbort-, fast-UR (post test.235 rmmod).
+- No modules loaded.
+
+### Build status — REBUILT CLEAN
+
+`brcmfmac.ko` rebuilt 2026-04-23 ~00:0x BST. `strings` confirms 3
+test.236 breadcrumbs + `bcm4360_test236_force_seed` module param.
+Existing test.235 param retained. Pre-existing unused-variable
+warnings unchanged.
+
+### Pre-test checklist (CLAUDE.md)
+
+1. Build status: REBUILT CLEAN above.
+2. PCIe state: clean post test.235.
+3. Hypothesis stated above.
+4. Plan in this PRE block; will commit + push before insmod.
+5. Filesystem sync on commit.
+
+---
+
+
+## POST-TEST.235 (2026-04-22 23:53 BST, boot 0) — cheap-tier zero of [0x9FE00..0x9FF1C) does NOT prevent wedge
+
+Summary moved into "Current state" header above. Highlights:
+- 71/71 dwords non-zero pre-zero (SRAM-PUF-style random data)
+- 0/71 non-zero post-zero (zero loop works)
+- SKIPPING set_active per `bcm4360_test235_skip_set_active=1`
+- Clean BM-clear / -ENODEV / rmmod, host alive
+
+Combined with test.234 wedge → cheap-tier failed for THIS region.
+Code-reading then identified the random_seed write as the next
+candidate (see PRE-TEST.236 above).
+
+---
+
+
 ## PRE-TEST.235 (2026-04-23 00:xx BST, post-SMC-reset boot from test.234 wedge) — observable run of test.234's zero+verify, set_active SKIPPED (test.230 baseline + module param)
 
 ### Hypothesis

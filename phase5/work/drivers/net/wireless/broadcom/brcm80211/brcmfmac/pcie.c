@@ -90,6 +90,19 @@ static int bcm4360_test235_skip_set_active;
 module_param(bcm4360_test235_skip_set_active, int, 0644);
 MODULE_PARM_DESC(bcm4360_test235_skip_set_active, "BCM4360 test.235: skip brcmf_chip_set_active after zero+verify (1=skip, 0=normal test.234 path)");
 
+/* BCM4360 test.236: force the upstream Apple-style random_seed write right
+ * after the live NVRAM write. Upstream gates this block on otp.valid (which
+ * is FALSE on the BCM4360 path because OTP read is bypassed at probe), AND
+ * places it in dead code after an early -ENODEV return — so we never write
+ * the seed today. Apple BCM4360/firmware comment in upstream notes "Some
+ * Apple chips/firmwares expect a buffer of random data to be present before
+ * NVRAM" (sizeof(footer)+256 B with magic 0xfeedc0de). When this param is
+ * set, also disable the test.234 zero block (which would clobber the seed).
+ * Default 0 (no seed write — test.234/235 behaviour). */
+static int bcm4360_test236_force_seed;
+module_param(bcm4360_test236_force_seed, int, 0644);
+MODULE_PARM_DESC(bcm4360_test236_force_seed, "BCM4360 test.236: force Apple random_seed write before set_active (1=force, 0=do not write)");
+
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
  * stage=1: write IOCTL = FGC|CLK (coredisable in_reset_configure step)
@@ -2286,6 +2299,49 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			}
 			pr_emerg("BCM4360 test.188: post-NVRAM write done (%u bytes)\n",
 				 nvram_len);
+
+			/* test.236: write the upstream Apple-style random_seed
+			 * buffer that lives just below the NVRAM in TCM. Footer
+			 * (8 B: magic 0xfeedc0de + length 0x100) sits at
+			 * NVRAM_start - 8; 256 B of random bytes sit at
+			 * NVRAM_start - 8 - 256. Upstream wraps this in
+			 * `if (devinfo->otp.valid)` and places the block in the
+			 * post-return-ENODEV dead path (line ~2941), so the BCM4360
+			 * probe never writes the seed. With this module param set
+			 * we force the write and verify the footer magic landed.
+			 */
+			if (bcm4360_test236_force_seed) {
+				size_t rand_len = BRCMF_RANDOM_SEED_LENGTH;
+				struct brcmf_random_seed_footer footer = {
+					.length = cpu_to_le32(rand_len),
+					.magic = cpu_to_le32(BRCMF_RANDOM_SEED_MAGIC),
+				};
+				u32 footer_addr = address - sizeof(footer);
+				u32 rand_addr = footer_addr - rand_len;
+				u32 rb_magic, rb_length;
+
+				pr_emerg("BCM4360 test.236: writing random_seed footer at TCM[0x%05x] magic=0x%08x len=0x%x\n",
+					 footer_addr, BRCMF_RANDOM_SEED_MAGIC,
+					 (u32)rand_len);
+				brcmf_pcie_copy_mem_todev(devinfo, footer_addr,
+							  &footer,
+							  sizeof(footer));
+				pr_emerg("BCM4360 test.236: writing random_seed buffer at TCM[0x%05x] (%u bytes)\n",
+					 rand_addr, (u32)rand_len);
+				brcmf_pcie_provide_random_bytes(devinfo,
+								rand_addr);
+
+				/* verify footer magic + length readback */
+				rb_length = brcmf_pcie_read_tcm32(devinfo,
+								  footer_addr);
+				rb_magic = brcmf_pcie_read_tcm32(devinfo,
+								 footer_addr + 4);
+				pr_emerg("BCM4360 test.236: seed footer readback length=0x%08x magic=0x%08x (expect 0x%08x / 0x%08x)\n",
+					 rb_length, rb_magic,
+					 (u32)rand_len,
+					 BRCMF_RANDOM_SEED_MAGIC);
+			}
+
 			sharedram_addr_written =
 				brcmf_pcie_read_ram32(devinfo,
 						       devinfo->ci->ramsize - 4);
@@ -2523,6 +2579,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				 resetintr);
 			mdelay(30);
 
+			/* test.236: skip the test.234 zero block when forcing a
+			 * seed write, since the zero range overlaps the random_seed
+			 * area (footer at NVRAM_start - 8, random bytes 256 B
+			 * below) and would clobber it. */
+			if (!bcm4360_test236_force_seed) {
 			/* test.234: cheapest-tier shared-memory-struct probe.
 			 * Zero the upper TCM region [0x9FE00..0x9FF1C) — 284
 			 * bytes / 71 dwords — that is above the fw image and
@@ -2576,6 +2637,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pr_emerg("BCM4360 test.234: zero verify %u/%u non-zero (expect 0)\n",
 					 nz_post, count);
 			}
+			} /* end if (!bcm4360_test236_force_seed) for test.234 zero block */
 
 			if (bcm4360_test235_skip_set_active) {
 				pr_emerg("BCM4360 test.235: SKIPPING brcmf_chip_set_active (zero+verify-only run; test.230 baseline)\n");
