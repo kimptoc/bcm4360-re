@@ -1,5 +1,67 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.200 (2026-04-22) — extended TCM dump including fault address area
+
+### Hypothesis
+
+Test.199 caught the firmware assertion at `hndarm.c:397`. The assert
+includes `fa=0x0009cfe0` (fault address) which sits just above our
+test.199 dump end (`0x9cdc0`). Test.200 widens both dump ranges:
+
+- `0x96000..0x97200` (was `0x96e00..0x97200`): catches earlier console
+  ring-buffer history that may show what firmware was doing right
+  before the assert.
+- `0x9cc00..0x9d000` (was `0x9cc00..0x9cdc0`): covers the rest of
+  the console message text AND the fault address `0x0009cfe0`. May
+  reveal what the assert is actually checking for at that address.
+
+### Firmware-image analysis (already done — desktop-only)
+
+Found the assert call site in firmware: at offset `0x641b8` we see
+`MOVW r1, #0x18d` (= **397** decimal — the line number) followed by
+`LDR r0, =&"hndarm.c"` and a `BL` to the assert handler. Confirmed
+identity of the line.
+
+The return address from the captured ASSERT (`ra=0x000641cb`) is just
+past this `BL` instruction, with the standard Thumb LSB set. This
+gives us the function-level location of the assert: it's a routine
+that runs after `si_kattach`, performs some hardware/state check, and
+calls the assert handler with `r1=397`.
+
+We don't decompile the function (clean-room rule), but we now know
+*where* the failing check lives and can correlate test outcomes
+against changes to host-side state that might satisfy that check.
+
+### Implementation
+
+**chip.c** — marker rename `test.199` → `test.200`. PMU unchanged.
+
+**pcie.c** — widen `dump_ranges[]`:
+- Region 0: `0x96000..0x97200` (4608 B = 288 rows)
+- Region 1: `0x9cc00..0x9d000` (1024 B = 64 rows)
+
+Total 352 dump rows, ~1408 indirect-MMIO reads (~70 ms). Still cheap
+enough for a single end-of-dwell pass.
+
+### Build + pre-test
+
+- Module rebuilt clean.
+- PCIe state still clean (verified post-test.199 reboot).
+- Note: machine rebooted 07:24 (boot index 0) — test.199 ran cleanly,
+  reboot was after test, possibly unrelated. brcmfmac currently
+  loaded (test.199 left it loaded).
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Log → `test.200.journalctl.full.txt` (use `.full.txt` — the test
+script's truncated capture cuts off the dump rows).
+
+---
+
 ## POST-TEST.199 (2026-04-22) — BREAKTHROUGH 3: firmware is ASSERTING — not waiting
 
 Logs: `phase5/logs/test.199.journalctl.full.txt` (use `.full.txt`,

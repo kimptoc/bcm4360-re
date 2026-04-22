@@ -2025,8 +2025,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 * fields and any format-string templates.
 		 */
 		static const u32 dump_ranges[][2] = {
-			{0x96e00, 0x97200},	/* 1 KB around 0x9702c */
-			{0x9cc00, 0x9cdc0},	/* 448 B around 0x9cd48..0x9cdb8 */
+			{0x96000, 0x97200},	/* extended: catch earlier ring-buffer history */
+			{0x9cc00, 0x9d000},	/* extended: covers 0x9cdb0+ assert text continuation AND fa=0x9cfe0 */
 		};
 		static const u32 wide_offsets[40] = {
 			0x00000, 0x04000, 0x08000, 0x0c000,
@@ -2519,7 +2519,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				u32 lo = dump_ranges[j][0];
 				u32 hi = dump_ranges[j][1];
 
-				pr_emerg("BCM4360 test.199: dump range 0x%05x..0x%05x\n",
+				pr_emerg("BCM4360 test.200: dump range 0x%05x..0x%05x\n",
 					 lo, hi);
 				for (addr = lo; addr < hi; addr += 16) {
 					u32 w[4];
@@ -2536,7 +2536,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							(char)c : '.';
 					}
 					ascii[16] = '\0';
-					pr_emerg("BCM4360 test.199: 0x%05x: %08x %08x %08x %08x | %s\n",
+					pr_emerg("BCM4360 test.200: 0x%05x: %08x %08x %08x %08x | %s\n",
 						 addr, w[0], w[1], w[2], w[3],
 						 ascii);
 				}
