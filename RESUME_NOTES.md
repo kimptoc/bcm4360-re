@@ -1,5 +1,163 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.214 (2026-04-22) — locate "v = %d, wd_msticks = %d" format string + decode polled register
+
+### What POST-TEST.213 just delivered
+
+Three concrete results from forcing `min_res_mask = 0x17f`:
+
+1. **PMU bit 2 IS controllable.** Pre-release snapshot shows res_state went from
+   the long-standing `0x17b` to `0x17f` — bit 2 asserted as soon as the host
+   wrote min_res_mask. Stayed at 0x17f across all 12 dwell ticks. So the chip
+   *can* hold bit 2; nothing was missing in OTP/PLL config.
+
+2. **Bit 2 was a coincidence — not the polling target.** Despite res_state now
+   matching max_res_mask perfectly, firmware **still asserts at the same exact
+   instruction** (trap PC `0x000641cb` = 0x641ca | thumb-bit) — bit-identical
+   to test.211 and test.212.
+
+3. **Full assert message decoded** from trap-text dump (0x9cdb0..0x9ce10):
+   ```
+   141331.301 ASSERT in file hndarm.c line 397 (ra 000641cb, fa 0009cfe0)
+
+   v = 43, wd_msticks = 32
+   ```
+   - `v = 43` is the value firmware read from the polled register (or a count of
+     retries) — meaning is unknown until we find the format string
+   - `wd_msticks = 32` is a **software** watchdog timeout in milliseconds
+     (note: `pmuwatchdog` is 0, so this is firmware-managed)
+   - "ramstbydis" from earlier dump turns out to be the **function name**, not
+     the assert text. Firmware string area at 0x40670 has it as
+     `.hndarm.c\0ramstbydis\0pciedngl_isr...` — NUL-separated, so "ramstbydis"
+     is just the symbol containing the assert.
+
+### The new question
+
+What does `v = 43` actually represent? Three candidates:
+- **(a)** Value read from the polled hardware register `[r3, #0x1e0]`
+  — an unexpected value where firmware expected 0 (or a specific other value)
+- **(b)** Count of polling-loop iterations before timeout (the polling loop
+  actually ran 43 times in 32 ms = ~745µs/iteration, plausible for an MMIO
+  read + condition check)
+- **(c)** Some chip identifier (note: `ccrev = 43`, suspicious coincidence)
+
+The format string `"v = %d, wd_msticks = %d\n"` was NOT in our 0x40000..0x406c0
+strings dump. It lives in firmware text we haven't scanned. Finding it would
+tell us:
+- The exact context (which subsystem's wait timed out)
+- Whether v is a register read or a counter
+- Possibly the polled register's name in source
+
+### Implementation plan for test.214
+
+**Single new dump range** added: `0x40700..0x41000` (768 bytes / 48 rows). This
+is the firmware string area immediately after our existing 0x40000..0x406c0 dump,
+where additional debug strings most likely live (printf templates are typically
+co-located with their .c-file groupings).
+
+If "wd_msticks" string isn't in that range, expand to `0x41000..0x42000` in
+test.215.
+
+Also: leave `min_res_mask = 0x17f` patch in place. It's been proven safe (no
+crash) and proven a useful diagnostic baseline. Future tests inherit it.
+
+### Decision tree
+
+| Find | Interpretation | Next |
+|---|---|---|
+| Format string contains "wait", "timeout", "poll" | confirms (b) — v is iteration count | derive polling-loop period; trace what hardware bit firmware was waiting for |
+| Format string near "regulator", "pll", "xtal" keywords | confirms (a) — v is a register value; tells subsystem | targeted register dump for that subsystem |
+| Format string not in 0x40700..0x41000 | strings live further out | dump 0x41000..0x42000 in test.215 |
+
+### Build/run
+
+`min_res_mask=0x17f` patch already committed (chip.c). Adding only one
+dump_ranges entry plus marker bumps .213→.214.
+
+```
+make -C /home/kimptoc/bcm4360-re/phase5/work    # via kbuild
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.214.{run,journalctl,journalctl.full}.txt`.
+
+---
+
+## POST-TEST.213 (2026-04-22) — bit 2 was a coincidence; full assert message decoded
+
+Logs: `phase5/logs/test.213.{run,journalctl,journalctl.full}.txt`. Test ran
+cleanly; all 12 dwell ticks completed; KATSKATS canary intact; no machine crash.
+
+### Hypothesis check (forcing PMU bit 2 always-on)
+
+`min_res_mask` write succeeded:
+```
+test.188: CC-min_res_mask=0x0000017f (pre-release snapshot)   [was 0x13b]
+test.188: CC-res_state=0x0000017f (pre-release snapshot)      [was 0x17b]
+```
+
+All 12 dwell ticks: `res_state UNCHANGED at 0x17f`, `min_res_mask UNCHANGED at 0x17f`.
+Bit 2 stayed asserted the entire run. **PMU side is now pristine: every bit
+in max_res_mask is present in res_state.**
+
+### What still failed
+
+Trap data at 0x9cfe0 is **bit-for-bit identical** to test.211 and test.212:
+```
+0x9cfe0: 18002000 00062a98 000a0000 000641cb
+```
+- D11 base 0x18002000
+- Chip-info pointer 0x00062a98
+- TCM top 0x000a0000
+- Trap PC 0x000641cb (= 0x641ca | Thumb bit) — same place as before
+
+So firmware is hitting the same assert at hndarm.c:397, regardless of bit 2 state.
+**Conclusion: bit 2's stuck-low correlation in test.212 was a coincidence; the
+polling target is somewhere else.**
+
+### Bonus — full assert text decoded from 0x9cdb0..0x9ce10
+
+```
+141331.301 ASSERT in file hndarm.c line 397 (ra 000641cb, fa 0009cfe0)
+
+v = 43, wd_msticks = 32
+```
+
+(15 chars at start are likely a firmware-internal timestamp or version.)
+
+This is the most informative fragment we've ever recovered from the trap.
+Two new variables surfaced:
+- `v = 43` — the value-of-interest at assert time. Could be a register read,
+  iteration count, or a chip-related constant. Crucially, **43 == ccrev**.
+- `wd_msticks = 32` — software watchdog timeout in ms. Notably, the *PMU*
+  watchdog (pmuwatchdog) reads 0; this 32ms timeout is firmware-managed.
+
+The format string `"v = %d, wd_msticks = %d\n"` lives somewhere in firmware
+text we have not dumped (not in 0x40000..0x406c0). Finding it would tell us
+exactly what `v` represents and bound the polling target's domain.
+
+### Side-finding — earlier "ramstbydis" interpretation refined
+
+The 0x40670 dump showed `.hndarm.c\0ramstbydis\0pciedngl_isr...` (NUL-separated).
+"ramstbydis" is **the function name** containing the assert at line 397, not
+part of the assert message. So "ramstbydis" = "RAM standby disable" function,
+in which line 397's assert checks `v` against a wd-timeout condition.
+
+### Why this is good news
+
+We're closer than ever to the root cause:
+- PMU is fully healthy (no stuck resource bits)
+- Firmware boots, enters init code, executes `ramstbydis()`, polls something,
+  times out at 32ms with `v = 43`, asserts cleanly at hndarm.c:397
+- The assert handler runs (trap data + text written), which means firmware
+  ARM is alive and console-ring works
+- PCIe bus stays healthy after the assert (we read all dumps without MAbort)
+
+The next probe (test.214) just needs to find the format string to learn what
+`v = 43` represents.
+
+---
+
 ## PRE-TEST.213 (2026-04-22) — force min_res_mask=0x17f to pin PMU bit 2 permanently on
 
 ### Breakthrough from POST-TEST.212 dwell snapshots
