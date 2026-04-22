@@ -1,5 +1,98 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.221 (2026-04-22 14:45 BST) — ★★ BREAKTHROUGH: HAVEHT=YES after wider PMU masks ★★
+
+### Summary
+
+Test.221 proves the wider PMU resource-mask hypothesis. After widening
+both min_res_mask and max_res_mask to 0xffffffff on the BCM4360
+ChipCommon PMU (before the firmware download / ARM release), the
+ARM CR4 `clk_ctl_st` register reads **0x07030040 = HAVEHT(17)=YES,
+ALP_AVAIL(16)=YES** at the pre-halt probe. This is the first time
+HAVEHT has ever come up on this chip in this driver — resolves the
+test.219 blocker where FORCEHT latched but HAVEHT never asserted.
+
+Machine then hard-hung during `test.188` post-release TCM verification
+(256 × pr_emerg fw-sample compare lines pumped into kernel syslog in a
+tight loop). User did SMC reset; current boot is clean
+(`MAbort- SERR- DevSta clean, LnkSta 2.5GT/s x1`).
+
+### Key log lines (from boot -2, now captured in
+`phase5/logs/test.221.journalctl.{txt,full.txt}`)
+
+```
+test.193: chip=0x4360 ccrev=43 pmurev=17 pmucaps=0x10a22b11
+test.193: PMU WARs applied — chipcontrol#1 0x00000210->0x00000a10
+          pllcontrol#6=0x080004e2 #0xf=0x0000000e
+test.221: max_res_mask 0x0000013f -> 0xffffffff (wrote 0xffffffff)
+test.221: min_res_mask 0x0000013b -> 0xffffffff (wrote 0xffffffff)
+test.218: pre-halt CR4 clk_ctl_st=0x07030040
+          [HAVEHT(17)=YES ALP_AVAIL(16)=YES BP_ON_HT(19)=no
+           bit6=SET FORCEHT(1)=no FORCEALP(0)=no]
+```
+
+(FORCEHT=no yet HAVEHT=yes — HT is genuinely available at the PMU,
+not a forced latch like test.219.)
+
+### What this means
+
+- The BCM4360 PMU resource registers are not read-only: writing the
+  full 32-bit mask is accepted and read-back 0xffffffff (no clobber).
+- The chip's default `0x13f / 0x13b` is a conservative mask that does
+  not include the HT-clock-backing resource(s). Upstream `brcmfmac`
+  never touches these registers, which is why HT never came up.
+- With the wider mask the PMU brings up HT — satisfying the clock
+  dependency the test.219 ramstbydis wait was blocked on.
+- `wl` driver traces (when we get `wl` loading) should show the
+  specific bits `wl` sets; our next refinement is to narrow the mask
+  from `0xffffffff` to only the bits required. But for *now* the
+  broad mask is our unblock.
+
+### Crash cause (our own instrumentation, not the chip)
+
+The hang occurred during `brcmf_pcie_download_fw_nvram` → pre-release
+TCM verification, roughly half-way through the 256-entry fw-sample
+compare loop (111 `fw-sample` lines logged before freeze). Pumping
+256 × pr_emerg at ~3 MB of printk load overwhelms the kernel. Chip
+survived; host OS did not.
+
+### Decision: tame diagnostics, re-run as test.222
+
+Minimal diagnostic-only change for next test (PRE-TEST.222):
+
+- `pcie.c` — reduce `nr_fw_samples` **256 → 16** (coverage is
+  already known-good from prior tests; 16 × 28 KB across fw is
+  plenty to detect a bad write).
+- Bump the PMU mask markers `test.221` → `test.222` so we can
+  grep-confirm which module loaded (matches workflow from 220→221).
+- Everything else unchanged — wider PMU masks stay in; we **want**
+  to see whether firmware now makes progress past the previous
+  stall points with HAVEHT=YES.
+
+### Risk assessment
+
+- **Chip side:** unchanged from test.221. Wider masks worked once,
+  no hardware faults observed.
+- **Host side:** reducing log volume ≈16× should drop pre-release
+  dwell printk below the danger threshold.
+- **If firmware now runs further**, expect to see:
+  - TCM writes at previously-unchanged offsets (pmucontrol,
+    mailbox, OLMSG area).
+  - Possible D11 wrapper exit from RESET (test.185 blocker) once
+    firmware reaches BPHY/MAC bring-up.
+  - Still possible to hang if firmware issues DMA to an address we
+    haven't set up — harness has the BAR0-probe safety gate.
+
+### Run plan
+
+1. Edit `phase5/work/drivers/.../pcie.c` — `nr_fw_samples = 256 → 16`.
+2. Edit `phase5/work/drivers/.../chip.c` — bump 2× `test.221` → `test.222`.
+3. `make -C phase5/work`
+4. `sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh`
+5. Capture `phase5/logs/test.222.{run,journalctl,journalctl.full}.txt`
+
+---
+
 ## PRE-TEST.221 (2026-04-22 12:30 BST) — rerun wider-mask probe with pr_emerg markers
 
 ### What changed vs test.220
