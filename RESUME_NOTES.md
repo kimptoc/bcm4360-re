@@ -1,5 +1,112 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.201 (2026-04-22) — BREAKTHROUGH 4: 0x62a98 is the chip-info struct, not code
+
+Logs: `phase5/logs/test.201.journalctl.full.txt` (use the `.full.txt`).
+Run text: `phase5/logs/test.201.run.txt`. Test ran cleanly — no crash.
+
+### Headline result
+
+The mystery PC value `0x00062a98` from the trap data is **not a code
+address**. The live TCM around it contains a populated chip-info data
+structure that looks like Broadcom's `si_info_t`:
+
+```
+0x62a80: 00000000 00000000 00000000 00000000   ← header / unused
+0x62a90: 00000001 00000020 00000001 00000000   ← (0x62a98 here = 0x00000001)
+0x62aa0: 00000700 ffffffff 00000011 0000002b   ← 0x11=pmurev=17, 0x2b=ccrev=43
+0x62ab0: 58680001 00000003 00000011 10a22b11   ← caps, chiprev=3, pmurev, pmucaps
+0x62ac0: 0000ffff 00000000 000014e4 00000000   ← 0x14e4 = Broadcom vendor ID
+0x62ad0: 00000000 00004360 00000003 00000000   ← 0x4360 = chip ID, rev=3
+0x62ae0: 00008a4d 00000000 00000000 00000000   ← 0x8a4d = chipst (matches log)
+0x62af0: 00096f60 00000000 00000000 00000000   ← pointer into upper TCM
+```
+
+Every value in this struct matches the chip we already know we have:
+chiprev=3, ccrev=43, pmurev=17, pmucaps=0x10a22b11, chipst=0x8a4d.
+That's the firmware's `si_info_t` (or equivalent) for the local chip.
+
+**Hypothesis (b) confirmed**: the trap struct's "PC" slot is actually
+a *function argument* (likely `r0`/`r1` saved at exception entry, which
+the trap handler displays as PC because it dumps the full register
+file). The real instruction-pointing value is `ra=0x000641cb` — the
+LR — which we already located in code at `0x641b8`'s `BL <assert>`.
+
+### Control region (assert site) — confirmed code
+
+```
+0x641a0: fc9cf79d 682b3e0a 21e0f8d3 3f00f412
+0x641b0: 2e09d101 f8d3d1f3 f41331e0 d1043f00
+0x641c0: f240481c f79d118d 6ca3f80f 7f80f413
+0x641d0: 2100d00d 4620460b 6200f44f fef8f7ff
+```
+
+Live TCM bytes in this range have the typical Thumb-2 encoding density:
+`f240` (MOVW), `f80f` (LDRB.W literal pool form), `4620 460b`
+(MOV r0,r4 ; MOV r3,r1), `bl` calls (`f7ff fef8`). Matches exactly the
+disassembly we did desktop-side — control passes, our offset model is
+right for this code region.
+
+### Important secondary finding
+
+The chip-info struct's last populated field at `0x62af0` holds
+`0x00096f60` — a pointer into upper TCM. **Our console-buffer dump
+in test.200 found readable text starting at `0x97000`**, just past
+`0x96f60`. So `0x96f60` is the address of the `hndrte_cons` descriptor
+header (which is typically a small struct followed by the ring buffer
+itself). Reading that descriptor will tell us:
+
+- Ring base address
+- Ring size
+- Current write index (so we can know where the *latest* console
+  message is, instead of guessing from text positions)
+- Possibly a "buffer-full" or "wrap" flag
+
+### Implications
+
+1. **The assert is operating on this chip-info struct.** With "v = 43"
+   in the assert message and `ccrev=43` in the struct, the failing
+   check is almost certainly something *about* `ccrev` — either:
+   - Validating ccrev is in a supported list and 43 isn't there (in
+     this firmware build), OR
+   - Looking up a per-ccrev table entry and finding it null/missing.
+
+2. **The chip-info struct is built by the firmware's `si_attach` /
+   `si_kattach`** (hence the console-log line "si_kattach done.
+   ccrev = 43, wd_msticks = 32" appearing right before the assert).
+   So `si_kattach` succeeds, but the *next* function — which uses the
+   built struct — finds `ccrev=43` unacceptable.
+
+3. **Trap-handler register layout demystified.** The slot we were
+   calling "PC" was carrying the asserted function's argument, not
+   the PC. The trap handler likely dumps `r0..r12`, `sp`, `lr`,
+   `pc`, `cpsr` in some order. The 16-word region at 0x9cf60..0x9d000
+   is consistent with that: 16 slots, the right ballpark.
+
+### Next step (test.202)
+
+Two lines of attack, in increasing order of investment:
+
+1. **Read the hndrte_cons descriptor at `0x96f60`**: 64-byte dump
+   should reveal the ring metadata and exact write index. From there
+   we can find the most recent console line precisely (no more
+   pattern-matching the duplicate text shadows).
+
+2. **Read the chip-info struct's table-lookup field**: if there's
+   a per-ccrev table with a null slot for 43, the address of that
+   table will be derivable from instructions immediately before the
+   assert (around `0x6418c..0x641b6` — between any earlier prologue
+   and the `MOVW r1,#0x18d` line-number store). Read that range
+   live and decode the literal pool addresses (`LDR Rx, [pc,#imm]`)
+   to find what value the assert is comparing against.
+
+Plan to implement (1) first — it's a 4-row dump (~1 ms). If that
+gives us a clean "latest console message" pointer, we can drop a lot
+of the dumb text-window scanning that's currently giving us false
+duplicates.
+
+---
+
 ## PRE-TEST.201 (2026-04-22) — image translation: read TCM around trap PC and assert site
 
 ### Hypothesis
