@@ -2089,7 +2089,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		u32 pre_wide[40] = {0};	/* test.188: 16-KB grid across 640-KB TCM */
 		u32 pre_tail[16] = {0};	/* test.188: last 64 B of TCM */
 		u32 pre_bp[BRCMF_BP_REG_COUNT] = {0};	/* test.188: backplane regs */
-		const u32 nr_fw_samples = 256;	/* test.188: fw-sample count */
+		const u32 nr_fw_samples = 16;	/* test.222: reduced 256->16 (log storm crashed host in test.221) */
 		u32 *pre_fw_sample = NULL;	/* test.188: heap-alloc'd — see below */
 		u32 *fw_sample_offsets = NULL;	/* heap-alloc'd offsets for each sample */
 		/* test.197: fine-grain scan over 0x90000..0xa0000 (upper TCM

@@ -1193,7 +1193,7 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		before_max = chip->ops->read32(chip->ctx, max_addr);
 		chip->ops->write32(chip->ctx, max_addr, 0xffffffff);
 		after_max = chip->ops->read32(chip->ctx, max_addr);
-		pr_emerg("BCM4360 test.221: max_res_mask 0x%08x -> 0x%08x (wrote 0xffffffff)\n",
+		pr_emerg("BCM4360 test.222: max_res_mask 0x%08x -> 0x%08x (wrote 0xffffffff)\n",
 			  before_max, after_max);
 
 		/* test.220: also widen min_res_mask.
@@ -1208,7 +1208,7 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		before_min = chip->ops->read32(chip->ctx, min_addr);
 		chip->ops->write32(chip->ctx, min_addr, 0xffffffff);
 		after_min = chip->ops->read32(chip->ctx, min_addr);
-		pr_emerg("BCM4360 test.221: min_res_mask 0x%08x -> 0x%08x (wrote 0xffffffff — learning probe)\n",
+		pr_emerg("BCM4360 test.222: min_res_mask 0x%08x -> 0x%08x (wrote 0xffffffff — learning probe)\n",
 			  before_min, after_min);
 	}
 

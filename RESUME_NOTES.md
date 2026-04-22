@@ -1,5 +1,66 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.222 (2026-04-22 14:50 BST) — re-run wider-mask probe with reduced log volume
+
+### What changed vs test.221
+
+- `pcie.c` — `nr_fw_samples` reduced **256 → 16**. test.221 crashed
+  the host while pumping 256 × pr_emerg fw-sample lines at the kernel
+  syslog; at 16 samples the log volume is ≈16× lower and should stay
+  well below the soft-lockup threshold.
+- `chip.c` — PMU mask-write markers bumped `test.221 → test.222` so
+  we can grep-confirm the new module loaded.
+- Wider PMU mask write itself is **unchanged** — still
+  `min_res_mask = max_res_mask = 0xffffffff` on the CC PMU.
+
+### Build state (verified just now)
+
+- `brcmfmac.ko` rebuilt 14:49 Apr 22; `strings` shows `test.222`
+  markers in chip.o. No compile errors; one harmless unused-function
+  warning on `brcmf_pcie_write_ram32`.
+- Kernel 6.12.80, vermagic matches.
+
+### Pre-test hardware state (just checked)
+
+- `lspci -vvv -s 03:00.0`: `MAbort- SERR- DevSta clean, LnkSta 2.5GT/s
+   x1, ASPM Disabled` → clean post-SMC-reset, safe to probe.
+- No brcmfmac module loaded (`lsmod | grep brcm` empty).
+
+### Hypothesis
+
+With HAVEHT now available (proven in test.221) AND log volume tamed,
+we should see firmware progress **past** the previous stall points:
+
+1. Pre-release `clk_ctl_st` reproducibly = HAVEHT=YES (regression check).
+2. ARM CR4 release proceeds (as before).
+3. Post-release TCM probes: we expect some cells that were UNCHANGED
+   in tests 184–197 to now change — firmware reaching NVRAM parser,
+   mailbox setup, or even initial console output.
+4. D11 wrapper might exit RESET (was held at 0x01 through test.185).
+
+### Decision tree
+
+| Post-dwell observation | Interpretation |
+|---|---|
+| TCM cells change, mailboxint bits set | Firmware running further — advance to next mailbox/state probe |
+| Same TCM as test.184 (pmucontrol bit-9 flip only) | HAVEHT not sufficient; inspect other resource deps (D11 reset, GCI, otp) |
+| Host crashes again during dwell | Tighten log further or comment out the entire fw-sample block |
+| Chip reports AER / MCE | HT clock mask was too aggressive — back off to max-only |
+
+### Run plan
+
+```bash
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Expected artifacts:
+- `phase5/logs/test.222.run.txt`
+- `phase5/logs/test.222.journalctl.txt` (post-run grep)
+- `phase5/logs/test.222.journalctl.full.txt` (post-run full boot dump)
+- On crash: capture from `journalctl -k -b -1` next boot.
+
+---
+
 ## POST-TEST.221 (2026-04-22 14:45 BST) — ★★ BREAKTHROUGH: HAVEHT=YES after wider PMU masks ★★
 
 ### Summary
