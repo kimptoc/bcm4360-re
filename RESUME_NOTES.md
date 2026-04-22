@@ -1,5 +1,79 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.226 RERUN (2026-04-22 19:55 BST, boot 0) — wedged at same test.158 line as first run; 2/2 reproducibility
+
+### Headline
+
+The test.226 rerun on boot -1 (19:50:54 → 19:51:13 — 19 s from insmod to
+wedge) stopped at the exact same line as the first test.226 run:
+`test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)`. Two runs of
+the same .ko, same wedge point. SMC reset between boot -1 and boot 0
+done; boot 0 clean (BAR0 20-23 ms fast-UR, lsmod clean, no MAbort/SERR).
+
+### What this does — and does not — prove
+
+The 2/2 reproducibility rules out "one-off flake". But it does NOT prove
+the wedge is between the ARM CR4 print and the next pr_emerg in source
+— source has only `pr_emerg("about to pci_clear_master")` + `msleep(300)`
+between them, and the pr_emerg precedes the msleep. A missing pr_emerg
+from the log is more likely **journald tail truncation from a deeper
+wedge** than a wedge on a trivial pr_emerg line.
+
+Also consider: test.225.rerun (boot -3) got past this exact probe and
+reached the full FW download. Nothing in the test.226 diff (26 lines
+of pr_emerg+msleep inserted INSIDE `brcmf_pcie_download_fw_nvram`) is
+upstream of this probe. Either the regression is stochastic (not 2/2
+but flip-a-coin leaning bad) or layout-perturbation of the .ko hit a
+PCIe timing window — unlikely but not eliminable from code alone.
+
+### Decision: try ONE more test.226 rerun as binomial discriminator
+
+Three outcomes possible on this next rerun (boot 0 → boot -1 of next
+session):
+
+1. **Wedges at test.158 again (3/3)** — the wedge is reproducible at
+   this flow point. Build test.227 that pivots to **durable logging**
+   (netconsole or `earlyprintk=serial`) rather than more pr_emergs —
+   if tail truncation is the real story, more breadcrumbs are wasted.
+
+2. **Passes test.158 and reaches FW download** — 2/3 failure rate → it's
+   stochastic with high incidence. test.226's 12 downstream breadcrumbs
+   become useful again; interpret per the original decision tree
+   (copy from the entry further down).
+
+3. **Wedges somewhere different** — new information. Redesign from there.
+
+Hypothesis to record for match-against: **I expect a wedge at test.158
+again** (outcome 1). Reason: two identical runs hitting the same line
+is stronger than one — Bayesian lean toward reproducible. If it passes,
+I'll treat that as evidence of stochasticity and pivot test.227
+accordingly.
+
+### Hardware state on current boot 0 (19:55 onward, uptime ~1 min)
+
+- `lspci -vvv -s 03:00.0`: Control `I/O- Mem- BusMaster-` (fresh post-boot,
+  nothing enabled). MAbort-, SERR-, DEVSEL=fast. Clean.
+- `enable=0`, `power_state=unknown`
+- BAR0 `dd` wall-clock: 23 / 21 / 21 / 20 ms — fast-UR, well under 40 ms
+- `lsmod | grep brcm`: empty
+- `brcmfmac.ko` unchanged since 19:40 (same test.226 build; 12 markers
+  present per `strings`)
+
+### Run
+
+```bash
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Expected artifacts:
+- `phase5/logs/test.N.run.txt` (wrapper output)
+- `phase5/logs/test.N.journalctl.txt` (grep-filtered)
+- `phase5/logs/test.N.journalctl.full.txt` (whole boot, post-recovery)
+
+If host wedges: capture via `sudo journalctl -k -b -1` from next boot.
+
+---
+
 ## POST-TEST.226 (2026-04-22 19:45 BST, boot 0) — EARLIER wedge than test.225.rerun, NONE of the 12 breadcrumbs fired
 
 ### Headline
