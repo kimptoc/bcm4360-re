@@ -1,5 +1,72 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.204 (2026-04-22) — extend chip-info down + read strings + pre-CMP code
+
+### Hypothesis
+
+Three small additions to the dump close several open puzzles from test.203.
+
+1. **`0x62a00..0x62a80` (8 rows)** — chip-info struct lower half.
+   The assert literal pool holds pointers to `0x62a08` and `0x62a0c`,
+   both below our current dump start. Whatever values are there,
+   the assert routine is reading them.
+
+2. **`0x40660..0x406c0` (6 rows)** — string region. Reads the
+   filename "hndarm.c" at `0x40671` and the format string at
+   `0x4067a` literally. Confirms our reading of the assert message
+   format and may show preceding/following strings that hint at
+   the calling-function context.
+
+3. **`0x64160..0x6418c` (4 rows)** — instructions immediately before
+   the `CMP r6, #9` at `0x641b2`. Want to find the `LDR r6, [...]`
+   that loads r6, which tells us *which struct* and *which field*
+   r6 holds the value of. That's the actual smoking gun for "what
+   does the firmware expect?".
+
+### Implementation
+
+**chip.c** — bump marker `test.203` → `test.204`.
+
+**pcie.c** — replace `dump_ranges[]`:
+
+| Range              | Purpose                                              | Rows |
+|--------------------|------------------------------------------------------|-----:|
+| `0x40660..0x406c0` | Filename + format-string text                        |    6 |
+| `0x64160..0x641e0` | Pre-CMP code + assert call-site (extended down)      |   10 |
+| `0x64200..0x64280` | Literal pool                                         |    8 |
+| `0x62a00..0x62b80` | Chip-info struct (extended down + neighbours)        |   24 |
+| `0x96f40..0x96fc0` | hndrte_cons descriptor                               |    8 |
+| `0x97000..0x97200` | Console ring                                         |   32 |
+| `0x9cc00..0x9d000` | Trap data + assert text                              |   64 |
+
+Total = 152 rows ≈ 30 ms. Acceptable.
+
+### Build + pre-test
+
+- About to rebuild module.
+- PCIe state: clean post-test.203.
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.204.journalctl.full.txt`.
+
+### Expected outcomes
+
+- **String confirmation**: bytes at 0x40671 and 0x4067a should
+  spell "hndarm.c\0" and the assert format. Definitive.
+- **Chip-info lower half**: shows what's stored at `0x62a08`/`0x62a0c`
+  that the assert routine consults.
+- **r6 source**: a `LDR r6, [Rs, #imm]` will give us the struct
+  base register and offset; chained back through earlier code to
+  identify the structure type. Perhaps directly identifiable from
+  Broadcom's open driver source (`brcmfmac` or upstream Linux).
+
+---
+
 ## POST-TEST.203 (2026-04-22) — literal pool decoded + chip-info core table found
 
 Logs: `phase5/logs/test.203.journalctl.full.txt`. Run text:
