@@ -2060,6 +2060,24 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			  bar2_probe == 0xffffffff ? "(0xffffffff — CTO/error)" :
 						     "(real value — BAR2 accessible)");
 		mdelay(300);
+
+		/* test.233: TCM persistence probe — read two cells at
+		 * 0x90000 / 0x90004 (past 442 KB fw image, before NVRAM
+		 * slot at 0x9ff1c). Read happens after chip_attach + its
+		 * probe-start SBR. Interpretation:
+		 *   Run 1 (fresh SMC-reset boot): expect 0 / garbage
+		 *   Run 2 (same boot, no reset): expect magic from Run 1
+		 *     → if seen, TCM survives rmmod/insmod + probe-start SBR
+		 *   Run 3 (after SMC reset + reboot): expect magic from Run 2
+		 *     → if seen, TCM survives SMC reset; logger is viable
+		 *     → if 0, SMC reset wipes TCM; pick a different transport
+		 */
+		{
+			u32 persist_pre_a = brcmf_pcie_read_tcm32(devinfo, 0x90000);
+			u32 persist_pre_b = brcmf_pcie_read_tcm32(devinfo, 0x90004);
+			pr_emerg("BCM4360 test.233: PRE-READ TCM[0x90000]=0x%08x TCM[0x90004]=0x%08x (expect 0 fresh, 0xDEADBEEF/0xCAFEBABE if preserved)\n",
+				 persist_pre_a, persist_pre_b);
+		}
 	}
 
 	if (devinfo->pdev->device == BRCM_PCIE_4360_DEVICE_ID) {
@@ -2430,29 +2448,31 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						"ON" : "OFF",
 					 mmio_guard);
 
-				/* test.232: SKIP pci_set_master before set_active.
-				 * Leading theory after test.230/231: firmware-
-				 * initiated DMA to unpopulated shared-memory rings
-				 * hangs the bus. If DMA-target-missing is the cause,
-				 * BM=OFF makes device-side DMA TLPs fail-fast at the
-				 * root complex instead of stalling waiting for a
-				 * completion. Binary discriminator:
-				 *   host survives → DMA-target-missing confirmed
-				 *   host wedges   → wedge is not DMA-bound
+				/* test.233: restore pci_set_master (test.230
+				 * baseline) — test.232 proved BM=OFF did not
+				 * prevent the wedge, so pure DMA-completion-waiting
+				 * is falsified. For test.233 (TCM persistence
+				 * probe) we want the cleanest proven-safe probe
+				 * path, which is test.230 (set_active SKIPPED,
+				 * pci_set_master enabled). No functional change
+				 * here vs test.230/231.
 				 */
-				pr_emerg("BCM4360 test.232: SKIPPING pci_set_master — BM stays OFF into set_active\n");
+				pr_emerg("BCM4360 test.226: before pci_set_master\n");
+				msleep(5);
+				pci_set_master(devinfo->pdev);
+				pr_emerg("BCM4360 test.226: after pci_set_master\n");
 				msleep(5);
 				pci_read_config_word(devinfo->pdev,
 						     PCI_COMMAND,
 						     &cmd_post_bm);
-				pr_emerg("BCM4360 test.232: post-skip PCI_COMMAND=0x%04x BM=%s (expect OFF)\n",
+				pr_emerg("BCM4360 test.188: pci_set_master done; PCI_COMMAND=0x%04x BM=%s (before set_active)\n",
 					 cmd_post_bm,
 					 (cmd_post_bm & PCI_COMMAND_MASTER) ?
 						"ON" : "OFF");
 
 				mmio_guard = brcmf_pcie_read_reg32(devinfo,
 						devinfo->reginfo->mailboxint);
-				pr_emerg("BCM4360 test.232: post-skip MMIO guard mailboxint=0x%08x (endpoint still responsive)\n",
+				pr_emerg("BCM4360 test.188: post-BM-on MMIO guard mailboxint=0x%08x (endpoint still responsive)\n",
 					 mmio_guard);
 			}
 			pr_emerg("BCM4360 test.226: past BusMaster dance — entering FORCEHT block\n");
@@ -2493,37 +2513,29 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			pr_emerg("BCM4360 test.219: calling brcmf_chip_set_active resetintr=0x%08x (FORCEHT pre-applied)\n",
 				 resetintr);
 			mdelay(30);
-			pr_emerg("BCM4360 test.226: immediately before brcmf_chip_set_active()\n");
-			msleep(5);
-			sa_rc = brcmf_chip_set_active(devinfo->ci,
-						      resetintr);
-			pr_emerg("BCM4360 test.226: immediately after brcmf_chip_set_active() returned\n");
-			msleep(5);
-			pr_emerg("BCM4360 test.188: brcmf_chip_set_active returned %s\n",
-				 sa_rc ? "true" : "false");
 
-			/* test.231: single-run timing bisect to locate
-			 * *when* in fw startup the bus-wide stall lands.
-			 * Breadcrumbs at 10/50/100/200/300/500/700/900/1000 ms
-			 * from set_active return. The last breadcrumb that
-			 * lands in the journal reveals the upper bound on
-			 * the wedge window. Fast (<100 ms) = fw hits bus
-			 * instantly (DMA-target-missing shape); slow
-			 * (>500 ms) = fw runs some init then stumbles.
-			 *
-			 * Post-set_active probe block remains at #if 0 below —
-			 * one variable at a time (probes stay off).
+			/* test.233: TCM persistence probe run — write magic
+			 * pattern as late as possible in the probe, then
+			 * SKIP brcmf_chip_set_active (test.230 baseline; the
+			 * only known-safe path). The next probe run reads
+			 * TCM[0x90000/4] early and compares against the
+			 * magic to decide whether TCM persisted through
+			 * whatever reset separated the two runs.
 			 */
-			pr_emerg("BCM4360 test.231: dwell start — breadcrumbs every ~100 ms to t=1000ms\n");
-			msleep(10);  pr_emerg("BCM4360 test.231: t=10ms\n");
-			msleep(40);  pr_emerg("BCM4360 test.231: t=50ms\n");
-			msleep(50);  pr_emerg("BCM4360 test.231: t=100ms\n");
-			msleep(100); pr_emerg("BCM4360 test.231: t=200ms\n");
-			msleep(100); pr_emerg("BCM4360 test.231: t=300ms\n");
-			msleep(200); pr_emerg("BCM4360 test.231: t=500ms\n");
-			msleep(200); pr_emerg("BCM4360 test.231: t=700ms\n");
-			msleep(200); pr_emerg("BCM4360 test.231: t=900ms\n");
-			msleep(100); pr_emerg("BCM4360 test.231: t=1000ms dwell done; proceeding to BM-clear + release\n");
+			pr_emerg("BCM4360 test.233: writing magic TCM[0x90000]=0xDEADBEEF TCM[0x90004]=0xCAFEBABE\n");
+			brcmf_pcie_write_tcm32(devinfo, 0x90000, 0xDEADBEEF);
+			brcmf_pcie_write_tcm32(devinfo, 0x90004, 0xCAFEBABE);
+			{
+				u32 vpa = brcmf_pcie_read_tcm32(devinfo, 0x90000);
+				u32 vpb = brcmf_pcie_read_tcm32(devinfo, 0x90004);
+				pr_emerg("BCM4360 test.233: POST-WRITE readback TCM[0x90000]=0x%08x TCM[0x90004]=0x%08x (expect DEADBEEF/CAFEBABE)\n",
+					 vpa, vpb);
+			}
+
+			pr_emerg("BCM4360 test.233: SKIPPING brcmf_chip_set_active — resetintr=0x%08x NOT written to CR4 (TCM-persistence probe run, test.230 baseline)\n",
+				 resetintr);
+			msleep(1000);
+			pr_emerg("BCM4360 test.233: 1000 ms dwell done (no fw activation); proceeding to BM-clear + release\n");
 #if 0
 			mdelay(20);
 			brcmf_pcie_probe_armcr4_state(devinfo,

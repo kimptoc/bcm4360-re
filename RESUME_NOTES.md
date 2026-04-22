@@ -126,6 +126,138 @@ to that host address never get a completion; bus stalls.
 ---
 
 
+## PRE-TEST.233 (2026-04-22 22:25 BST, fresh SMC-reset boot) — TCM persistence probe: does SMC reset wipe TCM?
+
+### Hypothesis
+
+We don't know whether TCM (chip's internal SRAM, mapped via BAR2)
+survives an SMC reset. The answer determines whether the TCM ring-
+buffer logger (our strongest remaining wedge-timing transport) is
+viable at all. Design: write a magic pattern to a known-safe TCM
+offset on one run, read it back on a later run, and log survival.
+
+### Design — 3 runs across 1 SMC reset
+
+Each run uses the test.230 baseline probe path (FORCEHT ✓,
+pci_set_master ✓, **`brcmf_chip_set_active` SKIPPED**). No wedge
+risk in any run — this exact path ran cleanly end-to-end in
+test.230. Probe writes a magic pattern to TCM[0x90000] /
+TCM[0x90004] as late as possible in the probe, then dwells
+1000 ms, then does clean BM-clear + release → -ENODEV. Driver
+rmmods cleanly.
+
+Offset 0x90000 is past the 442 KB firmware image (last fw byte at
+0x6bf78) and before the NVRAM slot (0x9ff1c), so it's untouched
+by the normal fw/NVRAM writes.
+
+| Run | Context | Pre-read expected (if TCM preserved) | Pre-read expected (if wiped) |
+|---|---|---|---|
+| 1 | fresh SMC-reset boot, first insmod | 0 / garbage (baseline — no prior write) | 0 / garbage (same) |
+| 2 | same boot, second insmod after rmmod | 0xDEADBEEF / 0xCAFEBABE | 0 / garbage → probe-start SBR wipes TCM |
+| 3 | after SMC reset + reboot, first insmod | 0xDEADBEEF / 0xCAFEBABE | 0 / garbage → SMC reset wipes TCM |
+
+Run 2 is a bonus: tells us whether the driver's own probe-start
+SBR (via bridge) wipes TCM. If SBR itself wipes, cross-boot
+persistence via the driver path is impossible.
+
+### Code change
+
+`drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c` in
+`brcmf_pcie_download_fw_nvram`:
+
+1. **Restored** test.232's SKIP of `pci_set_master` → `pci_set_master`
+   called as in test.230 baseline. No functional difference with
+   set_active skipped, but matches a proven-clean path.
+2. **Added pre-read** (near function entry, after the BAR2 probe):
+   reads TCM[0x90000] and [0x90004], logs as
+   `test.233: PRE-READ TCM[0x90000]=... TCM[0x90004]=...`.
+3. **Added write + verify + skip-set_active** (where the
+   brcmf_chip_set_active call used to be, replacing test.231's 10
+   timing dwells): writes 0xDEADBEEF to TCM[0x90000] and
+   0xCAFEBABE to TCM[0x90004], logs, reads back, logs. Then a
+   `test.233: SKIPPING brcmf_chip_set_active` marker, 1000 ms
+   dwell, `dwell done` marker.
+
+All other test.230 breadcrumbs (fw download, TCM verify, NVRAM
+write, pre-release snapshots, FORCEHT, pci_set_master, BM-clear,
+-ENODEV return) retained.
+
+### Build status — REBUILT CLEAN (2026-04-22 22:23 BST)
+
+`brcmfmac.ko` 14249552 bytes. `strings` confirms 5 test.233
+breadcrumbs present and 0 test.232 leftovers:
+- `test.233: PRE-READ TCM[0x90000]=0x%08x TCM[0x90004]=0x%08x ...`
+- `test.233: writing magic TCM[0x90000]=0xDEADBEEF TCM[0x90004]=0xCAFEBABE`
+- `test.233: POST-WRITE readback TCM[0x90000]=0x%08x ... (expect DEADBEEF/CAFEBABE)`
+- `test.233: SKIPPING brcmf_chip_set_active ...`
+- `test.233: 1000 ms dwell done ...`
+
+### Hardware state (post-SMC-reset boot at ~21:54 BST, user did SMC reset)
+
+- Boot 0 started 2026-04-22 21:54:48 BST (following test.232 wedge
+  reboot + user SMC reset).
+- `lspci -vvv -s 03:00.0`: Control `Mem+ BusMaster+`, Status
+  MAbort- (clean), DevSta CorrErr+ UnsupReq+ (sticky) AuxPwr+
+  TransPend-, LnkCtl ASPM L0s L1 Enabled CommClk+, LnkSta 2.5GT/s
+  x1. Matches post-SMC-reset idiom from prior tests.
+- No modules loaded. pstore empty.
+
+### Run sequence (this PRE entry covers all 3 runs; POST will
+summarize outcomes)
+
+```bash
+# Run 1: fresh SMC-reset boot — captures baseline TCM state
+sudo phase5/work/test-brcmfmac.sh   # (or insmod equivalent)
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil
+
+# Run 2: same boot, tests probe-SBR persistence
+sudo phase5/work/test-brcmfmac.sh
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil
+
+# >>> Intermission: user SMC-resets host. Reboot. <<<
+
+# Run 3: post-SMC-reset boot — tests SMC-reset persistence
+sudo phase5/work/test-brcmfmac.sh
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil
+```
+
+The harness test-brcmfmac.sh already arms NMI watchdog / panic
+sysctls + captures run artifacts. Each run's journal is read
+live (no wedge expected).
+
+### Decision tree
+
+| Run 2 pre-read | Run 3 pre-read | Interpretation | Next |
+|---|---|---|---|
+| magic | magic | **TCM survives everything** (SBR + SMC reset). Logger fully viable. | Build TCM ring-buffer logger |
+| magic | 0/garbage | TCM survives SBR within boot, wiped by SMC reset. Logger only helps if host survives without SMC reset (rare). | Investigate alt transports or proceed to shared-memory struct implementation |
+| 0/garbage | (any) | Probe-start SBR wipes TCM. Logger cannot use driver-probe path to seed state cross-boot. | Shared-memory-struct forward step, or alternative reset path |
+| 0/garbage | magic | Contradictory — SBR wipes but SMC reset preserves? Unlikely; re-investigate. | Rerun runs 1-2 to confirm baseline |
+
+### Logging / watchdog arming
+
+```bash
+echo 1 | sudo tee /proc/sys/kernel/nmi_watchdog
+echo 1 | sudo tee /proc/sys/kernel/hardlockup_panic
+echo 1 | sudo tee /proc/sys/kernel/softlockup_panic
+echo 30 | sudo tee /proc/sys/kernel/panic
+sync
+```
+
+No wedge expected — test.230 baseline. If a wedge somehow occurs,
+the test design catches it the same way test.230 would (BM-clear
++ -ENODEV or visible hang).
+
+### Expected artifacts
+
+- `phase5/logs/test.233.run1.journal.txt` — current-boot journal after run 1
+- `phase5/logs/test.233.run2.journal.txt` — current-boot journal after run 2 (both runs visible)
+- `phase5/logs/test.233.run3.journal.txt` — boot -1 or boot 0 journal after run 3 (depending on whether host survived; expected survive)
+- PRE/POST lspci captures for each run
+
+---
+
+
 ## POST-TEST.232 (2026-04-22 21:52 BST, boot -1 journal captured) — BM=OFF did NOT prevent wedge; DMA-completion-waiting theory falsified
 
 ### Headline
