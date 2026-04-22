@@ -1,5 +1,47 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.206 (2026-04-22) — ramstbydis=1 also no effect; revert and pivot
+
+Logs: `phase5/logs/test.206.journalctl.full.txt`. Run text:
+`phase5/logs/test.206.run.txt`. Test ran cleanly — no crash.
+
+### Result: identical assert (third time)
+
+Same `hndarm.c:397`, same `v = 43`, same trap data
+`18002000 00062a98 000a0000 000641cb` at `0x9cfe0`. Adding
+`ramstbydis=1` (test.206) and `ramstbydis=0` (test.205) both
+produced byte-identical results — and identical to the
+no-ramstbydis baseline (test.204).
+
+### Conclusion (NVRAM angle)
+
+The firmware **either does not consume the `ramstbydis` NVRAM
+variable in this code path, or our NVRAM isn't reaching the
+firmware at all**. The latter is concerning enough to verify
+directly in test.207.
+
+### Plan for test.207 — three concurrent probes
+
+1. **Revert NVRAM**: remove the `ramstbydis=1` line — restore the
+   pre-205 NVRAM. (Backup is already at
+   `phase5/work/nvram-backup-pre-205.txt`.)
+
+2. **Verify NVRAM actually reached firmware**: add a dump range at
+   the top of TCM (`0x9ff00..0xa0000`) where Broadcom firmwares
+   typically place the NVRAM blob. If we see our key=value pairs
+   there, NVRAM is being delivered. If zeros / random, NVRAM isn't
+   loading at the address the firmware reads from.
+
+3. **Find r6's source**: add wider code dump
+   `0x64100..0x64160` (6 rows) — instructions before the
+   pre-CMP region we already dumped. Look for an `LDR r6, [Rs,
+   #imm]` that initializes r6.
+
+Cost: small NVRAM dump (~16 rows) + small code dump (6 rows) =
++22 rows. Same dump pipeline.
+
+---
+
 ## PRE-TEST.206 (2026-04-22) — try ramstbydis=1; second NVRAM probe
 
 ### Hypothesis
