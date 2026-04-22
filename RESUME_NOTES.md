@@ -1,5 +1,104 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.199 (2026-04-22) — BREAKTHROUGH 3: firmware is ASSERTING — not waiting
+
+Logs: `phase5/logs/test.199.journalctl.full.txt` (use `.full.txt`,
+the test script's truncated `.journalctl.txt` cuts off the dump rows;
+they appear earlier in the journal than the post-dwell fine scan that
+fills the tail). Run text: `phase5/logs/test.199.run.txt`.
+
+### Headline result
+
+The firmware writes a `hndrte_cons`-style **debug console ring
+buffer** into upper TCM. Decoding the dump:
+
+```
+Found chip type AI (0x15034360)
+.125888.000 Chipc: rev 43, caps 0x58680001, chipst 0x8a4d
+                   pmurev 17, pmucaps 0x10a22b11
+.125888.000 si_kattach done. ccrev = 43, wd_msticks = 32
+.134592.747 ASSERT in file hndarm.c line 397 (ra 000641cb, fa 0009cfe0)
+```
+
+The firmware image (`/lib/firmware/brcm/brcmfmac4360-pcie.bin`)
+contains the matching format strings — confirmed:
+- `"Found chip type AI (0x%08x)"`
+- `"ASSERT in file %s line %d (ra %p, fa %p)"`
+- Source files referenced include `hndarm.c`, `hndrte_cons.c`,
+  `hndrte.c`, `hndpmu.c`, `siutils.c`, `wlc_bmac.c` and many others.
+
+### Updated mental model — firmware is *crashed*, not idle
+
+| Earlier theory | Reality |
+|---|---|
+| Firmware in tight loop updating buffers | NO — buffers are written once during init, then frozen |
+| Firmware in passive "wait for host handshake" idle | NO — firmware is **halted on assertion failure** |
+| The 7 cells we kept catching across runs | These are the bytes of the ASSERT text (timestamp, line counter) and metadata struct that vary per boot |
+
+What firmware actually does on each run:
+1. Detects the chip (correct: 4360 AI)
+2. Logs Chipc + PMU caps to console buffer
+3. Calls `si_kattach` (~125888 us into firmware boot)
+4. ~8704 us later (presumably some init step in `hndarm.c`), hits
+   ASSERT at line 397 and halts.
+5. Console buffer keeps the assertion message; ARM CR4 stays running
+   (`CPUHALT=NO`, `RESET_CTL=0`) but doing nothing useful (no further
+   register writes, no D2H mailbox, no IPC ring brought up).
+
+### What we now know about TCM layout
+
+| TCM region | Contents (decoded) |
+|---|---|
+| `0x96f70..0x97070` (~256 B) | Snapshot of the console log text (Found chip → si_kattach → ASSERT) |
+| `0x97070..0x97200` | Zero-padded |
+| `0x9cc00..0x9cd17` (~280 B) | Stack canary fill `"KATS"` repeating (= 0x5354414b LE — `'KATS'` reversed = `'STAK'`/start of "stack") |
+| `0x9cd18..0x9cd2c` | Pointer-like values (high-bit-set 0x80000000 or'd over TCM addresses 0x9cd7e, 0x9cd87) |
+| `0x9cd30..0x9cdaf` | hndrte_cons metadata struct: pointers to log buffer, line lengths, indices, plus mirrored values |
+| `0x9cdb0..0x9cdc0` | Latest log message starting `"134592.747 ASSER..."` (continues past dump end) |
+| `0x9cfe0` (fa) | The fault address from the ASSERT — just above our dump range |
+
+### Cross-referencing the dump bytes
+
+`0x9cd38 = 0x10a22b11` — this is `pmucaps` (16-bit chip register
+literal value), so this struct stores firmware's snapshot of chip
+state. Adjacent `0x9cd30 = ASCII "11b22a01"` is the same value
+formatted as a hex string (matches `"pmucaps 0x10a22b11"` in the
+console line) — so this struct holds both string and binary copies
+of fields, classic log-record layout.
+
+### Why the same 7 cells changed across runs
+
+Re-explained simply: the per-run varying-text positions in the
+hndrte_cons buffer landed on these 4-byte aligned cells. The text
+contents of each ASSERT line vary slightly per boot (timestamp µs,
+line counter `0x9cd50` — which is the µs value, e.g. 0x2eb=747 in
+test.199), so those cells "differ from previous run" in the snapshot
+diff. The cells with stable text (e.g. format-string constants) don't
+diff and so don't show up in CHANGED lists.
+
+### Next move (test.200)
+
+Extend the dump to cover the **fault address area**
+(`0x9cfc0..0x9d000`) and the area **before** the visible log start
+(`0x96000..0x96e00`) to find:
+- Whatever firmware code/data is at `fa=0x0009cfe0`
+- Earlier console history (older log messages in the ring buffer)
+- The hndrte_cons struct base pointer (so we can index it correctly)
+- Any additional active write regions we missed
+
+Also worth doing this run: search the firmware image for the
+return-address `0x000641cb` to identify the function that calls the
+ASSERT — gives us a function-level location for line 397 of hndarm.c.
+
+Beyond test.200 — once we know what condition is failing in
+hndarm.c:397, we can either change PMU/host setup to satisfy the
+condition, or find a code path that avoids it. Likely candidate:
+firmware expects the host to populate sharedram (D2H mailbox base
+address) before bringing up the ARM CR4 — we currently never do
+that handshake.
+
+---
+
 ## PRE-TEST.199 (2026-04-22) — hex+ASCII dump of upper-TCM regions to decode firmware data structure
 
 ### What we know going into test.199
