@@ -1,5 +1,50 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.225 RERUN (2026-04-22 19:25 BST, boot 0) — post-git-recovery refresh
+
+### Session context
+
+Previous session wedged the host at ~16:20 BST after committing+pushing
+the PRE-TEST.225 RERUN plan. Wedge left three zero-byte git objects
+locally (HEAD commit + tree + blob). Recovery on this boot:
+
+1. `git fsck` found ref `refs/heads/main` pointing at empty object.
+2. Main reflog's last good hash was `5ad176b`; origin had `7183e17`
+   (the pre-rerun commit pushed just before wedge).
+3. Removed empty objects, reset main to `5ad176b`, `git fetch origin`
+   pulled the missing commit, `git reset --hard origin/main` restored
+   tree cleanly. Working tree back at `7183e17`.
+
+### Fresh boot state verification (boot 0, uptime ~13 min)
+
+- `lspci -vvv -s 03:00.0`: Control `I/O- Mem+ BusMaster+` (BIOS
+  residual — enable=0 in sysfs). MAbort-, SERR-, DEVSEL=fast.
+  Region 0 assigned at 0xb0600000 (32K), Region 2 at 0xb0400000 (2M).
+- `enable=0`, `power_state=D0`
+- BAR0 `dd resource0` timing: 40ms (cold first read, transient link
+  wake) → 19–22ms stable across 8 subsequent reads. Fast-UR regime,
+  safe to insmod.
+- `lsmod | grep brcm`: empty.
+- `brcmfmac.ko`: 14.3 MB, mtime 15:25:45 (same test.225 build from
+  pre-wedge session; `strings` confirms test.225 readback marker).
+
+### Plan — unchanged
+
+Rerun test.225 as-is (no code changes). Same decision tree as the
+entry below: splits boot -1's silent tail into "real setup-entry
+wedge" vs "journald flush loss on deeper wedge".
+
+```bash
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Expected artifacts (next LOG_NUM):
+- `phase5/logs/test.N.run.txt`
+- `phase5/logs/test.N.journalctl.txt` (grep-filtered)
+- `phase5/logs/test.N.journalctl.full.txt` (whole boot)
+
+---
+
 ## PRE-TEST.225 RERUN (2026-04-22 16:10 BST) — deeper PCI state dive; safe to rerun
 
 ### Deeper dive: BAR0 timing depends on `enable`, not just chip health
