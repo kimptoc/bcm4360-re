@@ -1,5 +1,151 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.227 / PRE-TEST.228 (2026-04-22 20:35 BST, boot 0 of new session) — tail-truncation theory partly confirmed; designing the (a)/(b) discriminator
+
+### Headline
+
+Test.227 ran, host wedged, auto-reboot never completed (user pressed power
+button). Journal of boot -1 shows the driver got **much further** than the
+3× test.226 runs: all the way through `test.158` post-chip_attach probes
+(BusMaster clear, ASPM disable, LnkCtl read — all succeeded), then into
+`brcmf_pcie_download_fw_nvram`, and into the 442 KB chunked firmware
+write loop. Last captured breadcrumb:
+```
+20:23:18 brcmfmac: BCM4360 test.225: wrote 26624 words (106496 bytes) last=0x220682ab readback=0x220682ab OK
+```
+That's chunk 26 of 108. Journal stops there — no further breadcrumbs.
+
+### What we learned
+
+1. **Tail-truncation theory is confirmed in part.** The "wedge at test.158"
+   pattern from test.226/rerun/rerun2 was an artifact of journald not
+   flushing after the host lost userspace. With NMI watchdog enabled
+   (`Enabled. Permanently consumes one hw-PMU counter.` at 20:21:47, before
+   the 20:23:03 insmod), the kernel kept forcing flushes longer. So the
+   real wedge point is NOT test.158 — that line is reached and passed
+   cleanly.
+
+2. **pstore is still empty** after the wedge — `/sys/fs/pstore/` has no
+   `dmesg-efi_pstore-*` files. Interpretation per the PRE-227 decision
+   table: either (i) the wedge is a bus-wide stall (all CPUs frozen
+   simultaneously, watchdog CPU can't fire), or (ii) the wedge is soft
+   (CPU still responds to NMI so `hardlockup_panic` never triggers), or
+   (iii) the panic handler started but couldn't complete the efi_pstore
+   write (less likely — `panic=30` would have rebooted but the user
+   power-cycled before 30 s elapsed so we can't tell).
+
+3. **NMI watchdog was armed** (confirmed in boot -1 journal). No direct
+   confirmation of `hardlockup_panic`/`softlockup_panic` sysctls in logs
+   (kernel doesn't log sysctl writes), so we don't know if the panic
+   path was actually enabled. `test.227.run.txt` is 0 bytes — the
+   harness did not capture the sysctl state before insmod. Fix this in
+   test.228 (print sysctls to run.txt).
+
+### The unresolved question — two hypotheses, opposite test.228 designs
+
+The chunked-write loop in `brcmf_pcie_download_fw_nvram` is
+**byte-identical** between commit `5735a29` (test.225 POST rerun) and
+commit `0a19a6e` (test.226 code) — only post-chunked-write breadcrumbs
+differ. Yet:
+
+- **test.225.rerun** (boot of 19:24:11 BST): journal contains **107**
+  `test.225: wrote … OK` lines, i.e. the full 442 KB was written and
+  TCM verify ran afterwards (`fw-sample[…] MATCH` × 16). Success.
+- **test.227** (boot of 20:23:18 BST): journal contains **26**
+  `test.225: wrote … OK` lines, i.e. only 24 % of firmware captured.
+
+Possible explanations:
+
+- **(a) Pure tail-truncation, no real regression.** All 107 chunks
+  actually wrote successfully in test.227 too, but journald only
+  flushed the first 26 before the host wedged. The real wedge in
+  test.227 is post-chunked-write (possibly in the new test.226
+  breadcrumb block). "Wedge at chunk 27" would then be an illusion,
+  same as "wedge at test.158" was.
+- **(b) Real regression in chunked-write.** Chunk 27 genuinely hangs
+  now but didn't before test.225.rerun. Possible causes: chip state
+  corruption from 3 consecutive wedges without SMC reset; ambient
+  temperature; a previously-cached PCIe window state.
+
+Designing test.228 breadcrumbs around chunk 27 commits to (b) before
+(b) has been tested.
+
+### Cheapest discriminator — re-run SAME .ko with explicit sysctl logging
+
+1. No code change. Same `brcmfmac.ko` as test.226/227.
+2. Re-arm watchdog sysctls and log their values to `test.228.run.txt`
+   BEFORE insmod so we have a durable record.
+3. `sync` before insmod.
+4. Run the test; capture boot journal after reboot.
+
+Decision tree:
+
+| Result | Interpretation | Next test |
+|---|---|---|
+| ~107 chunks in journal (same as test.225.rerun) | (a) Pure truncation; the "wedge" in test.227 was post-chunked-write. | test.229 = add breadcrumbs to the test.226 post-chunked-write block + long mdelay between each so journald has time to flush. |
+| ~26 chunks again (same chunk-27 cutoff) | (b) Real regression, possibly state-driven. | Ask user for SMC reset, re-run same .ko. If ~107 chunks return → state-driven; test.229 isolates the trigger. If ~26 still → chunk-27 is a real data-dependent wedge; test.229 adds per-word breadcrumbs in chunk 27. |
+| Chunks count wildly different from 26 or 107 (e.g. 50, 80) | Non-deterministic / race; the wedge is timing-related, not address-related. | Switch to earlyprintk or accept we need a second host for netconsole. |
+
+### Hardware state before test.228 (boot 0 of this session)
+
+- User note: SMC reset was NOT done after the test.227 crash.
+- `lspci -vvv -s 03:00.0`: Control I/O- Mem- BusMaster-, Status MAbort-
+  SERR- TAbort- DEVSEL=fast, DevSta AuxPwr+ TransPend-, LnkCtl ASPM
+  Disabled CommClk-, LnkSta 2.5GT/s x1 — clean.
+- BAR0 `dd resource0` wall-clock: 40/18/18/18 ms (1st is cold-cache
+  warmup; steady state is fast-UR regime well under 40 ms).
+- `lsmod | grep brcm` — empty.
+- pstore empty (no previous panic dumps).
+- `nmi_watchdog`, `hardlockup_panic`, `softlockup_panic`, `panic` all
+  back to defaults (0 / 0 / 0 / 0) — reboot cleared the earlier sysctls.
+
+### Commands in order (test.228)
+
+```bash
+# Arm watchdog path and record the fact durably
+echo 1 | sudo tee /proc/sys/kernel/nmi_watchdog
+echo 1 | sudo tee /proc/sys/kernel/hardlockup_panic
+echo 1 | sudo tee /proc/sys/kernel/softlockup_panic
+echo 30 | sudo tee /proc/sys/kernel/panic
+
+# Durable record of pre-test state
+RUN=/home/kimptoc/bcm4360-re/phase5/logs/test.228.run.txt
+{
+  echo "=== test.228 PRE sysctls ==="
+  for k in nmi_watchdog hardlockup_panic softlockup_panic panic; do
+    printf '  %s=%s\n' "$k" "$(cat /proc/sys/kernel/$k)"
+  done
+  echo "=== test.228 PRE lspci ==="
+  sudo lspci -vvv -s 03:00.0 | grep -E 'Control|Status|MAbort|LnkSta|CommClk|TransPend|DevSta' | sed 's/^/  /'
+  echo "=== test.228 PRE BAR0 timing (4 reads) ==="
+  for i in 1 2 3 4; do
+    { TIMEFORMAT=%R; time sudo dd if=/sys/bus/pci/devices/0000:03:00.0/resource0 of=/dev/null bs=4 count=1 >/dev/null 2>&1; } 2>&1 | sed 's/^/  /'
+  done
+  echo "=== test.228 PRE pstore ==="
+  sudo ls -la /sys/fs/pstore/ 2>&1 | sed 's/^/  /'
+} | sudo tee "$RUN" >/dev/null
+sync
+
+# Run the test
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh 2>&1 | sudo tee -a "$RUN" >/dev/null
+```
+
+### Expected artifacts after reboot/recovery
+
+- `phase5/logs/test.228.run.txt` — sysctl values + lspci/BAR0 pre-test
+  state (durable even if host wedges mid-test).
+- `phase5/logs/test.228.journalctl.full.txt` — boot -1 full journal.
+- `phase5/logs/test.228.journalctl.txt` — brcmfmac-filtered subset.
+- `phase5/logs/test.228.pstore.txt` — if pstore fires this time.
+
+### State written to RESUME_NOTES and committed BEFORE running
+
+This entry is committed and pushed before the test starts, per the
+CLAUDE.md rule. If the host wedges, the next session can pick up from
+here with the decision tree already written down.
+
+---
+
 ## PRE-TEST.227 (2026-04-22 20:15 BST, boot 0) — durable logging via pstore + NMI watchdog; SAME .ko as test.226
 
 ### Hypothesis
