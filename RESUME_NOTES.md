@@ -1,76 +1,98 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## PRE-TEST.213 (2026-04-22) — pivot from caller-search to polled-register identification
+## PRE-TEST.213 (2026-04-22) — force min_res_mask=0x17f to pin PMU bit 2 permanently on
 
-### What POST-TEST.212 just resolved (and what it didn't)
+### Breakthrough from POST-TEST.212 dwell snapshots
 
-POST-TEST.212 (below) confirmed the caller is **not in any dumped region**:
-- 0x40000..0x40660 is firmware string table (hndchipc/hndrte/hndarm/hndrte_lbuf strings, ASSERT/TRAP format strings, Memory/Stack/timer log templates) — not code
-- 0x64280..0x64500 contains sibling functions (entries at 0x64248, 0x64248-end at 0x642c4, function at 0x642f0=NOP+BX, function at 0x642fc onward), with two BL upper-halfwords decoded to targets 0x63D9C and 0x63B3C — **neither targets 0x64028**
-- Post-fn literal pool 0x6422c..0x64248 holds 0x40671, 0x4067a, 0x17fff, 0x62a08, 0x62a0c — **no 0x00064028/9**
-- Global grep across all test.212 dump rows for function-pointer values `00064028`/`00064029` returned **zero hits**
+While planning test.213, I re-examined the existing dwell-PMU snapshots already
+captured in test.212 (and identical across .210, .211). At every dwell tick from
+250ms to 3000ms, immediately before assert:
 
-So caller is in firmware text we haven't dumped. Helper_C lives at 0x11E8 (test.211),
-implying significant code exists below 0x40000. Plus there's also the post-string
-region 0x40670..0x63e00 (~145KB) which is mostly unscanned.
+```
+clk_ctl_st    = 0x00050040
+pmucontrol    = 0x01770381   (CHANGED from 0x01770181 — fw set bit 9 = ResReqAlways)
+pmustatus     = 0x0000002a
+res_state     = 0x0000017b   ← bits 0,1,3,4,5,6,8 set; **bit 2 missing**
+pmutimer      = monotonic    (PMU is clocked)
+min_res_mask  = 0x0000013b   (we don't write this — PMU default for chip)
+max_res_mask  = 0x0000017f   (we write this — bit 6 added)
+pmuwatchdog   = 0x00000000
+```
 
-### Strategic pivot
+`max_res_mask - res_state = 0x17f - 0x17b = 0x4 = bit 2`.
 
-Continuing the brute-force caller-search by widening dumps is slow: at ~50µs/4B,
-covering even 16KB costs ~100ms of MMIO and we still might not hit it. **A more
-useful question** is *what hardware bit is the polling loop waiting on?* — if we
-can identify the polled register/bit, we may be able to satisfy it from the host
-side regardless of who started the wait.
+**Bit 2 is requested in max_res_mask but NEVER asserts in res_state, across all
+dwell windows in every test since .196.** This is the only stuck-low resource
+bit in the entire PMU register set.
 
-From POST-TEST.210 we already know:
-- Polling loop at 0x6419e..0x641b8
-- Reads `[r3, #0xXX]`, masks with `0x80000` (bit 19), waits for it to assert
-- r7 is retry counter; assert fires when r7 hits 0
-- r3 is loaded from `[r4, #0x4c]` somewhere in entry sequence
+The "ramstbydis" assert string (RAM standby DISable) maps semantically: an SRAM
+PMU resource that controls standby mode for one of the on-chip RAMs. If firmware
+issues "wait for RAM-standby-disable to take effect" → polling loop → res_state
+never gets bit 2 set → r7 retry counter exhausts → assert "ramstbydis".
 
-But we never decoded *exactly which register* r4 points at. r4 is initialized in
-the first dozen instructions of the function (0x64028..). If r4 = chip-info struct
-(test.211 helpers operate on such a struct), then [r4+0x4c] is a *register pointer
-field* in that struct, not a fixed hardware address — meaning the firmware lookup
-table indirected by helper_B (which returns 0x11 sentinel for not-found) likely
-*selects* which register pointer to use.
+(The exact polling-loop opcode decode for which mask bit is checked is still in
+progress — but the *PMU-side observation* of stuck bit 2 is independent of that
+decode and stands on its own.)
 
 ### Hypothesis for test.213
 
-The polled register is one of the **PMU resource state registers** (which we
-actually control: `max_res_mask=0x17f` is what we set). The polling loop is
-waiting for a specific PMU resource bit to come on in `PMU_RES_STATE` — and bit 19
-of *some* register field is the indicator.
+**Pin bit 2 permanently on via min_res_mask.** Currently we only set
+max_res_mask=0x17f (allowing bit 2 to be requested on-demand). If we ALSO
+write min_res_mask=0x17f, we tell PMU "bit 2 must always be asserted, drive it
+always-on, never let it drop." If bit 2 is enable-able with appropriate
+PMU-side wiring/OTP/PLL config that's already present, this forces the issue.
 
-If true, two driver-side fixes become possible:
-1. Add the missing PMU resource bit to `max_res_mask` so the firmware sees its
-   bit assert
-2. Pre-set the resource state from host side before ARM release
+Three possible outcomes:
+1. **res_state goes to 0x17f** (bit 2 asserts) AND assert disappears →
+   SOLVED — bit 2 was the polling target, firmware now sees its required state
+2. **res_state goes to 0x17f** AND assert persists →
+   PMU side is fine; polling target was in a *different* register (probably
+   D11/PHY); bit 2 was a coincidence
+3. **res_state stays 0x17b** (bit 2 still won't assert despite min_res mandate) →
+   bit 2 has an unmet hardware dependency (likely a missing PMU chipcontrol or
+   pllcontrol entry, OR an OTP fuse that's not populated). Firmware can't
+   force what hardware refuses.
 
-### Implementation plan for test.213
+### Implementation
 
-**Two parallel probes:**
+Single-line patch to `chip.c` after the existing max_res_mask write:
 
-**(a) Decode r4 init in asserting function** — re-examine bytes 0x64028..0x64080
-(already dumped in test.210/211/212) offline; trace what value flows into r4
-before the polling loop. No new MMIO needed.
+```c
+if (pub->chip == BRCM_CC_4360_CHIP_ID) {
+    /* existing: write max_res_mask = 0x17f */
+    ...
+    /* new for test.213: also pin min_res_mask = 0x17f to force bit 2 on */
+    u32 min_addr = CORE_CC_REG(pmu->base, min_res_mask);
+    u32 before_min = chip->ops->read32(chip->ctx, min_addr);
+    chip->ops->write32(chip->ctx, min_addr, 0x17f);
+    u32 after_min = chip->ops->read32(chip->ctx, min_addr);
+    brcmf_err("BCM4360 test.213: min_res_mask 0x%08x -> 0x%08x (force bit 2 on)\n",
+              before_min, after_min);
+}
+```
 
-**(b) Dump current PMU register snapshot** — at the moment the assert is detected,
-read PMU_RES_STATE (chipcommon offset 0x120), MIN/MAX_RES_MASK (offsets 0x618/0x61c),
-PMU_CTL (0x600), PMU_CHIP_CONTROL_DATA (0x654), and a few neighbors. Compare
-which bits are set vs which are in our `max_res_mask=0x17f` config. If bit 19
-of some PMU register is the polled bit, it'll be visible as 0 in this snapshot.
+Bump test marker .212 → .213 in chip.c (3 sites) and pcie.c (2 sites). No
+dump_ranges change needed — existing PMU snapshot at every dwell tick is
+already exactly the diagnostic we need to verify the outcome.
 
-For (b), MMIO cost is trivial (~10 reads = 0.5ms). Add as a new dump phase
-*after* the existing TCM dumps but *before* the assert text dump.
+### Risk
+
+Low. Pinning bit 2 in min_res_mask might cause:
+- More current draw (bit 2 = always-on RAM standby disable means RAM stays
+  active even when firmware goes to sleep) — irrelevant for bring-up
+- PMU sequencing issue if bit 2 has prerequisites — but if so, the symptom
+  would be `before_min/after_min` mismatch in our trace, easy to diagnose
+
+If outcome 3 (bit 2 won't assert), test.214 will need to find what enables bit 2
+(PMU chipcontrol register / pllcontrol / OTP).
 
 ### Decision tree
 
-| Find | Interpretation | Next |
-|---|---|---|
-| PMU register with bit 19 = 0 in snapshot, matches r3 base | polled register identified | patch driver to set/wait for that bit |
-| All PMU regs settled, no bit-19-clear matches | polled bit is in a non-PMU register | dump SI/D11/PCIE register space too |
-| r4 not initialized to known struct base | function takes r4 via caller — no fix without finding caller | revert to caller-hunt: dump 0x10000..0x14000 in test.214 |
+| Outcome | Next test |
+|---|---|
+| res_state→0x17f + assert gone | **MAJOR WIN** — boot continues, focus on next failure point (BCDC handshake?) |
+| res_state→0x17f + assert remains | dump D11/PHY register space to find true polling target |
+| res_state→0x17b (bit 2 refuses) | study PMU chipcontrol/pllcontrol enables for bit 2 in BCM4360 wl driver |
 
 ### Run command
 
