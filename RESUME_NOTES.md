@@ -1,5 +1,72 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.209 (2026-04-22) — swap firmware to dlarray_4350pci variant (wrong-firmware test)
+
+### Hypothesis
+
+The Linux distro `/lib/firmware/brcm/brcmfmac4360-pcie.bin` (md5
+`812705b3ff0f81f0ef067f6a42ba7b46`, size 442233) is **byte-identical** to
+`dlarray_4352pci` extracted from Apple/Broadcom's `wl.ko` in phase1.
+
+Phase1's extraction script comments suggest:
+- `dlarray_4352pci` → BCM4352/BCM4360 rev **≤ 3**
+- `dlarray_4350pci` → BCM4350/BCM4360 rev **3+**
+
+Our chip is BCM4360 rev 3 (chiprev=3) — exactly on the boundary where both
+variants could apply. The currently-loaded 4352pci blob asserts at line 397
+of `hndarm.c` (test.204..208). The 4350pci blob is a different binary
+(md5 `550bf8d4e7efed60e1f36f9d8311c14b`, size 445717 — slightly larger).
+**If the assert is firmware-build dependent (wrong-variant hypothesis),
+swapping in the 4350pci variant should produce a different outcome.**
+
+### Implementation
+
+Pure firmware swap — no driver code changes. Bump test marker `208 → 209`
+on the dump labels for traceability.
+
+```
+sudo cp /lib/firmware/brcm/brcmfmac4360-pcie.bin /lib/firmware/brcm/brcmfmac4360-pcie.bin.4352pci-original
+sudo cp /home/kimptoc/bcm4360-re/phase1/output/firmware_4350pci.bin /lib/firmware/brcm/brcmfmac4360-pcie.bin
+```
+
+Keep `.bak` as the existing backup; add a new explicit `.4352pci-original`
+for clarity. Same NVRAM as test.207-208 (reverted/original).
+
+### Build + pre-test
+
+- No code rebuild required (pure firmware swap), but bump test marker on
+  pcie.c/chip.c label strings for log clarity → triggers a rebuild
+- PCIe state: clean post-test.208
+- Filesystem will be synced before commit
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.209.{run,journalctl,journalctl.full}.txt`.
+
+### Pre-arranged decision tree (read after test runs)
+
+| Outcome | Interpretation | Next |
+|---|---|---|
+| Same `line 397` assert with same `v=43` | wrong-variant hypothesis WRONG; firmware-content-independent assert | abandon firmware-swap path; pivot to bypass/patch route |
+| Same line 397 with different `v` (e.g. `v=3`) | both variants assert at same site but with different state context | suggests a real config issue, dig into the v=value mapping |
+| Different line/file in assert | new code path → great news; document new assert and repeat investigative cycle |
+| **No assert, console buffer extends past 0x97070** | best case — 4350pci variant supports our chip; firmware booted further | read new console messages to see how far it got |
+| Hard crash / no console output | 4350pci is too different — maybe it tries to use cores we don't have | revert to .bak immediately and pivot |
+
+### Recovery plan (if 4350pci breaks the host)
+
+If the test crashes the machine, on next boot:
+```
+sudo cp /lib/firmware/brcm/brcmfmac4360-pcie.bin.4352pci-original /lib/firmware/brcm/brcmfmac4360-pcie.bin
+```
+to restore the known baseline.
+
+---
+
 ## POST-TEST.208 (2026-04-22) — both sides see 6 cores; "9-core mismatch" hypothesis killed
 
 Logs: `phase5/logs/test.208.journalctl.full.txt`,
