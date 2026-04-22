@@ -1,5 +1,151 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.199 (2026-04-22) — hex+ASCII dump of upper-TCM regions to decode firmware data structure
+
+### What we know going into test.199
+
+Test.198 changed the picture from "firmware runs continuous loops" to
+"firmware runs init then halts":
+
+- The 7 cells test.197 caught are written in the first <250 ms after
+  `set_active` and **never updated again** during the 3 s dwell.
+- Same 7 offsets are written across runs but values differ per run:
+  test.197 wrote `0x335 = 821`, test.198 wrote `0xeb = 235`.
+- Old "was" values come from the previous firmware run (TCM persists
+  across rmmod/insmod since it's on-chip; rebooting the host would
+  give us pristine ROM-poison values).
+
+Reproducibility of the offset set + per-run variation of the values
+implies these cells are a fixed firmware data structure storing
+runtime values (calibration result, sensor reading, random init seed,
+or boot-counter snapshot).
+
+### Hypothesis
+
+If we hex+ASCII dump the surrounding TCM region we should see:
+- Adjacent printable bytes that extend the strings beyond the 4-byte
+  cells we caught (e.g. "1366 84.235 A" might be part of a longer
+  format string with field labels)
+- Possibly format-string templates nearby (e.g. `"%4u %2u.%03u A"`)
+- Other firmware-written fields that happened to land on already-zero
+  bytes (so the wide-stride scan missed them)
+
+### Implementation
+
+**chip.c** — marker rename `test.198` → `test.199`. PMU unchanged.
+
+**pcie.c** — replace the per-tick TS sample with a single end-of-dwell
+hex+ASCII dump of two regions:
+- `0x96e00..0x97200` (1 KB centred on 0x9702c)
+- `0x9cc00..0x9cdc0` (448 B centred on 0x9cd48..0x9cdb8 active block)
+
+Format per 16-byte row:
+```
+test.199: 0xNNNNN: ww0 ww1 ww2 ww3 | aaaaaaaaaaaaaaaa
+```
+where `wwN` is the 32-bit word read at +0/+4/+8/+12 and `a` is the
+ASCII rendering (printables → char, others → '.').
+
+Total log lines: (1024 + 448) / 16 = **92 dump rows** + the existing
+fine-grain post-dwell scan. Cheap and easy to read.
+
+### Build + pre-test
+
+To do after edits — same checklist (build, PCIe state, push, sync).
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Log → rename to `test.199.journalctl.txt`.
+
+---
+
+## POST-TEST.198 (2026-04-22) — firmware writes once at init then HALTS (revised model)
+
+Logs: `phase5/logs/test.198.journalctl.txt` + `.full.txt`.
+
+### Headline result
+
+| Outcome | Status |
+|---|---|
+| No crash | ✓ |
+| `res_state` 0x13b → 0x17b | ✓ same as test.196/197 |
+| Per-tick TS sample of 7 cells (12 ticks × 7 cells = 84 reads) | ✓ all SAME |
+| ts-seed at dwell-250 ms shows final values already in place | ✓ |
+| Post-dwell fine scan still finds same 7 cells "CHANGED" vs pre-set_active baseline | ✓ |
+
+### Decoded — the model is "init + halt", not "running loops"
+
+ts-seed at dwell-250 ms read:
+
+```
+[0x9702c]=0x34383636  "6684"
+[0x97030]=0x3533322e  ".235"
+[0x9cd48]=0x00323335  "532\0"
+[0x9cd50]=0x000000eb  binary 235  ← matches ".235" in 0x97030
+[0x9cdb0]=0x36363331  "1366"
+[0x9cdb4]=0x322e3438  "84.2"
+[0x9cdb8]=0x41203533  "35 A"
+```
+
+All 12 subsequent ticks (500 ms..3000 ms): every cell `delta=0 SAME`.
+
+### Compared across runs
+
+| Cell | test.197 final | test.198 final | Note |
+|---|---|---|---|
+| 0x9702c..0x97033 | "6172.821" | "6684.235" | varying |
+| 0x9cd48..0x9cd4b | "128\0" | "532\0" | varying |
+| 0x9cd50 (binary) | 0x335 = **821** | 0xeb = **235** | matches ASCII in 0x97030 each run |
+| 0x9cdb0..0x9cdbb | "1352 98.036 A" | "1366 84.235 A" | varying |
+
+**The binary at 0x9cd50 == the trailing ".NNN" digits in 0x97030 AND
+in 0x9cdb4-0x9cdb8 each run** — same value formatted into both ASCII
+buffers. Strong: the 7-cell change set is one logical record written
+by a single sprintf-style routine during firmware init.
+
+### Updated mental model
+
+Firmware on this chip, with PMU `max_res_mask=0x17f` (HT clock only),
+runs the following observable sequence after `set_active`:
+
+1. (within first 250 ms) Sets `pmucontrol.NOILPONW`, leaves
+   `clk_ctl_st = 0x00050040`.
+2. (within first 250 ms) Writes a 1-record data structure spanning
+   `0x97028..0x9cdbb` containing several stringified fields and one
+   binary counter at `0x9cd50`. Looks like a calibration / sensor /
+   boot-stat record — same offsets each run, fresh values each run.
+3. After that — no further visible activity through the 3 s dwell
+   (per-tick reads of the same cells stay constant; per-tick CC
+   backplane regs stay constant except `pmutimer` which is the free
+   counter).
+
+What we still don't see:
+- Any host↔firmware mailbox / doorbell handshake completing.
+- Any IPC ring, sharedram pointer write, or D2H mailboxint event.
+- D11 RESET still asserted (CPU never gets to bring up the radio MAC).
+
+This is consistent with the firmware reaching the "wait for host
+handshake" point in init and then idling because we never complete the
+PCIe handshake (no sharedram base advertised, no doorbell, no MSI
+configured).
+
+### Next move (test.199)
+
+Decode the firmware data structure: hex+ASCII dump of the active
+region, look for adjacent printable text and format-string templates.
+That tells us what firmware is reporting, and may give us a foothold
+for matching offsets to known brcmfmac shared-memory layouts.
+
+After test.199 — likely the right move is to rebuild the host-side
+PCIe handshake from the trunk driver and retry the full bring-up; the
+chip is ready, we just aren't talking to it.
+
+---
+
 ## PRE-TEST.198 (2026-04-22) — per-tick time-series of 7 firmware-active TCM cells
 
 ### Hypothesis
