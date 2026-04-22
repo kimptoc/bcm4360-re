@@ -1,5 +1,83 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.221 (2026-04-22 12:30 BST) — rerun wider-mask probe with pr_emerg markers
+
+### What changed vs test.220
+
+**Code change is purely diagnostic visibility**:
+
+- `chip.c` — converted every `brcmf_err("BCM4360 test.XXX: ...")` to
+  `pr_emerg(...)`. 11 call sites (test.121, 125, 193, 218, 220 → 221).
+  Motivation: `brcmf_err` is gated by `net_ratelimit()` on this NixOS
+  6.12.80 kernel (CONFIG_BRCMDBG and CONFIG_BRCM_TRACING are off), so
+  most of our diagnostic emissions in test.220 were silently dropped.
+- The two PMU mask-write markers (previously test.220) bumped to
+  **test.221** so we can trivially confirm the recompiled module
+  loaded by grepping for "test.221" in the journal.
+- **The experiment itself is unchanged** — still writes
+  `min_res_mask = max_res_mask = 0xffffffff` to CC PMU.
+
+### Build state (verified just now)
+
+- `brcmfmac.ko` rebuilt 12:28 Apr 22; vermagic `6.12.80 SMP preempt
+  mod_unload` matches running kernel.
+- `strings brcmfmac.ko` confirms both `test.221: max_res_mask ...`
+  and `test.221: min_res_mask ...`.
+- No compile warnings.
+
+### Pre-test hardware state (just checked)
+
+- `lspci -vvv -s 03:00.0`: `MAbort- SERR- CommClk+ LnkSta 2.5GT/s x1
+  ASPM L0s L1 Enabled` → clean post-SMC-reset, safe to probe.
+- No prior brcmfmac module loaded this boot (lsmod | grep brcm → empty).
+
+### Hypothesis
+
+Now that PMU markers aren't rate-limited, we expect to see — in the
+same run, regardless of whether it ultimately crashes:
+
+1. `test.193: chip=0x43a0 ccrev=... pmurev=... pmucaps=...` (re-prints
+   the previously-dropped chip/PMU info banner).
+2. `test.193: PMU WARs applied — ...` (the pre-existing chipcontrol/PLL
+   tweak — was there all along, just not visible in logs).
+3. `test.221: max_res_mask 0x0000017f -> 0xXXXXXXXX` — the read-back
+   `XXXXXXXX` is *what the chip actually implements* in max_res_mask.
+4. `test.221: min_res_mask 0x0000017f -> 0xYYYYYYYY` — the read-back
+   YYYYYYYY tells us which bits the PMU will accept as `min` resources.
+
+Then the dwell-probe samples of pmustatus (every 250 ms) tell us which
+bits actually came UP under the wider request. Decision tree same as
+PRE-TEST.220:
+
+| pmustatus after wider mask | Interpretation |
+|---|---|
+| more bits UP incl. HT_AVAIL → HAVEHT=1 | mask was the blocker — proceed past ramstbydis |
+| more bits UP but HAVEHT still 0 | dependency table unprogrammed — enumerate wl.ko res_dep (Phase 6) |
+| pmustatus still 0x2a | wider mask rejected/clobbered — check register semantics |
+| crash / SLVERR | mask write itself perturbs device — back off to max-only |
+
+### Known risk
+
+The test.220 run crashed during ASPM disable (after the mask write
+completed, given the code ordering). We don't yet know whether the mask
+write destabilised the device into the ASPM-time hang. If test.221
+crashes the same way, that becomes strong evidence (not yet conclusive)
+that the aggressive `0xffffffff` min write triggers it. In that case
+next iteration narrows scope to max-only.
+
+### Run plan
+
+```bash
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Expected logs:
+- `phase5/logs/test.221.run.txt` — test script stdout
+- `journalctl -k -b 0 > phase5/logs/test.221.journalctl.txt` — after run
+- If crash, capture from `journalctl -k -b -1` next boot.
+
+---
+
 ## POST-CRASH REVIEW (2026-04-22 12:18 BST) — test.220 first-run forensics + new blind-spot finding
 
 Machine just came back from the crash that killed the first test.220 run.

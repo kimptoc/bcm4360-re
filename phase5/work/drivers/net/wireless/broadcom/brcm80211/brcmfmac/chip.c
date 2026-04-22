@@ -530,7 +530,7 @@ static int brcmf_chip_cores_check(struct brcmf_chip_priv *ci)
 	int idx = 1;
 
 	list_for_each_entry(core, &ci->cores, list) {
-		brcmf_err("BCM4360 test.218: core[%-2d] id=0x%x:rev%-3d base=0x%08x wrap=0x%08x\n",
+		pr_emerg("BCM4360 test.218: core[%-2d] id=0x%x:rev%-3d base=0x%08x wrap=0x%08x\n",
 			  idx++, core->pub.id, core->pub.rev, core->pub.base,
 			  core->wrapbase);
 
@@ -553,7 +553,7 @@ static int brcmf_chip_cores_check(struct brcmf_chip_priv *ci)
 		}
 	}
 
-	brcmf_err("BCM4360 test.218: host-side enumerated %d cores total\n",
+	pr_emerg("BCM4360 test.218: host-side enumerated %d cores total\n",
 		  idx - 1);
 	if (!cpu_found) {
 		brcmf_err("CPU core not detected\n");
@@ -767,10 +767,10 @@ int brcmf_chip_get_raminfo(struct brcmf_chip *pub)
 		ci->pub.rambase = 0;
 		ci->pub.ramsize = 0xa0000;
 		ci->pub.srsize = 0;
-		brcmf_err("BCM4360 test.121: using fixed RAM info rambase=0x%x ramsize=0x%x srsize=0x%x\n",
+		pr_emerg("BCM4360 test.121: using fixed RAM info rambase=0x%x ramsize=0x%x srsize=0x%x\n",
 			  ci->pub.rambase, ci->pub.ramsize, ci->pub.srsize);
 		/* test.125: marker before returning from get_raminfo */
-		brcmf_err("BCM4360 test.125: get_raminfo returning 0\n");
+		pr_emerg("BCM4360 test.125: get_raminfo returning 0\n");
 		return 0;
 	}
 
@@ -1059,9 +1059,9 @@ static int brcmf_chip_recognition(struct brcmf_chip_priv *ci)
 	if (ci->ops->reset) {
 		ci->ops->reset(ci->ctx, &ci->pub);
 		if (ci->pub.chip == BRCM_CC_4360_CHIP_ID) {
-			brcmf_err("BCM4360 test.121: post-reset passive skipped; using fixed RAM info next\n");
+			pr_emerg("BCM4360 test.121: post-reset passive skipped; using fixed RAM info next\n");
 			/* test.125: marker after reset and before get_raminfo */
-			brcmf_err("BCM4360 test.125: after reset, before get_raminfo\n");
+			pr_emerg("BCM4360 test.125: after reset, before get_raminfo\n");
 		} else {
 			brcmf_chip_set_passive(&ci->pub);
 		}
@@ -1133,7 +1133,7 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 	brcmf_dbg(INFO, "ccrev=%d, pmurev=%d, pmucaps=0x%x\n",
 		  cc->pub.rev, pub->pmurev, pub->pmucaps);
 
-	brcmf_err("BCM4360 test.193: chip=0x%x ccrev=%d pmurev=%d pmucaps=0x%x\n",
+	pr_emerg("BCM4360 test.193: chip=0x%x ccrev=%d pmurev=%d pmucaps=0x%x\n",
 		  pub->chip, cc->pub.rev, pub->pmurev, pub->pmucaps);
 
 	if (pub->chip == BRCM_CC_4360_CHIP_ID && cc->pub.rev > 3) {
@@ -1172,10 +1172,10 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		chip->ops->write32(chip->ctx, pll_addr, 0xf);
 		after_pllf = chip->ops->read32(chip->ctx, pll_data);
 
-		brcmf_err("BCM4360 test.193: PMU WARs applied — chipcontrol#1 0x%08x->0x%08x pllcontrol#6=0x%08x #0xf=0x%08x\n",
+		pr_emerg("BCM4360 test.193: PMU WARs applied — chipcontrol#1 0x%08x->0x%08x pllcontrol#6=0x%08x #0xf=0x%08x\n",
 			  before_cc1, after_cc1, after_pll6, after_pllf);
 	} else {
-		brcmf_err("BCM4360 test.193: PMU WARs SKIPPED (chip=0x%x ccrev=%d)\n",
+		pr_emerg("BCM4360 test.193: PMU WARs SKIPPED (chip=0x%x ccrev=%d)\n",
 			  pub->chip, cc->pub.rev);
 	}
 
@@ -1193,7 +1193,7 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		before_max = chip->ops->read32(chip->ctx, max_addr);
 		chip->ops->write32(chip->ctx, max_addr, 0xffffffff);
 		after_max = chip->ops->read32(chip->ctx, max_addr);
-		brcmf_err("BCM4360 test.220: max_res_mask 0x%08x -> 0x%08x (wrote 0xffffffff)\n",
+		pr_emerg("BCM4360 test.221: max_res_mask 0x%08x -> 0x%08x (wrote 0xffffffff)\n",
 			  before_max, after_max);
 
 		/* test.220: also widen min_res_mask.
@@ -1208,7 +1208,7 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		before_min = chip->ops->read32(chip->ctx, min_addr);
 		chip->ops->write32(chip->ctx, min_addr, 0xffffffff);
 		after_min = chip->ops->read32(chip->ctx, min_addr);
-		brcmf_err("BCM4360 test.220: min_res_mask 0x%08x -> 0x%08x (wrote 0xffffffff — learning probe)\n",
+		pr_emerg("BCM4360 test.221: min_res_mask 0x%08x -> 0x%08x (wrote 0xffffffff — learning probe)\n",
 			  before_min, after_min);
 	}
 
