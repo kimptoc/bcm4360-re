@@ -1,5 +1,132 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.200 (2026-04-22) — decoded ARM trap-data structure at fa=0x9cfe0
+
+Logs: `phase5/logs/test.200.journalctl.full.txt` (always use `.full.txt`,
+the test script's `.journalctl.txt` truncates the dump rows). Run text:
+`phase5/logs/test.200.run.txt`.
+
+### Headline result
+
+The fault address `fa=0x0009cfe0` named in the assert message points to
+a populated **ARM trap-data structure** in TCM. The 16 words around it
+look exactly like a saved CPU context written by an exception handler:
+
+```
+0x9cf60: 00000000 00000713 00000000 0003ffff
+0x9cf70: 00062a98 00000001 18000000 00000002
+0x9cf80: 00000002 00001202 200001df 200001ff   ← CPSR-style words (mode bits)
+0x9cf90: 00000047 00000000 000000fa 00000001
+0x9cfa0: 0000018d 00062a08 00000009 0009cfe0   ← line=0x18d=397 stored explicitly!
+0x9cfb0: 00058c8c 00002f5c bbadbadd bbadbadd   ← Broadcom 0xbbadbadd magic ×2
+0x9cfc0: 00000000 0009cfd8 00001201 00001202
+0x9cfd0: 00001202 200001ff 0009cfe0 00062a98
+0x9cfe0: 18002000 00062a98 000a0000 000641cb   ← fault address — fa value
+0x9cff0: 00062a98 0009d0a0 00000000 000a0000
+```
+
+Key observations:
+
+- **Line number self-evident**: `0x9cfa0 = 0x18d = 397` matches the
+  `hndarm.c line 397` in the assert text. The trap struct stores
+  `line` as a u32.
+- **Magic sentinel**: `bbadbadd bbadbadd` at `0x9cfb8/0x9cfbc` — the
+  classic Broadcom "BAD BAD" trap-data marker, also referenced by
+  upstream brcmfmac as `BRCMF_TRAP_DATA_MAGIC`.
+- **CPSR words**: `0x200001df` and `0x200001ff` — these decode as ARM
+  CPSR with V (overflow) flag set, A/I/F masked, mode `0x1f` (System)
+  — i.e. saved as part of the exception entry.
+- **ra/fa correspondence**: `ra=0x000641cb` (assert text) appears at
+  `0x9cfec`. `fa=0x0009cfe0` is the address of the struct itself —
+  recursively the trap struct's first 16 bytes are a small header.
+- **Repeated PC value `0x00062a98`** appears at `0x9cf70`, `0x9cfd4`,
+  `0x9cfe4`, `0x9cff0`. Likely the trapping PC and its propagated
+  copies (saved across multiple slots: epc/cpc/lr).
+
+### Console-buffer geometry now clearer
+
+The wide 0x96000 region was overwhelmingly **entropy** (looks like a
+random table or hash pool — all 4096 B nonzero, no ASCII patterns).
+**The actual console text starts at `0x97000`** (not earlier as I had
+guessed):
+
+```
+0x97000: "attach done. ccrev = 43, wd_msti"
+0x97020: "cks = 32\r\n135178"
+0x97030: ".345 ASSERT in f"
+0x97040: "ile hndarm.c lin"
+0x97050: "e 397 (ra 000641"
+0x97060: "cb, fa 0009cfe0)"
+0x97070: "\r\n" then 00 00 00 ... (ring tail)
+```
+
+So the console ring extends `0x97000..~0x97070` (continuous) and then
+zeros to the end of region 0. The duplicate text we saw in test.199
+`0x9cdb0..0x9cdf0` is the *same* assert text written via a second
+sink (likely `hndrte_cons`'s shadow buffer in upper TCM near the trap
+struct). Everything at `0x96000..0x96fff` is unrelated bulk data —
+not console history. So next test should drop that range.
+
+### Fact summary
+
+- Fault is a *handled* assert: firmware vector caught it, populated
+  `0xbbadbadd` trap data, wrote two copies of the message into the
+  hndrte_cons sink, then halted.
+- Trap PC = `0x00062a98` (Thumb). Trap LR = `0x000641ca` (=0x641cb&~1).
+- Asserted line = 397 (`hndarm.c`), v=43, wd_msticks=32 (from text).
+- The "v = 43" detail in the message is consistent with `ccrev`
+  (chip common rev = 43) — the assert may be checking `ccrev` against
+  an expected list and bailing because some host-side handshake
+  hasn't told the firmware that we support its expected protocol.
+
+### Open puzzles
+
+- **PC=0x62a98 at firmware-image offset reads as zeros** (checked
+  desktop-side). Two possibilities: (a) firmware loads with rambase
+  offset, so PC is virtual not file-relative — needs translation by
+  whatever load offset the bootloader uses; (b) `0x62a98` is in BSS
+  (data section), and the trap PC is actually a function pointer
+  variable holding the *target* of a call that crashed before it ran.
+  Plan to investigate this with a tighter image read around the
+  `MOVW r1, #0x18d` site we already located at `0x641b8`, and also
+  to check the firmware ELF/PT_LOAD-equivalent metadata for any
+  load-address adjustment.
+
+- **What is the assert checking?** The assert call site is in a
+  routine that runs *after* `si_kattach done` succeeds (because we
+  see that line in the console buffer first). `wd_msticks=32` is
+  printed alongside, which suggests this is in the watchdog/PMU
+  setup path. Likely candidates for `hndarm.c:397`:
+    - PMU resource-mask sanity check (firmware expects bits we
+      didn't grant) — but our `max_res_mask=0x17f` matches what
+      Broadcom's open driver uses for chiprev=43 already.
+    - SHARED-RAM handshake check (firmware reads a magic value
+      from a host-supplied location and asserts if missing).
+    - Watchdog/clock-domain setup verification (since `wd_msticks`
+      is printed in the same message, this code path is wd-related).
+
+### Suggested next step (test.201 — to be planned in PRE-TEST.201)
+
+Two tracks worth pursuing in parallel:
+
+1. **Shared-RAM handshake**: re-examine where `brcmf_pcie_setup`
+   writes the bootloader/shared structures and whether anything is
+   missing for chiprev=43. Trace the writes the host *does* perform
+   to TCM and compare against the populated firmware data
+   (especially the area near `0x9d000..0x9d100`, just past the
+   trap struct).
+
+2. **Image translation puzzle**: read 4-byte stride around the
+   firmware image at offsets `0x62a80..0x62b00` and `0x641a0..0x641e0`
+   to confirm we *do* get instruction-shaped data at the assert
+   call site (which we already proved at `0x641b8`) but not at
+   the trap PC `0x62a98` — that asymmetry confirms hypothesis (b)
+   above (BSS pointer) over (a) (virtual offset).
+
+No firmware is being modified, no large excerpts will be committed.
+
+---
+
 ## PRE-TEST.200 (2026-04-22) — extended TCM dump including fault address area
 
 ### Hypothesis
