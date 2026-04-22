@@ -1,6 +1,136 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## POST-TEST.225 RERUN (2026-04-22 19:29 BST, boot 0) — JACKPOT: full 442 KB firmware download + TCM verification, host wedged in post-snapshot / set_active block
+## POST-TEST.226 (2026-04-22 19:45 BST, boot 0) — EARLIER wedge than test.225.rerun, NONE of the 12 breadcrumbs fired
+
+### Headline
+
+test.226 wedged at **`test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)`** —
+about 19 s after insmod on boot -1 (19:41:23 → 19:41:42). Compare to boot -2's
+test.225.rerun, which at the *same* flow point printed another ~10 lines of
+test.158/test.188 setup markers before starting the chunked FW download
+~10 s later. **None of the 12 test.226 breadcrumbs fired** — all are past
+the wedge, deeper in `brcmf_pcie_download_fw_nvram`.
+
+SMC reset **was** performed between boot -2 and boot -1 (confirmed earlier),
+and again between boot -1 and boot 0. So boot -1 started from a clean post-SMC
+state, identical to boot 0's current state. This is a regression from a clean
+state, not a dirty-hardware artifact.
+
+### Observed boot -1 journal (test.226)
+
+Last good marker before wedge:
+```
+19:41:42 brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+(boot ends here — host wedged)
+```
+
+Full sequence from probe to wedge (14 kernel lines) is intact:
+test.188 module_init → test.155 sdio → test.128 probe → test.127 devinfo →
+test.53 SBR → chip_attach → test.218 core enum (6 cores) → test.125 buscore_reset →
+test.122 reset bypass → test.145 ARM CR4 halt → test.188 post-halt CPUHALT=YES →
+test.121 raminfo → test.193 chip info + PMU WARs → test.224 max/min/post-settle
+(pmustatus=0x2e res_state=0x7ff — clean) → test.119 chip_attach returned →
+**test.158: ARM CR4 core->base** → wedge.
+
+Compare boot -2 (test.225.rerun) from the same point:
+```
+test.158: ARM CR4 core->base  (same line)
+test.158: about to pci_clear_master
+test.158: BusMaster cleared after chip_attach
+test.158: about to read LnkCtl before ASPM disable
+test.158: LnkCtl read before=0x0143 — disabling ASPM
+test.158: pci_disable_link_state returned — reading LnkCtl
+test.158: ASPM disabled; LnkCtl before=0x0143 after=0x0140
+test.188: root port 0000:00:1c.2 LnkCtl before=0x0040 — disabling L0s/L1/CLKPM
+test.188: root-port pci_disable_link_state returned
+test.188: root port 0000:00:1c.2 LnkCtl after=0x0040
+(10 s gap — test.188 setup-entry / pre-attach / post-attach / post-raminfo / pre-download)
+test.188: starting chunked fw write, total_words=110558
+test.225: wrote 1024 words — full download through to post-snapshot
+```
+
+### What this rules out and what it means
+
+- **Not caused by test.226 code changes.** The 12 breadcrumbs are all inside
+  `brcmf_pcie_download_fw_nvram`, which is reached only AFTER the chunked FW
+  download. The wedge on boot -1 was before any of that, right after
+  `brcmf_chip_attach` returned.
+- **Not dirty hardware.** SMC reset between -2 and -1 was performed; boot -1's
+  pre-insmod state was clean (per the 19:25 PRE entry below).
+- **Candidates for the regression**:
+  1. Flaky one-off — PCIe link renegotiation / ASPM state / PMU settle hit a
+     bad window this run that cleared on retry.
+  2. Something nondeterministic in the probe path that lands on this wedge
+     some-fraction-of-the-time.
+- **Rerun is the right discriminator.** test.226's 12 breadcrumbs are dead
+  weight against *this* failure mode — they only help if the wedge recurs in
+  the post-CC-res_state block. If the rerun wedges at test.158 again, pivot
+  to test.227: drop breadcrumbs between `test.158: ARM CR4 core->base` and
+  `test.158: about to pci_clear_master` (small gap on boot -2 — narrow
+  window to instrument).
+
+### Hardware state on current boot 0 (19:45 onward)
+
+- `lspci -vvv -s 03:00.0`: `I/O- Mem+ BusMaster+` (BIOS residual).
+  MAbort-, SERR-, DEVSEL=fast — clean.
+- `enable=0`, `power_state=unknown`.
+- BAR0 `dd resource0` timing: **21 / 20 / 20 / 19 ms** (fast-UR regime,
+  well under 40 ms threshold).
+- `lsmod | grep brcm`: empty.
+
+Ready to rerun test.226 .ko as-is.
+
+---
+
+## PRE-TEST.226 RERUN (2026-04-22 19:45 BST, boot 0) — same .ko, cheapest next step
+
+### Objective
+
+Rerun the existing test.226 .ko with no code changes. Two possible outcomes:
+- **Reaches FW download + breadcrumbs fire** → the boot -1 regression was a
+  flake; proceed as originally planned, interpreting the 12 breadcrumbs per
+  the decision tree below.
+- **Wedges at test.158 again** → regression is reproducible; pivot to test.227
+  with breadcrumbs in the post-chip_attach / pre-pci_clear_master gap.
+
+### Build state
+
+- `brcmfmac.ko` dated 19:40, 14.27 MB — unchanged since test.226 built.
+- No rebuild needed.
+
+### Run
+
+```bash
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+### Hardware risk
+
+Identical to the original test.226 pre-plan. Chip is in a verified-clean
+state. Worst case is another wedge, host recovery via next SMC reset (done
+twice already this session, confirmed reliable).
+
+### Breadcrumb decision tree (if download is reached this time — unchanged from original)
+
+| Last test.226 marker emitted | Interpretation | Next |
+|---|---|---|
+| "before `brcmf_chip_get_core`" but not "after" | impossibly early — log flush issue, not real wedge | rethink flush budget; add mdelay(100) instead of msleep(5) |
+| "after brcmf_chip_get_core" / pre-set-active probes but not pci_set_master | wedge on ARM CR4 / D11 wrapper MMIO read | look at select_core left from prior readbacks |
+| "before pci_set_master" but not "after" | config-space write wedged PCIe link | check AER / root-port state; may need separate probe |
+| FORCEHT write visible, set_active marker not | wedge in FORCEHT path (unlikely; test.219 proved this works) | n/a |
+| `brcmf_chip_set_active returned` visible, tier1 not | wedge in firmware execution — real behavior, not probe artefact | move to tier1 response debugging; compare against test.218 tier1 outcomes |
+| All markers through tier1 visible, host wedges later | wedge is in dwell or D11 bring-up — reset plan to deeper window | design test.227 around the later probe set |
+
+### Pre-test checks — DONE
+
+- Build is fresh (test.226 .ko, unchanged from pre-test.226-original).
+- `lspci -vvv -s 03:00.0` clean (no MAbort/SERR).
+- BAR0 dd 19-21 ms — fast-UR regime.
+- `lsmod | grep brcm` empty.
+
+---
+
+## POST-TEST.225 RERUN (2026-04-22 19:29 BST, boot -2) — JACKPOT: full 442 KB firmware download + TCM verification, host wedged in post-snapshot / set_active block
 
 ### Headline
 
