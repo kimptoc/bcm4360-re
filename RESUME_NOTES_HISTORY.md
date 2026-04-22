@@ -1,3 +1,127 @@
+## PRE-TEST.234 (2026-04-23 00:xx BST, post-SMC-reset boot from test.233 Run 3) — zero TCM[0x9FE00..0x9FF1C] before `brcmf_chip_set_active`; cheapest-tier shared-memory-struct probe
+
+### Hypothesis
+
+The wedge triggered by `brcmf_chip_set_active` is caused, at least
+in part, by firmware reading *something* in the upper TCM region
+(between the end of the firmware image at 0x6BF78 and the NVRAM
+slot at 0x9FF1C) during its boot phase and using that value as a
+DMA target / pointer. On a post-SMC-reset boot, that region contains
+a deterministic SRAM fingerprint (test.233 Runs 1 & 3 showed non-
+zero, nearly-identical bytes at 0x90000 despite our code never
+writing there). Fw dereferences the fingerprint as if it were a
+host address, PCIe TLP to that bogus address never completes (or
+the root complex UR-responds), fw enters a state that freezes the
+bus host-wide within ~1 s.
+
+This is the **cheapest-tier** experiment of the staged plan the
+advisor laid out before test.234:
+- **Cheap (this test):** zero the suspect region, re-enable
+  set_active. If fw now DMAs to a NULL address instead of a
+  fingerprint-derived one, behavior may change (NULL is often
+  DMA-rejected cleanly at root complex; garbage is not).
+- **Medium (test.235 if cheap fails):** write sentinel pointers
+  into TCM itself (no host DMA alloc) at suspect offsets.
+- **Expensive (test.236 if medium fails):** real DMA-coherent
+  allocations + TCM pointer fixups.
+
+### Region chosen — 0x9FE00..0x9FF1C (284 bytes, 71 dwords)
+
+- Above the firmware image (ends at 0x6BF78) — not part of fw code.
+- Below the NVRAM slot (starts at 0x9FF1C) — not touched by NVRAM write.
+- Below the ramsize-4 marker (0x9FFFC) — not touched by NVRAM marker write.
+- Matches the traditional upper-TCM position where brcmfmac-style
+  shared-memory structs often live on other chips.
+
+Our code never writes to this region during the probe path, so on
+a post-SMC-reset boot it contains whatever the SRAM powers up as
+(the fingerprint). Zeroing it is the cheapest way to test whether
+its contents are load-bearing for fw boot.
+
+### Code change
+
+In `brcmf_pcie_download_fw_nvram`, replace the test.233 block
+(write magic + SKIPPING set_active) with test.234:
+
+1. **Pre-zero scan**: read all 71 dwords in [0x9FE00..0x9FF1C),
+   log any non-zero cells as `pre-zero TCM[0x%05x]=0x%08x`, and
+   emit a summary count.
+2. **Zero loop**: write 0 to each of the 71 dwords.
+3. **Verify pass**: re-read, count non-zero cells, log summary
+   `zero verify N/71 non-zero` (expect 0/71).
+4. **Restore `brcmf_chip_set_active`**: call it with the resetintr
+   derived from the first 4 fw bytes (as test.231/232 did). Log
+   before the call; log the boolean return.
+5. **Post-set_active dwells**: five breadcrumbs at t=100, 300, 500,
+   700, 1000 ms after set_active returns, then "dwell done".
+6. **BM-clear + release + -ENODEV** (unchanged).
+
+Keep the test.231 pci_set_master restore from test.233 (BM=ON
+going into set_active — test.230 baseline).
+
+### Decision tree
+
+| Outcome signature | Interpretation | Next (test.235) |
+|---|---|---|
+| Full clean run: set_active returns, all 5 dwells + dwell-done land, BM-clear, -ENODEV, rmmod clean, host alive ≥30 s | **Zeroing the region stopped the wedge.** Fw was dereferencing fingerprint as a DMA target. Major finding. | Narrow down which specific dword inside the region matters — binary-search with smaller zero ranges, then design real shared-memory struct. |
+| Wedge occurs but tail-truncation lands **more** breadcrumbs than test.231/232 (e.g. "set_active returned" visible, or t=100ms dwell lands) | **Wedge shifted later** — zeroing bought time. Fw still hitting another bad region or reaches further before hanging. | Widen the zero range (0x70000..0x9FF1C, ~195 KB) in test.235 to cover all possible shared-memory locations. |
+| Wedge occurs, tail-truncation at same point as test.231/232 (before any post-set_active breadcrumb) | **Region didn't matter** — theory wrong or fw reads elsewhere. | Try different regions: fw image upper bits (0x6C000..0x9FE00), or fw-written regions (maybe fw re-reads a spot in its own image as a pointer seed). |
+| Wedge at earlier point (before set_active) — e.g. zeroing itself wedges the host | Unexpected — TCM-write should be safe (test.225 wrote 442 KB cleanly). Indicates either a wild hazard in the region or a bug in the zero loop. | Re-read journal for latest breadcrumb; consider 4-byte-at-a-time vs loop bug. |
+
+### Expected artifacts
+
+- `phase5/logs/test.234.run.txt` — PRE sysctls + lspci + BAR0 + pstore + strings + harness output.
+- `phase5/logs/test.234.journalctl.full.txt` — boot -1 or boot 0 journal.
+- `phase5/logs/test.234.journalctl.txt` — filtered subset (test.234 breadcrumbs only).
+- PRE/POST lspci captures.
+
+### Hardware state (post-SMC-reset boot, carries over from test.233 Run 3)
+
+- Boot 0 started at 2026-04-22 ~22:3x BST (after user did SMC reset +
+  reboot between Runs 2 and 3 of test.233).
+- `lspci -vvv -s 03:00.0` at 23:xx: Control `Mem+ BusMaster-` (clean
+  rmmod idiom after Run 3), Status MAbort- (clean), DevSta AuxPwr+
+  TransPend-, LnkCtl ASPM L0s L1 Enabled CommClk+, LnkSta 2.5GT/s
+  x1. No dirty signature.
+- pstore empty. No modules loaded.
+
+### Build status — REBUILT CLEAN (2026-04-22 23:09 BST)
+
+`brcmfmac.ko` 14259504 bytes, mtime 23:09. `strings` confirms 14
+test.234 breadcrumbs present (PRE-ZERO scan header, per-cell pre-
+zero non-zero reporter, pre-zero summary, zeroing header, VERIFY-
+FAIL reporter, zero verify summary, set_active call header, set_
+active TRUE/FALSE return lines, five dwell breadcrumbs t+100..
+t+1000ms). The pre-existing `test.233: PRE-READ TCM[0x90000]=…`
+at function entry is retained as a continuity diagnostic (same
+fingerprint check as test.233 Runs 1 & 3).
+
+Build warnings are all pre-existing unused-variable warnings for
+stale helpers (`dwell_increments_ms`, `dwell_labels_ms`, `dump_
+ranges`, `brcmf_pcie_write_ram32`) from earlier test iterations —
+not regressions.
+
+### Logging / watchdog arming
+
+```bash
+echo 1 | sudo tee /proc/sys/kernel/nmi_watchdog
+echo 1 | sudo tee /proc/sys/kernel/hardlockup_panic
+echo 1 | sudo tee /proc/sys/kernel/softlockup_panic
+echo 30 | sudo tee /proc/sys/kernel/panic
+sync
+```
+
+### Pre-test checklist (CLAUDE.md)
+
+1. Build status: **PENDING** (code change in progress; will rebuild before test).
+2. PCIe state: will capture + verify no dirty state (MAbort+, CommClk-) before insmod.
+3. Hypothesis stated: above.
+4. Plan written to RESUME_NOTES.md: this block.
+5. Filesystem synced on commit.
+
+---
+
+
 ## POST-TEST.233 (2026-04-22 22:41 BST, 3 runs across 2 boots) — SMC reset wipes our TCM magic; TCM ring-buffer logger RULED OUT
 
 ### Headline

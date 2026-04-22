@@ -103,6 +103,19 @@ static int bcm4360_test236_force_seed;
 module_param(bcm4360_test236_force_seed, int, 0644);
 MODULE_PARM_DESC(bcm4360_test236_force_seed, "BCM4360 test.236: force Apple random_seed write before set_active (1=force, 0=do not write)");
 
+/* BCM4360 test.237: extended dwell ladder after brcmf_chip_set_active.
+ * Replaces the short t+100..t+1000 chain with a ladder reaching t+30s so
+ * we can bracket the actual wedge moment. Test.236 Run B landed t+700ms
+ * as the last journald breadcrumb — lower bound only. Journald tail-
+ * truncation budget is not calibrated, so we can't back out the wedge
+ * from "last flushed" alone. Use switch msleep for >1s waits to avoid
+ * pinning the CPU + triggering softlockup from our own thread. Pair
+ * with bcm4360_test236_force_seed=1 for the seed-present comparison run.
+ * Default 0 (short t+100..t+1000 chain). */
+static int bcm4360_test237_extended_dwells;
+module_param(bcm4360_test237_extended_dwells, int, 0644);
+MODULE_PARM_DESC(bcm4360_test237_extended_dwells, "BCM4360 test.237: extend post-set_active dwell ladder to t+30s (1=extended, 0=short t+100..t+1000)");
+
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
  * stage=1: write IOCTL = FGC|CLK (coredisable in_reset_configure step)
@@ -2643,6 +2656,42 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pr_emerg("BCM4360 test.235: SKIPPING brcmf_chip_set_active (zero+verify-only run; test.230 baseline)\n");
 				msleep(1000);
 				pr_emerg("BCM4360 test.235: 1000 ms dwell done (no fw activation); proceeding to BM-clear + release\n");
+			} else if (bcm4360_test237_extended_dwells) {
+				pr_emerg("BCM4360 test.237: calling brcmf_chip_set_active resetintr=0x%08x (extended-dwell ladder)\n",
+					 resetintr);
+				mdelay(10);
+				if (!brcmf_chip_set_active(devinfo->ci, resetintr))
+					pr_emerg("BCM4360 test.237: brcmf_chip_set_active returned FALSE\n");
+				else
+					pr_emerg("BCM4360 test.237: brcmf_chip_set_active returned TRUE\n");
+				mdelay(100);
+				pr_emerg("BCM4360 test.237: t+100ms dwell\n");
+				mdelay(200);
+				pr_emerg("BCM4360 test.237: t+300ms dwell\n");
+				mdelay(200);
+				pr_emerg("BCM4360 test.237: t+500ms dwell\n");
+				mdelay(200);
+				pr_emerg("BCM4360 test.237: t+700ms dwell\n");
+				mdelay(300);
+				pr_emerg("BCM4360 test.237: t+1000ms dwell\n");
+				msleep(500);
+				pr_emerg("BCM4360 test.237: t+1500ms dwell\n");
+				msleep(500);
+				pr_emerg("BCM4360 test.237: t+2000ms dwell\n");
+				msleep(1000);
+				pr_emerg("BCM4360 test.237: t+3000ms dwell\n");
+				msleep(2000);
+				pr_emerg("BCM4360 test.237: t+5000ms dwell\n");
+				msleep(5000);
+				pr_emerg("BCM4360 test.237: t+10000ms dwell\n");
+				msleep(5000);
+				pr_emerg("BCM4360 test.237: t+15000ms dwell\n");
+				msleep(5000);
+				pr_emerg("BCM4360 test.237: t+20000ms dwell\n");
+				msleep(5000);
+				pr_emerg("BCM4360 test.237: t+25000ms dwell\n");
+				msleep(5000);
+				pr_emerg("BCM4360 test.237: t+30000ms dwell done (proceeding to BM-clear + release)\n");
 			} else {
 				pr_emerg("BCM4360 test.234: calling brcmf_chip_set_active resetintr=0x%08x (after zero-upper-TCM)\n",
 					 resetintr);
