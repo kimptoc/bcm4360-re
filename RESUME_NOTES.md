@@ -1,5 +1,73 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-CRASH REVIEW (2026-04-22 12:18 BST) — test.220 first-run forensics + new blind-spot finding
+
+Machine just came back from the crash that killed the first test.220 run.
+User ran an SMC reset before powering back on. Current state:
+
+- **PCIe clean**: `MAbort- SERR- CommClk+ LnkSta 2.5GT/s x1, ASPM L0s L1 Enabled`
+- **Boot -1** (12:14:32–12:14:49, 17 s): the test.220 run. Last line logged:
+  `test.158: pci_disable_link_state returned — reading LnkCtl` → boot ends.
+  No panic, no oops captured — hard crash/freeze.
+- **Boot 0** (12:16:37–now): clean reboot, no brcmfmac activity.
+
+### ★ NEW FINDING — `brcmf_err()` is rate-limited, our test markers are being silently dropped
+
+`debug.h` line 45 defines `brcmf_err` as:
+
+```c
+if (IS_ENABLED(CONFIG_BRCMDBG) || IS_ENABLED(CONFIG_BRCM_TRACING) || net_ratelimit())
+    __brcmf_err(NULL, __func__, fmt, ...);
+```
+
+NixOS kernel 6.12.80 has neither CONFIG_BRCMDBG nor CONFIG_BRCM_TRACING
+enabled, so `brcmf_err` only emits when `net_ratelimit()` admits the line.
+Under load, most lines are silently dropped.
+
+Evidence from boot -1: `test.119: brcmf_chip_attach returned successfully`
+(pr_emerg, always shown) appears at 12:14:46, proving `brcmf_chip_setup` ran
+— yet neither `test.193: chip=...` nor `test.220: max_res_mask ...` nor
+`test.220: min_res_mask ...` appear anywhere in the 43 brcmfmac log lines
+of that boot. These are all `brcmf_err` calls and got eaten by ratelimit.
+
+**Consequence:** the PMU mask write in test.220 almost certainly *did*
+execute, but we have zero visibility on read-back values → we cannot
+distinguish the test.220 decision-tree branches (A), (B), (mask locked),
+(crash-on-mask-write). The crash during ASPM disable may or may not be
+related to the mask write — can't tell yet.
+
+### ★ Proposed fix before next test — switch marker macros
+
+Convert all our `brcmf_err("BCM4360 test.XXX: ...")` diagnostic markers
+(chip.c — test.121, test.125, test.188, test.193, test.218, test.220)
+to `pr_emerg(...)` which is not rate-limited. Restores visibility for
+every future test.
+
+**Note to self:** this blind-spot explains several earlier test reports
+that said "no messages from X" where we *expected* them. Before trusting
+an absence-of-evidence in any log, confirm the marker uses pr_emerg and
+not brcmf_err.
+
+### Decision pending user input
+
+Options for next test:
+
+1. **test.221 (recommended)**: switch chip.c markers to pr_emerg, rebuild,
+   rerun. Same experimental code (widen both masks), but we'll SEE what
+   happens this time. Pure diagnostic change.
+2. **test.220 re-run unchanged**: re-run with the same code hoping the
+   mask write makes it into the log this time — low-reward, risks another
+   crash with no diagnostic gain.
+3. **test.221 (narrower)**: keep markers as pr_emerg, but first widen
+   ONLY max_res_mask (reading the chip's implemented-bits mirror is
+   non-perturbative). Defer the aggressive min_res_mask=0xffffffff until
+   we know which bits are implemented. Least aggressive.
+
+Going with option 1 unless user objects — it's the smallest change that
+unblocks diagnosis.
+
+---
+
 ## PRE-TEST.220 RERUN (2026-04-22 post-crash) — rerun the wider-mask learning probe
 
 System crashed between commit `ae29e57` (test.220 PRE code) and the first
