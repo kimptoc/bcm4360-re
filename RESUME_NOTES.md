@@ -80,6 +80,47 @@ analysis, decode the chip-info struct contents we already have.
 | Strings in 0x41000..0x42000 are still PCIe/CDC | format is even further | dump 0x42000..0x43000 in test.216 |
 | chip_info[0x48] (= TCM[0x62ae0]) decodes to a register pointer | identifies the polled register subsystem | targeted register-space dump |
 
+### Chip-info struct decoded from existing test.214 dump (no new MMIO needed)
+
+Slot[1] in trap data = `0x00062a98` = chip_info_t base. Decoded layout (offsets
+relative to 0x62a98):
+
+| Offset | Value | Likely meaning |
+|---|---|---|
+| 0x00 | 0x00000001 | flag |
+| 0x10 | 0x00000011 | rev (17 — pmurev?) |
+| **0x14** | **0x0000002b** | **= 43 = ccrev — likely `v` printed in assert** |
+| 0x18 | 0x58680001 | packed |
+| 0x1c | 0x00000003 | chiprev |
+| 0x20 | 0x00000011 | rev (17) |
+| 0x30 | 0x000014e4 | PCI vendor ID (Broadcom) |
+| 0x3c | 0x00004360 | chip ID |
+| 0x40 | 0x00000003 | chiprev |
+| **0x48** | **0x00008a4d** | **loaded by trap PC `LDR r3, [r4, #0x48]`** |
+| 0x58 | 0x00096f60 | TCM ptr (near console buffer at 0x96f78) |
+| 0x6c | 0x0009d0c8 | TCM ptr |
+| 0x78 | 0x18002000 | core base table starts here |
+| 0x7c | 0x18000000 | ChipCommon base |
+| 0x80..0x8c | 0x18001000..0x18004000 | core base list |
+
+**Two big findings from this decode:**
+
+1. **`v=43` is BCM4360's `ccrev` (ChipCommon revision)** — confirmed from the
+   field at offset 0x14 holding 0x2b = 43. This matches Broadcom's documented
+   ccrev=43 for chiprev=3 of BCM4360. So the assert prints ccrev for
+   diagnostic context — it's NOT the failed condition. The actual failure is
+   the polling loop on `[r3, #0x1e0]`.
+
+2. **chip_info[0x48] = 0x00008a4d** — too low to be a register pointer (would
+   need 0x18xxxxxx for backplane). Could be a measured ILP frequency
+   (35405 Hz ≈ 32768 nominal +8% drift), or a calibration value. Not
+   immediately actionable but recorded for future cross-reference.
+
+3. **Core base table at offset 0x78+** confirms standard Broadcom backplane
+   layout: D11 at 0x18002000, ChipCommon at 0x18000000, etc. This means the
+   polled register `[r3, #0x1e0]` likely lives in one of these cores —
+   reading them at trap time would show stuck status bits.
+
 ### Build/run
 
 `min_res_mask=0x17f` patch stays in place. Add one dump_ranges entry, bump
