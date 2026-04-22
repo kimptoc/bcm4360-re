@@ -775,6 +775,75 @@ static void brcmf_pcie_probe_d11_state(struct brcmf_pciedev_info *devinfo,
 }
 
 
+/* test.217: read-only probe of D11 core's clk_ctl_st register (offset 0x1e0).
+ *
+ * BCM4360 firmware traps inside `ramstbydis` at PC 0x000641cb with assert
+ * text "v = 43, wd_msticks = 32". Static analysis of ramstbydis (see
+ * test.215 RESUME_NOTES) shows it polls bit 17 of [r5+0x1e0] up to 2000
+ * times × 10µs (~20ms). Trap data slot[0]=0x18002000 = D11 core base, so
+ * the polled register is most likely D11.clk_ctl_st (bit 17 = HAVEHT).
+ *
+ * This probe samples that register from the host, decoded into named bits,
+ * during the dwell phase. Read is gated on D11 wrapper RESET_CTL — reading
+ * 0x1e0 while IN_RESET=YES caused PCIe SLVERR in test.115. Same gating
+ * pattern as test.114b.
+ *
+ * Yields a direct two-explanation distinguisher (issue #14): does D11 ever
+ * acquire HT clock during the firmware-active dwell, or is HAVEHT stuck
+ * CLEAR — implying the missing bring-up condition is HT clock to D11.
+ */
+static void brcmf_pcie_probe_d11_clkctlst(struct brcmf_pciedev_info *devinfo,
+					  const char *tag)
+{
+	struct brcmf_core *d11_core;
+	u32 saved_bar0;
+	u32 wrap_rstctl = 0xdeadbeef, ccs = 0xdeadbeef;
+	bool in_reset = true;
+
+	d11_core = brcmf_chip_get_core(devinfo->ci, BCMA_CORE_80211);
+	if (!d11_core) {
+		pr_emerg("BCM4360 test.217: %s D11 core not found\n", tag);
+		return;
+	}
+
+	/* Step 1: read wrapper RESET_CTL via the high window. */
+	pci_read_config_dword(devinfo->pdev, BRCMF_PCIE_BAR0_WINDOW,
+			      &saved_bar0);
+	pci_write_config_dword(devinfo->pdev, BRCMF_PCIE_BAR0_WINDOW,
+			       d11_core->base + 0x100000);
+	wrap_rstctl = brcmf_pcie_read_reg32(devinfo, 0x800);
+	in_reset = (wrap_rstctl & 1) != 0;
+
+	/* Step 2: if D11 is out of reset, switch to the core register window
+	 * and read clk_ctl_st at 0x1e0. Reading while IN_RESET=YES is unsafe
+	 * (PCIe SLVERR). */
+	if (!in_reset) {
+		pci_write_config_dword(devinfo->pdev, BRCMF_PCIE_BAR0_WINDOW,
+				       d11_core->base);
+		ccs = brcmf_pcie_read_reg32(devinfo, 0x1e0);
+	}
+
+	pci_write_config_dword(devinfo->pdev, BRCMF_PCIE_BAR0_WINDOW,
+			       saved_bar0);
+	brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
+
+	if (in_reset) {
+		pr_emerg("BCM4360 test.217: %s D11 IN_RESET=YES (RESET_CTL=0x%08x) — clk_ctl_st read SKIPPED\n",
+			 tag, wrap_rstctl);
+		return;
+	}
+
+	pr_emerg("BCM4360 test.217: %s D11 clk_ctl_st=0x%08x [HAVEHT(17)=%s ALP_AVAIL(16)=%s BP_ON_HT(19)=%s bit6=%s FORCEHT(1)=%s FORCEALP(0)=%s]\n",
+		 tag, ccs,
+		 (ccs & BIT(17)) ? "YES" : "no ",
+		 (ccs & BIT(16)) ? "YES" : "no ",
+		 (ccs & BIT(19)) ? "YES" : "no ",
+		 (ccs & BIT(6))  ? "SET" : "clr",
+		 (ccs & BIT(1))  ? "YES" : "no ",
+		 (ccs & BIT(0))  ? "YES" : "no ");
+}
+
+
 /* test.188: snapshot ChipCommon backplane registers that firmware would
  * typically manipulate during early init, plus pmutimer as a monotonic
  * "is the PMU clocked?" signal. Purely diagnostic; no writes.
@@ -2028,7 +2097,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			{0x40660, 0x406c0},	/* strings */
 			{0x40700, 0x41000},	/* test.214: PCIe-dongle string slab (no fmt match) */
 			{0x41000, 0x42000},	/* test.215: AI core / olmsg / rpc strings (no fmt match) */
-			{0x01000, 0x02000},	/* test.216: helper_C @ 0x11e8 + delay @ 0x1adc */
+			{0x00000, 0x01000},	/* test.217: ARM vectors + SVC handler (where v=%d fmt likely lives) */
 			{0x40000, 0x40400},	/* early boot/init code */
 			{0x40400, 0x40660},	/* code immediately before strings */
 			{0x64280, 0x64500},	/* code immediately after asserting function */
@@ -2072,6 +2141,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		/* Pre-halt probe (hi-window only since test.169) */
 		brcmf_pcie_probe_armcr4_state(devinfo, "pre-halt");
 		brcmf_pcie_probe_d11_state(devinfo, "pre-halt");
+		brcmf_pcie_probe_d11_clkctlst(devinfo, "pre-halt");
 		mdelay(50);
 
 		/* test.167: re-halt ARM CR4 via the public chip API. */
@@ -2299,6 +2369,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						      "pre-set-active");
 			brcmf_pcie_probe_d11_state(devinfo,
 						   "pre-set-active");
+			brcmf_pcie_probe_d11_clkctlst(devinfo,
+						      "pre-set-active");
 			mdelay(50);
 
 			/* test.188: enable BusMaster BEFORE set_active so
@@ -2349,11 +2421,15 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						      "post-set-active-20ms");
 			brcmf_pcie_probe_d11_state(devinfo,
 						   "post-set-active-20ms");
+			brcmf_pcie_probe_d11_clkctlst(devinfo,
+						      "post-set-active-20ms");
 			mdelay(80);	/* total 100 ms dwell after release */
 			brcmf_pcie_probe_armcr4_state(devinfo,
 						      "post-set-active-100ms");
 			brcmf_pcie_probe_d11_state(devinfo,
 						   "post-set-active-100ms");
+			brcmf_pcie_probe_d11_clkctlst(devinfo,
+						      "post-set-active-100ms");
 
 			/* test.188: Two-tier fine-grain sampling BEFORE the
 			 * coarse dwell grid.  Previous layout (tests 184–187)
@@ -2374,6 +2450,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				mdelay(5);
 				brcmf_pcie_probe_armcr4_state(devinfo, "tier1");
 				brcmf_pcie_probe_d11_state(devinfo, "tier1");
+				brcmf_pcie_probe_d11_clkctlst(devinfo, "tier1");
 
 				/* Subset of fw-integrity region every other
 				 * sample (16 of 256 points) */
@@ -2398,6 +2475,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				mdelay(50);
 				brcmf_pcie_probe_armcr4_state(devinfo, "tier2");
 				brcmf_pcie_probe_d11_state(devinfo, "tier2");
+				brcmf_pcie_probe_d11_clkctlst(devinfo, "tier2");
 
 				/* Minimal fw sampling during tier 2
 				 * (first sample only, every 5th) */
@@ -2427,6 +2505,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					 dwell_labels_ms[d]);
 				brcmf_pcie_probe_armcr4_state(devinfo, tag);
 				brcmf_pcie_probe_d11_state(devinfo, tag);
+				brcmf_pcie_probe_d11_clkctlst(devinfo, tag);
 
 				marker_now = brcmf_pcie_read_ram32(devinfo,
 						devinfo->ci->ramsize - 4);
@@ -2528,7 +2607,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				u32 lo = dump_ranges[j][0];
 				u32 hi = dump_ranges[j][1];
 
-				pr_emerg("BCM4360 test.216: dump range 0x%05x..0x%05x\n",
+				pr_emerg("BCM4360 test.217: dump range 0x%05x..0x%05x\n",
 					 lo, hi);
 				for (addr = lo; addr < hi; addr += 16) {
 					u32 w[4];
@@ -2545,7 +2624,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							(char)c : '.';
 					}
 					ascii[16] = '\0';
-					pr_emerg("BCM4360 test.216: 0x%05x: %08x %08x %08x %08x | %s\n",
+					pr_emerg("BCM4360 test.217: 0x%05x: %08x %08x %08x %08x | %s\n",
 						 addr, w[0], w[1], w[2], w[3],
 						 ascii);
 				}

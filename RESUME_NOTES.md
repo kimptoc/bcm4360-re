@@ -1,5 +1,113 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.217 (2026-04-22) — REVISED per issue #14: high-yield D11 clk_ctl_st probe
+
+### Plan revision rationale (issue #14 alignment)
+
+Issue #14's decision rule — **"no new test unless it distinguishes between
+two concrete explanations"** — flags the originally staged test.217 plan
+(dump 0x00000..0x01000 to find the `"v = %d, wd_msticks = %d"` format
+string) as **low yield**:
+
+- We already know `v=43`=ccrev (loaded by LDR at 0x64186 from chip_info[0x14])
+- We already know `wd_msticks=32`=20ms timeout (matches the polling loop
+  decoded from ramstbydis: max 2000 iterations × 10µs)
+- Locating the literal merely confirms what we already understand; it does
+  not move us toward identifying the missing condition
+
+**Higher-yield test:** identify which register `[r5+0x1e0]` actually points
+to during firmware's polling loop. Test.216 trap data at offset 0x9cfe0:
+
+```
+slot[0] = 0x18002000   ← D11 core base (chip_info[0x78])
+slot[1] = 0x00062a98   ← chip_info struct ptr
+slot[2] = 0x000a0000   ← TCM top
+slot[3] = 0x000641cb   ← trap PC inside ramstbydis
+```
+
+Slot[0]=0x18002000 strongly implies `r5 = &chip_info[0x78]` and the polled
+register is **D11 base + 0x1e0**.
+
+**Critical existing context (line 2778):** `0x1e0` from any BCMA core base
+is the per-core `clk_ctl_st` register. Bit 17 = HAVEHT (have HT clock).
+Test.114b at line 2781 already reads this safely (with IN_RESET guard).
+
+So the firmware's poll is most likely:
+- Set bit 6 of D11.clk_ctl_st (request RAM standby — bit 6 is chip-specific
+  but appears in the same register)
+- Wait up to 20ms for HAVEHT (bit 17) to go HIGH (or for an ack bit)
+- If it never asserts → ASSERT "v=43, wd_msticks=32"
+
+### What POST-TEST.216 delivered (still valid)
+
+Test.216 ran cleanly with `min_res_mask=0x17f`. Same trap (PC 0x000641cb,
+`v = 43, wd_msticks = 32`). Dumped 0x01000..0x02000.
+
+**helper_C @ 0x011E8 fully decoded** as a printf("ASSERT in file %s line %d
+(ra %p, fa %p)") wrapper followed by `SVC #0` to the trap handler. So
+helper_C ONLY emits the "ASSERT in file..." line; the `v = %d, wd_msticks
+= %d` text comes from the SVC trap handler in 0x00000..0x01000 (still
+unmapped, but now lower priority).
+
+**0x01ADC entry** is a non-leaf wrapper calling 0x001EC in low TCM.
+
+### Implementation plan for test.217 (REVISED — high yield)
+
+Two probes, ordered by yield:
+
+1. **PRIMARY: D11 clk_ctl_st (0x1e0) sampling during dwell.** New helper
+   `brcmf_pcie_probe_d11_clkctlst()` that mirrors the test.114b pattern:
+   - Select BCMA_CORE_80211, read wrapper RESET_CTL first to confirm
+     IN_RESET=NO (avoid PCIe SLVERR if D11 is in reset — killed test.115).
+   - If safe, read core register at offset 0x1e0 and decode bits 0..2,
+     6, 16, 17, 19 (FORCEALP, FORCEHT, FORCEILP, ?, ALP_AVAIL, HAVEHT,
+     BP_ON_HT).
+   - Restore CHIPCOMMON window when done.
+
+   Call sites:
+   - `pre-set-active` (baseline)
+   - `post-set-active-20ms`, `post-set-active-100ms`
+   - Once per `tier1` iteration (10 × 5 ms — covers ~100-150 ms)
+   - Once per `tier2` iteration (30 × 50 ms — covers ~150-1650 ms)
+   - Once per dwell tick (12 × 250 ms — covers ~1750-3000 ms)
+
+   Total: ~52 reads — safe (CC sample already runs at every tick without
+   issue per test.196).
+
+2. **SECONDARY (cheap, kept): low TCM dump 0x00000..0x01000** for SVC
+   handler context (free with the existing dump_ranges loop).
+
+`min_res_mask=0x17f` patch retained. Test marker .216 → .217.
+
+### Decision tree
+
+| D11 clk_ctl_st observation | Interpretation | Next test |
+|---|---|---|
+| Bit 17 (HAVEHT) STAYS CLEAR throughout dwell | D11 never receives HT clock — PMU isn't gating HT to D11, or D11's CCR clock-request bit isn't set | inspect/force PMU resource bits gating D11 HT, or pre-set D11 FORCEHT before set_active |
+| Bit 17 oscillates / drops to 0 just before assert | Standby-request handshake doesn't ack | locate which bit firmware sets at +0x1e0 (likely bit 6) and inspect ack semantics |
+| Bit 17 stays SET continuously | Polled register is NOT D11.clk_ctl_st — slot[0]=D11 base is a back-ref | re-decode chip_info[+0x78..0xa0] and find the real polled core |
+| Read of D11+0x1e0 returns 0xffffffff | D11 went IN_RESET after set_active | check D11 wrapper RESET_CTL transitions over dwell |
+
+### Build/run
+
+```
+make -C /home/kimptoc/bcm4360-re/phase5/work    # via kbuild
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.217.{run,journalctl,journalctl.full}.txt`.
+
+---
+
+## POST-TEST.216 (2026-04-22) — see PRE-TEST.217 above
+
+helper_C @ 0x011E8 is a printf+SVC wrapper. Format string `v = %d,
+wd_msticks = %d` not in 0x01000..0x02000 — emitted by SVC trap handler in
+0x00000..0x01000. Plan revised per issue #14 to focus on identifying the
+polled register directly via D11 clk_ctl_st sampling.
+
+---
+
 ## PRE-TEST.216 (2026-04-22) — dump early TCM (0x01000..0x02000) to find helper_C + format string
 
 ### What POST-TEST.215 just delivered (HUGE — full ramstbydis decode)
