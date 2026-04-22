@@ -2494,6 +2494,29 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			msleep(5);
 			pr_emerg("BCM4360 test.188: brcmf_chip_set_active returned %s\n",
 				 sa_rc ? "true" : "false");
+
+			/* test.229 Option A: binary discriminator for the
+			 * post-set_active wedge observed in test.228.
+			 *
+			 * test.228 captured "brcmf_chip_set_active returned
+			 * true" for the first time and then the host wedged
+			 * bus-wide (no NMI, empty pstore, ~2 min auto-reboot).
+			 * The next action was the first MMIO probe at 0x408
+			 * (ARM CR4 IOCTL), which could be the trigger (H1:
+			 * host-initiated MMIO hang) or innocent of it (H2:
+			 * firmware-initiated bus stall).
+			 *
+			 * This test skips all post-set_active probes
+			 * (probe_armcr4_state, probe_d11_state,
+			 * probe_d11_clkctlst, tier-1/2 fine-grain, 3000 ms
+			 * dwell). If host does NOT wedge and driver returns
+			 * -ENODEV cleanly, H1 is confirmed; if it still
+			 * wedges, H2.
+			 */
+			pr_emerg("BCM4360 test.229: SKIPPING post-set_active probes — msleep(1000) before BM-clear\n");
+			msleep(1000);
+			pr_emerg("BCM4360 test.229: 1000 ms dwell done; proceeding to BM-clear + release\n");
+#if 0
 			mdelay(20);
 			brcmf_pcie_probe_armcr4_state(devinfo,
 						      "post-set-active-20ms");
@@ -2738,6 +2761,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						 fine_first, fine_last,
 						 fine_last - fine_first + 4);
 			}
+#endif /* test.229 Option A: post-set_active probe + tier + dwell block skipped */
 		}
 		/* test.188: set_active ran with BusMaster ENABLED (set
 		 * above before the call). Tiers ran at ~100-1650 ms then

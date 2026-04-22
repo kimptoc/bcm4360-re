@@ -154,11 +154,15 @@ stays intact.
 
 ### Pre-test checklist (to complete before running)
 
-1. Build status: NOT yet rebuilt — code change pending
+1. Build status: **REBUILT CLEAN** (2026-04-22 20:51 BST) — `brcmfmac.ko`
+   contains both `test.229: SKIPPING post-set_active probes` and
+   `test.229: 1000 ms dwell done` strings; probe/tier/dwell block now
+   gated behind `#if 0`
 2. PCIe state: will re-verify after SMC reset (user action)
 3. Hypothesis stated: above
 4. Plan committed and pushed: this commit
 5. Filesystem synced in commit step
+6. **USER ACTION PENDING**: SMC reset before insmod
 
 ### Run command (same as every test)
 
