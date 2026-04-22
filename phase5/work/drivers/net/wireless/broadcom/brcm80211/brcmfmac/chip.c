@@ -530,7 +530,7 @@ static int brcmf_chip_cores_check(struct brcmf_chip_priv *ci)
 	int idx = 1;
 
 	list_for_each_entry(core, &ci->cores, list) {
-		brcmf_err("BCM4360 test.209: core[%-2d] id=0x%x:rev%-3d base=0x%08x wrap=0x%08x\n",
+		brcmf_err("BCM4360 test.210: core[%-2d] id=0x%x:rev%-3d base=0x%08x wrap=0x%08x\n",
 			  idx++, core->pub.id, core->pub.rev, core->pub.base,
 			  core->wrapbase);
 
@@ -553,7 +553,7 @@ static int brcmf_chip_cores_check(struct brcmf_chip_priv *ci)
 		}
 	}
 
-	brcmf_err("BCM4360 test.209: host-side enumerated %d cores total (firmware assert wants r6==9 — see test.207)\n",
+	brcmf_err("BCM4360 test.210: host-side enumerated %d cores total (firmware assert wants r6==9 — see test.207)\n",
 		  idx - 1);
 	if (!cpu_found) {
 		brcmf_err("CPU core not detected\n");
@@ -1186,7 +1186,7 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		before_max = chip->ops->read32(chip->ctx, max_addr);
 		chip->ops->write32(chip->ctx, max_addr, 0x17f);
 		after_max = chip->ops->read32(chip->ctx, max_addr);
-		brcmf_err("BCM4360 test.209: max_res_mask 0x%08x -> 0x%08x (write 0x17f — bit 6 only; extended core-table dump + host-side core count)\n",
+		brcmf_err("BCM4360 test.210: max_res_mask 0x%08x -> 0x%08x (write 0x17f — bit 6 only; extended core-table dump + host-side core count)\n",
 			  before_max, after_max);
 	}
 

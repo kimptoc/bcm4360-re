@@ -1,5 +1,70 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.210 (2026-04-22) — widen code dump to find assert function entry
+
+### Hypothesis
+
+The function containing the BL-to-assert at `0x641c6` starts somewhere
+between `0x63e00` and `0x64100`. From earlier dumps:
+
+- `0x64100..0x641df` shows mid-function code (loop with `SUBS r6,#1`,
+  `STR r6,[r5,#0x10]`, `CMP r6,#0`, struct accesses through r5).
+- `0x641c0..0x641d0` is the assert call site (`MOVW r1,#0x18d`, BL,
+  post-BL `LDR r3,[r4,#0x4c]; TST r3,#0x100; BEQ`).
+- `0x64238..0x64244` is a literal pool with pointers to "ramstbydis",
+  `0x17fff`, `0x62a08`, `0x62a0c`.
+- `0x64248` shows `2d e9 f8 43` = `STMDB SP!,{r3-r9,lr}` — clearly the
+  **start of a *different* function** below the asserting one.
+
+So the asserting function lives entirely **above 0x64248** and below
+its own function entry (which we haven't located yet). Standard ARM Thumb-2
+function prologues use `B5xx` (small PUSH) or `E92D xxxx` (PUSH.W) — both
+are easy to spot byte-wise.
+
+If we can find this function's entry, we get:
+
+- The **prologue's PUSH list** → tells us the function's max-saved-register
+  set, hinting at function complexity.
+- **r5 setup** at the top → tells us where the chip-info struct pointer
+  actually comes from (passed in or loaded from a global).
+- Any **branch table or initial CMP** that determines which code path
+  reaches the assert site.
+
+### Implementation
+
+Replace dump_ranges entries `{0x64100,0x641e0}` + `{0x64200,0x64280}` with
+a single contiguous `{0x63e00,0x64280}`. New code dump = 1152 bytes / 16 =
+**72 rows** (~18 ms additional MMIO time during dump phase). Bumps test
+markers `209 → 210` for log clarity.
+
+No NVRAM or firmware changes. No other code changes.
+
+### Build + pre-test
+
+- Module rebuild required (test marker bump triggers recompile)
+- PCIe state: clean (`Status: Cap+ ... <MAbort-`)
+- Firmware reverted to 4352pci-original (md5 `812705b3...`) post-test.209
+- Filesystem will be synced before commit
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.210.{run,journalctl,journalctl.full}.txt`.
+
+### Pre-arranged decision tree (read after test runs)
+
+| Find at offset X | Interpretation | Next |
+|---|---|---|
+| `B5xx` or `E92D xxxx` between 0x63e00 and 0x64100 | function entry found | trace what's at function entry; identify args (r0..r3) and globals; map r5's source |
+| Multiple `B5xx`/`E92D` patterns | several short functions in this range | bisect to find the one whose body extends to 0x641c6 (look for matching POP/`E8BD`) |
+| No clear prologue, just data | range is data table or literal pool | widen further to `0x63800..0x63e00` in test.211 |
+| Function entry below 0x63e00 | very large function (>900 bytes) | re-allocate dump budget; widen code window |
+
+---
+
 ## POST-TEST.209 (2026-04-22) — 4350pci binary downloads but never executes (different entry-vector format)
 
 Logs: `phase5/logs/test.209.{run,journalctl,journalctl.full}.txt`. Test ran
