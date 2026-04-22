@@ -1,5 +1,171 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.215 (2026-04-22) — widen format-string hunt + dump chip-info struct in detail
+
+### What POST-TEST.214 just delivered
+
+Test.214 added one new dump range `0x40700..0x41000`. Outcomes:
+
+1. **Format string `"v = %d, wd_msticks = %d"` NOT in 0x40700..0x41000.** Hunt
+   continues — likely lives in the larger string area between 0x41000 and ~0x42000+.
+
+2. **Firmware version string FOUND: `PCI.CDC.6.30.223 (TOB) (r)`** at 0x40b8x.
+   Matches the last broadcom-sta release (September 2015, v6.30.223.271).
+   Confirms our firmware blob and proprietary `wl` driver share the same
+   ARM-side codebase. **Major reference data point** — anything we learn from
+   wl driver-side disassembly applies directly to this firmware's code.
+
+3. **AI core wrapper register layout discovered.** A long format-string block
+   at 0x40e?? enumerates wrapper register names that firmware can dump for
+   diagnostics: `Core ID, addr, config, resetctrl, resetstatus, ioctrl,
+   iostatus, errlogctrl, errlogdone, errlogstatus, intstatus, errlogid,
+   errloguser, errlogflags, errlogaddr, oobselin{a,b,c,d}{30,74},
+   oobselout{a,b,c,d}{30,74}, oobsync{a,b,c,d}, oobseloutaen, oobaext...`
+   This is the ChipCommon AI (AXI Interconnect) wrapper register set —
+   useful reference if we later need to decode core-wrapper traps.
+
+4. **Strings between 0x40700-0x41000 are entirely PCIe-dongle subsystem**:
+   `pciedngl_isr/open/close/probe/send`, `bcmcdc.c`, `dngl_rte.c`,
+   `proto_attach`, `dngl_devioctl`, `dngl_attach`, etc. This is the FullMAC
+   protocol layer — not where ramstbydis lives.
+
+5. **Behavior unchanged**: same trap PC `0x000641cb`, same assert message
+   `v = 43, wd_msticks = 32` (only the leading firmware timestamp differs:
+   141678.495 in test.214 vs 141331.301 in test.213). Confirms test.214's
+   dump-only change had zero firmware impact, and that v=43 is **invariant
+   across runs** — strong indicator v is a constant (chiprev or expected
+   value), not a polling counter.
+
+### Refinements to working theory
+
+- Polling loop reads `[r3, #0x1e0]` where r3 = `*arg1` of asserting function
+  (set at 0x6402e: `MOV r5, r1; ... LDR r3, [r5, #0]`). arg0 (saved as r4)
+  appears in trap PC neighborhood: `LDR r3, [r4, #0x48]` at 0x641ca.
+- BL at 0x641c6 → 0x011E8 (helper_C, the printf logger from test.211)
+- The literal pool entry loaded into r0 right before the BL points to
+  `"hndarm.c"` at 0x40671 (file name for the assert)
+- The `"v = %d, wd_msticks = %d"` format string is not loaded by any literal
+  pool entry in the asserting function — meaning it's emitted by a separate
+  trap handler (probably automatic for any `ASSERT()` call) that reads global
+  variables `v` and `wd_msticks`. Finding the string would still narrow the
+  context.
+
+### Implementation plan for test.215
+
+**Two complementary probes in one test:**
+
+1. **Continue format-string hunt**: dump `0x41000..0x42000` (next 4 KB; the
+   PCIe-dongle string slab in 0x40700..0x41000 strongly suggests larger
+   string clusters live ahead — and "v = %d, wd_msticks = %d" plus other
+   trap-handler text likely cluster together).
+
+2. **Dump arg0 (chip-info struct) in detail**: trap data slot[1] = 0x00062a98.
+   We have `0x62a00..0x62c00` already in dump_ranges, but the post-trap dump
+   shows it. Now we know arg0 = chip_info struct base — re-examining its
+   contents at offsets 0x48 (used by `LDR r3, [r4, #0x48]` at trap PC) and
+   the polling pointer field will tell us what hardware register is polled.
+
+   Actually: we already dump 0x62a00..0x62c00 — we just need to **decode**
+   the field at offset 0x48 from 0x62a98 = `0x62ae0` from existing data, no
+   new MMIO needed.
+
+So test.215 = ONE new dump range `{0x41000, 0x42000}`. Plus, in the post-test
+analysis, decode the chip-info struct contents we already have.
+
+### Decision tree
+
+| Find | Interpretation | Next |
+|---|---|---|
+| `"v = %d"` or `"wd_msticks"` literally in 0x41000..0x42000 | format string located | trace what code references it; that's the trap handler — read globals being printed |
+| Strings in 0x41000..0x42000 are still PCIe/CDC | format is even further | dump 0x42000..0x43000 in test.216 |
+| chip_info[0x48] (= TCM[0x62ae0]) decodes to a register pointer | identifies the polled register subsystem | targeted register-space dump |
+
+### Build/run
+
+`min_res_mask=0x17f` patch stays in place. Add one dump_ranges entry, bump
+markers .214 → .215.
+
+```
+make -C /home/kimptoc/bcm4360-re/phase5/work    # via kbuild
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.215.{run,journalctl,journalctl.full}.txt`.
+
+---
+
+## POST-TEST.214 (2026-04-22) — fw version 6.30.223 located; format string still hiding
+
+Logs: `phase5/logs/test.214.{run,journalctl,journalctl.full}.txt`. Test ran
+cleanly; same trap behavior as test.213 (bit-for-bit identical trap PC and
+assert text apart from firmware-internal timestamp prefix).
+
+### Sanity check
+
+- All 12 dwell ticks completed
+- res_state stable at 0x17f (bit 2 still pinned by min_res_mask=0x17f)
+- KATSKATS canary intact
+- Trap PC: `0x000641cb` (same as .211/.212/.213)
+- Assert text: `"... v = 43, wd_msticks = 32"` (same v, same wd_msticks)
+
+### New strings cataloged from 0x40700..0x41000
+
+Five distinct string clusters identified (decoded from hex+ASCII dump):
+
+**0x40700-0x408xx — extension of PCIe-dongle subsystem strings**
+- `extpktlen %d`, `dngl_dev_ioctl:`, `pciedngl_isr exits`, `partial pkt pool allocated`
+- `dngl_attach failed`, `pcidongle_probe:hndrte_add_isr failed`
+- `pciedngl_close/ioctl/send/probe/open`, `proto_attach`
+- `bcmcdc.c`, `bad return buffer`, `out of txbufs`, `bad packet length`, `bad message length`
+- `bus:`, `dngl_finddev`, `dngl_devioctl`, `dngl_binddev`, `dngl_sendpkt`
+- `vslave %d not found`, `pkt 0x%p; len %d`, `QUERY`, `dngl_rte.c`, `ioctl %s cmd 0x%x, len %d`,
+  `status = %d/0x%x`, `MALLOC failed`, `flowctl %s`, `dropped pkt`, `unknown`
+
+**0x40b80-0x40bxx — firmware version + admin strings**
+- `Broadcom`, `Watchdog reset bit set, clearing`, `PCI.CDC.6.30.223 (TOB) (r)`,
+  `c_init: add PCI device`, `add WL device 0x%x`, `rtecdc.c`,
+  `device binddev failed`, `PCIDEV`, `device open failed`, `netdev`
+
+**0x40d??-0x40e?? — manufacturer + device-name format**
+- `manf`, `%s: %s Network Adapter (%s)`, `RTEGPERMADDR failed`,
+  `dngl_setifindex`, `dngl_unbinddev`
+
+**0x40e??-end — ai_core_reset diagnostic dump format**
+A massive printf format-string for dumping AI (AXI) core-wrapper registers.
+Fields enumerated: `Core ID`, `addr`, `config`, `resetctrl`, `resetstatus`,
+`resetread/writeid`, `ioctrl`, `iostatus`, `errlogctrl/done/status`,
+`intstatus`, `errlog{id,user,flags,addr}`, `oobselin/out{a,b,c,d}{30,74}`,
+`oobsync{a,b,c,d}`, `oobselout{a,b,c,d}en`, `oobaext...`. This is the
+ChipCommon AI wrapper register set — useful reference for backplane decoding.
+
+### Critical confirmation: firmware = wl driver firmware
+
+The `PCI.CDC.6.30.223` string matches broadcom-sta v6.30.223.271 exactly
+(September 2015 final release). Two implications:
+
+1. Anything reverse-engineered from the proprietary `wl` ARM-side code IS
+   directly applicable to this firmware (same codebase, same symbols)
+2. The "ramstbydis" function we're hitting is part of the unified
+   wl/firmware codebase, so symbol-name searches in `wl.ko` disassembly
+   should find it
+
+### Behavioral invariants confirmed across .211/.212/.213/.214
+
+| Quantity | Value | Implication |
+|---|---|---|
+| Trap PC | `0x000641cb` | Same instruction asserts every time |
+| `v` in assert | `43` | Constant; not a varying counter or register read |
+| `wd_msticks` | `32` | Constant (fixed timeout) |
+| Trap data slot[0] | `0x18002000` | D11 base addr (chip layout) |
+| Trap data slot[1] | `0x00062a98` | chip-info struct ptr (constant alloc) |
+| Trap data slot[2] | `0x000a0000` | TCM top |
+
+`v=43` being constant strongly suggests it's `ccrev` or a similar
+chip-identification value — possibly being printed for diagnostic context,
+not as the failed condition itself.
+
+---
+
 ## PRE-TEST.214 (2026-04-22) — locate "v = %d, wd_msticks = %d" format string + decode polled register
 
 ### What POST-TEST.213 just delivered
