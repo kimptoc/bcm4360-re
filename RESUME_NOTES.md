@@ -1,5 +1,111 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.197 (2026-04-22) — BREAKTHROUGH 2: firmware is *running loops* (ASCII counter strings updating in real time)
+
+Logs: `phase5/logs/test.197.journalctl.txt` (892 brcmfmac lines) +
+`test.197.journalctl.full.txt` (893 lines).
+
+### Headline result
+
+| Outcome | Status |
+|---|---|
+| No crash | ✓ — slim dwell + 16 K post-dwell reads survived |
+| `res_state` 0x13b → 0x17b (bit 6 only) | ✓ same as test.196 |
+| Pre-release populate ran cleanly (16384 cells, 64 KB heap, ~6 s mark) | ✓ |
+| Post-dwell scan found CHANGED cells | **7 of 16384** |
+| Span of changes | `0x9702c..0x9cdb8` (23 952 bytes — wide, scattered) |
+| 0x98000 / 0x9c000 (test.196 hits) — CHANGED again? | **No**, both UNCHANGED in test.197 |
+
+### Decoded changes — firmware is updating ASCII counter strings
+
+All seven changed cells decode as printable ASCII (little-endian):
+
+| Addr | Old (hex / ASCII) | New (hex / ASCII) | Note |
+|---|---|---|---|
+| 0x9702c | 0x38393235 `"5298"` | 0x32373136 `"6172"` | adjacent → 8-byte string |
+| 0x97030 | 0x3633302e `".063"` | 0x3132382e `".821"` | "5298.063" → "6172.821" |
+| 0x9cd48 | 0x00303336 `"630\0"` | 0x00383231 `"128\0"` | null-terminated short string |
+| 0x9cd50 | 0x00000024 (binary 36) | 0x00000335 (binary 821) | binary counter — **note 821 == suffix in 0x97030** |
+| 0x9cdb0 | 0x32353331 `"1352"` | 0x31363331 `"1361"` | adjacent triple → 12-byte string |
+| 0x9cdb4 | 0x302e3839 `"98.0"` | 0x382e3237 `"72.8"` | (cont) |
+| 0x9cdb8 | 0x41203633 `"63 A"` | 0x41203132 `"12 A"` | (cont) → "1352 98.063 A" → "1361 72.812 A" |
+
+**Significant detail**: the binary counter at `0x9cd50` reads `0x335 = 821`,
+exactly matching the ASCII suffix in `0x97030` (`".821"`). This is firmware
+*formatting* a binary counter into a printable string — strong evidence of
+an active sprintf/print routine running, not just one-shot init writes.
+
+### What this means
+
+Test.196 showed firmware wrote two cells. Test.197 shows those exact cells
+did NOT change again, but seven *other* cells did, **and the changes look
+like a sprintf-style string buffer being updated**. The window between
+pre-populate (~end-of-dwell) and post-dwell scan is only ~400 ms, so these
+are events firing on a sub-second cadence. Firmware is alive and looping.
+
+This is qualitatively different from test.196 (which could be read as
+"firmware ran once and stopped"). Test.197 demonstrates **continuous
+firmware execution** at sub-second granularity. The chip is functional;
+what we still lack is the host↔firmware protocol bring-up that lets the
+driver hand off control packets.
+
+### Firmware progress timeline (unchanged from test.196)
+
+- t=0 (pre-release): `pmucontrol=0x01770181`, `clk_ctl_st=0x00010040`
+- t=250 ms: `pmucontrol=0x01770381` (NOILPONW set by firmware)
+- t=500 ms–t=3000 ms: CC regs stable (firmware in steady-state loop)
+- end-of-dwell: pre-populate snapshot of 0x90000-0xa0000 taken
+- ~400 ms later: post-dwell scan → 7 cells CHANGED
+
+### Hypothesis confirmed/refuted from PRE-TEST.197
+
+| Hypothesis | Result |
+|---|---|
+| (a) Wide-stride aliasing — firmware only wrote two cells | **Refuted**. Test.197 shows multiple write hotspots not on the 16 KB grid. |
+| (b) Contiguous structure | **Partially**. Two short adjacent runs (8 B at 0x9702c, 12 B at 0x9cdb0) but not one big block. |
+| (c) Scattered singletons | **Confirmed for the binary counter** at 0x9cd50, possibly 0x9cd48 too. |
+
+The picture is **multiple short string fields** scattered across 0x97000-0x9d000.
+Looks like a status / log structure with several text fields and at least one
+binary counter, all updated by the same firmware loop.
+
+### Open puzzle
+
+Test.196's writes (0x98000, 0x9c000) **did not repeat** in test.197.
+Possibilities:
+1. Those were one-shot init writes (zero-fill / stack-canary plant); test.197
+   captured later steady-state activity instead.
+2. The wide-TCM probe READ at those addresses during test.196 perturbed
+   them (read-modify-clear on a register-aliased TCM region?). Unlikely —
+   they are deep in TCM, not register-mapped.
+3. Firmware behavior is non-deterministic across runs.
+
+(1) is most plausible: test.196 caught early init, test.197 caught steady-state.
+
+### Next options to consider
+
+A. **Wider scan** (0x80000–0xa0000 or whole 0x00000–0xa0000) at 4-byte
+   stride to find any other active write regions and any code/data near
+   the strings that might decode as format-string templates.
+B. **Time-series sample** of just the 7 known-active cells — read each
+   cell every 250 ms during dwell, log values. Will tell us how fast
+   the counter increments and whether the string fields update on a
+   periodic schedule (heartbeat? watchdog?).
+C. **Pre-set_active scan** — populate the snapshot BEFORE set_active so we
+   see the *initial* writes too (test.196's 0x98000/0x9c000 hits) plus
+   ongoing activity. Combine with end-of-dwell scan to see the full
+   write history during the 3 s dwell.
+D. **Decode the structure** — dump 0x97000-0x9d000 contents fresh (no
+   compare) and look for printable strings with `strings` tool; might
+   recognise format strings like `"%s %d.%03d A"` etc.
+
+Recommendation: **B (time-series)** — cheapest, most informative.
+Watching the counter at 0x9cd50 increment will tell us the firmware
+loop frequency, which is a hard datapoint we don't have. If it
+increments by N per 250 ms, we know the firmware tick rate.
+
+---
+
 ## PRE-TEST.197 (2026-04-22) — fine-grain TCM scan over 0x90000–0xa0000 to map full extent of firmware writes
 
 ### Hypothesis
