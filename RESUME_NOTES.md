@@ -1,5 +1,106 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.196 (2026-04-22) — BREAKTHROUGH: bit 6 alone is safe AND firmware finally writes TCM (first ever observation)
+
+Logs: `phase5/logs/test.196.journalctl.txt` (885 brcmfmac lines) +
+`test.196.journalctl.full.txt` (920 lines).
+
+### Headline result
+
+| Outcome | Status |
+|---|---|
+| No crash | ✓ — system survived test cleanly, module rmmod'd normally |
+| `res_state` 0x13b → 0x17b (bit 6 asserted, bit 7 NOT asserted) | ✓ |
+| **First ever firmware-originated TCM writes detected** | ✓ |
+| `fw-sample` 256-region scan post-dwell | 256 UNCHANGED — firmware code intact, no overwrite |
+| `wide-TCM` post-dwell | **2 of 40 regions CHANGED** — firmware wrote scratch |
+
+Specific writes found by post-dwell wide-TCM scan:
+
+```
+post-dwell wide-TCM[0x98000]=0x00000000 (was 0x15f3b94d) CHANGED
+post-dwell wide-TCM[0x9c000]=0x5354414b (was 0xf39d6dd9) CHANGED
+```
+
+`0x9c000` is in the upper TCM (~624 KB from base, near the end of the
+640 KB TCM). `0x5354414b` decodes as ASCII "KATS" little-endian / "STAK"
+big-endian — looks like part of a firmware initialisation marker
+(possibly "STACK" or a stack canary fill pattern). `0x98000` zeroed out.
+**This is the first objective evidence in this project that firmware is
+executing and writing data on this chip.**
+
+### Bit 6 vs bit 7 decoded
+
+| Signal | test.194 (max=0x13f) | test.195 (max=0x1ff, both 6+7) | test.196 (max=0x17f, bit 6 only) |
+|---|---|---|---|
+| `res_state` | 0x13b | 0x1fb | **0x17b** |
+| `clk_ctl_st` pre-release | 0x00050040 | 0x01070040 | **0x00010040** |
+| `clk_ctl_st` post-dwell | 0x00050040 | (crashed) | **0x00050040** (bit 0x40000 set during dwell) |
+| `pmustatus` | 0x2a | 0x2e | 0x2a |
+| `pmucontrol` post-dwell | 0x01770381 | 0x01770381 | 0x01770381 (NOILPONW set by fw within 250 ms) |
+| Crash? | no | YES (mid-dwell freeze) | **no** |
+| Firmware TCM writes? | 0 | unknown (crashed before scan) | **2** |
+
+Bit 6 alone is the HT clock the firmware needs to execute. Bit 7 enables
+something else (sets `clk_ctl_st` bits 0x10000+0x1000000 even before
+`set_active` runs — confirmed by pre-release snapshot delta) and is the
+destabiliser. Adding bit 7 to bit 6 simultaneously is what crashed
+test.195.
+
+### Firmware progress timeline (from per-tick CC backplane sample)
+
+- t=0 (pre-release): `pmucontrol=0x01770181`, `clk_ctl_st=0x00010040`
+- t=250 ms: `pmucontrol=0x01770381` (NOILPONW set), `clk_ctl_st=0x00050040`
+  → firmware completed early `si_pmu_init` within first 250 ms
+- t=500 ms through t=3000 ms: all CC regs stable (no further changes)
+  → firmware then sits idle (or in a polling loop with no register-visible side effects)
+- post-dwell: 2 wide-TCM cells found CHANGED
+- D11 `RESET_CTL` stayed 0x1 throughout — firmware did NOT advance to D11 bring-up
+
+### What this tells us
+
+1. **Direction is fully validated.** Bit 6 of max_res_mask is THE gate.
+   Firmware was waiting for HT clock; once we permit it, firmware runs
+   and starts initializing.
+2. **Bit 7 is dangerous and unnecessary** for the basic firmware unblock.
+   We can leave it gated off for now.
+3. **Firmware progress stops short of D11 bring-up.** It runs, completes
+   PMU init, writes a small amount of scratch, then stalls. Likely waiting
+   on something else: probably NVRAM (we currently don't fully program
+   NVRAM), a host doorbell signal, or a second clock-domain enable.
+4. **The slim dwell harness is a good baseline** for further bring-up
+   work — it's safe even with HT clock active and gives clean per-tick
+   PMU evolution data.
+
+### Suggested next moves (priority order)
+
+1. **Probe deeper into wide-TCM** — current scan only samples every 16 KB.
+   Add a finer scan around `0x98000`–`0x9c000` to find the full extent
+   of the firmware-written region. Possibly contains a fw-init structure
+   we can decode to learn what state firmware reached.
+2. **Test bit 7 alone** (`max_res_mask=0x1bf`) — formally confirm bit 7
+   is the destabiliser independent of bit 6 (control test). Even with
+   the slim harness, expect a crash; but we'll know.
+3. **NVRAM revisit** — firmware in early init typically reads NVRAM for
+   board-specific config (PHY calibration tables etc). If our NVRAM
+   write is incomplete, fw could be sitting in a "wait for NVRAM ready"
+   loop. Worth re-checking what we actually upload vs what wl.ko does.
+4. **Forcing bit 6 via min_res_mask** — currently bit 6 is asserted only
+   because we permitted it; the chip might cycle it. Setting
+   `min_res_mask=0x17b` would FORCE bit 6 to stay on and could help fw
+   make further progress.
+
+### Ruled out
+
+| Hypothesis | Test | Outcome |
+|---|---|---|
+| Bit 6 + bit 7 simultaneous activation is safe | 195 | falsified — chip freezes |
+| Bit 6 alone destabilises the chip | **196** | **falsified** — bit 6 alone is safe |
+| Heavy MMIO during dwell is universally safe | 195 | falsified |
+| Slim dwell harness can't detect fw writes | **196** | **falsified** — caught both |
+
+---
+
 ## PRE-TEST.196 (2026-04-22) — bisect res 6 vs 7 (try bit 6 only, max_res_mask=0x17f) + drastically reduce dwell-time MMIO
 
 ### Hypothesis
