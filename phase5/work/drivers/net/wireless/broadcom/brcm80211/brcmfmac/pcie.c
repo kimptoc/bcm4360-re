@@ -2423,8 +2423,35 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					 mmio_guard);
 			}
 
+			/* test.219: force HT clock by setting FORCEHT (bit 1)
+			 * of ChipCommon clk_ctl_st before set_active.
+			 * Test.218 proved HAVEHT (bit 17) stuck CLEAR
+			 * chip-wide throughout dwell — firmware ramstbydis
+			 * times out polling for it. Hypothesis: HT request
+			 * was never made; FORCEHT tells PMU to bring HT up.
+			 */
+			{
+				u32 ccs_pre, ccs_post;
+
+				brcmf_pcie_select_core(devinfo,
+						       BCMA_CORE_CHIPCOMMON);
+				ccs_pre = READCC32(devinfo, clk_ctl_st);
+				WRITECC32(devinfo, clk_ctl_st,
+					  ccs_pre | BIT(1));
+				udelay(50);
+				ccs_post = READCC32(devinfo, clk_ctl_st);
+				pr_emerg("BCM4360 test.219: FORCEHT write CC clk_ctl_st pre=0x%08x post=0x%08x [HAVEHT(17)=%s ALP_AVAIL(16)=%s FORCEHT(1)=%s]\n",
+					 ccs_pre, ccs_post,
+					 (ccs_post & BIT(17)) ? "YES" : "no ",
+					 (ccs_post & BIT(16)) ? "YES" : "no ",
+					 (ccs_post & BIT(1))  ? "YES" : "no ");
+			}
+			mdelay(2);
+			brcmf_pcie_probe_d11_clkctlst(devinfo,
+						      "post-FORCEHT-write");
+
 			mdelay(20);
-			pr_emerg("BCM4360 test.188: calling brcmf_chip_set_active resetintr=0x%08x (BusMaster ENABLED — DMA-stall discriminator)\n",
+			pr_emerg("BCM4360 test.219: calling brcmf_chip_set_active resetintr=0x%08x (FORCEHT pre-applied)\n",
 				 resetintr);
 			mdelay(30);
 			sa_rc = brcmf_chip_set_active(devinfo->ci,
