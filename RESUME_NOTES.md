@@ -83,6 +83,93 @@ markers) BEFORE set_active, and see if the wedge moves or disappears.
 ---
 
 
+## PRE-TEST.231 (2026-04-22 21:33 BST, boot 0, no reset needed) — single-run timing bisect to locate the wedge window post-set_active
+
+### Hypothesis
+
+With `brcmf_chip_set_active` re-enabled (baseline + wedge returns),
+emit 10 breadcrumbs at 10/50/100/200/300/500/700/900/1000 ms after
+the `returned true` marker. The last breadcrumb to appear in the
+journal gives an upper bound on the wedge window. Interpretation:
+
+- Last breadcrumb at 10–100 ms → fw hits the bus within ~100 ms of
+  starting. Suggests DMA-target-missing or instant config-TLP failure.
+- Last breadcrumb at 200–500 ms → fw runs some init routine then
+  stumbles. Could be init-poll on a missing resource.
+- Last breadcrumb at 700–1000 ms → fw polls for a host-ready marker
+  or does extensive internal init first.
+- All breadcrumbs including `t=1000ms dwell done` land, host wedges
+  later → stall is past 1 s; broader window to hunt in.
+- `t=0ms dwell start` itself does not land → stall is instant-on-
+  set_active.
+
+### Why single-run (not 4 runs as advisor initially suggested)
+
+Advisor suggested N=50/250/500/900 as 4 separate runs. Single-run with
+10 sequential breadcrumbs gives the same information (last-landing
+breadcrumb = wedge upper bound) plus finer granularity, at 1/4 the
+SMC-reset cost. Wedge is reliably reproducible (tests 227/228/229 all
+wedged in the same window), so independent-runs aren't needed for
+variance observation. If the single-run result is ambiguous (e.g.
+breadcrumbs interleave with kernel watchdog messages in confusing
+ways), individual-N runs remain available as a fallback.
+
+### Code change (pcie.c, in `brcmf_pcie_download_fw_nvram`)
+
+Restored the original `brcmf_chip_set_active` call + surrounding
+`test.226 immediately before / after` + `test.188: returned %s`
+breadcrumbs that test.230 removed. Then replaced test.230's single
+`msleep(1000)` with a chain of `msleep(N) + pr_emerg` pairs at the
+offsets above. Total dwell is still 1000 ms.
+
+Post-set_active probe block (`probe_armcr4_state` etc.) remains at
+`#if 0` — keep one variable at a time.
+
+### Build status — REBUILT CLEAN (2026-04-22 21:32 BST)
+
+`brcmfmac.ko` 14251536 bytes, mtime 21:32. `strings` confirms all 10
+`test.231: t=…` breadcrumbs present.
+
+### Hardware state (still boot 0 of 21:06 BST SMC-reset session)
+
+- `lspci -vvv -s 03:00.0`: Control Mem+ BM-, Status MAbort-, DevSta
+  UnsupReq- (cleared by test.230), TransPend-, LnkSta 2.5GT/s x1.
+- BAR0 timing 17/18/18/18 ms — fast-UR intact.
+- pstore empty, no modules loaded.
+- No SMC reset needed (test.230 left chip clean because fw never activated).
+
+### Decision tree
+
+| Journal signature | Interpretation | Test.232 direction |
+|---|---|---|
+| Last breadcrumb is `t=0ms dwell start` or `returned true` | Stall is effectively instant-on-set_active. | Try to populate shared-memory struct in TCM before set_active so fw has valid DMA targets. |
+| Last breadcrumb in [10, 200] ms | Fast fw-stumble. Likely DMA-target-missing. | Same as above (populate shared-memory). |
+| Last breadcrumb in [300, 700] ms | Medium — fw runs an init routine then stumbles. | Look for fw init polling shapes (ring-descriptor read, doorbell write, MSI request). |
+| Last breadcrumb in [900, 1000] ms | Slow — fw polls host-ready marker or does extensive init. | May be recoverable by responding to a fw doorbell within the window. |
+| All breadcrumbs land including `t=1000ms dwell done` | Stall is past 1 s. | Extend dwell (test.232: 1/2/3/5 s breadcrumbs) and re-bisect. |
+
+### Logging / watchdog arming (same as test.229/230)
+
+```bash
+echo 1 | sudo tee /proc/sys/kernel/nmi_watchdog
+echo 1 | sudo tee /proc/sys/kernel/hardlockup_panic
+echo 1 | sudo tee /proc/sys/kernel/softlockup_panic
+echo 30 | sudo tee /proc/sys/kernel/panic
+sync
+```
+
+If host wedges: expect no auto-reboot, user power-cycle + SMC reset
+needed (consistent with tests 227/228/229).
+
+### Expected artifacts
+
+- `phase5/logs/test.231.run.txt` — PRE + harness.
+- `phase5/logs/test.231.journalctl.full.txt` — full journal (boot 0
+  if host survives; boot -1 if wedged).
+- `phase5/logs/test.231.journalctl.txt` — brcmfmac/PCIe/NMI filtered.
+
+---
+
 ## POST-TEST.230 (2026-04-22 21:25 BST, boot 0 — NO CRASH, host survived cleanly) — `brcmf_chip_set_active` is the SOLE wedge trigger
 
 ### Headline

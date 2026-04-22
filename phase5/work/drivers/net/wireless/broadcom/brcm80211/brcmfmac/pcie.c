@@ -2486,21 +2486,37 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			pr_emerg("BCM4360 test.219: calling brcmf_chip_set_active resetintr=0x%08x (FORCEHT pre-applied)\n",
 				 resetintr);
 			mdelay(30);
-			/* test.230: skip brcmf_chip_set_active entirely to
-			 * decide whether firmware activation is the sole
-			 * trigger for the bus-wide wedge confirmed in test.229
-			 * (H2). If host survives this path, fw activation is
-			 * the cause; if it wedges anyway, something in the
-			 * pre-set_active sequence is responsible.
+			pr_emerg("BCM4360 test.226: immediately before brcmf_chip_set_active()\n");
+			msleep(5);
+			sa_rc = brcmf_chip_set_active(devinfo->ci,
+						      resetintr);
+			pr_emerg("BCM4360 test.226: immediately after brcmf_chip_set_active() returned\n");
+			msleep(5);
+			pr_emerg("BCM4360 test.188: brcmf_chip_set_active returned %s\n",
+				 sa_rc ? "true" : "false");
+
+			/* test.231: single-run timing bisect to locate
+			 * *when* in fw startup the bus-wide stall lands.
+			 * Breadcrumbs at 10/50/100/200/300/500/700/900/1000 ms
+			 * from set_active return. The last breadcrumb that
+			 * lands in the journal reveals the upper bound on
+			 * the wedge window. Fast (<100 ms) = fw hits bus
+			 * instantly (DMA-target-missing shape); slow
+			 * (>500 ms) = fw runs some init then stumbles.
 			 *
-			 * Post-set_active probe block remains at #if 0 below
-			 * so we don't reintroduce the H1/H2 ambiguity we just
-			 * resolved.
+			 * Post-set_active probe block remains at #if 0 below —
+			 * one variable at a time (probes stay off).
 			 */
-			pr_emerg("BCM4360 test.230: SKIPPING brcmf_chip_set_active — resetintr=0x%08x NOT written to CR4\n",
-				 resetintr);
-			msleep(1000);
-			pr_emerg("BCM4360 test.230: 1000 ms dwell done (no fw activation); proceeding to BM-clear + release\n");
+			pr_emerg("BCM4360 test.231: dwell start — breadcrumbs every ~100 ms to t=1000ms\n");
+			msleep(10);  pr_emerg("BCM4360 test.231: t=10ms\n");
+			msleep(40);  pr_emerg("BCM4360 test.231: t=50ms\n");
+			msleep(50);  pr_emerg("BCM4360 test.231: t=100ms\n");
+			msleep(100); pr_emerg("BCM4360 test.231: t=200ms\n");
+			msleep(100); pr_emerg("BCM4360 test.231: t=300ms\n");
+			msleep(200); pr_emerg("BCM4360 test.231: t=500ms\n");
+			msleep(200); pr_emerg("BCM4360 test.231: t=700ms\n");
+			msleep(200); pr_emerg("BCM4360 test.231: t=900ms\n");
+			msleep(100); pr_emerg("BCM4360 test.231: t=1000ms dwell done; proceeding to BM-clear + release\n");
 #if 0
 			mdelay(20);
 			brcmf_pcie_probe_armcr4_state(devinfo,
