@@ -1,0 +1,1042 @@
+=== dmesg output ===
+[ 2538.657012] brcmfmac: BCM4360 test.188: module_init entry — extended post-release TCM sampling
+[ 2538.657144] brcmfmac: BCM4360 test.156: before brcmf_core_init()
+[ 2538.657182] brcmfmac: BCM4360 test.155: brcmf_core_init() entry
+[ 2538.657217] brcmfmac: BCM4360 test.155: before brcmf_sdio_register()
+[ 2538.657253] brcmfmac: BCM4360 test.155: after brcmf_sdio_register() err=0
+[ 2538.710082] brcmfmac: BCM4360 test.155: post-SDIO sync (before PCI)
+[ 2538.710115] brcmfmac: BCM4360 test.155: before brcmf_pcie_register()
+[ 2538.710141] brcmfmac: BCM4360 test.188: brcmf_pcie_register() entry
+[ 2539.012408] brcmfmac: BCM4360 test.188: before pci_register_driver
+[ 2539.316352] brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=00000000e7beda6e)
+[ 2539.620258] brcmfmac: BCM4360 test.158: probe entry flush done — proceeding
+[ 2539.924284] brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+[ 2539.924360] brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+[ 2539.924485] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+[ 2540.436368] brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+[ 2540.436419] brcmfmac: BCM4360 test.158: before brcmf_chip_attach
+[ 2540.740346] brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffd53f82800000
+[ 2540.740356] brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+[ 2540.791335] brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+[ 2540.792089] brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+[ 2540.792249] brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+[ 2540.792416] brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+[ 2540.798219] brcmfmac 0000:03:00.0: BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)
+[ 2540.808247] brcmfmac 0000:03:00.0: BCM4360 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0
+[ 2540.812675] brcmfmac: BCM4360 test.188: post-145 ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2540.815642] brcmfmac: brcmf_chip_recognition: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+[ 2540.818887] brcmfmac: brcmf_chip_recognition: BCM4360 test.125: after reset, before get_raminfo
+[ 2540.818895] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[ 2540.818902] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[ 2540.818918] brcmfmac: brcmf_chip_setup: BCM4360 test.193: chip=0x4360 ccrev=43 pmurev=17 pmucaps=0x10a22b11
+[ 2540.818966] brcmfmac: brcmf_chip_setup: BCM4360 test.193: PMU WARs applied — chipcontrol#1 0x00000a10->0x00000a10 pllcontrol#6=0x080004e2 #0xf=0x0000000e
+[ 2540.818982] brcmfmac: brcmf_chip_setup: BCM4360 test.205: max_res_mask 0x0000017f -> 0x0000017f (write 0x17f — bit 6 only, +NVRAM ramstbydis=0)
+[ 2540.818988] brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+[ 2541.124213] brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+[ 2541.124339] brcmfmac: BCM4360 test.158: about to pci_clear_master (config-space write)
+[ 2541.428198] brcmfmac 0000:03:00.0: BCM4360 test.158: BusMaster cleared after chip_attach
+[ 2541.732221] brcmfmac: BCM4360 test.158: about to read LnkCtl before ASPM disable
+[ 2542.036136] brcmfmac: BCM4360 test.158: LnkCtl read before=0x0140 — disabling ASPM
+[ 2542.340260] brcmfmac: BCM4360 test.158: pci_disable_link_state returned — reading LnkCtl
+[ 2542.644248] brcmfmac 0000:03:00.0: BCM4360 test.158: ASPM disabled; LnkCtl before=0x0140 after=0x0140 ASPM-bits-after=0x0
+[ 2542.948167] brcmfmac 0000:03:00.0: BCM4360 test.188: root port 0000:00:1c.2 LnkCtl before=0x0040 ASPM=0x0 CLKREQ=off — disabling L0s/L1/CLKPM
+[ 2543.253072] brcmfmac: BCM4360 test.188: root-port pci_disable_link_state returned — reading LnkCtl
+[ 2543.556205] brcmfmac 0000:03:00.0: BCM4360 test.188: root port 0000:00:1c.2 LnkCtl after=0x0040 ASPM=0x0 CLKREQ=off
+[ 2544.164102] brcmfmac 0000:03:00.0: BCM4360 test.159: before PCIE2 core/reginfo setup
+[ 2544.468091] brcmfmac 0000:03:00.0: BCM4360 test.159: reginfo selected (pcie2 rev=1)
+[ 2544.772081] brcmfmac 0000:03:00.0: BCM4360 test.159: pcie_bus_dev allocated
+[ 2545.076980] brcmfmac 0000:03:00.0: BCM4360 test.159: settings allocated (BCM4360 dummy path)
+[ 2545.380073] brcmfmac 0000:03:00.0: BCM4360 test.159: bus allocated
+[ 2545.684097] brcmfmac 0000:03:00.0: BCM4360 test.159: msgbuf allocated
+[ 2545.988055] brcmfmac 0000:03:00.0: BCM4360 test.159: struct wiring done — before pci_pme_capable
+[ 2546.292106] brcmfmac 0000:03:00.0: BCM4360 test.159: after pci_pme_capable wowl=1
+[ 2546.596064] brcmfmac 0000:03:00.0: BCM4360 test.160: drvdata set — before brcmf_alloc
+[ 2546.899966] brcmfmac 0000:03:00.0: BCM4360 test.160: brcmf_alloc complete — wiphy allocated
+[ 2547.203964] brcmfmac 0000:03:00.0: BCM4360 test.160: OTP read bypassed — OTP not needed
+[ 2547.507915] brcmfmac 0000:03:00.0: BCM4360 test.160: before prepare_fw_request
+[ 2547.811934] brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+[ 2547.811942] brcmfmac 0000:03:00.0: BCM4360 test.160: firmware request prepared
+[ 2548.115901] brcmfmac: BCM4360 test.161: calling brcmf_fw_get_firmwares — async callback expected
+[ 2548.419857] brcmfmac 0000:03:00.0: BCM4360 test.161: brcmf_fw_get_firmwares returned 0 (async/success; callback will fire)
+[ 2548.423101] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+[ 2548.423257] brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+[ 2548.423270] brcmfmac: BCM4360 test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0
+[ 2548.423504] brcmfmac: BCM4360 test.188: setup-entry ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2548.723970] brcmfmac: BCM4360 test.188: pre-attach ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2548.724117] brcmfmac: BCM4360 test.188: pci_register_driver returned ret=0
+[ 2548.724253] brcmfmac: BCM4360 test.128: before brcmf_pcie_attach
+[ 2548.724257] brcmfmac: BCM4360 test.128: brcmf_pcie_attach ENTRY
+[ 2548.724471] brcmfmac: BCM4360 test.155: after brcmf_pcie_register() err=0
+[ 2548.724576] brcmfmac: BCM4360 test.194: PCIe2 CLK_CONTROL probe = 0x00000182
+[ 2548.732422] brcmfmac: BCM4360 test.194: SBMBX write done
+[ 2548.734893] brcmfmac: BCM4360 test.194: PMCR_REFUP 0x0005185f -> 0x0005185f
+[ 2548.737791] brcmfmac: BCM4360 test.128: after brcmf_pcie_attach
+[ 2548.737809] brcmfmac: BCM4360 test.188: post-attach ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2548.774740] brcmfmac: BCM4360 test.155: post-PCI sync (skipping USB)
+[ 2548.774776] brcmfmac: BCM4360 test.156: after brcmf_core_init() err=0
+[ 2549.037834] brcmfmac: BCM4360 test.134: post-attach before fw-ptr-extract
+[ 2549.337898] brcmfmac: BCM4360 test.134: after kfree(fwreq)
+[ 2549.637935] brcmfmac: BCM4360 test.130: before brcmf_chip_get_raminfo
+[ 2549.937974] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+[ 2549.938028] brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+[ 2549.938060] brcmfmac: BCM4360 test.130: after brcmf_chip_get_raminfo
+[ 2549.938098] brcmfmac: BCM4360 test.188: post-raminfo ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2550.238170] brcmfmac: BCM4360 test.130: after brcmf_pcie_adjust_ramsize
+[ 2550.538223] brcmfmac: BCM4360 test.188: pre-download ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2550.538279] brcmfmac: BCM4360 test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)
+[ 2550.838320] brcmfmac: BCM4360 test.142: enter_download_state — confirming ARM CR4 reset state
+[ 2550.838369] brcmfmac: BCM4360 test.142: ARM CR4 state RESET_CTL=0x00000000 IN_RESET=NO/BAD IOCTL=0x0001 CPUHALT=NO FGC=NO CLK=YES
+[ 2551.138434] brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffd53f82800000
+[ 2551.138441] brcmfmac 0000:03:00.0: BCM4360 test.138: pre-BAR2-ioread32 (tcm=ffffd53f82800000)
+[ 2551.438501] brcmfmac 0000:03:00.0: BCM4360 test.138: post-BAR2-ioread32 = 0xb80ef000 (real value — BAR2 accessible)
+[ 2551.738705] brcmfmac: BCM4360 test.188: pre-halt ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2551.738793] brcmfmac: BCM4360 test.188: pre-halt D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2551.788853] brcmfmac: BCM4360 test.188: re-halting ARM CR4 via brcmf_chip_set_passive
+[ 2551.939074] brcmfmac: BCM4360 test.188: post-halt ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2551.989134] brcmfmac: BCM4360 test.188: starting chunked fw write, total_words=110558 (442233 bytes) tail=1 wbase=ffffd53f82800000
+[ 2552.041462] brcmfmac: BCM4360 test.188: wrote 4096 words (16384 bytes)
+[ 2552.093757] brcmfmac: BCM4360 test.188: wrote 8192 words (32768 bytes)
+[ 2552.146012] brcmfmac: BCM4360 test.188: wrote 12288 words (49152 bytes)
+[ 2552.198274] brcmfmac: BCM4360 test.188: wrote 16384 words (65536 bytes)
+[ 2552.250564] brcmfmac: BCM4360 test.188: wrote 20480 words (81920 bytes)
+[ 2552.302830] brcmfmac: BCM4360 test.188: wrote 24576 words (98304 bytes)
+[ 2552.355088] brcmfmac: BCM4360 test.188: wrote 28672 words (114688 bytes)
+[ 2552.407346] brcmfmac: BCM4360 test.188: wrote 32768 words (131072 bytes)
+[ 2552.459608] brcmfmac: BCM4360 test.188: wrote 36864 words (147456 bytes)
+[ 2552.511868] brcmfmac: BCM4360 test.188: wrote 40960 words (163840 bytes)
+[ 2552.564125] brcmfmac: BCM4360 test.188: wrote 45056 words (180224 bytes)
+[ 2552.616386] brcmfmac: BCM4360 test.188: wrote 49152 words (196608 bytes)
+[ 2552.668641] brcmfmac: BCM4360 test.188: wrote 53248 words (212992 bytes)
+[ 2552.720900] brcmfmac: BCM4360 test.188: wrote 57344 words (229376 bytes)
+[ 2552.773193] brcmfmac: BCM4360 test.188: wrote 61440 words (245760 bytes)
+[ 2552.825479] brcmfmac: BCM4360 test.188: wrote 65536 words (262144 bytes)
+[ 2552.877760] brcmfmac: BCM4360 test.188: wrote 69632 words (278528 bytes)
+[ 2552.930018] brcmfmac: BCM4360 test.188: wrote 73728 words (294912 bytes)
+[ 2552.982283] brcmfmac: BCM4360 test.188: wrote 77824 words (311296 bytes)
+[ 2553.034573] brcmfmac: BCM4360 test.188: wrote 81920 words (327680 bytes)
+[ 2553.086850] brcmfmac: BCM4360 test.188: wrote 86016 words (344064 bytes)
+[ 2553.139106] brcmfmac: BCM4360 test.188: wrote 90112 words (360448 bytes)
+[ 2553.191363] brcmfmac: BCM4360 test.188: wrote 94208 words (376832 bytes)
+[ 2553.243649] brcmfmac: BCM4360 test.188: wrote 98304 words (393216 bytes)
+[ 2553.295910] brcmfmac: BCM4360 test.188: wrote 102400 words (409600 bytes)
+[ 2553.348170] brcmfmac: BCM4360 test.188: wrote 106496 words (425984 bytes)
+[ 2553.400442] brcmfmac: BCM4360 test.188: all 110558 words written, before tail (tail=1)
+[ 2553.450513] brcmfmac: BCM4360 test.188: tail 1 bytes written at offset 442232
+[ 2553.500556] brcmfmac: BCM4360 test.188: fw write complete (442233 bytes)
+[ 2553.500593] brcmfmac: BCM4360 test.188: before post-fw msleep(100)
+[ 2553.603689] brcmfmac: BCM4360 test.188: after post-fw msleep(100)
+[ 2553.603734] brcmfmac: BCM4360 test.188: host resetintr=0xb80ef000 before NVRAM
+[ 2553.603770] brcmfmac: BCM4360 test.188: pre-NVRAM write address=0x9ff0c len=244 naddr=ffffd53f8289ff0c
+[ 2553.603836] brcmfmac: BCM4360 test.188: post-NVRAM write done (244 bytes)
+[ 2553.603870] brcmfmac: BCM4360 test.188: NVRAM marker at ramsize-4 = 0xffc3003c (pre-release snapshot)
+[ 2553.606612] brcmfmac: BCM4360 test.188: TCM[0x0000]=0xb80ef000 (pre-release snapshot)
+[ 2553.609650] brcmfmac: BCM4360 test.188: TCM[0x0004]=0xb82ef000 (pre-release snapshot)
+[ 2553.612798] brcmfmac: BCM4360 test.188: TCM[0x0008]=0xb839f000 (pre-release snapshot)
+[ 2553.615203] brcmfmac: BCM4360 test.188: TCM[0x000c]=0xb844f000 (pre-release snapshot)
+[ 2553.617308] brcmfmac: BCM4360 test.188: TCM[0x0010]=0xb852f000 (pre-release snapshot)
+[ 2553.619397] brcmfmac: BCM4360 test.188: TCM[0x0014]=0xb860f000 (pre-release snapshot)
+[ 2553.621412] brcmfmac: BCM4360 test.188: TCM[0x0018]=0xb86ef000 (pre-release snapshot)
+[ 2553.623466] brcmfmac: BCM4360 test.188: TCM[0x001c]=0xb87cf000 (pre-release snapshot)
+[ 2553.625700] brcmfmac: BCM4360 test.188: wide-TCM[0x00000]=0xb80ef000 (pre-release snapshot)
+[ 2553.628883] brcmfmac: BCM4360 test.188: wide-TCM[0x04000]=0x2c004798 (pre-release snapshot)
+[ 2553.632287] brcmfmac: BCM4360 test.188: wide-TCM[0x08000]=0x44460902 (pre-release snapshot)
+[ 2553.635083] brcmfmac: BCM4360 test.188: wide-TCM[0x0c000]=0x46984616 (pre-release snapshot)
+[ 2553.635089] brcmfmac: BCM4360 test.188: wide-TCM[0x10000]=0x46324639 (pre-release snapshot)
+[ 2553.635093] brcmfmac: BCM4360 test.188: wide-TCM[0x14000]=0x459868e3 (pre-release snapshot)
+[ 2553.635096] brcmfmac: BCM4360 test.188: wide-TCM[0x18000]=0x42ab317c (pre-release snapshot)
+[ 2553.635099] brcmfmac: BCM4360 test.188: wide-TCM[0x1c000]=0x480ffd17 (pre-release snapshot)
+[ 2553.635101] brcmfmac: BCM4360 test.188: wide-TCM[0x20000]=0xa84af8f3 (pre-release snapshot)
+[ 2553.639834] brcmfmac: BCM4360 test.188: wide-TCM[0x24000]=0x2b027973 (pre-release snapshot)
+[ 2553.639838] brcmfmac: BCM4360 test.188: wide-TCM[0x28000]=0x1129f640 (pre-release snapshot)
+[ 2553.639840] brcmfmac: BCM4360 test.188: wide-TCM[0x2c000]=0xf0084643 (pre-release snapshot)
+[ 2553.639843] brcmfmac: BCM4360 test.188: wide-TCM[0x30000]=0xf996f7fe (pre-release snapshot)
+[ 2553.639845] brcmfmac: BCM4360 test.188: wide-TCM[0x34000]=0xf0002800 (pre-release snapshot)
+[ 2553.639848] brcmfmac: BCM4360 test.188: wide-TCM[0x38000]=0x2bff2269 (pre-release snapshot)
+[ 2553.652149] brcmfmac: BCM4360 test.188: wide-TCM[0x3c000]=0xb004f8d4 (pre-release snapshot)
+[ 2553.654083] brcmfmac: BCM4360 test.188: wide-TCM[0x40000]=0x34333231 (pre-release snapshot)
+[ 2553.655850] brcmfmac: BCM4360 test.188: wide-TCM[0x44000]=0x00040160 (pre-release snapshot)
+[ 2553.657638] brcmfmac: BCM4360 test.188: wide-TCM[0x48000]=0x0a776f6c (pre-release snapshot)
+[ 2553.659374] brcmfmac: BCM4360 test.188: wide-TCM[0x4c000]=0x000a7825 (pre-release snapshot)
+[ 2553.661067] brcmfmac: BCM4360 test.188: wide-TCM[0x50000]=0x0004eeb8 (pre-release snapshot)
+[ 2553.662753] brcmfmac: BCM4360 test.188: wide-TCM[0x54000]=0x203a6425 (pre-release snapshot)
+[ 2553.664410] brcmfmac: BCM4360 test.188: wide-TCM[0x58000]=0x5f6f7370 (pre-release snapshot)
+[ 2553.666745] brcmfmac: BCM4360 test.188: wide-TCM[0x5c000]=0x0034005b (pre-release snapshot)
+[ 2553.668892] brcmfmac: BCM4360 test.188: wide-TCM[0x60000]=0x06000972 (pre-release snapshot)
+[ 2553.670561] brcmfmac: BCM4360 test.188: wide-TCM[0x64000]=0x4808b920 (pre-release snapshot)
+[ 2553.672134] brcmfmac: BCM4360 test.188: wide-TCM[0x68000]=0x25003088 (pre-release snapshot)
+[ 2553.673742] brcmfmac: BCM4360 test.188: wide-TCM[0x6c000]=0x008d65fc (pre-release snapshot)
+[ 2553.675194] brcmfmac: BCM4360 test.188: wide-TCM[0x70000]=0x80c900e2 (pre-release snapshot)
+[ 2553.676644] brcmfmac: BCM4360 test.188: wide-TCM[0x74000]=0x20e84158 (pre-release snapshot)
+[ 2553.678058] brcmfmac: BCM4360 test.188: wide-TCM[0x78000]=0xcc9ce141 (pre-release snapshot)
+[ 2553.679504] brcmfmac: BCM4360 test.188: wide-TCM[0x7c000]=0x401aa2a0 (pre-release snapshot)
+[ 2553.680844] brcmfmac: BCM4360 test.188: wide-TCM[0x80000]=0x981353f8 (pre-release snapshot)
+[ 2553.682170] brcmfmac: BCM4360 test.188: wide-TCM[0x84000]=0x8e7fc98d (pre-release snapshot)
+[ 2553.683424] brcmfmac: BCM4360 test.188: wide-TCM[0x88000]=0x77d73bbb (pre-release snapshot)
+[ 2553.684620] brcmfmac: BCM4360 test.188: wide-TCM[0x8c000]=0x35c4fcc3 (pre-release snapshot)
+[ 2553.686073] brcmfmac: BCM4360 test.188: wide-TCM[0x90000]=0xa42709e1 (pre-release snapshot)
+[ 2553.687692] brcmfmac: BCM4360 test.188: wide-TCM[0x94000]=0x464825ed (pre-release snapshot)
+[ 2553.689342] brcmfmac: BCM4360 test.188: wide-TCM[0x98000]=0x00000000 (pre-release snapshot)
+[ 2553.690812] brcmfmac: BCM4360 test.188: wide-TCM[0x9c000]=0x5354414b (pre-release snapshot)
+[ 2553.718009] brcmfmac: BCM4360 test.197: fine-TCM pre-release snapshot complete (16384 cells, base=0x90000 stride=4)
+[ 2553.719027] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffc0]=0x76656400 (pre-release snapshot)
+[ 2553.720029] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffc4]=0x303d6469 (pre-release snapshot)
+[ 2553.721016] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffc8]=0x61333478 (pre-release snapshot)
+[ 2553.721951] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffcc]=0x74780030 (pre-release snapshot)
+[ 2553.722891] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffd0]=0x72666c61 (pre-release snapshot)
+[ 2553.723823] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffd4]=0x343d7165 (pre-release snapshot)
+[ 2553.724746] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffd8]=0x30303030 (pre-release snapshot)
+[ 2553.725638] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffdc]=0x32616100 (pre-release snapshot)
+[ 2553.726520] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffe0]=0x00373d67 (pre-release snapshot)
+[ 2553.727476] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffe4]=0x67356161 (pre-release snapshot)
+[ 2553.728406] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffe8]=0x7200373d (pre-release snapshot)
+[ 2553.729346] brcmfmac: BCM4360 test.188: tail-TCM[0x9ffec]=0x74736d61 (pre-release snapshot)
+[ 2553.730274] brcmfmac: BCM4360 test.188: tail-TCM[0x9fff0]=0x69647962 (pre-release snapshot)
+[ 2553.731196] brcmfmac: BCM4360 test.188: tail-TCM[0x9fff4]=0x00303d73 (pre-release snapshot)
+[ 2553.732101] brcmfmac: BCM4360 test.188: tail-TCM[0x9fff8]=0x00000000 (pre-release snapshot)
+[ 2553.733017] brcmfmac: BCM4360 test.188: tail-TCM[0x9fffc]=0xffc3003c (pre-release snapshot)
+[ 2553.733918] brcmfmac: BCM4360 test.188: fw-sample[0x00000]=0xb80ef000 (TCM) vs 0xb80ef000 (fw->data) MATCH
+[ 2553.734795] brcmfmac: BCM4360 test.188: fw-sample[0x006c8]=0x42abe7f7 (TCM) vs 0x42abe7f7 (fw->data) MATCH
+[ 2553.735683] brcmfmac: BCM4360 test.188: fw-sample[0x00d8c]=0xfe50f7ff (TCM) vs 0xfe50f7ff (fw->data) MATCH
+[ 2553.736565] brcmfmac: BCM4360 test.188: fw-sample[0x01454]=0xf8c760bd (TCM) vs 0xf8c760bd (fw->data) MATCH
+[ 2553.737464] brcmfmac: BCM4360 test.188: fw-sample[0x01b18]=0x42283d01 (TCM) vs 0x42283d01 (fw->data) MATCH
+[ 2553.738352] brcmfmac: BCM4360 test.188: fw-sample[0x021e0]=0xf0136833 (TCM) vs 0xf0136833 (fw->data) MATCH
+[ 2553.739265] brcmfmac: BCM4360 test.188: fw-sample[0x028a4]=0x0a000100 (TCM) vs 0x0a000100 (fw->data) MATCH
+[ 2553.740233] brcmfmac: BCM4360 test.188: fw-sample[0x02f6c]=0x0e0b4770 (TCM) vs 0x0e0b4770 (fw->data) MATCH
+[ 2553.741175] brcmfmac: BCM4360 test.188: fw-sample[0x03630]=0x00041b8a (TCM) vs 0x00041b8a (fw->data) MATCH
+[ 2553.742105] brcmfmac: BCM4360 test.188: fw-sample[0x03cf8]=0x46216826 (TCM) vs 0x46216826 (fw->data) MATCH
+[ 2553.743037] brcmfmac: BCM4360 test.188: fw-sample[0x043bc]=0x0004255d (TCM) vs 0x0004255d (fw->data) MATCH
+[ 2553.743992] brcmfmac: BCM4360 test.188: fw-sample[0x04a84]=0xff5ef7ff (TCM) vs 0xff5ef7ff (fw->data) MATCH
+[ 2553.744960] brcmfmac: BCM4360 test.188: fw-sample[0x05148]=0xe0052000 (TCM) vs 0xe0052000 (fw->data) MATCH
+[ 2553.745941] brcmfmac: BCM4360 test.188: fw-sample[0x05810]=0xffb2f7ff (TCM) vs 0xffb2f7ff (fw->data) MATCH
+[ 2553.746929] brcmfmac: BCM4360 test.188: fw-sample[0x05ed4]=0x20b7f880 (TCM) vs 0x20b7f880 (fw->data) MATCH
+[ 2553.747904] brcmfmac: BCM4360 test.188: fw-sample[0x0659c]=0x83f8e8bd (TCM) vs 0x83f8e8bd (fw->data) MATCH
+[ 2553.748880] brcmfmac: BCM4360 test.188: fw-sample[0x06c60]=0x4682f889 (TCM) vs 0x4682f889 (fw->data) MATCH
+[ 2553.749941] brcmfmac: BCM4360 test.188: fw-sample[0x07328]=0xf640480f (TCM) vs 0xf640480f (fw->data) MATCH
+[ 2553.751095] brcmfmac: BCM4360 test.188: fw-sample[0x079ec]=0xbf0081f0 (TCM) vs 0xbf0081f0 (fw->data) MATCH
+[ 2553.752325] brcmfmac: BCM4360 test.188: fw-sample[0x080b4]=0x0904ea0b (TCM) vs 0x0904ea0b (fw->data) MATCH
+[ 2553.753583] brcmfmac: BCM4360 test.188: fw-sample[0x08778]=0x4623bdf8 (TCM) vs 0x4623bdf8 (fw->data) MATCH
+[ 2553.754869] brcmfmac: BCM4360 test.188: fw-sample[0x08e40]=0x0808ea89 (TCM) vs 0x0808ea89 (fw->data) MATCH
+[ 2553.756149] brcmfmac: BCM4360 test.188: fw-sample[0x09504]=0xea4f0a04 (TCM) vs 0xea4f0a04 (fw->data) MATCH
+[ 2553.757472] brcmfmac: BCM4360 test.188: fw-sample[0x09bcc]=0x46232264 (TCM) vs 0x46232264 (fw->data) MATCH
+[ 2553.758697] brcmfmac: BCM4360 test.188: fw-sample[0x0a290]=0xe7d6681b (TCM) vs 0xe7d6681b (fw->data) MATCH
+[ 2553.758702] brcmfmac: BCM4360 test.188: fw-sample[0x0a958]=0x4627f86b (TCM) vs 0x4627f86b (fw->data) MATCH
+[ 2553.758705] brcmfmac: BCM4360 test.188: fw-sample[0x0b01c]=0x46980f02 (TCM) vs 0x46980f02 (fw->data) MATCH
+[ 2553.758708] brcmfmac: BCM4360 test.188: fw-sample[0x0b6e4]=0x2b80e7f2 (TCM) vs 0x2b80e7f2 (fw->data) MATCH
+[ 2553.758711] brcmfmac: BCM4360 test.188: fw-sample[0x0bda8]=0xd0142b40 (TCM) vs 0xd0142b40 (fw->data) MATCH
+[ 2553.758716] brcmfmac: BCM4360 test.188: fw-sample[0x0c470]=0xf8d29401 (TCM) vs 0xf8d29401 (fw->data) MATCH
+[ 2553.758719] brcmfmac: BCM4360 test.188: fw-sample[0x0cb34]=0x90019300 (TCM) vs 0x90019300 (fw->data) MATCH
+[ 2553.758721] brcmfmac: BCM4360 test.188: fw-sample[0x0d1fc]=0xf7f3fba5 (TCM) vs 0xf7f3fba5 (fw->data) MATCH
+[ 2553.764171] brcmfmac: BCM4360 test.188: fw-sample[0x0d8c0]=0xf007da03 (TCM) vs 0xf007da03 (fw->data) MATCH
+[ 2553.764179] brcmfmac: BCM4360 test.188: fw-sample[0x0df88]=0xbf0083f8 (TCM) vs 0xbf0083f8 (fw->data) MATCH
+[ 2553.764183] brcmfmac: BCM4360 test.188: fw-sample[0x0e64c]=0xd13f0f00 (TCM) vs 0xd13f0f00 (fw->data) MATCH
+[ 2553.768358] brcmfmac: BCM4360 test.188: fw-sample[0x0ed14]=0x786a782b (TCM) vs 0x786a782b (fw->data) MATCH
+[ 2553.769877] brcmfmac: BCM4360 test.188: fw-sample[0x0f3d8]=0xf7ff9008 (TCM) vs 0xf7ff9008 (fw->data) MATCH
+[ 2553.771178] brcmfmac: BCM4360 test.188: fw-sample[0x0faa0]=0x70fcf504 (TCM) vs 0x70fcf504 (fw->data) MATCH
+[ 2553.772485] brcmfmac: BCM4360 test.188: fw-sample[0x10164]=0xbf380001 (TCM) vs 0xbf380001 (fw->data) MATCH
+[ 2553.773824] brcmfmac: BCM4360 test.188: fw-sample[0x1082c]=0x2101ea43 (TCM) vs 0x2101ea43 (fw->data) MATCH
+[ 2553.775231] brcmfmac: BCM4360 test.188: fw-sample[0x10ef0]=0x796130d8 (TCM) vs 0x796130d8 (fw->data) MATCH
+[ 2553.776286] brcmfmac: BCM4360 test.188: fw-sample[0x115b8]=0x68394622 (TCM) vs 0x68394622 (fw->data) MATCH
+[ 2553.777317] brcmfmac: BCM4360 test.188: fw-sample[0x11c7c]=0x4002f888 (TCM) vs 0x4002f888 (fw->data) MATCH
+[ 2553.778445] brcmfmac: BCM4360 test.188: fw-sample[0x12344]=0x00058f44 (TCM) vs 0x00058f44 (fw->data) MATCH
+[ 2553.779500] brcmfmac: BCM4360 test.188: fw-sample[0x12a08]=0xffaff7ed (TCM) vs 0xffaff7ed (fw->data) MATCH
+[ 2553.780564] brcmfmac: BCM4360 test.188: fw-sample[0x130d0]=0xff92f7ff (TCM) vs 0xff92f7ff (fw->data) MATCH
+[ 2553.781679] brcmfmac: BCM4360 test.188: fw-sample[0x13794]=0x32016c99 (TCM) vs 0x32016c99 (fw->data) MATCH
+[ 2553.782718] brcmfmac: BCM4360 test.188: fw-sample[0x13e5c]=0x479830b4 (TCM) vs 0x479830b4 (fw->data) MATCH
+[ 2553.783791] brcmfmac: BCM4360 test.188: fw-sample[0x14520]=0xf8d0d208 (TCM) vs 0xf8d0d208 (fw->data) MATCH
+[ 2553.785102] brcmfmac: BCM4360 test.188: fw-sample[0x14be8]=0xbd10bf23 (TCM) vs 0xbd10bf23 (fw->data) MATCH
+[ 2553.786195] brcmfmac: BCM4360 test.188: fw-sample[0x152ac]=0x462a4641 (TCM) vs 0x462a4641 (fw->data) MATCH
+[ 2553.787310] brcmfmac: BCM4360 test.188: fw-sample[0x15974]=0x4a3a68e1 (TCM) vs 0x4a3a68e1 (fw->data) MATCH
+[ 2553.788484] brcmfmac: BCM4360 test.188: fw-sample[0x16038]=0x00058f44 (TCM) vs 0x00058f44 (fw->data) MATCH
+[ 2553.789766] brcmfmac: BCM4360 test.188: fw-sample[0x16700]=0x480ad004 (TCM) vs 0x480ad004 (fw->data) MATCH
+[ 2553.790898] brcmfmac: BCM4360 test.188: fw-sample[0x16dc4]=0x0707ea46 (TCM) vs 0x0707ea46 (fw->data) MATCH
+[ 2553.792060] brcmfmac: BCM4360 test.188: fw-sample[0x1748c]=0x3838f8b4 (TCM) vs 0x3838f8b4 (fw->data) MATCH
+[ 2553.793297] brcmfmac: BCM4360 test.188: fw-sample[0x17b50]=0xaa029300 (TCM) vs 0xaa029300 (fw->data) MATCH
+[ 2553.794420] brcmfmac: BCM4360 test.188: fw-sample[0x18218]=0xf7e82204 (TCM) vs 0xf7e82204 (fw->data) MATCH
+[ 2553.795582] brcmfmac: BCM4360 test.188: fw-sample[0x188dc]=0x482fd004 (TCM) vs 0x482fd004 (fw->data) MATCH
+[ 2553.796747] brcmfmac: BCM4360 test.188: fw-sample[0x18fa4]=0xf920f7e8 (TCM) vs 0xf920f7e8 (fw->data) MATCH
+[ 2553.797819] brcmfmac: BCM4360 test.188: fw-sample[0x19668]=0x2504bf14 (TCM) vs 0x2504bf14 (fw->data) MATCH
+[ 2553.798899] brcmfmac: BCM4360 test.188: fw-sample[0x19d30]=0x4620fe1c (TCM) vs 0x4620fe1c (fw->data) MATCH
+[ 2553.799993] brcmfmac: BCM4360 test.188: fw-sample[0x1a3f4]=0x6007ea40 (TCM) vs 0x6007ea40 (fw->data) MATCH
+[ 2553.801008] brcmfmac: BCM4360 test.188: fw-sample[0x1aabc]=0x0f02f013 (TCM) vs 0x0f02f013 (fw->data) MATCH
+[ 2553.802031] brcmfmac: BCM4360 test.188: fw-sample[0x1b180]=0x23020900 (TCM) vs 0x23020900 (fw->data) MATCH
+[ 2553.803049] brcmfmac: BCM4360 test.188: fw-sample[0x1b848]=0x3424f8d5 (TCM) vs 0x3424f8d5 (fw->data) MATCH
+[ 2553.804103] brcmfmac: BCM4360 test.188: fw-sample[0x1bf0c]=0x681b4b46 (TCM) vs 0x681b4b46 (fw->data) MATCH
+[ 2553.805252] brcmfmac: BCM4360 test.188: fw-sample[0x1c5d4]=0x4442691a (TCM) vs 0x4442691a (fw->data) MATCH
+[ 2553.806436] brcmfmac: BCM4360 test.188: fw-sample[0x1cc98]=0xf0037be3 (TCM) vs 0xf0037be3 (fw->data) MATCH
+[ 2553.807716] brcmfmac: BCM4360 test.188: fw-sample[0x1d360]=0xf0064621 (TCM) vs 0xf0064621 (fw->data) MATCH
+[ 2553.808852] brcmfmac: BCM4360 test.188: fw-sample[0x1da24]=0x0004df61 (TCM) vs 0x0004df61 (fw->data) MATCH
+[ 2553.810010] brcmfmac: BCM4360 test.188: fw-sample[0x1e0ec]=0xd204429a (TCM) vs 0xd204429a (fw->data) MATCH
+[ 2553.811340] brcmfmac: BCM4360 test.188: fw-sample[0x1e7b0]=0x681b4b22 (TCM) vs 0x681b4b22 (fw->data) MATCH
+[ 2553.812468] brcmfmac: BCM4360 test.188: fw-sample[0x1ee78]=0xbf0087f0 (TCM) vs 0xbf0087f0 (fw->data) MATCH
+[ 2553.813587] brcmfmac: BCM4360 test.188: fw-sample[0x1f53c]=0xf0032701 (TCM) vs 0xf0032701 (fw->data) MATCH
+[ 2553.814695] brcmfmac: BCM4360 test.188: fw-sample[0x1fc04]=0xf7e1714a (TCM) vs 0xf7e1714a (fw->data) MATCH
+[ 2553.815763] brcmfmac: BCM4360 test.188: fw-sample[0x202c8]=0xa9424628 (TCM) vs 0xa9424628 (fw->data) MATCH
+[ 2553.816843] brcmfmac: BCM4360 test.188: fw-sample[0x20990]=0x48048223 (TCM) vs 0x48048223 (fw->data) MATCH
+[ 2553.817824] brcmfmac: BCM4360 test.188: fw-sample[0x21054]=0xbf17f001 (TCM) vs 0xbf17f001 (fw->data) MATCH
+[ 2553.818804] brcmfmac: BCM4360 test.188: fw-sample[0x2171c]=0xf7f2115c (TCM) vs 0xf7f2115c (fw->data) MATCH
+[ 2553.819787] brcmfmac: BCM4360 test.188: fw-sample[0x21de0]=0x4620fa03 (TCM) vs 0x4620fa03 (fw->data) MATCH
+[ 2553.820810] brcmfmac: BCM4360 test.188: fw-sample[0x224a8]=0x4604237d (TCM) vs 0x4604237d (fw->data) MATCH
+[ 2553.821821] brcmfmac: BCM4360 test.188: fw-sample[0x22b6c]=0x0103f021 (TCM) vs 0x0103f021 (fw->data) MATCH
+[ 2553.822841] brcmfmac: BCM4360 test.188: fw-sample[0x23234]=0x3124f8ca (TCM) vs 0x3124f8ca (fw->data) MATCH
+[ 2553.823905] brcmfmac: BCM4360 test.188: fw-sample[0x238f8]=0x1a89f103 (TCM) vs 0x1a89f103 (fw->data) MATCH
+[ 2553.824900] brcmfmac: BCM4360 test.188: fw-sample[0x23fc0]=0xf7f0da03 (TCM) vs 0xf7f0da03 (fw->data) MATCH
+[ 2553.825878] brcmfmac: BCM4360 test.188: fw-sample[0x24684]=0x0f04f013 (TCM) vs 0x0f04f013 (fw->data) MATCH
+[ 2553.826885] brcmfmac: BCM4360 test.188: fw-sample[0x24d4c]=0xb9304601 (TCM) vs 0xb9304601 (fw->data) MATCH
+[ 2553.827969] brcmfmac: BCM4360 test.188: fw-sample[0x25410]=0x22f04620 (TCM) vs 0x22f04620 (fw->data) MATCH
+[ 2553.829061] brcmfmac: BCM4360 test.188: fw-sample[0x25ad8]=0xfa4ff00f (TCM) vs 0xfa4ff00f (fw->data) MATCH
+[ 2553.830240] brcmfmac: BCM4360 test.188: fw-sample[0x2619c]=0xfeedf00e (TCM) vs 0xfeedf00e (fw->data) MATCH
+[ 2553.831375] brcmfmac: BCM4360 test.188: fw-sample[0x26864]=0xf00e47f0 (TCM) vs 0xf00e47f0 (fw->data) MATCH
+[ 2553.832490] brcmfmac: BCM4360 test.188: fw-sample[0x26f28]=0x6813f981 (TCM) vs 0x6813f981 (fw->data) MATCH
+[ 2553.833658] brcmfmac: BCM4360 test.188: fw-sample[0x275f0]=0x0f02f013 (TCM) vs 0x0f02f013 (fw->data) MATCH
+[ 2553.834718] brcmfmac: BCM4360 test.188: fw-sample[0x27cb4]=0x7136f240 (TCM) vs 0x7136f240 (fw->data) MATCH
+[ 2553.835780] brcmfmac: BCM4360 test.188: fw-sample[0x2837c]=0xeb0af906 (TCM) vs 0xeb0af906 (fw->data) MATCH
+[ 2553.835785] brcmfmac: BCM4360 test.188: fw-sample[0x28a40]=0xf047b2bf (TCM) vs 0xf047b2bf (fw->data) MATCH
+[ 2553.835788] brcmfmac: BCM4360 test.188: fw-sample[0x29108]=0x0004d31e (TCM) vs 0x0004d31e (fw->data) MATCH
+[ 2553.835791] brcmfmac: BCM4360 test.188: fw-sample[0x297cc]=0x46136200 (TCM) vs 0x46136200 (fw->data) MATCH
+[ 2553.835794] brcmfmac: BCM4360 test.188: fw-sample[0x29e94]=0x8ff0e8bd (TCM) vs 0x8ff0e8bd (fw->data) MATCH
+[ 2553.835798] brcmfmac: BCM4360 test.188: fw-sample[0x2a558]=0x2201210c (TCM) vs 0x2201210c (fw->data) MATCH
+[ 2553.835801] brcmfmac: BCM4360 test.188: fw-sample[0x2ac20]=0x95019700 (TCM) vs 0x95019700 (fw->data) MATCH
+[ 2553.835804] brcmfmac: BCM4360 test.188: fw-sample[0x2b2e4]=0x345ff885 (TCM) vs 0x345ff885 (fw->data) MATCH
+[ 2553.835806] brcmfmac: BCM4360 test.188: fw-sample[0x2b9ac]=0xf3c02500 (TCM) vs 0xf3c02500 (fw->data) MATCH
+[ 2553.835809] brcmfmac: BCM4360 test.188: fw-sample[0x2c070]=0xf2404620 (TCM) vs 0xf2404620 (fw->data) MATCH
+[ 2553.835812] brcmfmac: BCM4360 test.188: fw-sample[0x2c738]=0xfc1ff008 (TCM) vs 0xfc1ff008 (fw->data) MATCH
+[ 2553.835814] brcmfmac: BCM4360 test.188: fw-sample[0x2cdfc]=0xf8b561cd (TCM) vs 0xf8b561cd (fw->data) MATCH
+[ 2553.844649] brcmfmac: BCM4360 test.188: fw-sample[0x2d4c4]=0xab09fc05 (TCM) vs 0xab09fc05 (fw->data) MATCH
+[ 2553.844653] brcmfmac: BCM4360 test.188: fw-sample[0x2db88]=0x480e69e3 (TCM) vs 0x480e69e3 (fw->data) MATCH
+[ 2553.847158] brcmfmac: BCM4360 test.188: fw-sample[0x2e250]=0xba96f7fe (TCM) vs 0xba96f7fe (fw->data) MATCH
+[ 2553.848276] brcmfmac: BCM4360 test.188: fw-sample[0x2e914]=0x036ef10d (TCM) vs 0x036ef10d (fw->data) MATCH
+[ 2553.849408] brcmfmac: BCM4360 test.188: fw-sample[0x2efdc]=0x0201f108 (TCM) vs 0x0201f108 (fw->data) MATCH
+[ 2553.850576] brcmfmac: BCM4360 test.188: fw-sample[0x2f6a0]=0xf0044620 (TCM) vs 0xf0044620 (fw->data) MATCH
+[ 2553.851596] brcmfmac: BCM4360 test.188: fw-sample[0x2fd68]=0xfa3ef7d1 (TCM) vs 0xfa3ef7d1 (fw->data) MATCH
+[ 2553.852628] brcmfmac: BCM4360 test.188: fw-sample[0x3042c]=0xaa662100 (TCM) vs 0xaa662100 (fw->data) MATCH
+[ 2553.853725] brcmfmac: BCM4360 test.188: fw-sample[0x30af4]=0xdc032802 (TCM) vs 0xdc032802 (fw->data) MATCH
+[ 2553.854750] brcmfmac: BCM4360 test.188: fw-sample[0x311b8]=0xbc3af7cf (TCM) vs 0xbc3af7cf (fw->data) MATCH
+[ 2553.855831] brcmfmac: BCM4360 test.188: fw-sample[0x31880]=0xf003a0a8 (TCM) vs 0xf003a0a8 (fw->data) MATCH
+[ 2553.856972] brcmfmac: BCM4360 test.188: fw-sample[0x31f44]=0xf7f7235f (TCM) vs 0xf7f7235f (fw->data) MATCH
+[ 2553.858011] brcmfmac: BCM4360 test.188: fw-sample[0x3260c]=0x00051aa3 (TCM) vs 0x00051aa3 (fw->data) MATCH
+[ 2553.859024] brcmfmac: BCM4360 test.188: fw-sample[0x32cd0]=0x460271ca (TCM) vs 0x460271ca (fw->data) MATCH
+[ 2553.860212] brcmfmac: BCM4360 test.188: fw-sample[0x33398]=0x165cf895 (TCM) vs 0x165cf895 (fw->data) MATCH
+[ 2553.861499] brcmfmac: BCM4360 test.188: fw-sample[0x33a5c]=0x46132172 (TCM) vs 0x46132172 (fw->data) MATCH
+[ 2553.862841] brcmfmac: BCM4360 test.188: fw-sample[0x34124]=0xfd5af7f8 (TCM) vs 0xfd5af7f8 (fw->data) MATCH
+[ 2553.864153] brcmfmac: BCM4360 test.188: fw-sample[0x347e8]=0x050ff005 (TCM) vs 0x050ff005 (fw->data) MATCH
+[ 2553.865377] brcmfmac: BCM4360 test.188: fw-sample[0x34eb0]=0x3006f8bd (TCM) vs 0x3006f8bd (fw->data) MATCH
+[ 2553.866413] brcmfmac: BCM4360 test.188: fw-sample[0x35574]=0xf10b0a08 (TCM) vs 0xf10b0a08 (fw->data) MATCH
+[ 2553.867523] brcmfmac: BCM4360 test.188: fw-sample[0x35c3c]=0xf04ff94b (TCM) vs 0xf04ff94b (fw->data) MATCH
+[ 2553.868809] brcmfmac: BCM4360 test.188: fw-sample[0x36300]=0x2b804770 (TCM) vs 0x2b804770 (fw->data) MATCH
+[ 2553.870133] brcmfmac: BCM4360 test.188: fw-sample[0x369c8]=0x2b083301 (TCM) vs 0x2b083301 (fw->data) MATCH
+[ 2553.871555] brcmfmac: BCM4360 test.188: fw-sample[0x3708c]=0x0904f109 (TCM) vs 0x0904f109 (fw->data) MATCH
+[ 2553.873059] brcmfmac: BCM4360 test.188: fw-sample[0x37754]=0x4640f965 (TCM) vs 0x4640f965 (fw->data) MATCH
+[ 2553.874469] brcmfmac: BCM4360 test.188: fw-sample[0x37e18]=0x7f1b69e3 (TCM) vs 0x7f1b69e3 (fw->data) MATCH
+[ 2553.875867] brcmfmac: BCM4360 test.188: fw-sample[0x384e0]=0x8281f040 (TCM) vs 0x8281f040 (fw->data) MATCH
+[ 2553.877082] brcmfmac: BCM4360 test.188: fw-sample[0x38ba4]=0x468a4605 (TCM) vs 0x468a4605 (fw->data) MATCH
+[ 2553.877087] brcmfmac: BCM4360 test.188: fw-sample[0x3926c]=0x213ef240 (TCM) vs 0x213ef240 (fw->data) MATCH
+[ 2553.877090] brcmfmac: BCM4360 test.188: fw-sample[0x39930]=0x00056ea3 (TCM) vs 0x00056ea3 (fw->data) MATCH
+[ 2553.877093] brcmfmac: BCM4360 test.188: fw-sample[0x39ff8]=0xb1484603 (TCM) vs 0xb1484603 (fw->data) MATCH
+[ 2553.877095] brcmfmac: BCM4360 test.188: fw-sample[0x3a6bc]=0xf7c64935 (TCM) vs 0xf7c64935 (fw->data) MATCH
+[ 2553.877098] brcmfmac: BCM4360 test.188: fw-sample[0x3ad84]=0x6a63dd1d (TCM) vs 0x6a63dd1d (fw->data) MATCH
+[ 2553.877101] brcmfmac: BCM4360 test.188: fw-sample[0x3b448]=0xf8d5f95d (TCM) vs 0xf8d5f95d (fw->data) MATCH
+[ 2553.877104] brcmfmac: BCM4360 test.188: fw-sample[0x3bb10]=0xe00dfe71 (TCM) vs 0xe00dfe71 (fw->data) MATCH
+[ 2553.877106] brcmfmac: BCM4360 test.188: fw-sample[0x3c1d4]=0xf8a4bfa8 (TCM) vs 0xf8a4bfa8 (fw->data) MATCH
+[ 2553.882832] brcmfmac: BCM4360 test.188: fw-sample[0x3c89c]=0xbdf8d1f0 (TCM) vs 0xbdf8d1f0 (fw->data) MATCH
+[ 2553.882837] brcmfmac: BCM4360 test.188: fw-sample[0x3cf60]=0x298cf8c4 (TCM) vs 0x298cf8c4 (fw->data) MATCH
+[ 2553.882840] brcmfmac: BCM4360 test.188: fw-sample[0x3d628]=0x3e1c4866 (TCM) vs 0x3e1c4866 (fw->data) MATCH
+[ 2553.882843] brcmfmac: BCM4360 test.188: fw-sample[0x3dcec]=0xf7d6da03 (TCM) vs 0xf7d6da03 (fw->data) MATCH
+[ 2553.882846] brcmfmac: BCM4360 test.188: fw-sample[0x3e3b4]=0x4b37d032 (TCM) vs 0x4b37d032 (fw->data) MATCH
+[ 2553.882849] brcmfmac: BCM4360 test.188: fw-sample[0x3ea78]=0xf7d54628 (TCM) vs 0xf7d54628 (fw->data) MATCH
+[ 2553.882852] brcmfmac: BCM4360 test.188: fw-sample[0x3f140]=0x00c200a9 (TCM) vs 0x00c200a9 (fw->data) MATCH
+[ 2553.882855] brcmfmac: BCM4360 test.188: fw-sample[0x3f804]=0x0f02f013 (TCM) vs 0x0f02f013 (fw->data) MATCH
+[ 2553.882858] brcmfmac: BCM4360 test.188: fw-sample[0x3fecc]=0x4d3bb537 (TCM) vs 0x4d3bb537 (fw->data) MATCH
+[ 2553.882861] brcmfmac: BCM4360 test.188: fw-sample[0x40590]=0x6664202c (TCM) vs 0x6664202c (fw->data) MATCH
+[ 2553.882864] brcmfmac: BCM4360 test.188: fw-sample[0x40c58]=0x69766564 (TCM) vs 0x69766564 (fw->data) MATCH
+[ 2553.882867] brcmfmac: BCM4360 test.188: fw-sample[0x4131c]=0x74756f20 (TCM) vs 0x74756f20 (fw->data) MATCH
+[ 2553.882870] brcmfmac: BCM4360 test.188: fw-sample[0x419e4]=0x42005449 (TCM) vs 0x42005449 (fw->data) MATCH
+[ 2553.882873] brcmfmac: BCM4360 test.188: fw-sample[0x420a8]=0x725f6d63 (TCM) vs 0x725f6d63 (fw->data) MATCH
+[ 2553.882876] brcmfmac: BCM4360 test.188: fw-sample[0x42770]=0x00656c62 (TCM) vs 0x00656c62 (fw->data) MATCH
+[ 2553.882879] brcmfmac: BCM4360 test.188: fw-sample[0x42e34]=0x25000a75 (TCM) vs 0x25000a75 (fw->data) MATCH
+[ 2553.882883] brcmfmac: BCM4360 test.188: fw-sample[0x434fc]=0xa2677172 (TCM) vs 0xa2677172 (fw->data) MATCH
+[ 2553.882886] brcmfmac: BCM4360 test.188: fw-sample[0x43bc0]=0x10101010 (TCM) vs 0x10101010 (fw->data) MATCH
+[ 2553.882889] brcmfmac: BCM4360 test.188: fw-sample[0x44288]=0x78257830 (TCM) vs 0x78257830 (fw->data) MATCH
+[ 2553.882892] brcmfmac: BCM4360 test.188: fw-sample[0x4494c]=0x20617461 (TCM) vs 0x20617461 (fw->data) MATCH
+[ 2553.882895] brcmfmac: BCM4360 test.188: fw-sample[0x45014]=0x273a1d1d (TCM) vs 0x273a1d1d (fw->data) MATCH
+[ 2553.907333] brcmfmac: BCM4360 test.188: fw-sample[0x456d8]=0x84c61120 (TCM) vs 0x84c61120 (fw->data) MATCH
+[ 2553.908453] brcmfmac: BCM4360 test.188: fw-sample[0x45da0]=0x55ab2a66 (TCM) vs 0x55ab2a66 (fw->data) MATCH
+[ 2553.909599] brcmfmac: BCM4360 test.188: fw-sample[0x46464]=0xc8c8c8c8 (TCM) vs 0xc8c8c8c8 (fw->data) MATCH
+[ 2553.910713] brcmfmac: BCM4360 test.188: fw-sample[0x46b2c]=0xb8d36bb8 (TCM) vs 0xb8d36bb8 (fw->data) MATCH
+[ 2553.911875] brcmfmac: BCM4360 test.188: fw-sample[0x471f0]=0xb3b3b3b3 (TCM) vs 0xb3b3b3b3 (fw->data) MATCH
+[ 2553.913105] brcmfmac: BCM4360 test.188: fw-sample[0x478b8]=0x94de724b (TCM) vs 0x94de724b (fw->data) MATCH
+[ 2553.914154] brcmfmac: BCM4360 test.188: fw-sample[0x47f7c]=0x65766173 (TCM) vs 0x65766173 (fw->data) MATCH
+[ 2553.915215] brcmfmac: BCM4360 test.188: fw-sample[0x48644]=0x6f645f65 (TCM) vs 0x6f645f65 (fw->data) MATCH
+[ 2553.916308] brcmfmac: BCM4360 test.188: fw-sample[0x48d08]=0x444d0020 (TCM) vs 0x444d0020 (fw->data) MATCH
+[ 2553.917315] brcmfmac: BCM4360 test.188: fw-sample[0x493d0]=0x68637461 (TCM) vs 0x68637461 (fw->data) MATCH
+[ 2553.918324] brcmfmac: BCM4360 test.188: fw-sample[0x49a94]=0x7075656b (TCM) vs 0x7075656b (fw->data) MATCH
+[ 2553.919334] brcmfmac: BCM4360 test.188: fw-sample[0x4a15c]=0x6d63695f (TCM) vs 0x6d63695f (fw->data) MATCH
+[ 2553.920378] brcmfmac: BCM4360 test.188: fw-sample[0x4a820]=0x65656b5f (TCM) vs 0x65656b5f (fw->data) MATCH
+[ 2553.921403] brcmfmac: BCM4360 test.188: fw-sample[0x4aee8]=0x5f636c77 (TCM) vs 0x5f636c77 (fw->data) MATCH
+[ 2553.922464] brcmfmac: BCM4360 test.188: fw-sample[0x4b5ac]=0x6f634e20 (TCM) vs 0x6f634e20 (fw->data) MATCH
+[ 2553.923539] brcmfmac: BCM4360 test.188: fw-sample[0x4bc74]=0x3230253a (TCM) vs 0x3230253a (fw->data) MATCH
+[ 2553.924575] brcmfmac: BCM4360 test.188: fw-sample[0x4c338]=0x6e207369 (TCM) vs 0x6e207369 (fw->data) MATCH
+[ 2553.925674] brcmfmac: BCM4360 test.188: fw-sample[0x4ca00]=0x66666666 (TCM) vs 0x66666666 (fw->data) MATCH
+[ 2553.926798] brcmfmac: BCM4360 test.188: fw-sample[0x4d0c4]=0x53454100 (TCM) vs 0x53454100 (fw->data) MATCH
+[ 2553.927976] brcmfmac: BCM4360 test.188: fw-sample[0x4d78c]=0x33302520 (TCM) vs 0x33302520 (fw->data) MATCH
+[ 2553.929273] brcmfmac: BCM4360 test.188: fw-sample[0x4de50]=0x5f626d75 (TCM) vs 0x5f626d75 (fw->data) MATCH
+[ 2553.930341] brcmfmac: BCM4360 test.188: fw-sample[0x4e518]=0x5f6c676e (TCM) vs 0x5f6c676e (fw->data) MATCH
+[ 2553.931368] brcmfmac: BCM4360 test.188: fw-sample[0x4ebdc]=0x524c5700 (TCM) vs 0x524c5700 (fw->data) MATCH
+[ 2553.932453] brcmfmac: BCM4360 test.188: fw-sample[0x4f2a4]=0x47524154 (TCM) vs 0x47524154 (fw->data) MATCH
+[ 2553.933438] brcmfmac: BCM4360 test.188: fw-sample[0x4f968]=0x4d4f435f (TCM) vs 0x4d4f435f (fw->data) MATCH
+[ 2553.934411] brcmfmac: BCM4360 test.188: fw-sample[0x50030]=0x0004ef80 (TCM) vs 0x0004ef80 (fw->data) MATCH
+[ 2553.935411] brcmfmac: BCM4360 test.188: fw-sample[0x506f4]=0x64206c6c (TCM) vs 0x64206c6c (fw->data) MATCH
+[ 2553.936376] brcmfmac: BCM4360 test.188: fw-sample[0x50dbc]=0x6574203a (TCM) vs 0x6574203a (fw->data) MATCH
+[ 2553.937350] brcmfmac: BCM4360 test.188: fw-sample[0x51480]=0x3a64256c (TCM) vs 0x3a64256c (fw->data) MATCH
+[ 2553.938381] brcmfmac: BCM4360 test.188: fw-sample[0x51b48]=0x6e666165 (TCM) vs 0x6e666165 (fw->data) MATCH
+[ 2553.939402] brcmfmac: BCM4360 test.188: fw-sample[0x5220c]=0x616f722f (TCM) vs 0x616f722f (fw->data) MATCH
+[ 2553.940432] brcmfmac: BCM4360 test.188: fw-sample[0x528d4]=0x78207a48 (TCM) vs 0x78207a48 (fw->data) MATCH
+[ 2553.941451] brcmfmac: BCM4360 test.188: fw-sample[0x52f98]=0x656c635f (TCM) vs 0x656c635f (fw->data) MATCH
+[ 2553.942432] brcmfmac: BCM4360 test.188: fw-sample[0x53660]=0x24222523 (TCM) vs 0x24222523 (fw->data) MATCH
+[ 2553.943434] brcmfmac: BCM4360 test.188: fw-sample[0x53d24]=0x53207465 (TCM) vs 0x53207465 (fw->data) MATCH
+[ 2553.944709] brcmfmac: BCM4360 test.188: fw-sample[0x543ec]=0x64207369 (TCM) vs 0x64207369 (fw->data) MATCH
+[ 2553.945779] brcmfmac: BCM4360 test.188: fw-sample[0x54ab0]=0x203a7325 (TCM) vs 0x203a7325 (fw->data) MATCH
+[ 2553.946804] brcmfmac: BCM4360 test.188: fw-sample[0x55178]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+[ 2553.947917] brcmfmac: BCM4360 test.188: fw-sample[0x5583c]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+[ 2553.948954] brcmfmac: BCM4360 test.188: fw-sample[0x55f04]=0x00a50319 (TCM) vs 0x00a50319 (fw->data) MATCH
+[ 2553.949964] brcmfmac: BCM4360 test.188: fw-sample[0x565c8]=0xffd0ffd0 (TCM) vs 0xffd0ffd0 (fw->data) MATCH
+[ 2553.951002] brcmfmac: BCM4360 test.188: fw-sample[0x56c90]=0x6b617720 (TCM) vs 0x6b617720 (fw->data) MATCH
+[ 2553.951974] brcmfmac: BCM4360 test.188: fw-sample[0x57354]=0x20732520 (TCM) vs 0x20732520 (fw->data) MATCH
+[ 2553.952947] brcmfmac: BCM4360 test.188: fw-sample[0x57a1c]=0x702f6576 (TCM) vs 0x702f6576 (fw->data) MATCH
+[ 2553.953977] brcmfmac: BCM4360 test.188: fw-sample[0x580e0]=0x616c6620 (TCM) vs 0x616c6620 (fw->data) MATCH
+[ 2553.954988] brcmfmac: BCM4360 test.188: fw-sample[0x587a8]=0x44495353 (TCM) vs 0x44495353 (fw->data) MATCH
+[ 2553.956017] brcmfmac: BCM4360 test.188: fw-sample[0x58e6c]=0x00000001 (TCM) vs 0x00000001 (fw->data) MATCH
+[ 2553.957108] brcmfmac: BCM4360 test.188: fw-sample[0x59534]=0x0010f32f (TCM) vs 0x0010f32f (fw->data) MATCH
+[ 2553.958102] brcmfmac: BCM4360 test.188: fw-sample[0x59bf8]=0x00a70f00 (TCM) vs 0x00a70f00 (fw->data) MATCH
+[ 2553.959094] brcmfmac: BCM4360 test.188: fw-sample[0x5a2c0]=0x00cb8e39 (TCM) vs 0x00cb8e39 (fw->data) MATCH
+[ 2553.960144] brcmfmac: BCM4360 test.188: fw-sample[0x5a984]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+[ 2553.961156] brcmfmac: BCM4360 test.188: fw-sample[0x5b04c]=0x3400a500 (TCM) vs 0x3400a500 (fw->data) MATCH
+[ 2553.962187] brcmfmac: BCM4360 test.188: fw-sample[0x5b710]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+[ 2553.963257] brcmfmac: BCM4360 test.188: fw-sample[0x5bdd8]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+[ 2553.964262] brcmfmac: BCM4360 test.188: fw-sample[0x5c49c]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+[ 2553.965265] brcmfmac: BCM4360 test.188: fw-sample[0x5cb64]=0x00588cda (TCM) vs 0x00588cda (fw->data) MATCH
+[ 2553.966317] brcmfmac: BCM4360 test.188: fw-sample[0x5d228]=0x00909091 (TCM) vs 0x00909091 (fw->data) MATCH
+[ 2553.967270] brcmfmac: BCM4360 test.188: fw-sample[0x5d8f0]=0x0039a707 (TCM) vs 0x0039a707 (fw->data) MATCH
+[ 2553.968233] brcmfmac: BCM4360 test.188: fw-sample[0x5dfb4]=0x00588cda (TCM) vs 0x00588cda (fw->data) MATCH
+[ 2553.969246] brcmfmac: BCM4360 test.188: fw-sample[0x5e67c]=0x00603018 (TCM) vs 0x00603018 (fw->data) MATCH
+[ 2553.970195] brcmfmac: BCM4360 test.188: fw-sample[0x5ed40]=0x008a5392 (TCM) vs 0x008a5392 (fw->data) MATCH
+[ 2553.971159] brcmfmac: BCM4360 test.188: fw-sample[0x5f408]=0x0084d7df (TCM) vs 0x0084d7df (fw->data) MATCH
+[ 2553.972159] brcmfmac: BCM4360 test.188: fw-sample[0x5facc]=0x0080722d (TCM) vs 0x0080722d (fw->data) MATCH
+[ 2553.973200] brcmfmac: BCM4360 test.188: fw-sample[0x60194]=0xffffff05 (TCM) vs 0xffffff05 (fw->data) MATCH
+[ 2553.974191] brcmfmac: BCM4360 test.188: fw-sample[0x60858]=0x350404a4 (TCM) vs 0x350404a4 (fw->data) MATCH
+[ 2553.975188] brcmfmac: BCM4360 test.188: fw-sample[0x60f20]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+[ 2553.976183] brcmfmac: BCM4360 test.188: fw-sample[0x615e4]=0x1d6f000b (TCM) vs 0x1d6f000b (fw->data) MATCH
+[ 2553.977134] brcmfmac: BCM4360 test.188: fw-sample[0x61cac]=0x00000cef (TCM) vs 0x00000cef (fw->data) MATCH
+[ 2553.978154] brcmfmac: BCM4360 test.188: fw-sample[0x62370]=0xefff002f (TCM) vs 0xefff002f (fw->data) MATCH
+[ 2553.979169] brcmfmac: BCM4360 test.188: fw-sample[0x62a38]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+[ 2553.980160] brcmfmac: BCM4360 test.188: fw-sample[0x630fc]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+[ 2553.981144] brcmfmac: BCM4360 test.188: fw-sample[0x637c4]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+[ 2553.982158] brcmfmac: BCM4360 test.188: fw-sample[0x63e88]=0xfd48f79c (TCM) vs 0xfd48f79c (fw->data) MATCH
+[ 2553.983107] brcmfmac: BCM4360 test.188: fw-sample[0x64550]=0x00040c27 (TCM) vs 0x00040c27 (fw->data) MATCH
+[ 2553.984050] brcmfmac: BCM4360 test.188: fw-sample[0x64c14]=0x4810462a (TCM) vs 0x4810462a (fw->data) MATCH
+[ 2553.985106] brcmfmac: BCM4360 test.188: fw-sample[0x652dc]=0xd0060f01 (TCM) vs 0xd0060f01 (fw->data) MATCH
+[ 2553.986136] brcmfmac: BCM4360 test.188: fw-sample[0x659a0]=0x69a31aed (TCM) vs 0x69a31aed (fw->data) MATCH
+[ 2553.987228] brcmfmac: BCM4360 test.188: fw-sample[0x66068]=0xf013681b (TCM) vs 0xf013681b (fw->data) MATCH
+[ 2553.988523] brcmfmac: BCM4360 test.188: fw-sample[0x6672c]=0xf79a7240 (TCM) vs 0xf79a7240 (fw->data) MATCH
+[ 2553.989808] brcmfmac: BCM4360 test.188: fw-sample[0x66df4]=0x46204606 (TCM) vs 0x46204606 (fw->data) MATCH
+[ 2553.991088] brcmfmac: BCM4360 test.188: fw-sample[0x674b8]=0x00058f44 (TCM) vs 0x00058f44 (fw->data) MATCH
+[ 2553.992320] brcmfmac: BCM4360 test.188: fw-sample[0x67b80]=0x66036583 (TCM) vs 0x66036583 (fw->data) MATCH
+[ 2553.993542] brcmfmac: BCM4360 test.188: fw-sample[0x68244]=0x46534a75 (TCM) vs 0x46534a75 (fw->data) MATCH
+[ 2553.994810] brcmfmac: BCM4360 test.188: fw-sample[0x6890c]=0x484df891 (TCM) vs 0x484df891 (fw->data) MATCH
+[ 2553.996099] brcmfmac: BCM4360 test.188: fw-sample[0x68fd0]=0xf884005b (TCM) vs 0xf884005b (fw->data) MATCH
+[ 2553.997358] brcmfmac: BCM4360 test.188: fw-sample[0x69698]=0x4b393601 (TCM) vs 0x4b393601 (fw->data) MATCH
+[ 2553.998690] brcmfmac: BCM4360 test.188: fw-sample[0x69d5c]=0x4a884989 (TCM) vs 0x4a884989 (fw->data) MATCH
+[ 2553.999916] brcmfmac: BCM4360 test.188: fw-sample[0x6a424]=0xf7aad005 (TCM) vs 0xf7aad005 (fw->data) MATCH
+[ 2554.001119] brcmfmac: BCM4360 test.188: fw-sample[0x6aae8]=0xf64ad906 (TCM) vs 0xf64ad906 (fw->data) MATCH
+[ 2554.002374] brcmfmac: BCM4360 test.188: fw-sample[0x6b1b0]=0x46200dc0 (TCM) vs 0x46200dc0 (fw->data) MATCH
+[ 2554.003631] brcmfmac: BCM4360 test.188: fw-sample[0x6b874]=0xfe1cf7d2 (TCM) vs 0xfe1cf7d2 (fw->data) MATCH
+[ 2554.004900] brcmfmac: BCM4360 test.188: fw-sample[0x6bf3c]=0x61633839 (TCM) vs 0x61633839 (fw->data) MATCH
+[ 2554.006179] brcmfmac: BCM4360 test.188: CC-clk_ctl_st=0x00050040 (pre-release snapshot)
+[ 2554.007451] brcmfmac: BCM4360 test.188: CC-pmucontrol=0x01770181 (pre-release snapshot)
+[ 2554.008637] brcmfmac: BCM4360 test.188: CC-pmustatus=0x0000002a (pre-release snapshot)
+[ 2554.009871] brcmfmac: BCM4360 test.188: CC-res_state=0x0000017b (pre-release snapshot)
+[ 2554.009875] brcmfmac: BCM4360 test.188: CC-pmutimer=0x04f960ed (pre-release snapshot)
+[ 2554.009876] brcmfmac: BCM4360 test.188: CC-min_res_mask=0x0000013b (pre-release snapshot)
+[ 2554.009878] brcmfmac: BCM4360 test.188: CC-max_res_mask=0x0000017f (pre-release snapshot)
+[ 2554.009879] brcmfmac: BCM4360 test.188: CC-pmuwatchdog=0x00000000 (pre-release snapshot)
+[ 2554.009881] brcmfmac: BCM4360 test.188: INTERNAL_MEM core not found — resetcore skipped (expected on BCM4360)
+[ 2554.009895] brcmfmac: BCM4360 test.188: pre-set-active ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+[ 2554.009909] brcmfmac: BCM4360 test.188: pre-set-active D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.059926] brcmfmac: BCM4360 test.188: pre-BM PCI_COMMAND=0x0002 BM=OFF MMIO guard mailboxint=0x00000000
+[ 2554.059979] brcmfmac: BCM4360 test.188: pci_set_master done; PCI_COMMAND=0x0006 BM=ON (before set_active)
+[ 2554.060020] brcmfmac: BCM4360 test.188: post-BM-on MMIO guard mailboxint=0x00000000 (endpoint still responsive)
+[ 2554.080063] brcmfmac: BCM4360 test.188: calling brcmf_chip_set_active resetintr=0xb80ef000 (BusMaster ENABLED — DMA-stall discriminator)
+[ 2554.110142] brcmfmac 0000:03:00.0: BCM4360 test.65 activate: rstvec=0xb80ef000 to TCM[0]; CMD=0x0006 (BusMaster preserved)
+[ 2554.110277] brcmfmac: BCM4360 test.188: brcmf_chip_set_active returned true
+[ 2554.130342] brcmfmac: BCM4360 test.188: post-set-active-20ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.130450] brcmfmac: BCM4360 test.188: post-set-active-20ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.210545] brcmfmac: BCM4360 test.188: post-set-active-100ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.210682] brcmfmac: BCM4360 test.188: post-set-active-100ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.212364] brcmfmac: BCM4360 test.188: tier-1 fine-grain ~100-150 ms (10 × 5 ms)
+[ 2554.218879] brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.218941] brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.218981] brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+[ 2554.219036] brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x06c60]=0x4682f889 vs 0x4682f889 MATCH
+[ 2554.219076] brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x0d8c0]=0xf007da03 vs 0xf007da03 MATCH
+[ 2554.220233] brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x14520]=0xf8d0d208 vs 0xf8d0d208 MATCH
+[ 2554.221428] brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x1b180]=0x23020900 vs 0x23020900 MATCH
+[ 2554.222644] brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x21de0]=0x4620fa03 vs 0x4620fa03 MATCH
+[ 2554.223922] brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x28a40]=0xf047b2bf vs 0xf047b2bf MATCH
+[ 2554.225130] brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x2f6a0]=0xf0044620 vs 0xf0044620 MATCH
+[ 2554.226900] brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x36300]=0x2b804770 vs 0x2b804770 MATCH
+[ 2554.228683] brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x3cf60]=0x298cf8c4 vs 0x298cf8c4 MATCH
+[ 2554.230245] brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x43bc0]=0x10101010 vs 0x10101010 MATCH
+[ 2554.231602] brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x4a820]=0x65656b5f vs 0x65656b5f MATCH
+[ 2554.232958] brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x51480]=0x3a64256c vs 0x3a64256c MATCH
+[ 2554.234220] brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x580e0]=0x616c6620 vs 0x616c6620 MATCH
+[ 2554.235451] brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x5ed40]=0x008a5392 vs 0x008a5392 MATCH
+[ 2554.236780] brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x659a0]=0x69a31aed vs 0x69a31aed MATCH
+[ 2554.243019] brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.244327] brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.249343] brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.249435] brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.249500] brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+[ 2554.249572] brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x06c60]=0x4682f889 vs 0x4682f889 MATCH
+[ 2554.251326] brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x0d8c0]=0xf007da03 vs 0xf007da03 MATCH
+[ 2554.253018] brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x14520]=0xf8d0d208 vs 0xf8d0d208 MATCH
+[ 2554.254381] brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x1b180]=0x23020900 vs 0x23020900 MATCH
+[ 2554.255792] brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x21de0]=0x4620fa03 vs 0x4620fa03 MATCH
+[ 2554.257233] brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x28a40]=0xf047b2bf vs 0xf047b2bf MATCH
+[ 2554.258611] brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x2f6a0]=0xf0044620 vs 0xf0044620 MATCH
+[ 2554.259979] brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x36300]=0x2b804770 vs 0x2b804770 MATCH
+[ 2554.261473] brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x3cf60]=0x298cf8c4 vs 0x298cf8c4 MATCH
+[ 2554.263292] brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x43bc0]=0x10101010 vs 0x10101010 MATCH
+[ 2554.265188] brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x4a820]=0x65656b5f vs 0x65656b5f MATCH
+[ 2554.266822] brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x51480]=0x3a64256c vs 0x3a64256c MATCH
+[ 2554.268375] brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x580e0]=0x616c6620 vs 0x616c6620 MATCH
+[ 2554.270351] brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x5ed40]=0x008a5392 vs 0x008a5392 MATCH
+[ 2554.272488] brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x659a0]=0x69a31aed vs 0x69a31aed MATCH
+[ 2554.279301] brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.280851] brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.287321] brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.288820] brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.290329] brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+[ 2554.291808] brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x06c60]=0x4682f889 vs 0x4682f889 MATCH
+[ 2554.293290] brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x0d8c0]=0xf007da03 vs 0xf007da03 MATCH
+[ 2554.294805] brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x14520]=0xf8d0d208 vs 0xf8d0d208 MATCH
+[ 2554.296325] brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x1b180]=0x23020900 vs 0x23020900 MATCH
+[ 2554.297889] brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x21de0]=0x4620fa03 vs 0x4620fa03 MATCH
+[ 2554.299375] brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x28a40]=0xf047b2bf vs 0xf047b2bf MATCH
+[ 2554.300802] brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x2f6a0]=0xf0044620 vs 0xf0044620 MATCH
+[ 2554.302235] brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x36300]=0x2b804770 vs 0x2b804770 MATCH
+[ 2554.303672] brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x3cf60]=0x298cf8c4 vs 0x298cf8c4 MATCH
+[ 2554.305153] brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x43bc0]=0x10101010 vs 0x10101010 MATCH
+[ 2554.306576] brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x4a820]=0x65656b5f vs 0x65656b5f MATCH
+[ 2554.308053] brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x51480]=0x3a64256c vs 0x3a64256c MATCH
+[ 2554.309369] brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x580e0]=0x616c6620 vs 0x616c6620 MATCH
+[ 2554.310762] brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x5ed40]=0x008a5392 vs 0x008a5392 MATCH
+[ 2554.312099] brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x659a0]=0x69a31aed vs 0x69a31aed MATCH
+[ 2554.318451] brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.319771] brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.326185] brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.327583] brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.328981] brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+[ 2554.330485] brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x06c60]=0x4682f889 vs 0x4682f889 MATCH
+[ 2554.331891] brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x0d8c0]=0xf007da03 vs 0xf007da03 MATCH
+[ 2554.333371] brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x14520]=0xf8d0d208 vs 0xf8d0d208 MATCH
+[ 2554.334925] brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x1b180]=0x23020900 vs 0x23020900 MATCH
+[ 2554.336813] brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x21de0]=0x4620fa03 vs 0x4620fa03 MATCH
+[ 2554.338860] brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x28a40]=0xf047b2bf vs 0xf047b2bf MATCH
+[ 2554.340537] brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x2f6a0]=0xf0044620 vs 0xf0044620 MATCH
+[ 2554.341910] brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x36300]=0x2b804770 vs 0x2b804770 MATCH
+[ 2554.343226] brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x3cf60]=0x298cf8c4 vs 0x298cf8c4 MATCH
+[ 2554.344563] brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x43bc0]=0x10101010 vs 0x10101010 MATCH
+[ 2554.345876] brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x4a820]=0x65656b5f vs 0x65656b5f MATCH
+[ 2554.347181] brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x51480]=0x3a64256c vs 0x3a64256c MATCH
+[ 2554.348523] brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x580e0]=0x616c6620 vs 0x616c6620 MATCH
+[ 2554.349812] brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x5ed40]=0x008a5392 vs 0x008a5392 MATCH
+[ 2554.351077] brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x659a0]=0x69a31aed vs 0x69a31aed MATCH
+[ 2554.357365] brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.358675] brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.364966] brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.366408] brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.367811] brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+[ 2554.369123] brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x06c60]=0x4682f889 vs 0x4682f889 MATCH
+[ 2554.370451] brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x0d8c0]=0xf007da03 vs 0xf007da03 MATCH
+[ 2554.371796] brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x14520]=0xf8d0d208 vs 0xf8d0d208 MATCH
+[ 2554.373193] brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x1b180]=0x23020900 vs 0x23020900 MATCH
+[ 2554.374546] brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x21de0]=0x4620fa03 vs 0x4620fa03 MATCH
+[ 2554.375865] brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x28a40]=0xf047b2bf vs 0xf047b2bf MATCH
+[ 2554.377150] brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x2f6a0]=0xf0044620 vs 0xf0044620 MATCH
+[ 2554.378478] brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x36300]=0x2b804770 vs 0x2b804770 MATCH
+[ 2554.379784] brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x3cf60]=0x298cf8c4 vs 0x298cf8c4 MATCH
+[ 2554.381088] brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x43bc0]=0x10101010 vs 0x10101010 MATCH
+[ 2554.382404] brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x4a820]=0x65656b5f vs 0x65656b5f MATCH
+[ 2554.383954] brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x51480]=0x3a64256c vs 0x3a64256c MATCH
+[ 2554.385523] brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x580e0]=0x616c6620 vs 0x616c6620 MATCH
+[ 2554.387136] brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x5ed40]=0x008a5392 vs 0x008a5392 MATCH
+[ 2554.388717] brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x659a0]=0x69a31aed vs 0x69a31aed MATCH
+[ 2554.395170] brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.396512] brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.397912] brcmfmac: BCM4360 test.188: tier-2 fine-grain ~150-1650 ms (30 × 50 ms)
+[ 2554.449381] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.449449] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.449492] brcmfmac: BCM4360 test.188: tier2-t+150ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+[ 2554.499562] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.499625] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.549681] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.549782] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.599846] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.599906] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.649964] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.650026] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.700082] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.701541] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.702896] brcmfmac: BCM4360 test.188: tier2-t+400ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+[ 2554.754284] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.755739] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.807258] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.807321] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.857377] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.857441] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.907498] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.907572] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.957631] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2554.957697] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2554.957740] brcmfmac: BCM4360 test.188: tier2-t+650ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+[ 2555.009465] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.009530] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.059584] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.059645] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.109702] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.109766] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.159821] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.159884] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.209941] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.210004] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.210045] brcmfmac: BCM4360 test.188: tier2-t+900ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+[ 2555.260101] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.260164] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.310218] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.310281] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.360335] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.360395] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.410448] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.410515] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.460569] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.462030] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.463503] brcmfmac: BCM4360 test.188: tier2-t+1150ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+[ 2555.515023] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.515087] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.565142] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.565206] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.615260] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.615321] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.665374] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.665437] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.715506] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.715568] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.715611] brcmfmac: BCM4360 test.188: tier2-t+1400ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+[ 2555.765669] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.765765] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.817799] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.819923] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.872161] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.872255] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2555.922340] brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2555.922407] brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2556.179529] brcmfmac: BCM4360 test.188: post-set-active-250ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2556.179703] brcmfmac: BCM4360 test.188: post-set-active-250ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2556.179789] brcmfmac: BCM4360 test.188: dwell-250ms NVRAM marker=0xffc3003c (was 0xffc3003c) UNCHANGED
+[ 2556.179875] brcmfmac: BCM4360 test.188: dwell-250ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[ 2556.179943] brcmfmac: BCM4360 test.188: dwell-250ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[ 2556.182361] brcmfmac: BCM4360 test.188: dwell-250ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[ 2556.184004] brcmfmac: BCM4360 test.188: dwell-250ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[ 2556.184009] brcmfmac: BCM4360 test.188: dwell-250ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[ 2556.184012] brcmfmac: BCM4360 test.188: dwell-250ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[ 2556.184015] brcmfmac: BCM4360 test.188: dwell-250ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[ 2556.184018] brcmfmac: BCM4360 test.188: dwell-250ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[ 2556.184036] brcmfmac: BCM4360 test.188: dwell-250ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[ 2556.187329] brcmfmac: BCM4360 test.188: dwell-250ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[ 2556.187332] brcmfmac: BCM4360 test.188: dwell-250ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[ 2556.187333] brcmfmac: BCM4360 test.188: dwell-250ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+[ 2556.187334] brcmfmac: BCM4360 test.188: dwell-250ms CC-pmutimer=0x04fa7644 (was 0x04f960ed) CHANGED
+[ 2556.187335] brcmfmac: BCM4360 test.188: dwell-250ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[ 2556.187336] brcmfmac: BCM4360 test.188: dwell-250ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+[ 2556.187337] brcmfmac: BCM4360 test.188: dwell-250ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[ 2556.443584] brcmfmac: BCM4360 test.188: post-set-active-500ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2556.443689] brcmfmac: BCM4360 test.188: post-set-active-500ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2556.443750] brcmfmac: BCM4360 test.188: dwell-500ms NVRAM marker=0xffc3003c (was 0xffc3003c) UNCHANGED
+[ 2556.443797] brcmfmac: BCM4360 test.188: dwell-500ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[ 2556.443843] brcmfmac: BCM4360 test.188: dwell-500ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[ 2556.445641] brcmfmac: BCM4360 test.188: dwell-500ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[ 2556.447374] brcmfmac: BCM4360 test.188: dwell-500ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[ 2556.449130] brcmfmac: BCM4360 test.188: dwell-500ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[ 2556.450787] brcmfmac: BCM4360 test.188: dwell-500ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[ 2556.452389] brcmfmac: BCM4360 test.188: dwell-500ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[ 2556.454009] brcmfmac: BCM4360 test.188: dwell-500ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[ 2556.455613] brcmfmac: BCM4360 test.188: dwell-500ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[ 2556.457280] brcmfmac: BCM4360 test.188: dwell-500ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[ 2556.458925] brcmfmac: BCM4360 test.188: dwell-500ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[ 2556.460506] brcmfmac: BCM4360 test.188: dwell-500ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+[ 2556.462155] brcmfmac: BCM4360 test.188: dwell-500ms CC-pmutimer=0x04fa98da (was 0x04f960ed) CHANGED
+[ 2556.463750] brcmfmac: BCM4360 test.188: dwell-500ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[ 2556.465434] brcmfmac: BCM4360 test.188: dwell-500ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+[ 2556.466996] brcmfmac: BCM4360 test.188: dwell-500ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[ 2556.723538] brcmfmac: BCM4360 test.188: post-set-active-750ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2556.723624] brcmfmac: BCM4360 test.188: post-set-active-750ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2556.723679] brcmfmac: BCM4360 test.188: dwell-750ms NVRAM marker=0xffc3003c (was 0xffc3003c) UNCHANGED
+[ 2556.723725] brcmfmac: BCM4360 test.188: dwell-750ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[ 2556.723772] brcmfmac: BCM4360 test.188: dwell-750ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[ 2556.725886] brcmfmac: BCM4360 test.188: dwell-750ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[ 2556.727678] brcmfmac: BCM4360 test.188: dwell-750ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[ 2556.729537] brcmfmac: BCM4360 test.188: dwell-750ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[ 2556.731337] brcmfmac: BCM4360 test.188: dwell-750ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[ 2556.733827] brcmfmac: BCM4360 test.188: dwell-750ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[ 2556.736148] brcmfmac: BCM4360 test.188: dwell-750ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[ 2556.737926] brcmfmac: BCM4360 test.188: dwell-750ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[ 2556.739573] brcmfmac: BCM4360 test.188: dwell-750ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[ 2556.741516] brcmfmac: BCM4360 test.188: dwell-750ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[ 2556.743246] brcmfmac: BCM4360 test.188: dwell-750ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+[ 2556.744797] brcmfmac: BCM4360 test.188: dwell-750ms CC-pmutimer=0x04fabcce (was 0x04f960ed) CHANGED
+[ 2556.746411] brcmfmac: BCM4360 test.188: dwell-750ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[ 2556.747924] brcmfmac: BCM4360 test.188: dwell-750ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+[ 2556.749462] brcmfmac: BCM4360 test.188: dwell-750ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[ 2557.003474] brcmfmac: BCM4360 test.188: post-set-active-1000ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2557.003557] brcmfmac: BCM4360 test.188: post-set-active-1000ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2557.003611] brcmfmac: BCM4360 test.188: dwell-1000ms NVRAM marker=0xffc3003c (was 0xffc3003c) UNCHANGED
+[ 2557.003658] brcmfmac: BCM4360 test.188: dwell-1000ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[ 2557.003704] brcmfmac: BCM4360 test.188: dwell-1000ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[ 2557.005416] brcmfmac: BCM4360 test.188: dwell-1000ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[ 2557.007207] brcmfmac: BCM4360 test.188: dwell-1000ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[ 2557.008913] brcmfmac: BCM4360 test.188: dwell-1000ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[ 2557.010597] brcmfmac: BCM4360 test.188: dwell-1000ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[ 2557.012223] brcmfmac: BCM4360 test.188: dwell-1000ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[ 2557.013872] brcmfmac: BCM4360 test.188: dwell-1000ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[ 2557.015408] brcmfmac: BCM4360 test.188: dwell-1000ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[ 2557.016921] brcmfmac: BCM4360 test.188: dwell-1000ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[ 2557.018321] brcmfmac: BCM4360 test.188: dwell-1000ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[ 2557.019945] brcmfmac: BCM4360 test.188: dwell-1000ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+[ 2557.021357] brcmfmac: BCM4360 test.188: dwell-1000ms CC-pmutimer=0x04fae024 (was 0x04f960ed) CHANGED
+[ 2557.022810] brcmfmac: BCM4360 test.188: dwell-1000ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[ 2557.024254] brcmfmac: BCM4360 test.188: dwell-1000ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+[ 2557.025621] brcmfmac: BCM4360 test.188: dwell-1000ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[ 2557.283600] brcmfmac: BCM4360 test.188: post-set-active-1250ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2557.283699] brcmfmac: BCM4360 test.188: post-set-active-1250ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2557.283784] brcmfmac: BCM4360 test.188: dwell-1250ms NVRAM marker=0xffc3003c (was 0xffc3003c) UNCHANGED
+[ 2557.283876] brcmfmac: BCM4360 test.188: dwell-1250ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[ 2557.283967] brcmfmac: BCM4360 test.188: dwell-1250ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[ 2557.285984] brcmfmac: BCM4360 test.188: dwell-1250ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[ 2557.287791] brcmfmac: BCM4360 test.188: dwell-1250ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[ 2557.289574] brcmfmac: BCM4360 test.188: dwell-1250ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[ 2557.291438] brcmfmac: BCM4360 test.188: dwell-1250ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[ 2557.293207] brcmfmac: BCM4360 test.188: dwell-1250ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[ 2557.294971] brcmfmac: BCM4360 test.188: dwell-1250ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[ 2557.296671] brcmfmac: BCM4360 test.188: dwell-1250ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[ 2557.298174] brcmfmac: BCM4360 test.188: dwell-1250ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[ 2557.299679] brcmfmac: BCM4360 test.188: dwell-1250ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[ 2557.301106] brcmfmac: BCM4360 test.188: dwell-1250ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+[ 2557.302474] brcmfmac: BCM4360 test.188: dwell-1250ms CC-pmutimer=0x04fb03f6 (was 0x04f960ed) CHANGED
+[ 2557.303855] brcmfmac: BCM4360 test.188: dwell-1250ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[ 2557.305218] brcmfmac: BCM4360 test.188: dwell-1250ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+[ 2557.306885] brcmfmac: BCM4360 test.188: dwell-1250ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[ 2557.563506] brcmfmac: BCM4360 test.188: post-set-active-1500ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2557.563622] brcmfmac: BCM4360 test.188: post-set-active-1500ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2557.563693] brcmfmac: BCM4360 test.188: dwell-1500ms NVRAM marker=0xffc3003c (was 0xffc3003c) UNCHANGED
+[ 2557.563754] brcmfmac: BCM4360 test.188: dwell-1500ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[ 2557.563814] brcmfmac: BCM4360 test.188: dwell-1500ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[ 2557.565670] brcmfmac: BCM4360 test.188: dwell-1500ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[ 2557.567517] brcmfmac: BCM4360 test.188: dwell-1500ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[ 2557.569366] brcmfmac: BCM4360 test.188: dwell-1500ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[ 2557.571105] brcmfmac: BCM4360 test.188: dwell-1500ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[ 2557.572937] brcmfmac: BCM4360 test.188: dwell-1500ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[ 2557.574713] brcmfmac: BCM4360 test.188: dwell-1500ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[ 2557.576530] brcmfmac: BCM4360 test.188: dwell-1500ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[ 2557.578492] brcmfmac: BCM4360 test.188: dwell-1500ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[ 2557.580342] brcmfmac: BCM4360 test.188: dwell-1500ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[ 2557.582159] brcmfmac: BCM4360 test.188: dwell-1500ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+[ 2557.584032] brcmfmac: BCM4360 test.188: dwell-1500ms CC-pmutimer=0x04fb279a (was 0x04f960ed) CHANGED
+[ 2557.585863] brcmfmac: BCM4360 test.188: dwell-1500ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[ 2557.587346] brcmfmac: BCM4360 test.188: dwell-1500ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+[ 2557.588716] brcmfmac: BCM4360 test.188: dwell-1500ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[ 2557.844440] brcmfmac: BCM4360 test.188: post-set-active-1750ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2557.844559] brcmfmac: BCM4360 test.188: post-set-active-1750ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2557.844628] brcmfmac: BCM4360 test.188: dwell-1750ms NVRAM marker=0xffc3003c (was 0xffc3003c) UNCHANGED
+[ 2557.844687] brcmfmac: BCM4360 test.188: dwell-1750ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[ 2557.844745] brcmfmac: BCM4360 test.188: dwell-1750ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[ 2557.846894] brcmfmac: BCM4360 test.188: dwell-1750ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[ 2557.849019] brcmfmac: BCM4360 test.188: dwell-1750ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[ 2557.851032] brcmfmac: BCM4360 test.188: dwell-1750ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[ 2557.853024] brcmfmac: BCM4360 test.188: dwell-1750ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[ 2557.854962] brcmfmac: BCM4360 test.188: dwell-1750ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[ 2557.856920] brcmfmac: BCM4360 test.188: dwell-1750ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[ 2557.858907] brcmfmac: BCM4360 test.188: dwell-1750ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[ 2557.860835] brcmfmac: BCM4360 test.188: dwell-1750ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[ 2557.862202] brcmfmac: BCM4360 test.188: dwell-1750ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[ 2557.863647] brcmfmac: BCM4360 test.188: dwell-1750ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+[ 2557.863650] brcmfmac: BCM4360 test.188: dwell-1750ms CC-pmutimer=0x04fb4b90 (was 0x04f960ed) CHANGED
+[ 2557.863651] brcmfmac: BCM4360 test.188: dwell-1750ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[ 2557.863652] brcmfmac: BCM4360 test.188: dwell-1750ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+[ 2557.863653] brcmfmac: BCM4360 test.188: dwell-1750ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[ 2558.116410] brcmfmac: BCM4360 test.188: post-set-active-2000ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2558.116553] brcmfmac: BCM4360 test.188: post-set-active-2000ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2558.116625] brcmfmac: BCM4360 test.188: dwell-2000ms NVRAM marker=0xffc3003c (was 0xffc3003c) UNCHANGED
+[ 2558.116673] brcmfmac: BCM4360 test.188: dwell-2000ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[ 2558.116719] brcmfmac: BCM4360 test.188: dwell-2000ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[ 2558.118316] brcmfmac: BCM4360 test.188: dwell-2000ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[ 2558.120338] brcmfmac: BCM4360 test.188: dwell-2000ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[ 2558.122932] brcmfmac: BCM4360 test.188: dwell-2000ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[ 2558.125558] brcmfmac: BCM4360 test.188: dwell-2000ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[ 2558.127623] brcmfmac: BCM4360 test.188: dwell-2000ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[ 2558.129383] brcmfmac: BCM4360 test.188: dwell-2000ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[ 2558.130854] brcmfmac: BCM4360 test.188: dwell-2000ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[ 2558.132253] brcmfmac: BCM4360 test.188: dwell-2000ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[ 2558.133612] brcmfmac: BCM4360 test.188: dwell-2000ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[ 2558.134952] brcmfmac: BCM4360 test.188: dwell-2000ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+[ 2558.136285] brcmfmac: BCM4360 test.188: dwell-2000ms CC-pmutimer=0x04fb6e32 (was 0x04f960ed) CHANGED
+[ 2558.137602] brcmfmac: BCM4360 test.188: dwell-2000ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[ 2558.138945] brcmfmac: BCM4360 test.188: dwell-2000ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+[ 2558.140358] brcmfmac: BCM4360 test.188: dwell-2000ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[ 2558.395513] brcmfmac: BCM4360 test.188: post-set-active-2250ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2558.395639] brcmfmac: BCM4360 test.188: post-set-active-2250ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2558.395727] brcmfmac: BCM4360 test.188: dwell-2250ms NVRAM marker=0xffc3003c (was 0xffc3003c) UNCHANGED
+[ 2558.395802] brcmfmac: BCM4360 test.188: dwell-2250ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[ 2558.395876] brcmfmac: BCM4360 test.188: dwell-2250ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[ 2558.398090] brcmfmac: BCM4360 test.188: dwell-2250ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[ 2558.400256] brcmfmac: BCM4360 test.188: dwell-2250ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[ 2558.402303] brcmfmac: BCM4360 test.188: dwell-2250ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[ 2558.404107] brcmfmac: BCM4360 test.188: dwell-2250ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[ 2558.406519] brcmfmac: BCM4360 test.188: dwell-2250ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[ 2558.408841] brcmfmac: BCM4360 test.188: dwell-2250ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[ 2558.410880] brcmfmac: BCM4360 test.188: dwell-2250ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[ 2558.413075] brcmfmac: BCM4360 test.188: dwell-2250ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[ 2558.415069] brcmfmac: BCM4360 test.188: dwell-2250ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[ 2558.416971] brcmfmac: BCM4360 test.188: dwell-2250ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+[ 2558.418543] brcmfmac: BCM4360 test.188: dwell-2250ms CC-pmutimer=0x04fb91db (was 0x04f960ed) CHANGED
+[ 2558.420172] brcmfmac: BCM4360 test.188: dwell-2250ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[ 2558.421751] brcmfmac: BCM4360 test.188: dwell-2250ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+[ 2558.423415] brcmfmac: BCM4360 test.188: dwell-2250ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[ 2558.675413] brcmfmac: BCM4360 test.188: post-set-active-2500ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2558.675622] brcmfmac: BCM4360 test.188: post-set-active-2500ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2558.675782] brcmfmac: BCM4360 test.188: dwell-2500ms NVRAM marker=0xffc3003c (was 0xffc3003c) UNCHANGED
+[ 2558.675901] brcmfmac: BCM4360 test.188: dwell-2500ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[ 2558.675994] brcmfmac: BCM4360 test.188: dwell-2500ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[ 2558.678266] brcmfmac: BCM4360 test.188: dwell-2500ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[ 2558.680618] brcmfmac: BCM4360 test.188: dwell-2500ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[ 2558.682870] brcmfmac: BCM4360 test.188: dwell-2500ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[ 2558.684711] brcmfmac: BCM4360 test.188: dwell-2500ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[ 2558.686884] brcmfmac: BCM4360 test.188: dwell-2500ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[ 2558.689068] brcmfmac: BCM4360 test.188: dwell-2500ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[ 2558.691107] brcmfmac: BCM4360 test.188: dwell-2500ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[ 2558.693286] brcmfmac: BCM4360 test.188: dwell-2500ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[ 2558.695347] brcmfmac: BCM4360 test.188: dwell-2500ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[ 2558.697485] brcmfmac: BCM4360 test.188: dwell-2500ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+[ 2558.699601] brcmfmac: BCM4360 test.188: dwell-2500ms CC-pmutimer=0x04fbb58b (was 0x04f960ed) CHANGED
+[ 2558.701455] brcmfmac: BCM4360 test.188: dwell-2500ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[ 2558.703377] brcmfmac: BCM4360 test.188: dwell-2500ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+[ 2558.703394] brcmfmac: BCM4360 test.188: dwell-2500ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[ 2558.955498] brcmfmac: BCM4360 test.188: post-set-active-2750ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2558.955632] brcmfmac: BCM4360 test.188: post-set-active-2750ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2558.955726] brcmfmac: BCM4360 test.188: dwell-2750ms NVRAM marker=0xffc3003c (was 0xffc3003c) UNCHANGED
+[ 2558.955805] brcmfmac: BCM4360 test.188: dwell-2750ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[ 2558.955883] brcmfmac: BCM4360 test.188: dwell-2750ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[ 2558.958247] brcmfmac: BCM4360 test.188: dwell-2750ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[ 2558.960604] brcmfmac: BCM4360 test.188: dwell-2750ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[ 2558.962766] brcmfmac: BCM4360 test.188: dwell-2750ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[ 2558.964588] brcmfmac: BCM4360 test.188: dwell-2750ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[ 2558.966864] brcmfmac: BCM4360 test.188: dwell-2750ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[ 2558.968806] brcmfmac: BCM4360 test.188: dwell-2750ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[ 2558.970519] brcmfmac: BCM4360 test.188: dwell-2750ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[ 2558.972681] brcmfmac: BCM4360 test.188: dwell-2750ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[ 2558.974743] brcmfmac: BCM4360 test.188: dwell-2750ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[ 2558.976790] brcmfmac: BCM4360 test.188: dwell-2750ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+[ 2558.978353] brcmfmac: BCM4360 test.188: dwell-2750ms CC-pmutimer=0x04fbd921 (was 0x04f960ed) CHANGED
+[ 2558.979708] brcmfmac: BCM4360 test.188: dwell-2750ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[ 2558.981113] brcmfmac: BCM4360 test.188: dwell-2750ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+[ 2558.982473] brcmfmac: BCM4360 test.188: dwell-2750ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[ 2559.235386] brcmfmac: BCM4360 test.188: post-set-active-3000ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+[ 2559.235614] brcmfmac: BCM4360 test.188: post-set-active-3000ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+[ 2559.235797] brcmfmac: BCM4360 test.188: dwell-3000ms NVRAM marker=0xffc3003c (was 0xffc3003c) UNCHANGED
+[ 2559.235940] brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+[ 2559.236090] brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+[ 2559.239943] brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+[ 2559.243656] brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+[ 2559.246475] brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+[ 2559.249362] brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+[ 2559.249370] brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+[ 2559.249375] brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+[ 2559.249395] brcmfmac: BCM4360 test.188: dwell-3000ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+[ 2559.249398] brcmfmac: BCM4360 test.188: dwell-3000ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+[ 2559.249401] brcmfmac: BCM4360 test.188: dwell-3000ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+[ 2559.254947] brcmfmac: BCM4360 test.188: dwell-3000ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+[ 2559.254955] brcmfmac: BCM4360 test.188: dwell-3000ms CC-pmutimer=0x04fbfca4 (was 0x04f960ed) CHANGED
+[ 2559.254958] brcmfmac: BCM4360 test.188: dwell-3000ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+[ 2559.261989] brcmfmac: BCM4360 test.188: dwell-3000ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+[ 2559.263953] brcmfmac: BCM4360 test.188: dwell-3000ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+[ 2559.266398] brcmfmac: BCM4360 test.196: post-dwell fw-sample summary: 256 UNCHANGED, 0 REVERTED, 0 CHANGED (of 256)
+[ 2559.268772] brcmfmac: BCM4360 test.205: dump range 0x40660..0x406c0
+[ 2559.270936] brcmfmac: BCM4360 test.205: 0x40660: 006f745f 72646e68 615f6574 632e6d72 | _to.hndrte_arm.c
+[ 2559.272879] brcmfmac: BCM4360 test.205: 0x40670: 646e6800 2e6d7261 61720063 6274736d | .hndarm.c.ramstb
+[ 2559.274958] brcmfmac: BCM4360 test.205: 0x40680: 73696479 69637000 676e6465 73695f6c | ydis.pciedngl_is
+[ 2559.276739] brcmfmac: BCM4360 test.205: 0x40690: 73250072 6c616320 0a64656c 69637000 | r.%s called..pci
+[ 2559.278234] brcmfmac: BCM4360 test.205: 0x406a0: 676e6465 73695f6c 61632072 64656c6c | edngl_isr called
+[ 2559.279737] brcmfmac: BCM4360 test.205: 0x406b0: 7325000a 6e69203a 696c6176 53492064 | ..%s: invalid IS
+[ 2559.281219] brcmfmac: BCM4360 test.205: dump range 0x64160..0x641e0
+[ 2559.282732] brcmfmac: BCM4360 test.205: 0x64160: 4834b920 1165f240 f83ef79d f7a54620 |  .4H@.e...>. F..
+[ 2559.284210] brcmfmac: BCM4360 test.205: 0x64170: 4b34fbf9 682b6018 f042681a 601a0202 | ..4K.`+h.hB....`
+[ 2559.285702] brcmfmac: BCM4360 test.205: 0x64180: f8c32200 696221e0 dd052a27 21e0f8d3 | ."...!bi'*.....!
+[ 2559.287491] brcmfmac: BCM4360 test.205: 0x64190: 0240f042 21e0f8c3 6629f644 200ae003 | B.@....!D.)f... 
+[ 2559.289570] brcmfmac: BCM4360 test.205: 0x641a0: fc9cf79d 682b3e0a 21e0f8d3 3f00f412 | .....>+h...!...?
+[ 2559.291514] brcmfmac: BCM4360 test.205: 0x641b0: 2e09d101 f8d3d1f3 f41331e0 d1043f00 | .........1...?..
+[ 2559.293062] brcmfmac: BCM4360 test.205: 0x641c0: f240481c f79d118d 6ca3f80f 7f80f413 | .H@........l....
+[ 2559.294613] brcmfmac: BCM4360 test.205: 0x641d0: 2100d00d 4620460b 6200f44f fef8f7ff | ...!.F FO..b....
+[ 2559.296137] brcmfmac: BCM4360 test.205: dump range 0x64200..0x64280
+[ 2559.297701] brcmfmac: BCM4360 test.205: 0x64200: f6404620 f7ff023c 2100fee3 4620460b |  F@.<......!.F F
+[ 2559.299308] brcmfmac: BCM4360 test.205: 0x64210: 0212f640 fedcf7ff 46202200 0112f640 | @........" F@...
+[ 2559.300867] brcmfmac: BCM4360 test.205: 0x64220: ff02f7ff 681a682b 0204f042 e8bd601a | ....+h.hB....`..
+[ 2559.302384] brcmfmac: BCM4360 test.205: 0x64230: bf0081f0 00040671 0004067a 00017fff | ....q...z.......
+[ 2559.304362] brcmfmac: BCM4360 test.205: 0x64240: 00062a08 00062a0c 43f8e92d 4b1d4698 | .*...*..-..C.F.K
+[ 2559.306394] brcmfmac: BCM4360 test.205: 0x64250: 46054614 681a4699 0f02f012 481ad003 | .F.F.F.h.......H
+[ 2559.308397] brcmfmac: BCM4360 test.205: 0x64260: f79c491a 4f1afbe5 2b07783b f8d9d90a | .I.....O;x.+....
+[ 2559.310521] brcmfmac: BCM4360 test.205: 0x64270: f0166000 d0220601 26004816 f79c4913 | .`...."..H.&.I..
+[ 2559.312775] brcmfmac: BCM4360 test.205: dump range 0x62a00..0x62b80
+[ 2559.315087] brcmfmac: BCM4360 test.205: 0x62a00: 00000000 00000000 18002000 00000002 | ......... ......
+[ 2559.316871] brcmfmac: BCM4360 test.205: 0x62a10: 00000000 00000000 00000000 00000000 | ................
+[ 2559.316885] brcmfmac: BCM4360 test.205: 0x62a20: 00000000 00000000 00000000 00000000 | ................
+[ 2559.316895] brcmfmac: BCM4360 test.205: 0x62a30: 00000000 00000000 00000000 00000000 | ................
+[ 2559.317018] brcmfmac: BCM4360 test.205: 0x62a40: 00000000 00000000 00000000 00000000 | ................
+[ 2559.317027] brcmfmac: BCM4360 test.205: 0x62a50: 00000000 00000000 00000000 00000000 | ................
+[ 2559.318629] brcmfmac: BCM4360 test.205: 0x62a60: 00000000 00000000 00000000 00000000 | ................
+[ 2559.320135] brcmfmac: BCM4360 test.205: 0x62a70: 00000000 00000000 00000000 00000000 | ................
+[ 2559.321637] brcmfmac: BCM4360 test.205: 0x62a80: 00000000 00000000 00000000 00000000 | ................
+[ 2559.323101] brcmfmac: BCM4360 test.205: 0x62a90: 00000001 00000020 00000001 00000000 | .... ...........
+[ 2559.324588] brcmfmac: BCM4360 test.205: 0x62aa0: 00000700 ffffffff 00000011 0000002b | ............+...
+[ 2559.326073] brcmfmac: BCM4360 test.205: 0x62ab0: 58680001 00000003 00000011 10a22b11 | ..hX.........+..
+[ 2559.327569] brcmfmac: BCM4360 test.205: 0x62ac0: 0000ffff 00000000 000014e4 00000000 | ................
+[ 2559.328955] brcmfmac: BCM4360 test.205: 0x62ad0: 00000000 00004360 00000003 00000000 | ....`C..........
+[ 2559.330365] brcmfmac: BCM4360 test.205: 0x62ae0: 00008a4d 00000000 00000000 00000000 | M...............
+[ 2559.331806] brcmfmac: BCM4360 test.205: 0x62af0: 00096f60 00000000 00000000 00000000 | `o..............
+[ 2559.333183] brcmfmac: BCM4360 test.205: 0x62b00: 00000000 00000000 00000000 00000000 | ................
+[ 2559.334575] brcmfmac: BCM4360 test.205: 0x62b10: 00000000 00000000 0009d0c8 157d1f36 | ............6.}.
+[ 2559.335922] brcmfmac: BCM4360 test.205: 0x62b20: 18002000 18000000 18001000 18002000 | . ........... ..
+[ 2559.337230] brcmfmac: BCM4360 test.205: 0x62b30: 18003000 18004000 00000000 00000000 | .0...@..........
+[ 2559.338578] brcmfmac: BCM4360 test.205: 0x62b40: 00000000 00000000 00000000 00000000 | ................
+[ 2559.339871] brcmfmac: BCM4360 test.205: 0x62b50: 00000000 00000000 00000000 00000000 | ................
+[ 2559.341200] brcmfmac: BCM4360 test.205: 0x62b60: 00000000 00000002 00000005 00000800 | ................
+[ 2559.342515] brcmfmac: BCM4360 test.205: 0x62b70: 00000812 0000083e 0000083c 0000081a | ....>...<.......
+[ 2559.343835] brcmfmac: BCM4360 test.205: dump range 0x96f40..0x96fc0
+[ 2559.345157] brcmfmac: BCM4360 test.205: 0x96f40: 00000010 00000000 00000000 00000b05 | ................
+[ 2559.346454] brcmfmac: BCM4360 test.205: 0x96f50: 00000000 00000001 00000010 00000000 | ................
+[ 2559.347810] brcmfmac: BCM4360 test.205: 0x96f60: 00000000 00000000 00000000 00000000 | ................
+[ 2559.349127] brcmfmac: BCM4360 test.205: 0x96f70: 00004000 00000000 6e756f46 68632064 | .@......Found ch
+[ 2559.350460] brcmfmac: BCM4360 test.205: 0x96f80: 74207069 20657079 28204941 35317830 | ip type AI (0x15
+[ 2559.351757] brcmfmac: BCM4360 test.205: 0x96f90: 33343330 0d293036 3532310a 2e383838 | 034360)..125888.
+[ 2559.353073] brcmfmac: BCM4360 test.205: 0x96fa0: 20303030 70696843 72203a63 34207665 | 000 Chipc: rev 4
+[ 2559.354304] brcmfmac: BCM4360 test.205: 0x96fb0: 63202c33 20737061 38357830 30303836 | 3, caps 0x586800
+[ 2559.355552] brcmfmac: BCM4360 test.205: dump range 0x97000..0x97200
+[ 2559.356819] brcmfmac: BCM4360 test.205: 0x97000: 61747461 64206863 2e656e6f 72636320 | attach done. ccr
+[ 2559.358089] brcmfmac: BCM4360 test.205: 0x97010: 3d207665 2c333420 5f647720 6974736d | ev = 43, wd_msti
+[ 2559.359407] brcmfmac: BCM4360 test.205: 0x97020: 20736b63 3233203d 33310a0d 35323836 | cks = 32..136825
+[ 2559.360683] brcmfmac: BCM4360 test.205: 0x97030: 3438372e 53534120 20545245 66206e69 | .784 ASSERT in f
+[ 2559.361950] brcmfmac: BCM4360 test.205: 0x97040: 20656c69 61646e68 632e6d72 6e696c20 | ile hndarm.c lin
+[ 2559.363205] brcmfmac: BCM4360 test.205: 0x97050: 39332065 72282037 30302061 31343630 | e 397 (ra 000641
+[ 2559.364500] brcmfmac: BCM4360 test.205: 0x97060: 202c6263 30206166 63393030 29306566 | cb, fa 0009cfe0)
+[ 2559.365852] brcmfmac: BCM4360 test.205: 0x97070: 00000a0d 00000000 00000000 00000000 | ................
+[ 2559.367150] brcmfmac: BCM4360 test.205: 0x97080: 00000000 00000000 00000000 00000000 | ................
+[ 2559.368859] brcmfmac: BCM4360 test.205: 0x97090: 00000000 00000000 00000000 00000000 | ................
+[ 2559.370633] brcmfmac: BCM4360 test.205: 0x970a0: 00000000 00000000 00000000 00000000 | ................
+[ 2559.372319] brcmfmac: BCM4360 test.205: 0x970b0: 00000000 00000000 00000000 00000000 | ................
+[ 2559.373503] brcmfmac: BCM4360 test.205: 0x970c0: 00000000 00000000 00000000 00000000 | ................
+[ 2559.374685] brcmfmac: BCM4360 test.205: 0x970d0: 00000000 00000000 00000000 00000000 | ................
+[ 2559.375923] brcmfmac: BCM4360 test.205: 0x970e0: 00000000 00000000 00000000 00000000 | ................
+[ 2559.377079] brcmfmac: BCM4360 test.205: 0x970f0: 00000000 00000000 00000000 00000000 | ................
+[ 2559.378178] brcmfmac: BCM4360 test.205: 0x97100: 00000000 00000000 00000000 00000000 | ................
+[ 2559.379284] brcmfmac: BCM4360 test.205: 0x97110: 00000000 00000000 00000000 00000000 | ................
+[ 2559.380360] brcmfmac: BCM4360 test.205: 0x97120: 00000000 00000000 00000000 00000000 | ................
+[ 2559.381444] brcmfmac: BCM4360 test.205: 0x97130: 00000000 00000000 00000000 00000000 | ................
+[ 2559.382572] brcmfmac: BCM4360 test.205: 0x97140: 00000000 00000000 00000000 00000000 | ................
+[ 2559.383651] brcmfmac: BCM4360 test.205: 0x97150: 00000000 00000000 00000000 00000000 | ................
+[ 2559.384750] brcmfmac: BCM4360 test.205: 0x97160: 00000000 00000000 00000000 00000000 | ................
+[ 2559.385877] brcmfmac: BCM4360 test.205: 0x97170: 00000000 00000000 00000000 00000000 | ................
+[ 2559.386926] brcmfmac: BCM4360 test.205: 0x97180: 00000000 00000000 00000000 00000000 | ................
+[ 2559.387990] brcmfmac: BCM4360 test.205: 0x97190: 00000000 00000000 00000000 00000000 | ................
+[ 2559.389074] brcmfmac: BCM4360 test.205: 0x971a0: 00000000 00000000 00000000 00000000 | ................
+[ 2559.390094] brcmfmac: BCM4360 test.205: 0x971b0: 00000000 00000000 00000000 00000000 | ................
+[ 2559.391139] brcmfmac: BCM4360 test.205: 0x971c0: 00000000 00000000 00000000 00000000 | ................
+[ 2559.392223] brcmfmac: BCM4360 test.205: 0x971d0: 00000000 00000000 00000000 00000000 | ................
+[ 2559.393238] brcmfmac: BCM4360 test.205: 0x971e0: 00000000 00000000 00000000 00000000 | ................
+[ 2559.394250] brcmfmac: BCM4360 test.205: 0x971f0: 00000000 00000000 00000000 00000000 | ................
+[ 2559.395242] brcmfmac: BCM4360 test.205: dump range 0x9cc00..0x9d000
+[ 2559.396239] brcmfmac: BCM4360 test.205: 0x9cc00: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.397260] brcmfmac: BCM4360 test.205: 0x9cc10: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.398279] brcmfmac: BCM4360 test.205: 0x9cc20: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.399320] brcmfmac: BCM4360 test.205: 0x9cc30: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.400323] brcmfmac: BCM4360 test.205: 0x9cc40: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.401330] brcmfmac: BCM4360 test.205: 0x9cc50: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.402301] brcmfmac: BCM4360 test.205: 0x9cc60: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.403283] brcmfmac: BCM4360 test.205: 0x9cc70: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.404199] brcmfmac: BCM4360 test.205: 0x9cc80: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.405120] brcmfmac: BCM4360 test.205: 0x9cc90: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.406067] brcmfmac: BCM4360 test.205: 0x9cca0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.406976] brcmfmac: BCM4360 test.205: 0x9ccb0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.407997] brcmfmac: BCM4360 test.205: 0x9ccc0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.408983] brcmfmac: BCM4360 test.205: 0x9ccd0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.409859] brcmfmac: BCM4360 test.205: 0x9cce0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.410695] brcmfmac: BCM4360 test.205: 0x9ccf0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.411518] brcmfmac: BCM4360 test.205: 0x9cd00: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.412325] brcmfmac: BCM4360 test.205: 0x9cd10: 5354414b 5354414b 00303030 8009cd7e | KATSKATS000.~...
+[ 2559.413169] brcmfmac: BCM4360 test.205: 0x9cd20: 00000000 0000000a 0009cd87 8009cd7e | ............~...
+[ 2559.413994] brcmfmac: BCM4360 test.205: 0x9cd30: 32623131 31306132 10a22b11 00000010 | 11b22a01.+......
+[ 2559.414802] brcmfmac: BCM4360 test.205: 0x9cd40: 0009cdce 0009cf80 00373834 8009cdae | ........487.....
+[ 2559.415659] brcmfmac: BCM4360 test.205: 0x9cd50: 00000310 0000000a 0009cdb7 8009cdae | ................
+[ 2559.416455] brcmfmac: BCM4360 test.205: 0x9cd60: 63666530 30303039 0009cfe0 00000010 | 0efc9000........
+[ 2559.417257] brcmfmac: BCM4360 test.205: 0x9cd70: 0009cded 0009cfb0 00040327 0009cfdc | ........'.......
+[ 2559.418051] brcmfmac: BCM4360 test.205: 0x9cd80: 00000000 00000713 00000008 00040010 | ................
+[ 2559.418887] brcmfmac: BCM4360 test.205: 0x9cd90: 000629c0 0009af80 0000000a 0000185d | .)..........]...
+[ 2559.419668] brcmfmac: BCM4360 test.205: 0x9cda0: 00040010 00000047 00062910 00000a87 | ....G....)......
+[ 2559.420470] brcmfmac: BCM4360 test.205: 0x9cdb0: 38363331 372e3532 41203438 52455353 | 136825.784 ASSER
+[ 2559.421284] brcmfmac: BCM4360 test.205: 0x9cdc0: 6e692054 6c696620 6e682065 6d726164 | T in file hndarm
+[ 2559.422141] brcmfmac: BCM4360 test.205: 0x9cdd0: 6c20632e 20656e69 20373933 20617228 | .c line 397 (ra 
+[ 2559.423019] brcmfmac: BCM4360 test.205: 0x9cde0: 36303030 62633134 6166202c 30303020 | 000641cb, fa 000
+[ 2559.423921] brcmfmac: BCM4360 test.205: 0x9cdf0: 65666339 000a2930 203d2076 202c3334 | 9cfe0)..v = 43, 
+[ 2559.425038] brcmfmac: BCM4360 test.205: 0x9ce00: 6d5f6477 63697473 3d20736b 0a323320 | wd_msticks = 32.
+[ 2559.426210] brcmfmac: BCM4360 test.205: 0x9ce10: 53544100 5354414b 5354414b 5354414b | .ATSKATSKATSKATS
+[ 2559.427420] brcmfmac: BCM4360 test.205: 0x9ce20: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.428606] brcmfmac: BCM4360 test.205: 0x9ce30: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.429728] brcmfmac: BCM4360 test.205: 0x9ce40: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.430821] brcmfmac: BCM4360 test.205: 0x9ce50: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.431831] brcmfmac: BCM4360 test.205: 0x9ce60: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.432825] brcmfmac: BCM4360 test.205: 0x9ce70: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.433816] brcmfmac: BCM4360 test.205: 0x9ce80: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.434809] brcmfmac: BCM4360 test.205: 0x9ce90: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.435775] brcmfmac: BCM4360 test.205: 0x9cea0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.436711] brcmfmac: BCM4360 test.205: 0x9ceb0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.437762] brcmfmac: BCM4360 test.205: 0x9cec0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.438924] brcmfmac: BCM4360 test.205: 0x9ced0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.440134] brcmfmac: BCM4360 test.205: 0x9cee0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.441420] brcmfmac: BCM4360 test.205: 0x9cef0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.442769] brcmfmac: BCM4360 test.205: 0x9cf00: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.444048] brcmfmac: BCM4360 test.205: 0x9cf10: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.445276] brcmfmac: BCM4360 test.205: 0x9cf20: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 2559.446447] brcmfmac: BCM4360 test.205: 0x9cf30: 0009cf31 0009cfa7 00000001 0000000a | 1...............
+[ 2559.446456] brcmfmac: BCM4360 test.205: 0x9cf40: 0009cf31 0009cfb7 00000001 0000000a | 1...............
+[ 2559.446464] brcmfmac: BCM4360 test.205: 0x9cf50: 0009cfab 0009cfb7 000449bc 0009cfa8 | .........I......
+[ 2559.446627] brcmfmac: BCM4360 test.205: 0x9cf60: 00000000 00000713 00000000 0003ffff | ................
+[ 2559.446677] brcmfmac: BCM4360 test.205: 0x9cf70: 00062a98 00000001 18000000 00000002 | .*..............
+[ 2559.447710] brcmfmac: BCM4360 test.205: 0x9cf80: 00000002 00001202 200001df 200001ff | ........... ... 
+[ 2559.448752] brcmfmac: BCM4360 test.205: 0x9cf90: 00000047 00000000 000000fa 00000001 | G...............
+[ 2559.449892] brcmfmac: BCM4360 test.205: 0x9cfa0: 0000018d 00062a08 00000009 0009cfe0 | .....*..........
+[ 2559.450947] brcmfmac: BCM4360 test.205: 0x9cfb0: 00058c8c 00002f5c bbadbadd bbadbadd | ....\/..........
+[ 2559.452024] brcmfmac: BCM4360 test.205: 0x9cfc0: 00000000 0009cfd8 00001201 00001202 | ................
+[ 2559.453139] brcmfmac: BCM4360 test.205: 0x9cfd0: 00001202 200001ff 0009cfe0 00062a98 | ....... .....*..
+[ 2559.454194] brcmfmac: BCM4360 test.205: 0x9cfe0: 18002000 00062a98 000a0000 000641cb | . ...*.......A..
+[ 2559.455378] brcmfmac: BCM4360 test.205: 0x9cff0: 00062a98 0009d0a0 00000000 000a0000 | .*..............
+[ 2559.468215] brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9702c]=0x35323836 (was 0x34313536) CHANGED
+[ 2559.469441] brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x97030]=0x3438372e (was 0x3831332e) CHANGED
+[ 2559.480083] brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cd48]=0x00373834 (was 0x00333138) CHANGED
+[ 2559.481471] brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cd50]=0x00000310 (was 0x0000013e) CHANGED
+[ 2559.482702] brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cdb0]=0x38363331 (was 0x35363331) CHANGED
+[ 2559.483975] brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cdb4]=0x372e3532 (was 0x332e3431) CHANGED
+[ 2559.485229] brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cdb8]=0x41203438 (was 0x41203831) CHANGED
+[ 2559.491556] brcmfmac: BCM4360 test.197: fine-TCM summary: 7 of 16384 cells CHANGED
+[ 2559.491559] brcmfmac: BCM4360 test.197: fine-TCM CHANGED span 0x9702c..0x9cdb8 (23952 bytes)
+[ 2559.494104] brcmfmac: BCM4360 test.188: final PCIE2 mailboxint=0x00000001 (D2H bits would be 0x10000+, FN0 bits 0x0100/0x0200)
+[ 2559.495402] brcmfmac: BCM4360 test.188: pci_clear_master done; PCI_COMMAND=0x0002 BM=OFF
+[ 2559.496797] brcmfmac: BCM4360 test.188: post-BM-clear MMIO guard mailboxint=0x00000001 (endpoint alive after BM-off)
+[ 2559.498277] brcmfmac: BCM4360 test.188: released fw/nvram after BM-before-set_active + tiers + 3000ms dwell + BM-clear; returning -ENODEV
+[ 2559.499542] brcmfmac: BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+[ 2559.803305] brcmfmac: BCM4360 test.163: fw released; returning from setup (state still DOWN)

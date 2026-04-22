@@ -1,5 +1,60 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.205 (2026-04-22) — ramstbydis=0 had no effect; assert identical to test.204
+
+Logs: `phase5/logs/test.205.journalctl.full.txt`. Run text:
+`phase5/logs/test.205.run.txt`. Test ran cleanly — no crash.
+
+### Result: identical assert to test.204
+
+```
+136825.784 ASSERT in file hndarm.c line 397 (ra 000641cb, fa 0009cfe0)
+v = 43, wd_msticks = 32
+```
+
+Trap-data structure at `0x9cfe0` is byte-identical to test.204:
+`18002000 00062a98 000a0000 000641cb`. Line number at `0x9cfa0` is
+still `0x18d` (=397). The only varying field across runs is the
+boot-relative timestamp prefix in the console message.
+
+**`ramstbydis=0` did not affect the line-397 path.**
+
+### Interpretation
+
+Three possibilities, listed by what they imply for next steps:
+
+1. **The firmware ignored our NVRAM key**. Could be: (a) firmware
+   doesn't read NVRAM until after this assert, or (b) firmware
+   doesn't recognize `ramstbydis` for this build/chip, or (c) the
+   firmware downloader/NVRAM stage isn't actually working. (c) is
+   most concerning — would explain why no NVRAM-driven setting
+   ever works.
+
+2. **`ramstbydis=0` is the default** the firmware would have used
+   anyway, so adding it changes nothing. Worth one more test with
+   `ramstbydis=1` before discarding this avenue.
+
+3. **The assert path doesn't depend on ramstbydis**. The string is
+   nearby in the const-pool but used by an unrelated code path.
+   In which case we need to find what r6 actually loads from.
+
+### Per the pre-arranged decision tree
+
+Outcome was "same line / same v" → my plan said: revert NVRAM,
+then dump `0x64100..0x64160` in test.206 to find r6's source.
+
+But before fully reverting, **one quick second probe**:
+**test.206 will try `ramstbydis=1`** to disambiguate (1) vs (2)
+above. If `=1` also produces an identical assert, the NVRAM key is
+either being ignored or doesn't gate this path; revert it and
+shift focus to dumping wider code context in test.207.
+
+If `=1` produces a *different* result (different line, different
+v, no assert), then we've confirmed the firmware does read
+ramstbydis and we have a new lead.
+
+---
+
 ## PRE-TEST.205 (2026-04-22) — add ramstbydis=0 to NVRAM, compare assert against test.204
 
 ### Hypothesis
