@@ -1,5 +1,152 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.225 (2026-04-22 15:57 BST) — hang moved EARLIER; chip-state regression, not code; drain-to-0 SMC reset required
+
+### Summary
+
+Test.225 ran in boot -1 and wedged the host **much earlier** than
+test.224 — before the chunk loop even executed. The only code change
+vs test.224 (chunk_words 4096→1024 + per-chunk readback verify, marker
+188→225) lives **inside** `brcmf_pcie_download_fw_nvram`'s chunk loop,
+which was never reached. This means the regression is **chip-state**,
+not code. The quick SMC reset at ~15:43 BST that re-armed the test was
+not enough; the full drain-to-0 procedure (already flagged in the
+15:43 POST entry) is now required.
+
+### Binary sanity check
+
+`strings brcmfmac.ko | grep 'test.225'` produces the `test.225: wrote
+...readback=...` format string — confirms the loaded module is the
+test.225 build (mtime 15:25:45). Zero `test.225:` lines in the log
+therefore means "chunk loop never executed", not "wrong module loaded".
+
+### Boot -1 probe sequence — where it stopped
+
+Logs captured: `phase5/logs/test.225.journalctl.txt` (74 lines,
+grep-filtered), `phase5/logs/test.225.journalctl.full.txt` (1155 lines,
+whole boot). No oops, BUG, MCE, watchdog, rcu_sched stall, or hung
+task — pure silent wedge.
+
+Last three kernel log lines from brcmfmac before silence:
+```
+15:49:09 test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0
+15:49:09 test.188: setup-entry ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+15:49:10 test.188: pci_register_driver returned ret=0   ← module_init stack, unrelated to wedge
+[SILENCE — host hung]
+```
+
+The setup-entry `probe_armcr4_state` emitted **successfully** (CR4 read
+`0x21` is a real value, not `0xffffffff`), then the next expected
+emission was `test.188: pre-attach ARM CR4 ...` which test.224 produced
+1s later. That line never reached the journal. The wedge happened
+during the `msleep(300)` immediately after setup-entry (pcie.c:4590) or
+inside the next `brcmf_pcie_probe_armcr4_state(..., "pre-attach")` call
+(pcie.c:4596).
+
+For comparison, test.224's equivalent sequence reached **all** of:
+setup-entry → pre-attach → `brcmf_pcie_attach` ENTRY/EXIT → PCIe2
+CLK_CONTROL probe → SBMBX → PMCR_REFUP → get_raminfo → post-raminfo →
+adjust_ramsize → pre-download → `test.163: before download_fw_nvram` →
+BAR2 ioread32 probe → pre-halt → chunk-loop start → 8 chunks × 16KB
+(131072 B) before wedging mid-9th-chunk. Hang moved from ~2s of active
+download work all the way back to a 300ms idle window **before**
+download setup.
+
+### Earlier-in-boot probes looked *healthy*
+
+PMU state, chip_attach, ASPM manipulation, firmware request — all
+completed cleanly with identical values to test.224:
+
+- `pmustatus=0x0000002e res_state=0x000007ff` (match: 0x2e / 0x7ff)
+- `chip=0x4360 ccrev=43 pmurev=17 pmucaps=0x10a22b11`
+- `BAR0 probe (CC@0x18000000) = 0x15034360 — alive`
+- `ASPM disabled; LnkCtl before=0x0143 after=0x0140`
+- `setup-entry ARM CR4 IOCTL=0x00000021 ... CPUHALT=YES`
+
+Everything looked normal until the 300ms idle gap between setup-entry
+and pre-attach. That's the tell: chip tolerates the *traffic bursts*
+we measured before (chip_attach MMIO, mask writes, ASPM ops), then
+something drops during idle / on the next-burst. This is qualitatively
+different from test.224's "wedges during sustained BAR2 writes".
+
+### Interpretation — chip-state accumulation
+
+Timeline of resets (or lack thereof):
+
+| Event | SMC reset? | Result |
+|---|---|---|
+| pre-test.223 | yes (prior session) | fresh chip — test.223 reached pre-download, wedged in 442KB burst |
+| pre-test.224 | **no** (cold reboot only) | chip retained PMU/backplane state — test.224 reached chunk 8 (131KB into download) |
+| pre-test.225 attempt 1 | **no** | aborted pre-insmod — BAR0 CTO (56ms) — chip dead |
+| pre-test.225 attempt 2 | **quick SMC** | BAR0 restored to fast-UR (32ms) — proceeded |
+| test.225 (this run) | n/a | wedged 300ms after setup-entry, far earlier than test.224 |
+| post-test.225 (now) | **no** | BAR0 still fast-UR (~19ms), chip disabled, power_state D3cold |
+
+The quick SMC reset brought BAR0 alive enough for the pre-check, and
+most of the early-probe MMIO succeeded, but **chip-internal state did
+not fully clear** — evidenced by the wedge moving to a qualitatively
+different site (idle gap vs sustained traffic). The 15:43 BST entry
+correctly flagged this risk: *"Quick SMC resets often don't clear
+chip-internal state from BCM4360 hangs."*
+
+### Limitation of the BAR0 fast-UR pre-check
+
+The test script's `dd ... resource0` pre-check distinguishes CTO (dead)
+from UR (alive-but-unconfigured). Test.225 proves fast-UR is
+**necessary but not sufficient** — the chip passed the pre-check and
+still wedged. Chip-internal state (PMU latches, backplane window
+state, arbitration timers) can be dirty even with a live BAR0 UR path.
+
+Not tightening the threshold yet — one datapoint is not enough to pick
+a better proxy. Flagged as a limitation; revisit if post-SMC-reset
+behaviour still varies after drain-to-0.
+
+### Current hardware state (boot 0, now)
+
+- Uptime ~15 min, boot at 15:42
+- `lspci -s 03:00.0`: device present, Control: `I/O- Mem- BusMaster-`,
+  Region 0/2 show `[disabled]`. DEVSEL=fast, no MAbort/SERR.
+- `enable=0` initially (now set to 1), `power_state=D3cold`
+- `dd ... resource0`: fast-UR (~19ms), I/O error as expected for UR
+- `lsmod | grep brcm`: empty
+
+### Required action — drain-to-0 SMC reset
+
+Per the 15:43 BST pre-existing procedure note (MacBook):
+
+1. Shut down host
+2. Unplug power
+3. Drain battery to 0% (leave unplugged overnight or several hours)
+4. Reconnect power, boot
+5. Verify BAR0 alive and DevSta clean, then re-run test.225
+
+Alternative: wait some hours with host fully powered off to see if
+chip-internal state decays. Quick SMC reset has now empirically failed
+twice at cleaning chip state for BCM4360 wedges.
+
+### Do NOT re-run test.225 without drain-to-0
+
+Another attempt on the current chip state would almost certainly wedge
+earlier still and give no new information. Hold.
+
+### Post-SMC-reset plan (deferred until user confirms drain-to-0 done)
+
+First decision after clean chip: re-run **test.225 as-is** on the
+fresh chip. Expected outcomes:
+
+- **Chunk loop executes** (hang moves back to ~131KB or later with
+  4KB cadence) → test.225 delivers its designed signal. Proceed to
+  test.226 based on what the readback shows.
+- **Wedge at setup-entry / pre-attach again** → not just chip state;
+  something else (a probe that the halted-CR4 doesn't tolerate across
+  successive runs?). Design test.226 around that.
+- **Download completes cleanly** → jackpot; move to ARM release /
+  post-download TCM inspection.
+
+No code changes queued.
+
+---
+
 ## PROCEEDING WITH TEST.225 (2026-04-22 15:45 BST) — fast-UR confirmed, chip safe
 
 Re-checked the post-SMC-reset state with the **same timing logic** the
