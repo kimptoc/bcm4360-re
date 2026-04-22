@@ -1,5 +1,88 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.209 (2026-04-22) — 4350pci binary downloads but never executes (different entry-vector format)
+
+Logs: `phase5/logs/test.209.{run,journalctl,journalctl.full}.txt`. Test ran
+cleanly — no crash. Firmware reverted to 4352pci-original after test.
+
+### Result 1: 4350pci firmware downloads correctly to TCM
+
+The chip-info dump region `0x62a00..0x62c00` shows content **byte-identical
+to the 4350pci binary file at the same offset**:
+
+```
+Test.209 TCM 0x62a00:  1886 6100 1886 6100 d200 ba13 a854 6100  ..a...a......Ta.
+4350pci.bin offset 0x62a00:  1886 6100 1886 6100 d200 ba13 a854 6100  ..a...a......Ta.
+```
+
+This proves the 442233-byte (4352pci) blob got replaced by the 445717-byte
+(4350pci) blob during firmware load.
+
+### Result 2: 4350pci firmware never starts executing
+
+- **Console buffer at `0x96f70..0x97070` is byte-identical to test.208**, including
+  the exact same firmware-internal timestamps `125888.000` and `137635.697`.
+  These are from old text in chip RAM that the new firmware never overwrote.
+- **`fine-TCM summary: 0 of 16384 cells CHANGED`** during the 3000ms dwell.
+  In test.208 we saw 7 cells change (timestamps in console buffer ticking).
+  Zero changes here means firmware made no writes at all — it never ran.
+- The `0x9cfe0` trap-data area still shows `18002000 00062a98 ... 000641cb` —
+  but `0x62a98` in the **4350pci** image holds different content (`5212 5f00`),
+  so this trap data is stale from test.208, not produced by the new firmware.
+
+### Result 3: why 4350pci doesn't execute — entry-vector format differs
+
+```
+4352pci.bin first 64 bytes (working): 00f0 0eb8 00f0 2eb8 00f0 39b8 ...
+4350pci.bin first 64 bytes (broken):  80f1 3ebc 80f1 68bc 80f1 73bc ...
+```
+
+The 4352pci vectors decode as `B.W +0x1c` style forward branches into the
+firmware body (standard ARM Thumb-2 vector table). The 4350pci vectors look
+like **wide BL/B branches with sign-extended large offsets** — they would
+jump to wildly out-of-range addresses if executed at TCM[0].
+
+This strongly suggests the 4350pci firmware was built to load at a **different
+base address** than 4352pci. Possibly:
+- It expects to be loaded above the bootrom region (e.g. starts at 0x40000)
+- Or it has a separate header/loader sequence we'd need to honor
+- Or it's intended for a chip variant where TCM is at a different physical address
+
+Either way, **simply replacing the file isn't enough** to use 4350pci. Would
+require driver-level support for the alternate load address (which brcmfmac
+doesn't currently implement for BCM4360).
+
+### Conclusion: wrong-firmware-variant hypothesis stays open
+
+We didn't disprove the hypothesis (the 4350pci variant might fix the assert if
+we could actually run it). But we did show that swapping the file alone won't
+work. Two paths remain:
+
+1. **Driver-level support for 4350pci-style firmware** — non-trivial. Would
+   need to figure out the correct load address and any pre-init steps.
+2. **Stay with 4352pci and find another angle on the assert** — patch the
+   firmware in TCM after download, find the asserting function's entry point,
+   or focus on what happens *after* the (non-fatal) assert returns.
+
+### Plan for test.210
+
+Pivot back to investigating the 4352pci assert path with a wider code dump.
+Key open questions from test.207-208:
+
+- Where does the **function containing the assert** start? (Currently unknown
+  — we only have the assert call site at `0x641c0..0x641d0`.)
+- The post-assert code at `0x641ca` does `LDR r3,[r4,#0x4c]; TST r3,#0x100;
+  BEQ.N <skip>; ... BL <something>`. What does the post-BL call do?
+
+Test.210 will widen the code dump to **`0x63a00..0x64400`** (~2300 bytes ≈ 1150
+Thumb-2 instructions) — enough to find the function entry above the assert
+call site (functions in this firmware appear ~512–1024 bytes long based on
+spacing of literal pools we've seen).
+
+Cost: +220 dump rows ≈ 55ms additional MMIO time. Negligible.
+
+---
+
 ## PRE-TEST.209 (2026-04-22) — swap firmware to dlarray_4350pci variant (wrong-firmware test)
 
 ### Hypothesis
