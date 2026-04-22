@@ -1,5 +1,94 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.219 (2026-04-22) — FORCEHT latches but HAVEHT never comes up
+
+Decision tree branch **(B)** confirmed.
+
+Single line that decides the test:
+
+```
+test.219: FORCEHT write CC clk_ctl_st pre=0x00050040 post=0x00050042
+          [HAVEHT(17)=no  ALP_AVAIL(16)=YES FORCEHT(1)=YES]
+```
+
+- FORCEHT bit latched correctly (post=0x...42)
+- 50 µs after the write: HAVEHT still 0 on CC
+- 2 ms + 20 ms + 30 ms later (post-FORCEHT-write probe on ARM CR4):
+  HAVEHT still 0
+- Throughout the **3 second dwell** ARM CR4 clk_ctl_st = 0x04050040
+  (HAVEHT(17)=no, FORCEHT(1)=no — firmware never managed to set
+  FORCEHT itself either)
+- ASSERT in hndarm.c (ramstbydis) still fires (TCM strings present
+  at 0x40300/0x40550/0x40670/0x9cdc0)
+
+**Interpretation:** the HT request *was* made (FORCEHT bit visible
+in CC clk_ctl_st), but the PMU did not grant it. This is exactly
+decision-tree branch (B): HT clock is gated by a PMU resource
+dependency we have not satisfied.
+
+### Smoking-gun PMU dump (already in test.218/219 logs)
+
+```
+CC-pmustatus    = 0x0000002a    # bits 1, 3, 5 UP only
+CC-min_res_mask = 0x0000017f    # bits 0,1,2,3,4,5,6,8 REQUESTED
+CC-max_res_mask = 0x0000017f
+CC-pmucontrol   = 0x01770181 → 0x01770381 (bit 9 toggles)
+```
+
+Bits 0, 2, 4, 6, 8 are requested by min_res_mask but NEVER come up
+in pmustatus. Bit 6 is the typical HT_AVAIL slot for BCM43xx
+families. The lower bits (0,2,4) are the regulator → xtal → ALP
+chain HT depends on. PMU is refusing to advance because something
+upstream (regulator? xtal_ldo? pll?) isn't satisfied.
+
+The current `min_res_mask = 0x17f` patch in chip.c is therefore
+under-spec'd for BCM4360. The proprietary `wl` driver almost
+certainly writes a much wider mask (and possibly programs the PMU
+resource-up/down/dependency tables before doing so).
+
+---
+
+## PRE-TEST.220 (2026-04-22) — proposed: widen min_res_mask + observe pmustatus
+
+Two-explanation distinguisher (per issue #14 rule):
+
+- (A) Wider min_res_mask makes more pmustatus bits come up and
+  HAVEHT eventually appears → driver just needs the right mask
+  (and maybe a `wl`-style PMU resource table).
+- (B) Wider min_res_mask makes no new pmustatus bits come up →
+  PMU dependency tables themselves are unprogrammed; just writing
+  the mask is not enough; we need to program PMU `res_dep_mask`,
+  `res_updn_timer`, etc. (the full `si_pmu_res_init` sequence).
+
+### Implementation plan for test.220
+
+1. In chip.c BCM4360-specific block, change the existing
+   `min_res_mask = 0x17f` write to `min_res_mask = 0xffffffff`
+   (or a calculated wider value — start with 0xffffffff to learn
+   which bits *can* come up at all).
+2. Read `pmustatus` after a settle delay and log which bits became
+   UP vs which stayed DOWN. The kernel-side probe already samples
+   these every 250 ms during dwell, so adding a wider mask is the
+   only patch needed.
+3. Bump test markers .219 → .220.
+
+### Decision criteria
+
+| pmustatus after wider mask | Interpretation | Next |
+|---|---|---|
+| All min_res_mask bits 0..7 UP, HAVEHT(17) on CC clk_ctl_st = 1, ramstbydis ASSERT gone | mask was the only blocker — make wider mask permanent | proceed past ramstbydis to next firmware blocker |
+| More bits UP than before but HAVEHT still 0 | dependency table unprogrammed; we got the wrong subset up | enumerate PMU resource table from `wl.ko` (Phase 6 deliverable) |
+| pmustatus unchanged from 0x2a | PMU not even accepting wider mask write | check whether min_res_mask register is locked, or wrong CC offset, or write is being clobbered by firmware |
+| Crash/SLVERR | timing problem with mask write — defer or stage | revert to 0x17f and look elsewhere |
+
+This is the next intervention test. Awaiting user go-ahead before
+implementing — deliberately checking in because the previous
+intervention (test.219) showed PMU is not in a freely-acceptable
+state and a wider mask write could have side-effects we haven't
+modeled.
+
+---
+
 ## PRE-TEST.219 (2026-04-22) — force FORCEHT to bring up HT clock
 
 ### What POST-TEST.218 just delivered (ROOT CAUSE LOCATED)
