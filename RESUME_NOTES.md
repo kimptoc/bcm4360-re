@@ -1,5 +1,99 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.226.rerun2 (2026-04-22 20:05 BST, boot 0 → crash, now on boot 0 of new session) — 3/3 WEDGE AT TEST.158, discriminator complete
+
+### Headline
+
+Third run of identical test.226 .ko wedged at the **exact same line** as runs 1 and 2:
+`test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)` — emitted
+20:05:00 BST, journal ends one line later. This is outcome 1 from the
+binomial discriminator decision tree: **wedge is reproducible at this
+flow point (3/3)**. The plan pivots to **test.227 — durable logging**
+(netconsole or earlyprintk=serial), as more pr_emerg breadcrumbs are
+dead weight if the real story is tail truncation from a deeper wedge.
+
+### Boot -1 journal (the crashed rerun2)
+
+Captured to `phase5/logs/test.226.rerun2.journalctl.full.txt` (1101 lines,
+whole boot) and `phase5/logs/test.226.rerun2.journalctl.txt` (53 lines,
+brcmfmac-filtered). Last six lines of the filtered log:
+
+```
+20:04:59 brcmfmac: BCM4360 test.224: post-settle pmustatus=0x0000002e res_state=0x000007ff (expect 0x2e / 0x7ff)
+20:05:00 brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+20:05:00 brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+(journal ends here — host wedged)
+```
+
+Identical shape to runs 1 (19:41:42) and 2 (19:51:13): everything through
+chip_attach succeeds, the "ARM CR4 core->base" probe prints, and then the
+host stops logging. The 12 test.226 breadcrumbs inside
+`brcmf_pcie_download_fw_nvram` never fire (they are past the wedge).
+
+### Current boot 0 state (this session, crash-recovery only — SMC reset NOT done)
+
+User notified that no SMC reset was performed after the rerun2 crash.
+Checked hardware anyway:
+
+- `lspci -vvv -s 03:00.0`: Control `I/O- Mem- BusMaster-`; Status
+  MAbort-, SERR-, TAbort-, DEVSEL=fast — clean.
+- DevSta AuxPwr+ TransPend- — no hung transactions.
+- LnkCtl: ASPM Disabled; CommClk- (pre-ASPM-config state, normal on
+  fresh boot). LnkSta: Speed 2.5GT/s, Width x1 — link up.
+- BAR0 `dd resource0` wall-clock: 19 / 17 / 17 / 18 ms — fast-UR regime
+  (well under 40 ms stuck threshold).
+- `lsmod | grep -E 'brcm|wl'`: empty.
+
+Despite no SMC reset, the chip looks clean by every normal check. The
+wedge at test.158 was early (before PCIe config-space writes, before
+bus-master, before FW download), so it apparently did not latch
+persistent dirty state in the chip. This is consistent with the pattern
+seen on boot 0 after the earlier rerun1 wedge.
+
+### Git corruption recovered
+
+Session restart found three zero-byte object files from the crashed
+rerun2 write (this is the corruption pattern CLAUDE.md warns about):
+`c32be563…` (HEAD commit), `2fb2e407…` (blob), `8f8f5d6f…` (tree). The
+remote `origin/main` already had the same SHA, confirming the commit
+was pushed before the crash. Recovery: `sync` → delete the three exact
+zero-byte files → `git fetch origin` → `git fsck` clean (only harmless
+dangling orphans from prior recoveries). Working tree intact at
+`c32be56`. Commit tool-chain fully functional again.
+
+### Decision for next step — test.227 (durable logging)
+
+Pivot per the binomial decision tree in the earlier PRE entry. Two
+candidate transports:
+
+1. **netconsole** (kernel → UDP → capture host on same network)
+   - Pros: no extra hardware, works on NixOS out of the box, each
+     `pr_emerg` is flushed to the wire before the next line executes,
+     so even a hard lockup leaves a complete trace on the capture host.
+   - Cons: need a second host on the LAN to run `nc -lu` or a simple
+     UDP capture script. User has not yet indicated such a host is
+     available.
+2. **earlyprintk=serial** (kernel → `/dev/ttyS0` → serial cable → capture host)
+   - Pros: bypasses all kernel-log machinery; works even in very early
+     boot / NMI context.
+   - Cons: needs physical serial cable + a second host with a serial
+     port. NixOS may not have a UART exposed depending on the platform.
+
+Recommended: **netconsole**, because no new hardware is needed if the
+user has a second machine on the network (even a laptop). test.227
+would add a NETCONSOLE_TARGET setup step, convert the breadcrumbs around
+the test.158 wedge to pr_emerg, and keep journald capture as a backup.
+
+### Pending user input before test.227 implementation
+
+- Confirm whether to proceed with netconsole (second host available?)
+  or pivot to earlyprintk=serial (hardware available?).
+- Whether to do an SMC reset before the next test (recommended — we have
+  a 2-row pattern of "wedge at test.158 → boot looks clean → still
+  wedges", so state isn't the cause, but SMC reset removes one variable).
+
+---
+
 ## POST-TEST.226 RERUN (2026-04-22 19:55 BST, boot 0) — wedged at same test.158 line as first run; 2/2 reproducibility
 
 ### Headline
