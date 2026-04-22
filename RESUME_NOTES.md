@@ -1,5 +1,108 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.218 (2026-04-22) — verify D11 wrapper window (low vs high)
+
+### What POST-TEST.217 just delivered
+
+Test.217 ran cleanly, no crash. Two signals captured:
+
+**1. D11 RESET_CTL via the canonical high window (base+0x100000+0x800)
+reads 0x00000001 (IN_RESET=YES) for EVERY probe** — including pre-halt
+(before chip_set_passive even runs), pre-set-active, post-set-active,
+all of tier1/tier2, and every dwell tick (3 seconds total). IOCTL=0x07
+consistent throughout. Cross-checked against the existing
+`brcmf_pcie_probe_d11_state` (test.188) — same numbers.
+
+That is **internally inconsistent** with test.114b's earlier finding
+(line 2768) that D11 was NOT in reset when probed via the legacy low
+window at base+0x1800. Two possible explanations:
+
+- (A) D11 wrapper is genuinely at base+0x100000 (high window). D11 stays
+  in BCMA reset throughout. ramstbydis traps because the polled register
+  cannot ack while D11 is in reset (firmware accesses it via ARM CR4
+  backplane bypassing PCIe wrapper gating, but the underlying reset is
+  what blocks the ack).
+- (B) D11 wrapper is at base+0x1000 (low window) and base+0x100000 is
+  unmapped — what we read as `RESET_CTL=0x1, IOCTL=0x07` is some other
+  register's content. Test.114b's low-window read was correct; D11 is
+  actually OUT of reset and the polling failure has a different cause.
+
+**2. ARM exception vectors located at TCM 0x00000:**
+
+```
+0x00000  B 0x?? (Reset)
+0x00004  B 0x?? (Undef)
+0x00008  B 0x?? (SVC) ← branches to SVC trap handler
+0x0000c  B 0x?? (PrefetchAbort)
+0x00010  B 0x?? (DataAbort)
+0x00014  B 0x?? (Reserved/Hyp)
+0x00018  B 0x?? (IRQ)
+0x0001c  B 0x?? (FIQ)
+0x00020  ... reset-vector body (general regs init, jump to _start)
+0x00080  ... handler body (PUSH/POP, conditional branches)
+```
+
+Code body in 0x80-0x130 looks like a context-saving prologue — likely
+the SVC handler that emits `v = %d, wd_msticks = %d`. Format string
+location still TBD (need to scan further into 0x130-0x1000 or 0x100-0x200
+for printf-style template — defer until after wrapper-window question
+resolved).
+
+**3. ramstbydis trap recurred** — same assert text "v = 43, wd_msticks = 32"
+at PC 0x000641cb. Independent of dwell sampling.
+
+### Implementation plan for test.218
+
+Distinguish (A) vs (B) by reading D11 wrapper RESET_CTL/IOCTL from BOTH
+windows in the same probe call:
+
+```
+brcmf_pcie_probe_d11_clkctlst() amended to:
+  - Save BAR0 window
+  - WIN1 = base + 0x100000 (canonical AI high window)
+    log RESET_CTL@0x800, IOCTL@0x408, IOSTATUS@0x40c
+  - WIN2 = base + 0x1000 (legacy low window)
+    log RESET_CTL@0x800, IOCTL@0x408, IOSTATUS@0x40c
+  - WIN3 = base + 0  (alternative legacy: try wrapbase = base + 0x100,
+                       which means RESET_CTL@0x900, IOCTL@0x508 — log raw
+                       0x800/0x808 in low window)
+  - Whichever window shows values that CHANGE between pre-halt and
+    post-set-active is the true wrapper.
+  - If safe (IN_RESET=NO from the truthy window), read core 0x1e0
+    (clk_ctl_st) as before.
+```
+
+`min_res_mask=0x17f` patch retained. Test marker .217 → .218.
+
+### Decision tree
+
+| Observation | Interpretation | Next |
+|---|---|---|
+| Both windows show identical RESET_CTL=0x1 throughout | true wrapper still unknown; D11 might actually be in reset OR a third window applies | dump EROM scan output (enable brcmf_dbg(INFO) or add log in chip.c) |
+| Window A changes between pre/post probes; B is constant | A is the real wrapper | trust A's IN_RESET reading; if NO, sample 0x1e0 to test bit 17 |
+| One window reads 0xffffffff (UR) | unmapped — that window is wrong | use the other |
+| Low window shows IN_RESET=NO and HAVEHT toggles | D11 functional; firmware's polled bit isn't HAVEHT — re-decode the SET-bit at +0x1e0 in ramstbydis (likely bit 6 — chip-specific standby-disable bit) | dump 0x101e0 nearby for related registers |
+
+### Build/run
+
+```
+make -C /home/kimptoc/bcm4360-re/phase5/work    # via kbuild
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.218.{run,journalctl,journalctl.full}.txt`.
+
+---
+
+## POST-TEST.217 (2026-04-22) — see PRE-TEST.218 above
+
+D11 wrapper readings (high window) report IN_RESET=YES throughout the
+3-second dwell — internally inconsistent with test.114b's older
+low-window reading. Test.218 distinguishes which window is real before
+re-attempting the bit-17 hypothesis. ARM exception vectors located.
+
+---
+
 ## PRE-TEST.217 (2026-04-22) — REVISED per issue #14: high-yield D11 clk_ctl_st probe
 
 ### Plan revision rationale (issue #14 alignment)
