@@ -1,5 +1,109 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.227 (2026-04-22 20:15 BST, boot 0) — durable logging via pstore + NMI watchdog; SAME .ko as test.226
+
+### Hypothesis
+
+The wedge at `test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)` has
+been observed 3/3 times. Runs up to that line are normal; the journal ends
+there on each run. The leading theory is **tail-truncation**: pr_emerg is
+emitted after test.158 but journald never flushes the last bytes to disk
+because the host loses the ability to run userspace. The 12 test.226
+breadcrumbs inside `brcmf_pcie_download_fw_nvram` all lie past the wedge
+so they've never been observed — consistent with either "host wedges
+between test.158 and first breadcrumb" or "host wedges later and all
+that time journald never flushes".
+
+### Why this test is cheap
+
+- **No new code.** Using the existing test.226 .ko unchanged. First round
+  of test.227 is purely a logging-transport change.
+- **No new hardware.** efi_pstore backend is already registered
+  (`Registered efi_pstore as persistent store backend` in dmesg of this
+  boot). `/sys/fs/pstore/` is empty and ready.
+- **Zero-cost kernel reconfig.** Three sysctl writes:
+  - `kernel.nmi_watchdog=1` — enables hard/soft lockup detectors
+  - `kernel.hardlockup_panic=1` — escalates "CPU stuck, doesn't respond to
+    NMI" to a kernel panic (which triggers pstore dump + auto-reboot)
+  - `kernel.softlockup_panic=1` — same for slower "thread held CPU >20s"
+    case (belt-and-braces)
+  - `kernel.panic=30` — auto-reboot 30 s after panic, so we recover
+    without needing an SMC reset
+
+### Why pstore (not netconsole) is the right first swing
+
+- No second host needed. The user confirmed they do not want to set up a
+  netconsole capture host.
+- pstore writes synchronously to the panic handler — no buffering in a
+  userspace daemon, so it does not share journald's "never flushed" failure
+  mode.
+- ~10240 bytes of the tail of the kernel log get saved
+  (`CONFIG_PSTORE_DEFAULT_KMSG_BYTES=10240`). That's roughly 80–120 lines,
+  comfortably covering the last ~30 s of brcmfmac activity.
+- If the wedge is a single-CPU MMIO stall (canonical Broadcom pattern —
+  CPU stuck waiting for a TLP completion), NMI watchdog detects that
+  CPU's silence and panics. pstore dumps the tail of dmesg including any
+  test.226 breadcrumbs that fired before the stall.
+
+### Known failure mode — if this test yields nothing useful
+
+If the wedge freezes every CPU simultaneously (bus-wide PCIe fault that
+halts the whole front-side bus), no CPU runs the watchdog and no panic
+fires. In that case pstore stays empty and we pivot to netconsole (which
+needs a second host). Fallback is still cheap — same .ko, same test
+harness, just a different transport.
+
+### Expected outcomes
+
+| pstore contents after reboot | Interpretation | Next |
+|---|---|---|
+| `dmesg-efi_pstore-*` contains `test.226` breadcrumbs past test.158 | Journal was truncating. We now have the real wedge point. | Move test.228 design to the new, deeper wedge point. |
+| pstore contains lines up to `test.158: ARM CR4 core->base` and nothing after | No post-test.158 breadcrumb was ever emitted — wedge is literally on the next instruction (ARM CR4 probe or the msleep right after). | Redesign test.228 to probe that narrow gap — replace `pr_emerg("about to pci_clear_master")` + `msleep(300)` with either (a) skip the clear-master path entirely to see if wedge moves, or (b) split the next step into register reads with breadcrumbs between each. |
+| pstore empty, journal truncated as before | Wedge is a bus-wide stall; watchdog never fired. | Pivot to netconsole (needs second host) or earlyprintk=serial (needs serial cable). |
+| Machine does not reboot in 30 s | hardlockup_panic path didn't engage (or panic didn't auto-reboot). | Check if `kernel.panic` was actually 30; user may need to power-cycle once. |
+
+### Hardware state before test (same boot 0 as previous entry)
+
+- `lspci -vvv -s 03:00.0`: Control `I/O- Mem- BusMaster-`; MAbort-, SERR-,
+  TAbort-, DEVSEL=fast, DevSta TransPend-, LnkSta 2.5GT/s x1.
+- BAR0 `dd resource0` 19/17/17/18 ms — fast-UR regime.
+- `lsmod | grep -E 'brcm|wl'` empty.
+- No SMC reset since the rerun2 crash; state still looks clean per every
+  check (wedge-at-test.158 is early enough that no PCIe config-space state
+  got dirtied).
+
+### Commands in order
+
+```bash
+echo 1 | sudo tee /proc/sys/kernel/nmi_watchdog
+echo 1 | sudo tee /proc/sys/kernel/hardlockup_panic
+echo 1 | sudo tee /proc/sys/kernel/softlockup_panic
+echo 30 | sudo tee /proc/sys/kernel/panic
+sync
+
+# Re-verify hardware is still fast-UR before insmod
+sudo lspci -vvv -s 03:00.0 | grep -E 'MAbort|LnkSta'
+for i in 1 2 3 4; do time sudo dd if=/sys/bus/pci/devices/0000:03:00.0/resource0 of=/dev/null bs=4 count=1 2>&1 | tail -1; done
+
+# Run test (same as every other test)
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Expected artifacts (after reboot/recovery):
+- `/sys/fs/pstore/dmesg-efi_pstore-*` — durable tail with pre-wedge lines
+- `phase5/logs/test.227.pstore.txt` — copied from pstore
+- `phase5/logs/test.227.journalctl.full.txt` — boot -1 journal (what
+  journald did manage to save)
+- `phase5/logs/test.227.journalctl.txt` — brcmfmac-filtered subset
+
+### State written to RESUME_NOTES and committed BEFORE running
+
+This entry is committed and pushed before the test starts, per the
+CLAUDE.md rule. If the host wedges, the next session can pick up from
+here.
+
+---
+
 ## POST-TEST.226.rerun2 (2026-04-22 20:05 BST, boot 0 → crash, now on boot 0 of new session) — 3/3 WEDGE AT TEST.158, discriminator complete
 
 ### Headline
