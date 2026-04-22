@@ -5,44 +5,52 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-22, after test.232)
+## Current state (2026-04-22, after test.233)
 
-**Latest outcome (test.232):** BM=OFF did NOT prevent the wedge.
-Host wedged mid-probe, required reboot. Boot -1 journal tail-
-truncated at `wide-TCM[0x2c000]` pre-release snapshot (21:52:52) —
-every breadcrumb beyond that (rest of pre-release snapshots,
-INTERNAL_MEM probe, pre-set-active probes, the `test.232: SKIPPING
-pci_set_master` marker, FORCEHT, `brcmf_chip_set_active`, dwells)
-was swallowed by the tail-truncation budget. No test.232 breadcrumb
-landed at all. The binary discriminator still carries though: given
-test.230 proved this identical flow (minus set_active) runs cleanly
-end-to-end, the only runtime-different actor between the last
-landed log and the wedge is `brcmf_chip_set_active`. So the wedge
-trigger is still set_active; BM=OFF failed to neutralize it.
+**Latest outcome (test.233):** TCM persistence probe answered the
+advisor-blocking question. 3 runs on test.230 baseline (set_active
+SKIPPED, no wedge). Wrote 0xDEADBEEF/0xCAFEBABE magic to
+TCM[0x90000/4] in each run, pre-read the same offsets at probe
+entry:
 
-**Inference (advisor-refined):** "DMA-completion-waiting" theory is
-falsified — with BM=OFF, fw's DMA TLPs get UR responses from the
-root complex instead of stalling waiting for a completion, yet host
-still wedges. Wedge is NOT pure completion-starvation. It MAY still
-be DMA-rooted (fw could react to UR by doing something bus-hostile
-— AXI-side faults, retry storms, internal pcie2 bring-down). Phrase
-carefully: "not waiting-for-completion-of-missing-target", not "not
-DMA-related".
+| Run | Context | Pre-read | Interpretation |
+|---|---|---|---|
+| 1 | fresh post-SMC-reset boot | 0x842709e1 / 0x90dd4512 | **non-zero** residue — fingerprint-like |
+| 2 | same boot, after rmmod | 0xDEADBEEF / 0xCAFEBABE | **MATCH** — TCM survives SBR + rmmod/insmod within boot |
+| 3 | post-SMC-reset + reboot | 0x842709e1 / 0xb0dd4512 | magic GONE; near-identical to Run 1 baseline |
 
-**Blockers on next hardware test (advisor-flagged):**
-1. Host rebooted without SMC reset. Current lspci resembles
-   post-SMC-reset clean state, but fw may have left CR4 in a partially-
-   activated state. User should do SMC reset before next hardware
-   test — the "SMC reset NOT done" flag is a request, not a skip.
-2. Open question to user: does SMC reset wipe TCM? The TCM ring-buffer
-   logger's viability depends on the answer. If SMC reset wipes TCM,
-   the logger only helps on runs where reboot-without-SMC-reset
-   suffices — but history says SMC reset is usually required. Answer
-   before designing, may kill the approach.
-3. Cheap rule-out done: `/dev/ttyS0..3` exist but MacBook Pro 11,1
-   exposes no physical serial — `earlyprintk=serial` likely to
-   bit-bucket unless user has a USB-serial adapter mapped. Check
-   before committing to that option.
+**Binary conclusion:** SMC reset + reboot wipes our magic.
+**TCM ring-buffer logger is NOT viable for cross-SMC-reset data
+retention** — and every wedge in this investigation has required an
+SMC reset to recover. So TCM logger can't carry wedge-timing data
+through the recovery path we actually use.
+
+**Side observations worth keeping:**
+- Run 2 confirmed TCM persists across rmmod/insmod + probe-start
+  SBR. If a wedge ever leaves host recoverable without SMC reset,
+  the logger *would* help — but that hasn't happened in any test.
+- Run 1 and Run 3 pre-reads are near-identical (one word byte-
+  identical, one word off by one bit). These are NOT zeros or
+  all-0xFF — they look like a deterministic SRAM/fingerprint
+  pattern or residue of an early init routine that runs fresh on
+  each SMC-reset boot. Offset 0x90000 is past fw image (0..0x6bf78)
+  and before NVRAM (0x9ff1c), so our code never writes there in
+  normal flow. Could be a BCM4360 SRAM power-on signature.
+
+**Pivot: shared-memory struct forward step.** With TCM logger ruled
+out as the timing transport, the path advisor already identified
+as the natural next step becomes primary: study upstream brcmfmac's
+`brcmf_pcie_init_share` + PCIE2 ring infrastructure, then build a
+minimal shared-memory struct in TCM BEFORE `brcmf_chip_set_active`
+so that when fw activates, it has valid DMA targets to dereference.
+This is both a discriminator (if wedge stops or shifts, we've found
+the missing piece) and a forward step regardless of logging.
+
+**Prior fact (test.232):** BM=OFF did NOT prevent the wedge, so
+pure DMA-completion-waiting theory is falsified. Wedge may still
+be DMA-rooted via fw's reaction to UR responses (AXI fault, retry
+storms, pcie2 bring-down internally), but it's not plain
+completion-starvation.
 
 **Prior fact (test.230):** `brcmf_chip_set_active` is the **SOLE
 trigger** for the bus-wide wedge. With that call skipped, the host
@@ -80,6 +88,7 @@ probes `#if 0`'d, host still wedged. Narrowed the trigger to
 | Wedge caused by anything OTHER than `brcmf_chip_set_active` | 230 | ruled out — that call is the single-point trigger |
 | Sub-second wedge window measurable via journald tail | 231 | ruled out — tail-truncation budget (~15–20 s) >> wedge window |
 | Wedge is pure DMA-completion-starvation (fw stalls waiting for response to TLP with bad host address) | 232 | ruled out — BM=OFF forces UR responses instead of completion-waiting, host still wedged |
+| TCM ring-buffer logger viable across wedge recovery | 233 | ruled out — TCM magic survives within-boot SBR+insmod (Run 2) but wiped by SMC reset + reboot (Run 3) — every wedge-recovery in this investigation used SMC reset |
 
 **Refined wedge model (post test.230):**
 The moment ARM CR4 starts executing firmware (rstvec written via
@@ -98,30 +107,125 @@ shared-memory struct in TCM; those fields are all-zero or garbage;
 firmware dereferences a NULL/garbage host address; PCIe TLPs issued
 to that host address never get a completion; bus stalls.
 
-**Test.233 plan candidates (blocked on user answer about SMC↔TCM):**
-- **If TCM survives SMC reset** → build minimal TCM ring-buffer logger.
-  Use BAR2 window: reserve the last ~16 KB of TCM (fw ramsize=0x9c000..0xa0000),
-  driver writes breadcrumb records via `brcmf_pcie_copy_mem_todev`; post-wedge
-  reader uses `dd resource2` to pull the ring. Cost: ~1 day of driver code +
-  a reader script.
-- **If TCM is wiped by SMC reset** → either (a) add a stub shared-memory
-  struct in TCM pre-set_active so fw can make progress, turning the
-  diagnostic into a forward-step, or (b) try netconsole/USB-serial via
-  second host (user previously declined, may be worth revisiting).
-- **Forward-path option (independent of logging):** study upstream
-  `brcmf_pcie_init_share` and build a minimal shared-memory struct in
-  TCM BEFORE set_active. Even if the wedge still happens, the stumble
-  point should shift; if it stops wedging, we've found the missing
-  piece. This is the natural next step the DMA-target-missing theory
-  already implied — advisor now says it may double as a discriminator
-  cheaper than a full logger.
+**Test.234 plan (primary direction after test.233):**
+Implement a **minimal shared-memory struct in TCM BEFORE set_active**,
+per upstream brcmfmac `brcmf_pcie_init_share` pattern. Two bonuses:
+- Discriminator: if the wedge stops, we've found the piece fw was
+  reaching for. If timing/signature shifts, we have a new observable.
+- Forward step: it's part of the eventual correct driver path anyway.
 
-**Logging transport status:**
+Cost: 1-2 days to read brcmf_pcie_init_share + related ring setup,
+decide minimum viable struct, wire the allocations.
+
+**Logging transport status (updated after test.233):**
 - journald: drops ~15–20 s of tail when host loses userspace (confirmed tests 226/227/231/232).
 - pstore: doesn't fire — bus-wide stall freezes watchdog CPU (tests 227/228/229).
 - netconsole: user declined second-host setup.
-- TCM ring buffer: not yet tested. Strongest remaining transport. Post-wedge BAR0 fast-UR proven alive. **Blocking unknown: whether SMC reset wipes TCM.**
-- `earlyprintk=serial`: `/dev/ttyS0..3` exist but MacBook has no exposed port — likely bit-bucket without USB-serial adapter.
+- **TCM ring buffer: ruled out** — TCM magic wiped by SMC reset +
+  reboot (test.233 Run 3). Survives within-boot rmmod/insmod (Run 2),
+  but every wedge in this investigation has required an SMC reset.
+- `earlyprintk=serial`: `/dev/ttyS0..3` exist but MacBook has no
+  exposed port — likely bit-bucket without USB-serial adapter.
+
+Logging for test.234 falls back to journald tail-truncation as
+before. Resolution ≥15-20 s is fine because the goal is shape-
+comparison (does the wedge still happen? at the same place?),
+not sub-second timing.
+
+---
+
+
+## POST-TEST.233 (2026-04-22 22:41 BST, 3 runs across 2 boots) — SMC reset wipes our TCM magic; TCM ring-buffer logger RULED OUT
+
+### Headline
+
+All 3 runs completed cleanly (test.230 baseline, no wedge). Writes
+verified each time (post-write readback = 0xDEADBEEF/0xCAFEBABE).
+The critical evidence is the **pre-read** values at probe entry:
+
+| Run | Boot | Timestamp | Pre-read TCM[0x90000] | Pre-read TCM[0x90004] |
+|---|---|---|---|---|
+| 1 | boot -1 first insmod (fresh post-SMC-reset) | 22:25:50 | 0x842709e1 | 0x90dd4512 |
+| 2 | boot -1 second insmod (same boot) | 22:26:52 | **0xDEADBEEF** | **0xCAFEBABE** |
+| 3 | boot 0 first insmod (post-SMC-reset + reboot) | 22:40:xx | 0x842709e1 | 0xb0dd4512 |
+
+### Interpretation
+
+**Run 2 = MATCH (magic preserved within a boot):** TCM retains
+writes across a full driver-module cycle including the probe-start
+Secondary Bus Reset via bridge. Useful bank: within a single boot,
+if a wedge leaves the host recoverable without SMC reset, the TCM
+can carry data across the reload.
+
+**Run 3 ≠ magic (magic wiped across SMC reset):** Our 0xDEADBEEF/
+0xCAFEBABE is gone; the pre-read reverted to a value very close to
+Run 1's fresh-boot baseline (first word byte-identical, second word
+off by one bit in the high byte). SMC reset + reboot either cut
+power to the SRAM, or the brcmfmac re-init on a fresh boot traverses
+more initialization than the within-boot cycle does.
+
+**The Run 1 / Run 3 non-zero pre-reads are themselves interesting.**
+Offset 0x90000 is past the 442 KB fw image (ends at 0x6bf78) and
+before the 228 B NVRAM slot (0x9ff1c). Our code never writes there
+in the normal flow, yet we see specific non-zero bytes consistent
+across SMC resets with only a single-bit difference. Likely
+candidates:
+- BCM4360 SRAM power-on fingerprint (SRAM cells settling to
+  deterministic-but-instance-specific values; known PUF-adjacent
+  property).
+- Some early-probe routine (CR4 halt / buscore_reset / bridge
+  SBR) writes a pattern here as a side effect.
+Not worth chasing now; the binary answer (SMC reset wipes our
+magic) is what matters.
+
+### Binary conclusion: TCM ring-buffer logger NOT viable
+
+Every wedge in this investigation (tests 226, 227, 228, 229, 231,
+232) has required an SMC reset to recover the host. Since SMC reset
+wipes our TCM magic, a TCM-resident ring-buffer logger cannot
+survive the recovery path we actually use. Ruled out.
+
+Caveat: if a future wedge were ever host-recoverable without SMC
+reset (e.g. driver hang that doesn't freeze the watchdog), the
+logger could still help for that narrow case. Not worth building
+speculatively.
+
+### Pivot — test.234 plan (per PRE decision tree, "all pre-reads → 0/garbage" branch landed)
+
+Primary direction: **build a minimal shared-memory struct in TCM
+before `brcmf_chip_set_active`**, per upstream brcmfmac
+`brcmf_pcie_init_share` pattern. Two payoffs:
+
+1. **Diagnostic:** If the wedge stops, we've located the missing
+   piece fw was dereferencing. If timing/signature shifts, we have
+   a new observable.
+2. **Forward step:** Valid shared-memory infrastructure is part of
+   the eventual correct driver path anyway — progress on the
+   reverse-engineering goal regardless of the wedge outcome.
+
+Advisor previously flagged this as potentially simpler/cheaper than
+building a full logger — and we have no logger alternative left.
+
+### Evidence summary / artifacts
+
+- `phase5/logs/test.233.runs12.journal.txt` — 697 lines covering
+  runs 1-2 (already committed in f203c0b).
+- `phase5/logs/test.233.run3.journal.txt` — 349 lines, boot 0
+  post-SMC-reset journal with Run 3.
+- `phase5/logs/test.9, test.10, test.12` — harness dmesg captures.
+- All 3 runs: clean writes (post-write readback matched magic every
+  time), clean -ENODEV, clean rmmod. test.230 baseline held.
+- No wedges. No SMC reset required for any test.233 run — only the
+  one between run 2 and run 3 that the test design asked for.
+
+### Hardware state (post-Run-3 rmmod, 22:41 BST)
+
+- `lspci -vvv -s 03:00.0` — Control `Mem+ BusMaster-` (kernel
+  reverted after rmmod), MAbort-, DevSta would still show sticky
+  UR+ but no new dirty signature.
+- No modules loaded, no pstore dumps.
+- Host is ready for test.234 (code development, no hardware test
+  needed for initial implementation read-through).
 
 ---
 
@@ -432,152 +536,6 @@ sync
 3. Hypothesis stated: above
 4. Plan written to RESUME_NOTES.md: this block
 5. Filesystem synced on commit
-
----
-
-## POST-TEST.231 (2026-04-22 21:34 BST, boot -1 → SMC reset → boot 0) — journal tail-truncation swamped the bisect; no timing info recovered
-
-### Headline
-
-Host wedged as expected once `brcmf_chip_set_active` was re-enabled. SMC
-reset required. Boot -1 journal tail-truncated to `test.158: about to
-pci_clear_master (config-space write)` at 21:34:40 — a full ~15–20 s
-(and ~10 code-path blocks) BEFORE the set_active call that was
-supposed to reveal timing. All 10 timing breadcrumbs
-(t=10/50/100/200/300/500/700/900/1000 ms plus dwell-done) were lost.
-No new information about wedge timing.
-
-### Why this is tail-truncation, not a new regression
-
-Test.230's journal captured the exact same `about to pci_clear_master`
-breadcrumb at line 1118, then continued cleanly through ASPM disable,
-full fw download, TCM verify, set_active-skip, 1000 ms dwell, BM
-clear, release_firmware, and -ENODEV return (line 1413, 21:24:57).
-So this breadcrumb is NOT a wedge point — it just happens to be where
-journald's last-flushed entry landed for test.231. This matches the
-tail-truncation pattern first confirmed in tests 226/227 (host loses
-userspace → journald drops the tail that was in the kernel ring
-buffer but not yet persisted).
-
-### Truncation budget exceeded the bisect window
-
-The wedge window under investigation was ≤1 s (10 ms – 1000 ms after
-set_active). Based on test.231 compared to test.230, journald lost at
-least ~15 seconds of tail (the gap between `pci_clear_master` and the
-expected dwell breadcrumbs). That's one to two orders of magnitude
-larger than the measurement interval. Journald is structurally unable
-to resolve this wedge window.
-
-### Artifacts captured
-
-- `phase5/logs/test.231.run.txt` — PRE sysctls + lspci + BAR0 timing
-  + pstore (empty) + strings. Harness output ends at "Modules
-  loaded. Waiting 15s…" (script killed by wedge).
-- `phase5/logs/test.231.journalctl.full.txt` — 1472 lines boot -1.
-- `phase5/logs/test.231.journalctl.txt` — 442 lines filtered.
-- `phase5/logs/test.8` — test-brcmfmac.sh dmesg from test.230 run
-  (captured by script mid-session, not test.231). Kept as a reference
-  for what a full successful run looks like.
-- No pstore artifacts (bus-wide stall → watchdog frozen, as expected).
-
-### Hardware state after SMC reset
-
-Host alive, booted into boot 0 (21:36:38 BST). Chip reset via SMC.
-Ready for next test after logging pivot.
-
-### Implication: pivot before next wedge test
-
-Further wedge experiments that depend on journald for sub-second
-resolution are guaranteed to lose data. Need a transport that
-survives the bus-wide stall. Top candidate: TCM-resident ring buffer
-(see "Current state" → test.232 draft).
-
----
-
-## PRE-TEST.231 (2026-04-22 21:33 BST, boot 0, no reset needed) — single-run timing bisect to locate the wedge window post-set_active
-
-### Hypothesis
-
-With `brcmf_chip_set_active` re-enabled (baseline + wedge returns),
-emit 10 breadcrumbs at 10/50/100/200/300/500/700/900/1000 ms after
-the `returned true` marker. The last breadcrumb to appear in the
-journal gives an upper bound on the wedge window. Interpretation:
-
-- Last breadcrumb at 10–100 ms → fw hits the bus within ~100 ms of
-  starting. Suggests DMA-target-missing or instant config-TLP failure.
-- Last breadcrumb at 200–500 ms → fw runs some init routine then
-  stumbles. Could be init-poll on a missing resource.
-- Last breadcrumb at 700–1000 ms → fw polls for a host-ready marker
-  or does extensive internal init first.
-- All breadcrumbs including `t=1000ms dwell done` land, host wedges
-  later → stall is past 1 s; broader window to hunt in.
-- `t=0ms dwell start` itself does not land → stall is instant-on-
-  set_active.
-
-### Why single-run (not 4 runs as advisor initially suggested)
-
-Advisor suggested N=50/250/500/900 as 4 separate runs. Single-run with
-10 sequential breadcrumbs gives the same information (last-landing
-breadcrumb = wedge upper bound) plus finer granularity, at 1/4 the
-SMC-reset cost. Wedge is reliably reproducible (tests 227/228/229 all
-wedged in the same window), so independent-runs aren't needed for
-variance observation. If the single-run result is ambiguous (e.g.
-breadcrumbs interleave with kernel watchdog messages in confusing
-ways), individual-N runs remain available as a fallback.
-
-### Code change (pcie.c, in `brcmf_pcie_download_fw_nvram`)
-
-Restored the original `brcmf_chip_set_active` call + surrounding
-`test.226 immediately before / after` + `test.188: returned %s`
-breadcrumbs that test.230 removed. Then replaced test.230's single
-`msleep(1000)` with a chain of `msleep(N) + pr_emerg` pairs at the
-offsets above. Total dwell is still 1000 ms.
-
-Post-set_active probe block (`probe_armcr4_state` etc.) remains at
-`#if 0` — keep one variable at a time.
-
-### Build status — REBUILT CLEAN (2026-04-22 21:32 BST)
-
-`brcmfmac.ko` 14251536 bytes, mtime 21:32. `strings` confirms all 10
-`test.231: t=…` breadcrumbs present.
-
-### Hardware state (still boot 0 of 21:06 BST SMC-reset session)
-
-- `lspci -vvv -s 03:00.0`: Control Mem+ BM-, Status MAbort-, DevSta
-  UnsupReq- (cleared by test.230), TransPend-, LnkSta 2.5GT/s x1.
-- BAR0 timing 17/18/18/18 ms — fast-UR intact.
-- pstore empty, no modules loaded.
-- No SMC reset needed (test.230 left chip clean because fw never activated).
-
-### Decision tree
-
-| Journal signature | Interpretation | Test.232 direction |
-|---|---|---|
-| Last breadcrumb is `t=0ms dwell start` or `returned true` | Stall is effectively instant-on-set_active. | Try to populate shared-memory struct in TCM before set_active so fw has valid DMA targets. |
-| Last breadcrumb in [10, 200] ms | Fast fw-stumble. Likely DMA-target-missing. | Same as above (populate shared-memory). |
-| Last breadcrumb in [300, 700] ms | Medium — fw runs an init routine then stumbles. | Look for fw init polling shapes (ring-descriptor read, doorbell write, MSI request). |
-| Last breadcrumb in [900, 1000] ms | Slow — fw polls host-ready marker or does extensive init. | May be recoverable by responding to a fw doorbell within the window. |
-| All breadcrumbs land including `t=1000ms dwell done` | Stall is past 1 s. | Extend dwell (test.232: 1/2/3/5 s breadcrumbs) and re-bisect. |
-
-### Logging / watchdog arming (same as test.229/230)
-
-```bash
-echo 1 | sudo tee /proc/sys/kernel/nmi_watchdog
-echo 1 | sudo tee /proc/sys/kernel/hardlockup_panic
-echo 1 | sudo tee /proc/sys/kernel/softlockup_panic
-echo 30 | sudo tee /proc/sys/kernel/panic
-sync
-```
-
-If host wedges: expect no auto-reboot, user power-cycle + SMC reset
-needed (consistent with tests 227/228/229).
-
-### Expected artifacts
-
-- `phase5/logs/test.231.run.txt` — PRE + harness.
-- `phase5/logs/test.231.journalctl.full.txt` — full journal (boot 0
-  if host survives; boot -1 if wedged).
-- `phase5/logs/test.231.journalctl.txt` — brcmfmac/PCIe/NMI filtered.
 
 ---
 
