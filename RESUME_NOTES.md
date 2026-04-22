@@ -45,25 +45,53 @@ mapped register family. From the chip-info struct (test.201/203 dumps) the
 field at `+0x4c` is loaded — that's an offset into a per-core or per-block
 state record.
 
-### Implementation plan for test.211
+### Statically decoded BL targets (no new dump needed)
 
-This iteration is **dump-only** (no driver state changes). Two new dump regions:
+Decoded the first few Thumb-2 BL instructions in the asserting function from
+the test.210 byte dump (PC of BL = inst_addr + 4; signed 25-bit offset):
 
-1. **Decode caller — scan firmware code for callers of 0x64028.**
-   Compute encoded BL/B.W bytes that target 0x64029 (Thumb), then `grep`
-   the existing test.210 dump bytes for matches. If no match in the existing
-   dump, widen with: dump 0x40000..0x40400 (early init code, near `_to`/`hndrte_arm.c`
-   strings) and 0x60000..0x62a00 (PMU/clock init code per phase6 survey).
-   - **Cost:** at most +400 dump rows ≈ 100ms MMIO time
-2. **Decode callees — re-dump 0x64028..0x64080 already-captured area, but**
-   compute statically (no new dump needed) the BL targets for: 0x64030, 0x6403c,
-   0x64040, 0x6404c, 0x64054, 0x64064. Write decoded targets to RESUME_NOTES.md
-   as part of the PRE→POST documentation.
+| BL location | Encoding (hw1, hw2) | Decoded offset | Target |
+|---|---|---|---|
+| 0x64032 | `f7a5 fc90` | -0x5A6E0 | **0x9956** (helper_A, called with r0=r4=arg0) |
+| 0x6403e | `f7a5 fc93` | -0x5A6DA | **0x9968** (helper_B, called with r0=r4, r1=r5, r2=#0; returns code compared to 0x11) |
+| 0x6404c | `f79d f8cc` | -0x62E68 | **0x11E8** (helper_C, called with r0=const, r1=#0xdf) |
+| 0x64020 | `f7a5 bcc4` | -0x5A6DA | **0x9968** (B.W tail-call from PRIOR function — same target as helper_B!) |
 
-We may also try a complementary probe: dump 0x96f78 (the `hndrte_cons`
-log-buffer pointer) to read any actual log message firmware emitted before
-the assert — useful even if zero bytes — see if pre-assert console output
-contains additional context.
+Two strong observations:
+
+1. **Helper_B at 0x9968 returns a code compared against 0x11 (=17).**
+   `17 == pmurev` for BCM4360. This BL may be `get_pmurev()` or a chip-config
+   probe. If pmurev != 17 (success), the function takes the alternate path
+   that contains the polling loop and assert.
+2. **Helper_B is also tail-called by a different prior function** (the B.W
+   at 0x64020) — so it's a widely-used util, likely a hndrte runtime helper.
+
+The two helpers at 0x9956 and 0x9968 sit only 18 bytes apart — strongly
+suggesting they're two adjacent small helpers in a runtime utility region.
+helper_C at 0x11E8 is far away (early boot/text region).
+
+### Implementation plan for test.211 (dump-only, no logic change)
+
+Add three small dump regions covering the helper bodies:
+
+| Range | Purpose | Size |
+|---|---|---|
+| `{0x09900, 0x09a00}` | helper_A (0x9956) + helper_B (0x9968) | 256 bytes / 16 rows |
+| `{0x011c0, 0x01240}` | helper_C (0x11E8) | 128 bytes / 8 rows |
+| `{0x09c000, 0x09c100}` *(deferred — possibly noise)* | — | — |
+
+Cost: +24 dump rows ≈ 6ms additional MMIO. Negligible.
+
+We can DROP the existing `{0x97000, 0x97200}` console-buffer dump (we already
+know it's static "old text" — saves 32 rows) — net savings actually.
+
+### What we'll learn
+
+- **helper_A body** → its role (probably a getter for a struct field, given
+  it's called first and saves r0 result into r8)
+- **helper_B body** → likely "get pmurev" or similar; if it has a clear
+  literal-pool entry pointing to `pmurev` field offset, confirms the theory
+- **helper_C body** → why r1=#0xdf is passed; 0xdf may be an init-flag bitmask
 
 ### Decision tree
 
