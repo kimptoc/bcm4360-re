@@ -1184,7 +1184,7 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		before_max = chip->ops->read32(chip->ctx, max_addr);
 		chip->ops->write32(chip->ctx, max_addr, 0x17f);
 		after_max = chip->ops->read32(chip->ctx, max_addr);
-		brcmf_err("BCM4360 test.206: max_res_mask 0x%08x -> 0x%08x (write 0x17f — bit 6 only, NVRAM ramstbydis=1)\n",
+		brcmf_err("BCM4360 test.207: max_res_mask 0x%08x -> 0x%08x (write 0x17f — bit 6 only, NVRAM reverted; check NVRAM blob in TCM + widen code dump)\n",
 			  before_max, after_max);
 	}
 

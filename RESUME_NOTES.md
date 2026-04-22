@@ -1,5 +1,72 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.207 (2026-04-22) — verify NVRAM-blob in TCM + widen code dump
+
+### Hypothesis (3 things being tested)
+
+1. **NVRAM reverted** to pre-205 state (no `ramstbydis` line). This
+   isolates the question of "is firmware reading NVRAM at all?" —
+   if YES, we'd want to see a clean baseline; if NO, none of the
+   ramstbydis probes were valid tests.
+
+2. **NVRAM blob delivery check** — Broadcom firmwares typically
+   look for the NVRAM blob at the *top of TCM* (last few KB before
+   ramsize). Reading `0x9ff00..0xa0000` (4 KB at TCM top) will
+   show whether our NVRAM key=value text is present. If we see
+   `sromrev=11\nboardtype=0x0552\n...` etc, NVRAM IS being
+   delivered. If we see zeros / random / different content,
+   NVRAM isn't reaching this address.
+
+3. **r6 source** — `0x64100..0x64160` (6 rows, 24 instructions max)
+   to capture instructions that may load r6 with a value before
+   the CMP at `0x641b2`.
+
+### Implementation
+
+NVRAM reverted (already done). Marker bumps test.206 → test.207.
+
+**pcie.c** — replace `dump_ranges[]`:
+
+| Range              | Purpose                                              | Rows |
+|--------------------|------------------------------------------------------|-----:|
+| `0x40660..0x406c0` | Strings (kept)                                       |    6 |
+| `0x64100..0x641e0` | Code (extended down to find r6 source)               |   14 |
+| `0x64200..0x64280` | Literal pool                                         |    8 |
+| `0x62a00..0x62b80` | Chip-info struct                                     |   24 |
+| `0x96f40..0x96fc0` | hndrte_cons descriptor                               |    8 |
+| `0x97000..0x97200` | Console ring                                         |   32 |
+| `0x9cc00..0x9d000` | Trap data + assert text                              |   64 |
+| `0x9ff00..0xa0000` | TCM top — NVRAM delivery check                       |   16 |
+
+Total = 172 rows ≈ 34 ms. Acceptable.
+
+### Build + pre-test
+
+- Module rebuild needed (only marker changes).
+- PCIe state: clean post-test.206.
+- NVRAM file restored from backup (verified).
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.207.journalctl.full.txt`.
+
+### Decision tree for test.207
+
+- **NVRAM text visible at 0x9ff00+** → firmware *is* receiving
+  NVRAM. The ramstbydis tests were valid; the assert path simply
+  doesn't depend on it. Proceed with r6 source analysis.
+- **NVRAM area is zeros / random** → firmware isn't getting NVRAM
+  at the expected location. Need to check the host driver's NVRAM
+  download path; might be a fixable bug.
+- **r6 source visible**: an LDR with a struct base register
+  identifies what's being checked. May enable a focused next test.
+
+---
+
 ## POST-TEST.206 (2026-04-22) — ramstbydis=1 also no effect; revert and pivot
 
 Logs: `phase5/logs/test.206.journalctl.full.txt`. Run text:
