@@ -1,5 +1,46 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.206 (2026-04-22) — try ramstbydis=1; second NVRAM probe
+
+### Hypothesis
+
+If `ramstbydis=0` (test.205) was already the firmware's default
+behaviour, switching to `ramstbydis=1` should change the assert
+outcome (or at least the chip-info struct visible in TCM after
+the assert) IF the firmware actually reads this NVRAM key. If
+`=1` also leaves the assert byte-identical, then either the
+firmware doesn't read this key at all, or it consumes it after
+the line-397 assert path runs.
+
+### Implementation
+
+NVRAM only — change `ramstbydis=0` → `ramstbydis=1`. No code change
+beyond the test.205→206 marker bumps.
+
+### Build + pre-test
+
+- About to rebuild module (only marker change).
+- PCIe state: clean post-test.205.
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.206.journalctl.full.txt`.
+
+### Decision after test.206
+
+- **Same line 397, same v=43**: NVRAM key has no effect on this
+  path. Plan test.207: revert NVRAM (remove ramstbydis line),
+  add wider code dump `0x64100..0x64160` to find r6's source.
+
+- **Different result**: ramstbydis IS active; document the new
+  state and iterate on values.
+
+---
+
 ## POST-TEST.205 (2026-04-22) — ramstbydis=0 had no effect; assert identical to test.204
 
 Logs: `phase5/logs/test.205.journalctl.full.txt`. Run text:
