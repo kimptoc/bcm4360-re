@@ -2018,18 +2018,16 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		const u32 fine_stride = 4;
 		const u32 nr_fine = 0x10000 / 4;	/* 16384 cells */
 		u32 *pre_fine = NULL;
-		/* test.198: per-tick sampling of the 7 cells test.197 found
-		 * firmware actively updating. Cheap (7 indirect-MMIO reads
-		 * per tick); pin down the firmware loop tick rate from the
-		 * binary counter at 0x9cd50.
+		/* test.199: end-of-dwell hex+ASCII dump regions. Two ranges
+		 * around the firmware-init data structure caught in
+		 * tests 196/197/198. Each range is dumped as 16-byte rows
+		 * (4 × u32 + ASCII rendering) so we can read adjacent text
+		 * fields and any format-string templates.
 		 */
-		static const u32 ts_offsets[7] = {
-			0x9702c, 0x97030,
-			0x9cd48, 0x9cd50,
-			0x9cdb0, 0x9cdb4, 0x9cdb8
+		static const u32 dump_ranges[][2] = {
+			{0x96e00, 0x97200},	/* 1 KB around 0x9702c */
+			{0x9cc00, 0x9cdc0},	/* 448 B around 0x9cd48..0x9cdb8 */
 		};
-		u32 ts_prev[7] = {0};
-		bool ts_seeded = false;
 		static const u32 wide_offsets[40] = {
 			0x00000, 0x04000, 0x08000, 0x0c000,
 			0x10000, 0x14000, 0x18000, 0x1c000,
@@ -2471,49 +2469,10 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 								"CHANGED");
 				}
 
-				/* test.198: per-tick time-series of the 7 cells
-				 * test.197 caught firmware actively updating.
-				 * On the first tick we just seed prev; from
-				 * tick 2 onward we log delta per cell so we
-				 * can read the firmware loop tick rate
-				 * directly from the binary counter at
-				 * 0x9cd50 (and watch the ASCII string fields
-				 * advance in lockstep).
+				/* test.199: per-tick TS sample removed — test.198
+				 * proved cells stay constant across the dwell.
+				 * Dump moved to end-of-dwell, see below.
 				 */
-				{
-					u32 ts_now[7];
-					for (j = 0; j < 7; j++)
-						ts_now[j] = brcmf_pcie_read_ram32(
-								devinfo,
-								ts_offsets[j]);
-
-					if (!ts_seeded) {
-						for (j = 0; j < 7; j++) {
-							ts_prev[j] = ts_now[j];
-							pr_emerg("BCM4360 test.198: ts-seed dwell-%ums [0x%05x]=0x%08x\n",
-								 dwell_labels_ms[d],
-								 ts_offsets[j],
-								 ts_now[j]);
-						}
-						ts_seeded = true;
-					} else {
-						for (j = 0; j < 7; j++) {
-							s32 delta = (s32)(ts_now[j] -
-								    ts_prev[j]);
-							pr_emerg("BCM4360 test.198: ts dwell-%ums [0x%05x]=0x%08x prev=0x%08x delta=%d %s\n",
-								 dwell_labels_ms[d],
-								 ts_offsets[j],
-								 ts_now[j],
-								 ts_prev[j],
-								 delta,
-								 ts_now[j] ==
-								 ts_prev[j] ?
-									"SAME" :
-									"CHANGED");
-							ts_prev[j] = ts_now[j];
-						}
-					}
-				}
 			}
 
 			/* test.196: single end-of-dwell fw-sample + wide-TCM
@@ -2545,6 +2504,42 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				if (val != pre_wide[j])
 					pr_emerg("BCM4360 test.196: post-dwell wide-TCM[0x%05x]=0x%08x (was 0x%08x) CHANGED\n",
 						 offset, val, pre_wide[j]);
+			}
+
+			/* test.199: hex+ASCII dump of the firmware-init data
+			 * structure regions found in tests 196/197/198.
+			 * Each 16-byte row = 4 indirect-MMIO reads (~250 µs)
+			 * + an ASCII rendering of the 16 bytes for human
+			 * inspection. Two ranges, ~92 rows total. Goal: see
+			 * adjacent printable text and any nearby format
+			 * strings to decode what firmware is reporting.
+			 */
+			for (j = 0; j < ARRAY_SIZE(dump_ranges); j++) {
+				u32 addr;
+				u32 lo = dump_ranges[j][0];
+				u32 hi = dump_ranges[j][1];
+
+				pr_emerg("BCM4360 test.199: dump range 0x%05x..0x%05x\n",
+					 lo, hi);
+				for (addr = lo; addr < hi; addr += 16) {
+					u32 w[4];
+					char ascii[17];
+					unsigned int b;
+
+					w[0] = brcmf_pcie_read_ram32(devinfo, addr);
+					w[1] = brcmf_pcie_read_ram32(devinfo, addr + 4);
+					w[2] = brcmf_pcie_read_ram32(devinfo, addr + 8);
+					w[3] = brcmf_pcie_read_ram32(devinfo, addr + 12);
+					for (b = 0; b < 16; b++) {
+						u8 c = (u8)(w[b >> 2] >> ((b & 3) * 8));
+						ascii[b] = (c >= 0x20 && c < 0x7f) ?
+							(char)c : '.';
+					}
+					ascii[16] = '\0';
+					pr_emerg("BCM4360 test.199: 0x%05x: %08x %08x %08x %08x | %s\n",
+						 addr, w[0], w[1], w[2], w[3],
+						 ascii);
+				}
 			}
 
 			/* test.197: post-dwell fine-grain scan over upper TCM.
