@@ -1,5 +1,94 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.203 (2026-04-22) — literal pool decoded + chip-info core table found
+
+Logs: `phase5/logs/test.203.journalctl.full.txt`. Run text:
+`phase5/logs/test.203.run.txt`. Test ran cleanly — no crash.
+
+### Result 1: assert literal pool
+
+Dump at `0x64200..0x64280` shows end-of-function code (0x64200-0x64232)
+then the literal pool starts at `0x64234`:
+
+```
+0x64230:  bf00 81f0          ← (ends previous function)
+0x64234:  00040671           ← ptr to "hndarm.c" (9-char filename)
+0x64238:  0004067a           ← ptr to format string
+0x6423c:  00017fff           ← 0x17fff  (17-bit mask — max_res_mask-like!)
+0x64240:  00062a08           ← ptr into chip-info struct (r2 arg?)
+0x64244:  00062a0c           ← ptr into chip-info struct (r3 arg?)
+0x64248:  43f8 e92d 4b1d     ← (next function prologue: PUSH+LDR)
+```
+
+- `0x00040671 + 9 bytes = 0x0004067a` → "hndarm.c\0" (9 bytes
+  including terminator) followed immediately by the format string.
+- **`0x00017fff` is striking** — we know `max_res_mask` on this chip
+  reads back as `0x17f` after our write. `0x17fff` is almost exactly
+  `0x17f << 4` (= `0x17f0`, not quite) and looks like it could be a
+  **mask check** — e.g., "does the chip's resource-mask cover all
+  bits in 0x17fff?"  Or could be a totally unrelated bitmask used by
+  a different check. Need to read the bytes at `0x40671..0x4067a` to
+  confirm the filename, and walk back from the CMP to see which
+  register this literal was loaded into.
+- **`0x62a08` and `0x62a0c` pointers** — both are in the chip-info
+  struct area, but *below* our currently-dumped range (we started at
+  `0x62a80`). The struct extends at least to `0x62a08`.
+
+### Result 2: chip-info struct upper half has AI/AXI core table
+
+Dump at `0x62b00..0x62b80` reveals what appears to be a table of
+peripheral-core base addresses (AXI bus slots) and core IDs:
+
+```
+0x62b00-0x62b18: zeros (padding)
+0x62b1c:  0009d0c8                ← pointer into upper TCM (past trap data)
+0x62b20:  18002000 18000000 18001000 18002000
+0x62b30:  18003000 18004000 0 0                ← 6 core base addresses at 0x18000000+
+0x62b40-0x62b5c: zeros
+0x62b60:  00000000 00000002 00000005 00000800
+0x62b70:  00000812 0000083e 0000083c 0000081a  ← 6 core-ID words
+```
+
+The sequence `0x18000000, 0x18001000, 0x18002000, 0x18003000, 0x18004000`
+is classic Broadcom SoC AXI-bus core addressing (each core gets a
+4KB window). The 6 corresponding core IDs at `0x62b70..0x62b7c` are
+`0x800, 0x812, 0x83e, 0x83c, 0x81a` — these match Broadcom's
+CC_CORE_ID=0x800, PCIE2_CORE_ID=0x83c, ARMCR4_CORE_ID=0x83e, etc.
+**This is the firmware's core-enumeration table**.
+
+### Speculation refined
+
+The `r6 = 9` in the assert-preceding CMP is now less likely to be
+a chip-rev test — with the literal `0x17fff` in the pool *and* the
+PMU resource-mask angle, it might be testing whether a specific bit
+in the PMU `max_res_mask` is set. Our max_res_mask = `0x17f` (the
+driver-supplied value), but `0x17fff` has 13 bits set (0-9, 10, 11, 12).
+
+Another plausible scenario: **r6 holds a count of AI cores found**,
+and the firmware expected 9 cores but we have some different number
+enumerated. The core table here shows 6 populated AXI slots — if the
+firmware expects 9 and sees 6, that's the mismatch. But before
+pursuing this, we need to read the instructions between a load of
+r6 and the CMP to see where r6 actually comes from.
+
+### Plan for test.204
+
+1. **Extend chip-info dump down**: `0x62a00..0x62a80` (8 rows) to
+   reach the `0x62a08`/`0x62a0c` pointers and see what values they
+   target.
+
+2. **Read the string region**: `0x40660..0x406c0` (6 rows) to
+   extract the "hndarm.c" filename and format string literally —
+   validates our reading of the assert format.
+
+3. **Expand code context before the CMP**: pull `0x64160..0x6418c`
+   (4 rows) to see what instruction loaded r6 (likely `LDR r6,
+   [something, #offset]` — want to know what structure and field).
+
+Total +18 rows over test.203. Still fast.
+
+---
+
 ## PRE-TEST.203 (2026-04-22) — read literal pool + chip-info struct neighbours
 
 ### Hypothesis
