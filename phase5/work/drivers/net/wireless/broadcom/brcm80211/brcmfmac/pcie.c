@@ -2430,22 +2430,29 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						"ON" : "OFF",
 					 mmio_guard);
 
-				pr_emerg("BCM4360 test.226: before pci_set_master\n");
-				msleep(5);
-				pci_set_master(devinfo->pdev);
-				pr_emerg("BCM4360 test.226: after pci_set_master\n");
+				/* test.232: SKIP pci_set_master before set_active.
+				 * Leading theory after test.230/231: firmware-
+				 * initiated DMA to unpopulated shared-memory rings
+				 * hangs the bus. If DMA-target-missing is the cause,
+				 * BM=OFF makes device-side DMA TLPs fail-fast at the
+				 * root complex instead of stalling waiting for a
+				 * completion. Binary discriminator:
+				 *   host survives → DMA-target-missing confirmed
+				 *   host wedges   → wedge is not DMA-bound
+				 */
+				pr_emerg("BCM4360 test.232: SKIPPING pci_set_master — BM stays OFF into set_active\n");
 				msleep(5);
 				pci_read_config_word(devinfo->pdev,
 						     PCI_COMMAND,
 						     &cmd_post_bm);
-				pr_emerg("BCM4360 test.188: pci_set_master done; PCI_COMMAND=0x%04x BM=%s (before set_active)\n",
+				pr_emerg("BCM4360 test.232: post-skip PCI_COMMAND=0x%04x BM=%s (expect OFF)\n",
 					 cmd_post_bm,
 					 (cmd_post_bm & PCI_COMMAND_MASTER) ?
 						"ON" : "OFF");
 
 				mmio_guard = brcmf_pcie_read_reg32(devinfo,
 						devinfo->reginfo->mailboxint);
-				pr_emerg("BCM4360 test.188: post-BM-on MMIO guard mailboxint=0x%08x (endpoint still responsive)\n",
+				pr_emerg("BCM4360 test.232: post-skip MMIO guard mailboxint=0x%08x (endpoint still responsive)\n",
 					 mmio_guard);
 			}
 			pr_emerg("BCM4360 test.226: past BusMaster dance — entering FORCEHT block\n");
