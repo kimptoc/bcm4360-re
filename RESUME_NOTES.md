@@ -1,5 +1,65 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.195 (2026-04-22) — max_res_mask widening WORKED (resources 6+7 asserted) but chip became unstable mid-dwell → hard crash (SMC reset required)
+
+Logs: `phase5/logs/test.195.journalctl.txt` (792 brcmfmac lines) + `test.195.journalctl.full.txt` (2123 lines, full boot). Captured from journalctl boot -1 history after recovery — boot ended mid-dwell with no panic/MCE in dmesg (silent freeze).
+
+### Key result — first ever observation of res_state advancing past 0x13b
+
+| Register | test.194 (max=0x13f) | test.195 (max=0x1ff) | Delta |
+|---|---|---|---|
+| `max_res_mask` | 0x13f | **0x1ff** | widened by our write ✓ |
+| `res_state` | 0x13b | **0x1fb** | **bits 6 + 7 newly asserted** (HT clock + backplane HT) |
+| `clk_ctl_st` | 0x00050040 | **0x01070040** | new bits 0x01020000 set |
+| `pmustatus` | 0x2a | **0x2e** | bit 0x4 set |
+| `min_res_mask` | 0x13b | 0x13b | unchanged (we did not touch min) |
+
+Diagnostic line in dmesg confirms write landed:
+```
+brcmf_chip_setup: BCM4360 test.195: max_res_mask 0x0000013f -> 0x000001ff (write 0x1ff)
+```
+
+**The hypothesis was correct in mechanism:** widening max_res_mask DID cause the chip to grant resources 6 and 7. This is the first time ever in this project that res_state has changed past the POR value of 0x13b.
+
+### But — TCM never advanced AND chip became unstable
+
+| Signal | Observation |
+|---|---|
+| TCM dwell-pre samples | UNCHANGED from baseline |
+| TCM dwell-3000ms samples (got ~56 of 271 before crash) | ALL UNCHANGED — fw still not writing scratch |
+| D11 RESET_CTL | 0x1 (still in reset) |
+| ARM CR4 CPUHALT | NO (still running) |
+
+**Box hard-crashed mid-dwell** (boot -1 ended at 00:53:12 BST, exactly when the TCM-sample stream stops at fw-sample[0x238f8]). No MCE, no panic, no oops in dmesg — the kernel just stopped logging. Required SMC reset to recover. Boot 0 (current, 00:54:26) is fresh, no module loaded; PCIe state clean (`MAbort-`, no FatalErr, link x1/2.5GT/s).
+
+### Interpretation
+
+Resources 6 and 7 control HT-clock domains. Enabling them simultaneously (the only delta vs test.194) caused the chip to switch into a state where the heavy TCM-poll loop (running every ~10ms during the 3s dwell) eventually triggered a fatal MMIO fault that the host couldn't recover from. Likely root cause: chip changed PCIe ref-clock or backplane clock once HT became available; the host's continued indirect-MMIO reads then collided with that transition and produced an unrecoverable CTO.
+
+### Implications
+
+1. **The unblock direction is right.** First res_state movement in 30+ tests means we're touching the actual gate.
+2. **The diagnostic harness is now the liability.** The same TCM-poll loop that was safe in test.194 (resources gated off) is unsafe once resources are live.
+3. **Firmware still hasn't started writing TCM** even with HT resources asserted. Either it needs more time than 3s, more resources (min_res_mask widening to *force* 6/7 to stay asserted), or a different trigger (NVRAM/OTP).
+
+### Next test (test.196) — staged, low-poll diagnostic
+
+Plan:
+1. Keep `max_res_mask = 0x1ff` (proven to work).
+2. Bisect bits 6 vs 7: try `max_res_mask = 0x17f` first (bit 6 only) — if safe, follow with bit 7. Identifies which resource destabilises the chip.
+3. **Drastically reduce TCM-poll volume** during dwell — sample once at start, once at end. Replace with PMU/clk-state samples every 200ms (no-op MMIO of CC regs is cheap and stays in CC core which we know is safe).
+4. Add `min_res_mask` and `max_res_mask` to the periodic PMU sample so we can see if firmware writes them.
+5. If bit-6-only is also unstable, try widening *min_res_mask* to 0x17b (force bit 6 always asserted) — that may give firmware a stable HT clock long enough to write something.
+
+### Ruled out
+
+| Hypothesis | Test | Outcome |
+|---|---|---|
+| `max_res_mask = 0x1ff` widening doesn't matter | 195 | **falsified** — measurably activates resources 6+7 |
+| 3s dwell with heavy TCM poll is universally safe | 195 | **falsified** — safe at res_state=0x13b but unsafe at 0x1fb |
+
+---
+
 ## PRE-TEST.195 (2026-04-22) — widen max_res_mask from 0x13f (POR) to 0x1ff (wl.ko value)
 
 ### Hypothesis
