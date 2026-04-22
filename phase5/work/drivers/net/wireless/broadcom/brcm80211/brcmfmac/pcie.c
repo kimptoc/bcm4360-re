@@ -2514,28 +2514,77 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				 resetintr);
 			mdelay(30);
 
-			/* test.233: TCM persistence probe run — write magic
-			 * pattern as late as possible in the probe, then
-			 * SKIP brcmf_chip_set_active (test.230 baseline; the
-			 * only known-safe path). The next probe run reads
-			 * TCM[0x90000/4] early and compares against the
-			 * magic to decide whether TCM persisted through
-			 * whatever reset separated the two runs.
+			/* test.234: cheapest-tier shared-memory-struct probe.
+			 * Zero the upper TCM region [0x9FE00..0x9FF1C) — 284
+			 * bytes / 71 dwords — that is above the fw image and
+			 * below the NVRAM slot, where our code never writes.
+			 * test.233 showed this region has a deterministic non-
+			 * zero SRAM fingerprint on a fresh SMC-reset boot.
+			 * Hypothesis: fw reads a value there and uses it as a
+			 * DMA target during boot; zeroing it changes behavior
+			 * (NULL-DMA more likely to be cleanly rejected than a
+			 * fingerprint-derived bogus address). Then re-enable
+			 * brcmf_chip_set_active (test.231 path) and dwell with
+			 * breadcrumbs to compare tail-truncation point vs
+			 * test.231/232.
 			 */
-			pr_emerg("BCM4360 test.233: writing magic TCM[0x90000]=0xDEADBEEF TCM[0x90004]=0xCAFEBABE\n");
-			brcmf_pcie_write_tcm32(devinfo, 0x90000, 0xDEADBEEF);
-			brcmf_pcie_write_tcm32(devinfo, 0x90004, 0xCAFEBABE);
 			{
-				u32 vpa = brcmf_pcie_read_tcm32(devinfo, 0x90000);
-				u32 vpb = brcmf_pcie_read_tcm32(devinfo, 0x90004);
-				pr_emerg("BCM4360 test.233: POST-WRITE readback TCM[0x90000]=0x%08x TCM[0x90004]=0x%08x (expect DEADBEEF/CAFEBABE)\n",
-					 vpa, vpb);
+				u32 j, nz_pre = 0, nz_post = 0;
+				const u32 start = 0x9FE00;
+				const u32 end   = 0x9FF1C;
+				const u32 count = (end - start) / 4; /* 71 */
+
+				pr_emerg("BCM4360 test.234: PRE-ZERO scan [0x%05x..0x%05x) %u dwords\n",
+					 start, end, count);
+				for (j = 0; j < count; j++) {
+					u32 addr = start + j * 4;
+					u32 val = brcmf_pcie_read_tcm32(devinfo, addr);
+					if (val != 0) {
+						pr_emerg("BCM4360 test.234: pre-zero TCM[0x%05x]=0x%08x\n",
+							 addr, val);
+						nz_pre++;
+					}
+				}
+				pr_emerg("BCM4360 test.234: pre-zero scan %u/%u non-zero\n",
+					 nz_pre, count);
+
+				pr_emerg("BCM4360 test.234: zeroing TCM[0x%05x..0x%05x)\n",
+					 start, end);
+				for (j = 0; j < count; j++) {
+					u32 addr = start + j * 4;
+					brcmf_pcie_write_tcm32(devinfo, addr, 0);
+				}
+
+				for (j = 0; j < count; j++) {
+					u32 addr = start + j * 4;
+					u32 val = brcmf_pcie_read_tcm32(devinfo, addr);
+					if (val != 0) {
+						pr_emerg("BCM4360 test.234: VERIFY-FAIL TCM[0x%05x]=0x%08x (expected 0)\n",
+							 addr, val);
+						nz_post++;
+					}
+				}
+				pr_emerg("BCM4360 test.234: zero verify %u/%u non-zero (expect 0)\n",
+					 nz_post, count);
 			}
 
-			pr_emerg("BCM4360 test.233: SKIPPING brcmf_chip_set_active — resetintr=0x%08x NOT written to CR4 (TCM-persistence probe run, test.230 baseline)\n",
+			pr_emerg("BCM4360 test.234: calling brcmf_chip_set_active resetintr=0x%08x (after zero-upper-TCM)\n",
 				 resetintr);
-			msleep(1000);
-			pr_emerg("BCM4360 test.233: 1000 ms dwell done (no fw activation); proceeding to BM-clear + release\n");
+			mdelay(10);
+			if (!brcmf_chip_set_active(devinfo->ci, resetintr))
+				pr_emerg("BCM4360 test.234: brcmf_chip_set_active returned FALSE\n");
+			else
+				pr_emerg("BCM4360 test.234: brcmf_chip_set_active returned TRUE\n");
+			mdelay(100);
+			pr_emerg("BCM4360 test.234: t+100ms dwell\n");
+			mdelay(200);
+			pr_emerg("BCM4360 test.234: t+300ms dwell\n");
+			mdelay(200);
+			pr_emerg("BCM4360 test.234: t+500ms dwell\n");
+			mdelay(200);
+			pr_emerg("BCM4360 test.234: t+700ms dwell\n");
+			mdelay(300);
+			pr_emerg("BCM4360 test.234: t+1000ms dwell done (proceeding to BM-clear + release)\n");
 #if 0
 			mdelay(20);
 			brcmf_pcie_probe_armcr4_state(devinfo,

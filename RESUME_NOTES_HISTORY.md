@@ -1,3 +1,180 @@
+## POST-TEST.232 (2026-04-22 21:52 BST, boot -1 journal captured) — BM=OFF did NOT prevent wedge; DMA-completion-waiting theory falsified
+
+### Headline
+
+Host wedged as in test.231, required reboot. Boot -1 journal tail-
+truncated at `wide-TCM[0x2c000] pre-release snapshot` (21:52:52).
+None of the test.232-specific breadcrumbs (`SKIPPING pci_set_master`,
+`post-skip PCI_COMMAND`, `post-skip MMIO guard`) landed, nor did
+anything from `past pre-release snapshot` onward — INTERNAL_MEM
+probe, pre-set-active probes, BusMaster dance, FORCEHT, set_active,
+dwells, BM-clear, release were all lost to tail-truncation. But the
+binary discriminator still resolves: the same flow ran cleanly end-
+to-end in test.230 (set_active skipped), so the only runtime-
+different actor between the last landed log and the wedge is
+`brcmf_chip_set_active`, which is back on in test.232. BM=OFF did
+not neutralize it.
+
+### Inference
+
+**Plain DMA-completion-waiting theory is falsified.** With BM=OFF,
+any DMA TLP the device tries to issue gets UR-responded by the root
+complex (device is not bus master), so fw does not stall waiting
+for a completion that never lands. The host wedged anyway. Therefore
+the bus-stall mechanism is not pure completion-starvation.
+
+**Still potentially DMA-rooted:** fw's response to receiving a UR
+for its DMA TLP could itself be bus-hostile — AXI-side faults,
+retry storms against a dead rc path, internal pcie2 core being
+brought down, etc. We cannot yet distinguish those from a fully
+non-DMA mechanism (e.g. fw wedges an internal register or induces
+a link downtrain on its own initiative).
+
+**Phrase carefully going forward:** "not waiting-for-completion-of-
+missing-target", not "not DMA-related".
+
+### Evidence (boot -1 journal, 1297 lines)
+
+- Full probe path landed through test.225 chunk writes (107 chunks,
+  all 110558 words, tail byte written).
+- fw write complete + post-fw msleep(100) + NVRAM write (228 bytes).
+- Pre-release TCM snapshots started landing: `TCM[0x0000..0x001c]`
+  (resetintr + 7 x 4B neighbors), `wide-TCM[0x00000..0x2c000]`
+  (12 x 16-KB-spaced samples). Last landed line:
+  `wide-TCM[0x2c000]=0xf0084643 (pre-release snapshot)` at 21:52:52.
+- Expected-but-not-landed: `wide-TCM[0x30000..]`, `tail-TCM`, fw
+  samples, `CC-*` backplane snapshot, `test.226: past pre-release
+  snapshot — entering INTERNAL_MEM lookup`, and everything after.
+- No NMI watchdog / softlockup / hardlockup messages in boot -1
+  (bus-wide stall froze watchdog CPU too, same signature as 227/228/229/231).
+- Boot -1 ended at 21:52:52; host rebooted at 21:54:48 (user-initiated
+  or auto-panic unclear; panic=30 was armed).
+
+### Hardware state after reboot (NO SMC reset done per user)
+
+- `lspci -vvv -s 03:00.0` — Control `Mem+ BusMaster+` (kernel default),
+  Status MAbort- (clean), DevSta CorrErr+ UnsupReq+ (sticky, same as
+  post-SMC-reset state in tests 230/231/232 PRE), AuxPwr+ TransPend-,
+  LnkCtl ASPM L0s L1 Enabled CommClk+, LnkSta 2.5GT/s x1. No dirty
+  signature visible from the host side.
+- pstore empty.
+- No brcmfmac modules loaded.
+- Caveat: chip's internal state (CR4, fw) may still be partially
+  active from the test.232 set_active — only an SMC reset clears
+  that definitively.
+
+### Artifacts captured
+
+- `phase5/logs/test.232.run.txt` — PRE sysctls + lspci + BAR0 + pstore
+  + strings + truncated harness ("Modules loaded. Waiting 15s…").
+- `phase5/logs/test.232.journalctl.full.txt` — 1297 lines boot -1.
+- `phase5/logs/test.232.journalctl.txt` — 275 lines filtered.
+- No pstore dump.
+
+### Blockers before test.233 (per advisor)
+
+1. **Ask user: does SMC reset wipe TCM?** Determines TCM-ring-buffer
+   logger viability. Answer this before designing the logger.
+2. **Request SMC reset before next hardware test.** User flagged "SMC
+   reset NOT done" — treat as a prompt to do one, not permission to
+   skip. Chip may still have fw partially active in CR4.
+3. Cheap rule-out done: `/dev/ttyS0..3` exist but no physical serial
+   on this MacBook (cmdline has no earlyprintk=). Serial likely dead
+   end unless user has USB-serial adapter.
+
+### Direction (pending user answers)
+
+Leading candidate regardless of logging decision: **implement a
+minimal shared-memory struct in TCM before set_active** (per upstream
+brcmfmac `brcmf_pcie_init_share`). Two bonuses:
+- It's the natural forward step the DMA-target-missing theory implied.
+- If the wedge stops, we've found the piece. If the wedge shifts in
+  timing or signature, we have a new observable.
+- Advisor suggests this may double as a cheaper discriminator than a
+  full TCM ring-buffer logger.
+
+---
+
+## PRE-TEST.232 (2026-04-22 21:49 BST, boot 0 post-SMC-reset) — skip `pci_set_master` before set_active; binary discriminator for DMA-target-missing hypothesis
+
+### Hypothesis
+
+Wedge is caused by firmware issuing DMA to unpopulated shared-memory
+rings in TCM. Those ring structs are zero/garbage; fw dereferences a
+NULL/garbage host address; PCIe TLPs stall waiting for completions
+that never land; bus-wide freeze within ~1 s.
+
+If this is correct, setting BM=OFF before set_active should make
+device-side DMA fail-fast at the root complex (which refuses TLPs
+from a bus-master-off device). Firmware may stall internally but the
+host bus should stay healthy.
+
+### Why this, not more logging
+
+Advisor pivot (bisect was uninformative — see POST-TEST.231). Testing
+"why" with a candidate theory gives a binary result either way;
+refining "when" requires durable logging we haven't built. If BM=OFF
+fails to survive, *then* the TCM-logger investment is justified.
+
+### Code change
+
+In `brcmf_pcie_download_fw_nvram` (pcie.c:2416-2449 block), replaced
+the `pci_set_master` call + surrounding breadcrumbs with a `test.232:
+SKIPPING pci_set_master — BM stays OFF into set_active` marker. The
+PCI_COMMAND read-back and MMIO guard remain so we can verify BM=OFF
+is still in effect going into set_active. Everything else — FORCEHT,
+fw download, TCM verify, set_active, 10 dwell breadcrumbs, BM-clear,
+release — is identical to test.231.
+
+### Build status — REBUILT CLEAN (2026-04-22 21:49 BST)
+
+`brcmfmac.ko` 14250696 bytes, mtime 21:49. `strings` confirms:
+- `BCM4360 test.232: SKIPPING pci_set_master`
+- `BCM4360 test.232: post-skip PCI_COMMAND=0x%04x BM=%s (expect OFF)`
+- `BCM4360 test.232: post-skip MMIO guard mailboxint=0x%08x (endpoint still responsive)`
+
+### Decision tree
+
+| Outcome signature | Interpretation | Next (test.233) |
+|---|---|---|
+| All 10 dwell breadcrumbs (t=10..1000ms) + set_active returned true + -ENODEV + rmmod works + host stays alive | **DMA-target-missing confirmed.** Wedge-trigger neutralized with BM=OFF. | Investigate upstream `brcmf_pcie_init_share` and build a minimal shared-memory struct in TCM so fw can progress with BM=ON. |
+| Set_active returns true in journal but dwell breadcrumbs truncate, host wedges | Wedge happens even without BM. Theory wrong or partial — fw is doing something other than plain DMA that hangs the bus. | Pivot to TCM ring-buffer logger to recover timing, or try earlyprintk=serial. |
+| Set_active returns false, or earlier breadcrumb missing, or new regression | Unexpected interaction between BM=OFF and set_active path itself (e.g. fw init requires BM to even initialize). | Re-read journal for latest breadcrumb; consider whether BM-off breaks something earlier. |
+
+### Hardware state (post-SMC-reset boot at 21:36 BST)
+
+- `lspci -vvv -s 03:00.0` at 21:49 BST: Control `Mem+ BusMaster+`
+  (kernel default, brcmfmac will reset), Status MAbort- (clean), DevSta
+  CorrErr+ UnsupReq+ (sticky from earlier) TransPend-, LnkCtl ASPM
+  Enabled CommClk+ (post-SMC-reset idiom matches test.230 PRE), LnkSta
+  2.5GT/s x1. No dirty-state signature — safe to proceed.
+
+### Logging / watchdog arming (same as test.231)
+
+```bash
+echo 1 | sudo tee /proc/sys/kernel/nmi_watchdog
+echo 1 | sudo tee /proc/sys/kernel/hardlockup_panic
+echo 1 | sudo tee /proc/sys/kernel/softlockup_panic
+echo 30 | sudo tee /proc/sys/kernel/panic
+sync
+```
+
+### Expected artifacts
+
+- `phase5/logs/test.232.run.txt` — PRE sysctls + lspci + BAR0 timing + pstore + strings + harness output.
+- `phase5/logs/test.232.journalctl.full.txt` — boot 0 or boot -1 journal.
+- `phase5/logs/test.232.journalctl.txt` — filtered subset.
+
+### Pre-test checklist (CLAUDE.md)
+
+1. Build status: **REBUILT CLEAN** (21:49 BST)
+2. PCIe state: will capture + verify no dirty state (MAbort+, CommClk-) before insmod
+3. Hypothesis stated: above
+4. Plan written to RESUME_NOTES.md: this block
+5. Filesystem synced on commit
+
+---
+
 ## POST-TEST.231 (2026-04-22 21:34 BST, boot -1 → SMC reset → boot 0) — journal tail-truncation swamped the bisect; no timing info recovered
 
 ### Headline
