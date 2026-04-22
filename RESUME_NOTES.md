@@ -1,5 +1,162 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.213 (2026-04-22) — pivot from caller-search to polled-register identification
+
+### What POST-TEST.212 just resolved (and what it didn't)
+
+POST-TEST.212 (below) confirmed the caller is **not in any dumped region**:
+- 0x40000..0x40660 is firmware string table (hndchipc/hndrte/hndarm/hndrte_lbuf strings, ASSERT/TRAP format strings, Memory/Stack/timer log templates) — not code
+- 0x64280..0x64500 contains sibling functions (entries at 0x64248, 0x64248-end at 0x642c4, function at 0x642f0=NOP+BX, function at 0x642fc onward), with two BL upper-halfwords decoded to targets 0x63D9C and 0x63B3C — **neither targets 0x64028**
+- Post-fn literal pool 0x6422c..0x64248 holds 0x40671, 0x4067a, 0x17fff, 0x62a08, 0x62a0c — **no 0x00064028/9**
+- Global grep across all test.212 dump rows for function-pointer values `00064028`/`00064029` returned **zero hits**
+
+So caller is in firmware text we haven't dumped. Helper_C lives at 0x11E8 (test.211),
+implying significant code exists below 0x40000. Plus there's also the post-string
+region 0x40670..0x63e00 (~145KB) which is mostly unscanned.
+
+### Strategic pivot
+
+Continuing the brute-force caller-search by widening dumps is slow: at ~50µs/4B,
+covering even 16KB costs ~100ms of MMIO and we still might not hit it. **A more
+useful question** is *what hardware bit is the polling loop waiting on?* — if we
+can identify the polled register/bit, we may be able to satisfy it from the host
+side regardless of who started the wait.
+
+From POST-TEST.210 we already know:
+- Polling loop at 0x6419e..0x641b8
+- Reads `[r3, #0xXX]`, masks with `0x80000` (bit 19), waits for it to assert
+- r7 is retry counter; assert fires when r7 hits 0
+- r3 is loaded from `[r4, #0x4c]` somewhere in entry sequence
+
+But we never decoded *exactly which register* r4 points at. r4 is initialized in
+the first dozen instructions of the function (0x64028..). If r4 = chip-info struct
+(test.211 helpers operate on such a struct), then [r4+0x4c] is a *register pointer
+field* in that struct, not a fixed hardware address — meaning the firmware lookup
+table indirected by helper_B (which returns 0x11 sentinel for not-found) likely
+*selects* which register pointer to use.
+
+### Hypothesis for test.213
+
+The polled register is one of the **PMU resource state registers** (which we
+actually control: `max_res_mask=0x17f` is what we set). The polling loop is
+waiting for a specific PMU resource bit to come on in `PMU_RES_STATE` — and bit 19
+of *some* register field is the indicator.
+
+If true, two driver-side fixes become possible:
+1. Add the missing PMU resource bit to `max_res_mask` so the firmware sees its
+   bit assert
+2. Pre-set the resource state from host side before ARM release
+
+### Implementation plan for test.213
+
+**Two parallel probes:**
+
+**(a) Decode r4 init in asserting function** — re-examine bytes 0x64028..0x64080
+(already dumped in test.210/211/212) offline; trace what value flows into r4
+before the polling loop. No new MMIO needed.
+
+**(b) Dump current PMU register snapshot** — at the moment the assert is detected,
+read PMU_RES_STATE (chipcommon offset 0x120), MIN/MAX_RES_MASK (offsets 0x618/0x61c),
+PMU_CTL (0x600), PMU_CHIP_CONTROL_DATA (0x654), and a few neighbors. Compare
+which bits are set vs which are in our `max_res_mask=0x17f` config. If bit 19
+of some PMU register is the polled bit, it'll be visible as 0 in this snapshot.
+
+For (b), MMIO cost is trivial (~10 reads = 0.5ms). Add as a new dump phase
+*after* the existing TCM dumps but *before* the assert text dump.
+
+### Decision tree
+
+| Find | Interpretation | Next |
+|---|---|---|
+| PMU register with bit 19 = 0 in snapshot, matches r3 base | polled register identified | patch driver to set/wait for that bit |
+| All PMU regs settled, no bit-19-clear matches | polled bit is in a non-PMU register | dump SI/D11/PCIE register space too |
+| r4 not initialized to known struct base | function takes r4 via caller — no fix without finding caller | revert to caller-hunt: dump 0x10000..0x14000 in test.214 |
+
+### Run command
+
+```
+make -C /home/kimptoc/bcm4360-re/phase5/work    # via kbuild — see reference memory
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.213.{run,journalctl,journalctl.full}.txt`.
+
+---
+
+## POST-TEST.212 (2026-04-22) — caller of 0x64028 NOT in dumped regions; need different angle
+
+Logs: `phase5/logs/test.212.{run,journalctl,journalctl.full}.txt`. Test ran cleanly,
+firmware asserted at hndarm.c:397 ("ramstbydis") as in all prior runs. PCIe bus stayed
+healthy (no MAbort, dump phase completed in full).
+
+### Region-by-region findings
+
+**0x40000..0x40660 — firmware string table (not code)**
+
+Contents are exclusively NUL-terminated debug/log strings:
+- `0x40000`: "123456789ABCDEF.0123456789abcdef" (hex char tables)
+- `0x40020`: "hndchipc.c.reclaim section 1: Returned %d bytes to the heap" (+ section 0 variant)
+- `0x40090`: "Memory usage:..Text/Data/Bss/Stack" formatters
+- `0x400e0`: "Arena total: %d(%dK), Free: %d(%dK), In use:..." block
+- `0x40270`: "No timers..timer %p, fun %p, arg %p, %d ms"
+- `0x40300`: "ASSERT in file %s line %d (ra %p, fa %p)" — the ASSERT formatter itself
+- `0x40360`: "hndrte.c.No memory to satisfy request..."
+- `0x403e0`: "hndrte_init_timer: hndrte_malloc failed"
+- `0x40410`: "hndrte_add_isr: hndrte_malloc failed"
+- `0x40430`: "mu.lb_alloc: size too big" / "lb_alloc: size (%u); alloc failed"
+- `0x40480`: "hndrte_lbuf.c.lb_sane:.."
+- `0x40540`: "FWID 01-%x" / "TRAP %x(%x): pc %x, lr %x, sp %x, cpsr %x..."
+- `0x4065c`: "deadman"
+- `0x40660`: "_to.hndrte_arm.c\0hndarm.c.ramstbydis.pciedngl_isr called.%s called..pciedngl_isr called..%s: invalid IS..."
+
+These are referenced by code via PC-relative literal pools (the printf-style
+helpers like helper_C@0x11E8 take string-pointer args). **Not** code.
+
+**0x64280..0x64500 — sibling functions**
+
+- `0x64280..0x642c4`: tail of function whose entry is *before* 0x64280 (continues from
+  pre-asserting-fn region 0x6422c-0x64280's `0x64248` PUSH {r3-r9, lr}). Ends with
+  `e8bd…83f8` POP.W {r4-r10, pc} idiom at 0x642c0.
+- `0x642c4..0x642ec`: literal pool — 0x00058d24, 0x00040980, 0x000408e2, 0x00062a10,
+  0x0004098c, 0x000409a0 — pointers to other strings, NOT to 0x64028
+- `0x642ec`: tiny inline function: `4a064b05 70197dd1 70597e11 70997e51 70da7e92` —
+  load r3,[pc,#0x14]; load r2,[pc,#0x18]; LDRB/STRB chain copying 4 bytes between
+  two struct fields; then `bf004770` = NOP + BX LR
+- `0x642f0` literal pool: 0x00062eb0, 0x0006beda
+- `0x642fc..onward`: new function `4ff0e92d` PUSH.W {r4-r11, lr}; significant body
+  with many BL calls (decoded two: BL at 0x64302 → 0x63D9C, BL at 0x644aa → 0x63B3C
+  — both backward to **other unscanned addresses**, neither targets 0x64028)
+
+**Post-asserting-function literal pool 0x6422c..0x64248**
+
+`00040671 0004067a 00017fff 00062a08 00062a0c` — string pointers and a 0x17fff
+mask. **No 0x00064028 / 0x00064029.** This rules out vtable/jump-table entries
+in the asserting function's own pool.
+
+### Cross-region search
+
+Global grep across all test.212 dump rows:
+- `00064028` — **zero matches**
+- `00064029` — **zero matches**
+- BL upper-halfword `f7ff` followed by `fdXX`/`feXX` (small backward branches) —
+  two found, both in the new function 0x642fc-, both target other addresses.
+
+### Conclusion
+
+The caller of 0x64028 is in firmware text **outside the regions dumped so far**.
+Two unscanned candidate areas remain:
+1. **Low text 0x12000..0x40000** (~184KB) — where helper_C at 0x11E8 lives;
+   likely contains hndrte_main / pmu_init / boot-init code
+2. **Mid text 0x40670..0x63e00** (~145KB) — between strings and asserting fn;
+   could contain PMU/PCIe init helpers
+
+Brute-force widening dumps to cover 184KB+ of unscanned text is expensive and
+not guaranteed to localize the caller. **Pivoting to a different angle for test.213**:
+identify the polled register/bit directly, since the host can manipulate PMU state
+even without knowing who scheduled the wait. See PRE-TEST.213 above.
+
+---
+
 ## PRE-TEST.212 (2026-04-22) — find the CALLER of asserting function 0x64028
 
 ### What POST-TEST.211 just resolved

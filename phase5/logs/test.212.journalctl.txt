@@ -1,0 +1,1500 @@
+Apr 22 08:55:07 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms CC-pmutimer=0x0a958808 (was 0x0a931104) CHANGED
+Apr 22 08:55:07 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+Apr 22 08:55:07 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+Apr 22 08:55:07 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+Apr 22 08:55:07 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-3000ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-3000ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms CC-pmutimer=0x0a95aaef (was 0x0a931104) CHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.196: post-dwell fw-sample summary: 256 UNCHANGED, 0 REVERTED, 0 CHANGED (of 256)
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: dump range 0x40660..0x406c0
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x40660: 006f745f 72646e68 615f6574 632e6d72 | _to.hndrte_arm.c
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x40670: 646e6800 2e6d7261 61720063 6274736d | .hndarm.c.ramstb
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x40680: 73696479 69637000 676e6465 73695f6c | ydis.pciedngl_is
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x40690: 73250072 6c616320 0a64656c 69637000 | r.%s called..pci
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x406a0: 676e6465 73695f6c 61632072 64656c6c | edngl_isr called
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x406b0: 7325000a 6e69203a 696c6176 53492064 | ..%s: invalid IS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: dump range 0x011c0..0x01240
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x011c0: 000629a4 0006299c 000629b4 bd1ef000 | .)...)...)......
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x011d0: 4604b510 fd1cf000 f0004620 4620fd1f | ...F.... F.... F
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x011e0: fff4f7ff 0000e7fb b083b590 af024603 | .............F..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x011f0: 4622460c 48074619 97004673 fc18f7ff | .F"F.F.HsF......
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x01200: 4620df00 0704f107 e8bd46bd f7ff4090 | .. F.....F...@..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x01210: bf00b81f 00040301 4604b510 6a83b1a0 | ...........F...j
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x01220: 480ab16b fc04f7ff 48094621 69e369a2 | k..H....!F.H.i.i
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x01230: fbfef7ff f44f4807 f7ff61bb 4620ffd5 | .....HO..a.... F
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: dump range 0x09900..0x09a00
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x09900: d0e12b00 4615e002 2501e000 bdf84628 | .+.....F...%(F..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x09910: 47706d80 f8d06703 b51030cc 0383eb00 | .mpG.g...0......
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x09920: 66449c02 30d4f8d3 66c26681 bd106603 | ..Df...0.f.f.f..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x09930: 66832300 f8d04770 f8d33358 47700100 | .#.fpG..X3....pG
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x09940: bfa6f7f8 bfabf7f8 30ccf8d0 0083eb00 | ...........0....
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x09950: 00d4f8d0 f8d04770 477000cc f3c06980 | ....pG....pG.i..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x09960: 477060c0 bfb5f7f8 f8d0b570 460450d0 | .`pG....p....P.F
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x09970: 46032000 f8d4e008 428e60d4 4293d102 | . .F.....`.B...B
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x09980: 3301d005 34043001 d3f442a8 bd702011 | ...3.0.4.B... p.
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x09990: 4604b510 ffe8f7ff 4601280f 4620d804 | ...F.....(.F.. F
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x099a0: 4010e8bd bf22f7f8 bd102000 bf1ef7f8 | ...@..".. ......
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x099b0: b8ecf7f9 b912f7f9 bf93f7f8 bf77f7f8 | ..............w.
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x099c0: bfa0f7f8 bff2f7f8 b840f7f9 47702000 | ..........@.. pG
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x099d0: 6e85b570 b16d4604 30ccf8d0 0383eb00 | p..n.Fm....0....
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x099e0: 20d4f8d3 429a6e03 6e40d103 460547a8 | ... .n.B..@n.G.F
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x099f0: 2500e000 6da14620 f82cf7fe 46066ee3 | ...% F.m..,..n.F
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: dump range 0x63e00..0x64280
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63e00: b9206020 f6404813 f79d0188 6820f9ed |  ` ..H@....... h
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63e10: ff56f7ff f0006820 f7fff865 2200febf | ..V. h..e......"
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63e20: 490f480e fd28f79d 490f480e f79d2200 | .H.I..(..H.I."..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63e30: f7fffd23 6820fecd bf00bd1c deaddead | #..... h........
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63e40: 00058c7c 00062ea8 00062968 00062eac | |.......h)......
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63e50: 0006beda 00040364 0006296c 0005795e | ....d...l)..^y..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63e60: 00001925 00040436 00000d1d 4d1ab570 | %...6.......p..M
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63e70: 2c00682c 20a4d12a f79d4621 6028fa0d | ,h.,*.. !F....(`
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63e80: d0262800 22a44621 fd48f79c 4080f44f | .(&.!F."..H.O..@
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63e90: 682e4621 fa00f79d 682860b0 b91e6886 | !F.h.....`(h.h..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63ea0: fe3af79c e011602e 4280f44f 46216146 | ..:..`..O..BFa!F
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63eb0: 463060c2 fd32f79c 4b08682a 601a4620 | .`0F..2.*h.K F.`
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63ec0: 4b073208 6919681b bd70611a 30fff04f | .2.K.h.i.ap.O..0
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63ed0: f04fbd70 bd7030ff 000629bc 000629c0 | p.O..0p..)...)..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63ee0: 00062ea8 41f0e92d f0004604 482af8eb | ....-..A.F....*H
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63ef0: f9a6f79c f79d4620 4b28fe94 4e294a28 | .... F....(K(J)N
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63f00: fbb318c3 4a28f3f2 60134620 fd91f7a5 | ......(J F.`....
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63f10: 737af44f f5004925 30077078 f0f3fbb0 | O.zs%I..xp.0....
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63f20: 60184b23 2b006a23 bfcc4b22 427ff06f | #K.`#j.+"K..o..B
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63f30: 32fff240 681a601a f0f0fbb2 60182220 | @..2.`.h.... ".`
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63f40: 46202300 fdbef7ff 491b2000 f9a9f7a1 | .# F..... .I....
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63f50: 60304607 4620b1f0 fe63f79d f7f0fbb7 | .F0`.. F..c.....
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63f60: 2f003f02 4d15dd16 22342100 f79c4628 | .?./...M.!4"(F..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63f70: 4b13fcd5 717af44f 46284379 60ab2201 | ...KO.zqyC(F.".`
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63f80: f79d606c b128f8d9 68314620 41f0e8bd | l`....(. F1h...A
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63f90: be51f79d 81f0e8bd 00001951 000f423f | ..Q.....Q...?B..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63fa0: 000f4240 00062a04 00058c98 00001ba5 | @B...*..........
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63fb0: 00058c90 00058c94 00040659 000629d0 | ........Y....)..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63fc0: 00001a8d 4b012278 4770601a 00058c98 | ....x".K.`pG....
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63fd0: 41f0e92d 461e4604 f7a54617 4620fc99 | -..A.F.F.F.... F
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63fe0: fcb9f7a5 46324639 46204605 fcbcf7a5 | ....9F2F.F F....
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x63ff0: 013ef640 46062200 f7a54620 4607fcc9 | @.>..".F F.....F
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64000: 4808b920 1101f240 f8eef79d 69bb2201 |  ..H@........".i
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64010: fa124620 431ef606 61be4629 41f0e8bd |  F.....C)F.a...A
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64020: bcc4f7a5 00040671 47f0e92d 460d4604 | ....q...-..G.F.F
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64030: f7a54616 2200fc90 46804629 f7a54620 | .F.....")F.F F..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64040: 2811fc93 d1034681 21df481d f8ccf79d | ...(.F...H.!....
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64050: 46204649 fcaaf7a5 f7a54620 f009fc71 | IF F.... F..q...
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64060: f1b90503 bf8c0f03 27002704 468100ed | .........'.'...F
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64070: f7a54620 b116fc67 f689fa5f b2c6e000 |  F..g..._.......
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64080: f6402200 4620013e fc82f7a5 46202200 | ."@.>. F....." F
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64090: 46134639 fc92f7a5 f00040e8 42b0001f | 9F.F.....@.....B
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x640a0: 221fd007 46394620 fa1640aa f7a5f305 | ..." F9F.@......
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x640b0: 4620fc85 e8bd4641 f7a547f0 bf00bc77 | .. FAF...G..w...
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x640c0: 00040671 41f0e92d f7a54604 4620fc21 | q...-..A.F..!. F
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x640d0: 010ef640 f7a52200 4605fc5b d0372800 | @...."..[..F.(7.
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x640e0: f8d06803 f0038000 091e03f0 4851b923 | .h..........#.QH
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x640f0: 112ff240 f878f79d f7a54620 2804fc33 | @./...x. F..3..(
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64100: d8054607 f408d124 f5b828e0 d11f3f40 | .F..$....(..@?..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64110: 49492000 f8c5f7a1 4b48b9d0 3e01e010 | . II......HK...>
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64120: 612e2f07 2f0cd908 6c2ad006 6240f402 | ./.a.../..*l..@b
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64130: 6f40f5b2 b118d000 5304f043 616b2001 | ..@o....C..S. ka
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64140: d1ec2e00 31e8f8d5 0310f023 31e8f8c5 | .......1#......1
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64150: f6404620 2200013e fc1af7a5 60284d38 |  F@.>.."....8M(`
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64160: 4834b920 1165f240 f83ef79d f7a54620 |  .4H@.e...>. F..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64170: 4b34fbf9 682b6018 f042681a 601a0202 | ..4K.`+h.hB....`
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64180: f8c32200 696221e0 dd052a27 21e0f8d3 | ."...!bi'*.....!
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64190: 0240f042 21e0f8c3 6629f644 200ae003 | B.@....!D.)f... 
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x641a0: fc9cf79d 682b3e0a 21e0f8d3 3f00f412 | .....>+h...!...?
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x641b0: 2e09d101 f8d3d1f3 f41331e0 d1043f00 | .........1...?..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x641c0: f240481c f79d118d 6ca3f80f 7f80f413 | .H@........l....
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x641d0: 2100d00d 4620460b 6200f44f fef8f7ff | ...!.F FO..b....
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x641e0: 46202100 021af640 f7ff460b 2100fef1 | .! F@....F.....!
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x641f0: 4620460b 6200f44f feeaf7ff 460b2100 | .F FO..b.....!.F
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64200: f6404620 f7ff023c 2100fee3 4620460b |  F@.<......!.F F
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64210: 0212f640 fedcf7ff 46202200 0112f640 | @........" F@...
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64220: ff02f7ff 681a682b 0204f042 e8bd601a | ....+h.hB....`..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64230: bf0081f0 00040671 0004067a 00017fff | ....q...z.......
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64240: 00062a08 00062a0c 43f8e92d 4b1d4698 | .*...*..-..C.F.K
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64250: 46054614 681a4699 0f02f012 481ad003 | .F.F.F.h.......H
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64260: f79c491a 4f1afbe5 2b07783b f8d9d90a | .I.....O;x.+....
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x64270: f0166000 d0220601 26004816 f79c4913 | .`...."..H.&.I..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: dump range 0x62a00..0x62c00
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62a00: 00000000 00000000 18002000 00000002 | ......... ......
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62a10: 00000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62a20: 00000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62a30: 00000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62a40: 00000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62a50: 00000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62a60: 00000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62a70: 00000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62a80: 00000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62a90: 00000001 00000020 00000001 00000000 | .... ...........
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62aa0: 00000700 ffffffff 00000011 0000002b | ............+...
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62ab0: 58680001 00000003 00000011 10a22b11 | ..hX.........+..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62ac0: 0000ffff 00000000 000014e4 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62ad0: 00000000 00004360 00000003 00000000 | ....`C..........
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62ae0: 00008a4d 00000000 00000000 00000000 | M...............
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62af0: 00096f60 00000000 00000000 00000000 | `o..............
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62b00: 00000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62b10: 00000000 00000000 0009d0c8 157d1f36 | ............6.}.
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62b20: 18002000 18000000 18001000 18002000 | . ........... ..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62b30: 18003000 18004000 00000000 00000000 | .0...@..........
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62b40: 00000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62b50: 00000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62b60: 00000000 00000002 00000005 00000800 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62b70: 00000812 0000083e 0000083c 0000081a | ....>...<.......
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62b80: 00000135 00000000 00000000 00000000 | 5...............
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62b90: 00000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62ba0: 00000000 00000000 00000000 18000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62bb0: 18001000 18002000 18003000 18004000 | ..... ...0...@..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62bc0: 18000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62bd0: 00000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62be0: 00000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x62bf0: 00000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: dump range 0x96f40..0x96fc0
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x96f40: 00000010 00000000 00000000 00000b05 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x96f50: 00000000 00000001 00000010 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x96f60: 00000000 00000000 00000000 00000000 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x96f70: 00004000 00000000 6e756f46 68632064 | .@......Found ch
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x96f80: 74207069 20657079 28204941 35317830 | ip type AI (0x15
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x96f90: 33343330 0d293036 3532310a 2e383838 | 034360)..125888.
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x96fa0: 20303030 70696843 72203a63 34207665 | 000 Chipc: rev 4
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x96fb0: 63202c33 20737061 38357830 30303836 | 3, caps 0x586800
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: dump range 0x9cc00..0x9d000
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cc00: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cc10: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cc20: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cc30: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cc40: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cc50: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cc60: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cc70: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cc80: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cc90: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cca0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ccb0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ccc0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ccd0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cce0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ccf0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cd00: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cd10: 5354414b 5354414b 00303030 8009cd7e | KATSKATS000.~...
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cd20: 00000000 0000000a 0009cd87 8009cd7e | ............~...
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cd30: 32623131 31306132 10a22b11 00000010 | 11b22a01.+......
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cd40: 0009cdce 0009cf80 00393931 8009cdae | ........199.....
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cd50: 000003df 0000000a 0009cdb7 8009cdae | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cd60: 63666530 30303039 0009cfe0 00000010 | 0efc9000........
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cd70: 0009cded 0009cfb0 00040327 0009cfdc | ........'.......
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cd80: 00000000 00000713 00000008 00040010 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cd90: 000629c0 0009af80 0000000a 0000185d | .)..........]...
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cda0: 00040010 00000047 00062910 00000a87 | ....G....)......
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cdb0: 37393331 392e3136 41203139 52455353 | 139761.991 ASSER
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cdc0: 6e692054 6c696620 6e682065 6d726164 | T in file hndarm
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cdd0: 6c20632e 20656e69 20373933 20617228 | .c line 397 (ra 
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cde0: 36303030 62633134 6166202c 30303020 | 000641cb, fa 000
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cdf0: 65666339 000a2930 203d2076 202c3334 | 9cfe0)..v = 43, 
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ce00: 6d5f6477 63697473 3d20736b 0a323320 | wd_msticks = 32.
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ce10: 53544100 5354414b 5354414b 5354414b | .ATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ce20: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ce30: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ce40: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ce50: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ce60: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ce70: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ce80: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ce90: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cea0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ceb0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cec0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ced0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cee0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cef0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cf00: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cf10: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cf20: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cf30: 0009cf31 0009cfa7 00000001 0000000a | 1...............
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cf40: 0009cf31 0009cfb7 00000001 0000000a | 1...............
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cf50: 0009cfab 0009cfb7 000449bc 0009cfa8 | .........I......
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cf60: 00000000 00000713 00000000 0003ffff | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cf70: 00062a98 00000001 18000000 00000002 | .*..............
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cf80: 00000002 00001202 200001df 200001ff | ........... ... 
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cf90: 00000047 00000000 000000fa 00000001 | G...............
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cfa0: 0000018d 00062a08 00000009 0009cfe0 | .....*..........
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cfb0: 00058c8c 00002f5c bbadbadd bbadbadd | ....\/..........
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cfc0: 00000000 0009cfd8 00001201 00001202 | ................
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cfd0: 00001202 200001ff 0009cfe0 00062a98 | ....... .....*..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cfe0: 18002000 00062a98 000a0000 000641cb | . ...*.......A..
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9cff0: 00062a98 0009d0a0 00000000 000a0000 | .*..............
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: dump range 0x9ff00..0xa0000
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ff00: bb7edd47 a1f2f4fc 9d3c7ab6 6d6f7273 | G.~......z<.srom
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ff10: 3d766572 62003131 6472616f 6d6f7273 | rev=11.boardsrom
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ff20: 3d766572 62003131 6472616f 65707974 | rev=11.boardtype
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ff30: 3078303d 00323535 72616f62 76657264 | =0x0552.boardrev
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ff40: 3178303d 00313031 72616f62 616c6664 | =0x1101.boardfla
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ff50: 303d7367 34303178 30303130 6f620031 | gs=0x10401001.bo
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ff60: 66647261 7367616c 78303d32 30303030 | ardflags2=0x0000
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ff70: 32303030 616f6200 6c666472 33736761 | 0002.boardflags3
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ff80: 3078303d 30303030 00303030 72616f62 | =0x00000000.boar
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ff90: 6d756e64 6d00303d 64616361 303d7264 | dnum=0.macaddr=0
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ffa0: 43313a30 3a33423a 313a3130 31303a32 | 0:1C:B3:01:12:01
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ffb0: 6f636300 583d6564 65720030 76657267 | .ccode=X0.regrev
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ffc0: 7600303d 69646e65 78303d64 34653431 | =0.vendid=0x14e4
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ffd0: 76656400 303d6469 61333478 74780030 | .devid=0x43a0.xt
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9ffe0: 72666c61 343d7165 30303030 32616100 | alfreq=40000.aa2
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.211: 0x9fff0: 00373d67 67356161 0000373d ffc70038 | g=7.aa5g=7..8...
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9702c]=0x31363739 (was 0x37343738) CHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x97030]=0x3139392e (was 0x3338372e) CHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cd48]=0x00393931 (was 0x00373833) CHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cd50]=0x000003df (was 0x0000030f) CHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cdb0]=0x37393331 (was 0x37383331) CHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cdb4]=0x392e3136 (was 0x372e3734) CHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cdb8]=0x41203139 (was 0x41203338) CHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.197: fine-TCM summary: 7 of 16384 cells CHANGED
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.197: fine-TCM CHANGED span 0x9702c..0x9cdb8 (23952 bytes)
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: final PCIE2 mailboxint=0x00000001 (D2H bits would be 0x10000+, FN0 bits 0x0100/0x0200)
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: pci_clear_master done; PCI_COMMAND=0x0002 BM=OFF
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: post-BM-clear MMIO guard mailboxint=0x00000001 (endpoint alive after BM-off)
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.188: released fw/nvram after BM-before-set_active + tiers + 3000ms dwell + BM-clear; returning -ENODEV
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+Apr 22 08:55:08 nixos kernel: brcmfmac: BCM4360 test.163: fw released; returning from setup (state still DOWN)
+Apr 22 09:00:53 nixos kernel: brcmfmac: BCM4360 test.161: remove() short-circuit — state=0 != UP; skipping MMIO cleanup
+Apr 22 09:00:53 nixos kernel: brcmfmac: BCM4360 test.161: remove() short-circuit complete
+Apr 22 09:00:55 nixos kernel: brcmfmac: BCM4360 test.188: module_init entry — extended post-release TCM sampling
+Apr 22 09:00:55 nixos kernel: brcmfmac: BCM4360 test.156: before brcmf_core_init()
+Apr 22 09:00:55 nixos kernel: brcmfmac: BCM4360 test.155: brcmf_core_init() entry
+Apr 22 09:00:55 nixos kernel: brcmfmac: BCM4360 test.155: before brcmf_sdio_register()
+Apr 22 09:00:55 nixos kernel: brcmfmac: BCM4360 test.155: after brcmf_sdio_register() err=0
+Apr 22 09:00:55 nixos kernel: brcmfmac: BCM4360 test.155: post-SDIO sync (before PCI)
+Apr 22 09:00:55 nixos kernel: brcmfmac: BCM4360 test.155: before brcmf_pcie_register()
+Apr 22 09:00:55 nixos kernel: brcmfmac: BCM4360 test.188: brcmf_pcie_register() entry
+Apr 22 09:00:55 nixos kernel: brcmfmac: BCM4360 test.188: before pci_register_driver
+Apr 22 09:00:56 nixos kernel: brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=00000000e7beda6e)
+Apr 22 09:00:56 nixos kernel: brcmfmac: BCM4360 test.158: probe entry flush done — proceeding
+Apr 22 09:00:56 nixos kernel: brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+Apr 22 09:00:56 nixos kernel: brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+Apr 22 09:00:56 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+Apr 22 09:00:57 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+Apr 22 09:00:57 nixos kernel: brcmfmac: BCM4360 test.158: before brcmf_chip_attach
+Apr 22 09:00:57 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffd53f81a00000
+Apr 22 09:00:57 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+Apr 22 09:00:57 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+Apr 22 09:00:57 nixos kernel: brcmfmac: brcmf_chip_cores_check: BCM4360 test.212: core[1 ] id=0x800:rev43  base=0x18000000 wrap=0x18100000
+Apr 22 09:00:57 nixos kernel: brcmfmac: brcmf_chip_cores_check: BCM4360 test.212: core[2 ] id=0x812:rev42  base=0x18001000 wrap=0x18101000
+Apr 22 09:00:57 nixos kernel: brcmfmac: brcmf_chip_cores_check: BCM4360 test.212: core[3 ] id=0x83e:rev2   base=0x18002000 wrap=0x18102000
+Apr 22 09:00:57 nixos kernel: brcmfmac: brcmf_chip_cores_check: BCM4360 test.212: core[4 ] id=0x83c:rev1   base=0x18003000 wrap=0x18103000
+Apr 22 09:00:57 nixos kernel: brcmfmac: brcmf_chip_cores_check: BCM4360 test.212: core[5 ] id=0x81a:rev17  base=0x18004000 wrap=0x18104000
+Apr 22 09:00:57 nixos kernel: brcmfmac: brcmf_chip_cores_check: BCM4360 test.212: core[6 ] id=0x135:rev0   base=0x00000000 wrap=0x18108000
+Apr 22 09:00:57 nixos kernel: brcmfmac: brcmf_chip_cores_check: BCM4360 test.212: host-side enumerated 6 cores total
+Apr 22 09:00:57 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+Apr 22 09:00:57 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+Apr 22 09:00:57 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+Apr 22 09:00:57 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)
+Apr 22 09:00:57 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0
+Apr 22 09:00:57 nixos kernel: brcmfmac: BCM4360 test.188: post-145 ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 09:00:57 nixos kernel: brcmfmac: brcmf_chip_recognition: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+Apr 22 09:00:57 nixos kernel: brcmfmac: brcmf_chip_recognition: BCM4360 test.125: after reset, before get_raminfo
+Apr 22 09:00:57 nixos kernel: brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+Apr 22 09:00:57 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+Apr 22 09:00:58 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+Apr 22 09:00:58 nixos kernel: brcmfmac: BCM4360 test.158: about to pci_clear_master (config-space write)
+Apr 22 09:00:58 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.158: BusMaster cleared after chip_attach
+Apr 22 09:00:58 nixos kernel: brcmfmac: BCM4360 test.158: about to read LnkCtl before ASPM disable
+Apr 22 09:00:59 nixos kernel: brcmfmac: BCM4360 test.158: LnkCtl read before=0x0140 — disabling ASPM
+Apr 22 09:00:59 nixos kernel: brcmfmac: BCM4360 test.158: pci_disable_link_state returned — reading LnkCtl
+Apr 22 09:00:59 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.158: ASPM disabled; LnkCtl before=0x0140 after=0x0140 ASPM-bits-after=0x0
+Apr 22 09:00:59 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.188: root port 0000:00:1c.2 LnkCtl before=0x0040 ASPM=0x0 CLKREQ=off — disabling L0s/L1/CLKPM
+Apr 22 09:01:00 nixos kernel: brcmfmac: BCM4360 test.188: root-port pci_disable_link_state returned — reading LnkCtl
+Apr 22 09:01:00 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.188: root port 0000:00:1c.2 LnkCtl after=0x0040 ASPM=0x0 CLKREQ=off
+Apr 22 09:01:01 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.159: before PCIE2 core/reginfo setup
+Apr 22 09:01:01 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.159: reginfo selected (pcie2 rev=1)
+Apr 22 09:01:01 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.159: pcie_bus_dev allocated
+Apr 22 09:01:02 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.159: settings allocated (BCM4360 dummy path)
+Apr 22 09:01:02 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.159: bus allocated
+Apr 22 09:01:02 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.159: msgbuf allocated
+Apr 22 09:01:02 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.159: struct wiring done — before pci_pme_capable
+Apr 22 09:01:03 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.159: after pci_pme_capable wowl=1
+Apr 22 09:01:03 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.160: drvdata set — before brcmf_alloc
+Apr 22 09:01:03 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.160: brcmf_alloc complete — wiphy allocated
+Apr 22 09:01:04 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.160: OTP read bypassed — OTP not needed
+Apr 22 09:01:04 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.160: before prepare_fw_request
+Apr 22 09:01:04 nixos kernel: brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4360-pcie for chip BCM4360/3
+Apr 22 09:01:04 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.160: firmware request prepared
+Apr 22 09:01:05 nixos kernel: brcmfmac: BCM4360 test.161: calling brcmf_fw_get_firmwares — async callback expected
+Apr 22 09:01:05 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.161: brcmf_fw_get_firmwares returned 0 (async/success; callback will fire)
+Apr 22 09:01:05 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.clm_blob failed with error -2
+Apr 22 09:01:05 nixos kernel: brcmfmac 0000:03:00.0: Direct firmware load for brcm/brcmfmac4360-pcie.txcap_blob failed with error -2
+Apr 22 09:01:05 nixos kernel: brcmfmac: BCM4360 test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0
+Apr 22 09:01:05 nixos kernel: brcmfmac: BCM4360 test.188: setup-entry ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 09:01:05 nixos kernel: brcmfmac: BCM4360 test.188: pci_register_driver returned ret=0
+Apr 22 09:01:05 nixos kernel: brcmfmac: BCM4360 test.155: after brcmf_pcie_register() err=0
+Apr 22 09:01:05 nixos kernel: brcmfmac: BCM4360 test.188: pre-attach ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 09:01:05 nixos kernel: brcmfmac: BCM4360 test.128: before brcmf_pcie_attach
+Apr 22 09:01:05 nixos kernel: brcmfmac: BCM4360 test.128: brcmf_pcie_attach ENTRY
+Apr 22 09:01:05 nixos kernel: brcmfmac: BCM4360 test.194: PCIe2 CLK_CONTROL probe = 0x00000182
+Apr 22 09:01:05 nixos kernel: brcmfmac: BCM4360 test.194: SBMBX write done
+Apr 22 09:01:05 nixos kernel: brcmfmac: BCM4360 test.194: PMCR_REFUP 0x0005185f -> 0x0005185f
+Apr 22 09:01:05 nixos kernel: brcmfmac: BCM4360 test.128: after brcmf_pcie_attach
+Apr 22 09:01:05 nixos kernel: brcmfmac: BCM4360 test.188: post-attach ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 09:01:05 nixos kernel: brcmfmac: BCM4360 test.155: post-PCI sync (skipping USB)
+Apr 22 09:01:05 nixos kernel: brcmfmac: BCM4360 test.156: after brcmf_core_init() err=0
+Apr 22 09:01:06 nixos kernel: brcmfmac: BCM4360 test.134: post-attach before fw-ptr-extract
+Apr 22 09:01:06 nixos kernel: brcmfmac: BCM4360 test.134: after kfree(fwreq)
+Apr 22 09:01:06 nixos kernel: brcmfmac: BCM4360 test.130: before brcmf_chip_get_raminfo
+Apr 22 09:01:06 nixos kernel: net_ratelimit: 4 callbacks suppressed
+Apr 22 09:01:06 nixos kernel: brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+Apr 22 09:01:06 nixos kernel: brcmfmac: brcmf_chip_get_raminfo: BCM4360 test.125: get_raminfo returning 0
+Apr 22 09:01:06 nixos kernel: brcmfmac: BCM4360 test.130: after brcmf_chip_get_raminfo
+Apr 22 09:01:06 nixos kernel: brcmfmac: BCM4360 test.188: post-raminfo ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 09:01:07 nixos kernel: brcmfmac: BCM4360 test.130: after brcmf_pcie_adjust_ramsize
+Apr 22 09:01:07 nixos kernel: brcmfmac: BCM4360 test.188: pre-download ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 09:01:07 nixos kernel: brcmfmac: BCM4360 test.163: before brcmf_pcie_download_fw_nvram (442KB BAR2 write)
+Apr 22 09:01:07 nixos kernel: brcmfmac: BCM4360 test.142: enter_download_state — confirming ARM CR4 reset state
+Apr 22 09:01:07 nixos kernel: brcmfmac: BCM4360 test.142: ARM CR4 state RESET_CTL=0x00000000 IN_RESET=NO/BAD IOCTL=0x0001 CPUHALT=NO FGC=NO CLK=YES
+Apr 22 09:01:08 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: rambase=0x0 ramsize=0xa0000 srsize=0x0 fw_size=442233 tcm=ffffd53f81a00000
+Apr 22 09:01:08 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.138: pre-BAR2-ioread32 (tcm=ffffd53f81a00000)
+Apr 22 09:01:08 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.138: post-BAR2-ioread32 = 0xb80ef000 (real value — BAR2 accessible)
+Apr 22 09:01:08 nixos kernel: brcmfmac: BCM4360 test.188: pre-halt ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 09:01:08 nixos kernel: brcmfmac: BCM4360 test.188: pre-halt D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:08 nixos kernel: brcmfmac: BCM4360 test.188: re-halting ARM CR4 via brcmf_chip_set_passive
+Apr 22 09:01:08 nixos kernel: brcmfmac: BCM4360 test.188: post-halt ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 09:01:08 nixos kernel: brcmfmac: BCM4360 test.188: starting chunked fw write, total_words=110558 (442233 bytes) tail=1 wbase=ffffd53f81a00000
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 4096 words (16384 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 8192 words (32768 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 12288 words (49152 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 16384 words (65536 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 20480 words (81920 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 24576 words (98304 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 28672 words (114688 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 32768 words (131072 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 36864 words (147456 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 40960 words (163840 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 45056 words (180224 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 49152 words (196608 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 53248 words (212992 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 57344 words (229376 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 61440 words (245760 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 65536 words (262144 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 69632 words (278528 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 73728 words (294912 bytes)
+Apr 22 09:01:09 nixos kernel: brcmfmac: BCM4360 test.188: wrote 77824 words (311296 bytes)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wrote 81920 words (327680 bytes)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wrote 86016 words (344064 bytes)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wrote 90112 words (360448 bytes)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wrote 94208 words (376832 bytes)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wrote 98304 words (393216 bytes)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wrote 102400 words (409600 bytes)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wrote 106496 words (425984 bytes)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: all 110558 words written, before tail (tail=1)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail 1 bytes written at offset 442232
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw write complete (442233 bytes)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: before post-fw msleep(100)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: after post-fw msleep(100)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: host resetintr=0xb80ef000 before NVRAM
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: pre-NVRAM write address=0x9ff1c len=228 naddr=ffffd53f81a9ff1c
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: post-NVRAM write done (228 bytes)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: NVRAM marker at ramsize-4 = 0xffc70038 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: TCM[0x0000]=0xb80ef000 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: TCM[0x0004]=0xb82ef000 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: TCM[0x0008]=0xb839f000 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: TCM[0x000c]=0xb844f000 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: TCM[0x0010]=0xb852f000 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: TCM[0x0014]=0xb860f000 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: TCM[0x0018]=0xb86ef000 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: TCM[0x001c]=0xb87cf000 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x00000]=0xb80ef000 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x04000]=0x2c004798 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x08000]=0x44460902 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x0c000]=0x46984616 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x10000]=0x46324639 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x14000]=0x459868e3 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x18000]=0x42ab317c (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x1c000]=0x480ffd17 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x20000]=0xa84af8f3 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x24000]=0x2b027973 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x28000]=0x1129f640 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x2c000]=0xf0084643 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x30000]=0xf996f7fe (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x34000]=0xf0002800 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x38000]=0x2bff2269 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x3c000]=0xb004f8d4 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x40000]=0x34333231 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x44000]=0x00040160 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x48000]=0x0a776f6c (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x4c000]=0x000a7825 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x50000]=0x0004eeb8 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x54000]=0x203a6425 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x58000]=0x5f6f7370 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x5c000]=0x0034005b (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x60000]=0x06000972 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x64000]=0x4808b920 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x68000]=0x25003088 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x6c000]=0xfbc8f7c9 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x70000]=0x80c900e2 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x74000]=0x20e84158 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x78000]=0xcc9ce141 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x7c000]=0x401aa2a0 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x80000]=0x981353f8 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x84000]=0x8e7fc98d (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x88000]=0x77d73bbb (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x8c000]=0x35c4fcc3 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x90000]=0xa42709e1 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x94000]=0x464825ed (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x98000]=0x00000000 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: wide-TCM[0x9c000]=0x5354414b (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.197: fine-TCM pre-release snapshot complete (16384 cells, base=0x90000 stride=4)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail-TCM[0x9ffc0]=0x7600303d (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail-TCM[0x9ffc4]=0x69646e65 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail-TCM[0x9ffc8]=0x78303d64 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail-TCM[0x9ffcc]=0x34653431 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail-TCM[0x9ffd0]=0x76656400 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail-TCM[0x9ffd4]=0x303d6469 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail-TCM[0x9ffd8]=0x61333478 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail-TCM[0x9ffdc]=0x74780030 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail-TCM[0x9ffe0]=0x72666c61 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail-TCM[0x9ffe4]=0x343d7165 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail-TCM[0x9ffe8]=0x30303030 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail-TCM[0x9ffec]=0x32616100 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail-TCM[0x9fff0]=0x00373d67 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail-TCM[0x9fff4]=0x67356161 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail-TCM[0x9fff8]=0x0000373d (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: tail-TCM[0x9fffc]=0xffc70038 (pre-release snapshot)
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x00000]=0xb80ef000 (TCM) vs 0xb80ef000 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x006c8]=0x42abe7f7 (TCM) vs 0x42abe7f7 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x00d8c]=0xfe50f7ff (TCM) vs 0xfe50f7ff (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x01454]=0xf8c760bd (TCM) vs 0xf8c760bd (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x01b18]=0x42283d01 (TCM) vs 0x42283d01 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x021e0]=0xf0136833 (TCM) vs 0xf0136833 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x028a4]=0x0a000100 (TCM) vs 0x0a000100 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x02f6c]=0x0e0b4770 (TCM) vs 0x0e0b4770 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x03630]=0x00041b8a (TCM) vs 0x00041b8a (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x03cf8]=0x46216826 (TCM) vs 0x46216826 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x043bc]=0x0004255d (TCM) vs 0x0004255d (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x04a84]=0xff5ef7ff (TCM) vs 0xff5ef7ff (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x05148]=0xe0052000 (TCM) vs 0xe0052000 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x05810]=0xffb2f7ff (TCM) vs 0xffb2f7ff (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x05ed4]=0x20b7f880 (TCM) vs 0x20b7f880 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x0659c]=0x83f8e8bd (TCM) vs 0x83f8e8bd (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x06c60]=0x4682f889 (TCM) vs 0x4682f889 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x07328]=0xf640480f (TCM) vs 0xf640480f (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x079ec]=0xbf0081f0 (TCM) vs 0xbf0081f0 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x080b4]=0x0904ea0b (TCM) vs 0x0904ea0b (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x08778]=0x4623bdf8 (TCM) vs 0x4623bdf8 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x08e40]=0x0808ea89 (TCM) vs 0x0808ea89 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x09504]=0xea4f0a04 (TCM) vs 0xea4f0a04 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x09bcc]=0x46232264 (TCM) vs 0x46232264 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x0a290]=0xe7d6681b (TCM) vs 0xe7d6681b (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x0a958]=0x4627f86b (TCM) vs 0x4627f86b (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x0b01c]=0x46980f02 (TCM) vs 0x46980f02 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x0b6e4]=0x2b80e7f2 (TCM) vs 0x2b80e7f2 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x0bda8]=0xd0142b40 (TCM) vs 0xd0142b40 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x0c470]=0xf8d29401 (TCM) vs 0xf8d29401 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x0cb34]=0x90019300 (TCM) vs 0x90019300 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x0d1fc]=0xf7f3fba5 (TCM) vs 0xf7f3fba5 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x0d8c0]=0xf007da03 (TCM) vs 0xf007da03 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x0df88]=0xbf0083f8 (TCM) vs 0xbf0083f8 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x0e64c]=0xd13f0f00 (TCM) vs 0xd13f0f00 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x0ed14]=0x786a782b (TCM) vs 0x786a782b (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x0f3d8]=0xf7ff9008 (TCM) vs 0xf7ff9008 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x0faa0]=0x70fcf504 (TCM) vs 0x70fcf504 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x10164]=0xbf380001 (TCM) vs 0xbf380001 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x1082c]=0x2101ea43 (TCM) vs 0x2101ea43 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x10ef0]=0x796130d8 (TCM) vs 0x796130d8 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x115b8]=0x68394622 (TCM) vs 0x68394622 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x11c7c]=0x4002f888 (TCM) vs 0x4002f888 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x12344]=0x00058f44 (TCM) vs 0x00058f44 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x12a08]=0xffaff7ed (TCM) vs 0xffaff7ed (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x130d0]=0xff92f7ff (TCM) vs 0xff92f7ff (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x13794]=0x32016c99 (TCM) vs 0x32016c99 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x13e5c]=0x479830b4 (TCM) vs 0x479830b4 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x14520]=0xf8d0d208 (TCM) vs 0xf8d0d208 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x14be8]=0xbd10bf23 (TCM) vs 0xbd10bf23 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x152ac]=0x462a4641 (TCM) vs 0x462a4641 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x15974]=0x4a3a68e1 (TCM) vs 0x4a3a68e1 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x16038]=0x00058f44 (TCM) vs 0x00058f44 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x16700]=0x480ad004 (TCM) vs 0x480ad004 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x16dc4]=0x0707ea46 (TCM) vs 0x0707ea46 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x1748c]=0x3838f8b4 (TCM) vs 0x3838f8b4 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x17b50]=0xaa029300 (TCM) vs 0xaa029300 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x18218]=0xf7e82204 (TCM) vs 0xf7e82204 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x188dc]=0x482fd004 (TCM) vs 0x482fd004 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x18fa4]=0xf920f7e8 (TCM) vs 0xf920f7e8 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x19668]=0x2504bf14 (TCM) vs 0x2504bf14 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x19d30]=0x4620fe1c (TCM) vs 0x4620fe1c (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x1a3f4]=0x6007ea40 (TCM) vs 0x6007ea40 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x1aabc]=0x0f02f013 (TCM) vs 0x0f02f013 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x1b180]=0x23020900 (TCM) vs 0x23020900 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x1b848]=0x3424f8d5 (TCM) vs 0x3424f8d5 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x1bf0c]=0x681b4b46 (TCM) vs 0x681b4b46 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x1c5d4]=0x4442691a (TCM) vs 0x4442691a (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x1cc98]=0xf0037be3 (TCM) vs 0xf0037be3 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x1d360]=0xf0064621 (TCM) vs 0xf0064621 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x1da24]=0x0004df61 (TCM) vs 0x0004df61 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x1e0ec]=0xd204429a (TCM) vs 0xd204429a (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x1e7b0]=0x681b4b22 (TCM) vs 0x681b4b22 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x1ee78]=0xbf0087f0 (TCM) vs 0xbf0087f0 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x1f53c]=0xf0032701 (TCM) vs 0xf0032701 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x1fc04]=0xf7e1714a (TCM) vs 0xf7e1714a (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x202c8]=0xa9424628 (TCM) vs 0xa9424628 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x20990]=0x48048223 (TCM) vs 0x48048223 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x21054]=0xbf17f001 (TCM) vs 0xbf17f001 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2171c]=0xf7f2115c (TCM) vs 0xf7f2115c (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x21de0]=0x4620fa03 (TCM) vs 0x4620fa03 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x224a8]=0x4604237d (TCM) vs 0x4604237d (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x22b6c]=0x0103f021 (TCM) vs 0x0103f021 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x23234]=0x3124f8ca (TCM) vs 0x3124f8ca (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x238f8]=0x1a89f103 (TCM) vs 0x1a89f103 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x23fc0]=0xf7f0da03 (TCM) vs 0xf7f0da03 (fw->data) MATCH
+Apr 22 09:01:10 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x24684]=0x0f04f013 (TCM) vs 0x0f04f013 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x24d4c]=0xb9304601 (TCM) vs 0xb9304601 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x25410]=0x22f04620 (TCM) vs 0x22f04620 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x25ad8]=0xfa4ff00f (TCM) vs 0xfa4ff00f (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2619c]=0xfeedf00e (TCM) vs 0xfeedf00e (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x26864]=0xf00e47f0 (TCM) vs 0xf00e47f0 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x26f28]=0x6813f981 (TCM) vs 0x6813f981 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x275f0]=0x0f02f013 (TCM) vs 0x0f02f013 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x27cb4]=0x7136f240 (TCM) vs 0x7136f240 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2837c]=0xeb0af906 (TCM) vs 0xeb0af906 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x28a40]=0xf047b2bf (TCM) vs 0xf047b2bf (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x29108]=0x0004d31e (TCM) vs 0x0004d31e (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x297cc]=0x46136200 (TCM) vs 0x46136200 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x29e94]=0x8ff0e8bd (TCM) vs 0x8ff0e8bd (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2a558]=0x2201210c (TCM) vs 0x2201210c (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2ac20]=0x95019700 (TCM) vs 0x95019700 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2b2e4]=0x345ff885 (TCM) vs 0x345ff885 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2b9ac]=0xf3c02500 (TCM) vs 0xf3c02500 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2c070]=0xf2404620 (TCM) vs 0xf2404620 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2c738]=0xfc1ff008 (TCM) vs 0xfc1ff008 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2cdfc]=0xf8b561cd (TCM) vs 0xf8b561cd (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2d4c4]=0xab09fc05 (TCM) vs 0xab09fc05 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2db88]=0x480e69e3 (TCM) vs 0x480e69e3 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2e250]=0xba96f7fe (TCM) vs 0xba96f7fe (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2e914]=0x036ef10d (TCM) vs 0x036ef10d (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2efdc]=0x0201f108 (TCM) vs 0x0201f108 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2f6a0]=0xf0044620 (TCM) vs 0xf0044620 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x2fd68]=0xfa3ef7d1 (TCM) vs 0xfa3ef7d1 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3042c]=0xaa662100 (TCM) vs 0xaa662100 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x30af4]=0xdc032802 (TCM) vs 0xdc032802 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x311b8]=0xbc3af7cf (TCM) vs 0xbc3af7cf (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x31880]=0xf003a0a8 (TCM) vs 0xf003a0a8 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x31f44]=0xf7f7235f (TCM) vs 0xf7f7235f (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3260c]=0x00051aa3 (TCM) vs 0x00051aa3 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x32cd0]=0x460271ca (TCM) vs 0x460271ca (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x33398]=0x165cf895 (TCM) vs 0x165cf895 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x33a5c]=0x46132172 (TCM) vs 0x46132172 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x34124]=0xfd5af7f8 (TCM) vs 0xfd5af7f8 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x347e8]=0x050ff005 (TCM) vs 0x050ff005 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x34eb0]=0x3006f8bd (TCM) vs 0x3006f8bd (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x35574]=0xf10b0a08 (TCM) vs 0xf10b0a08 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x35c3c]=0xf04ff94b (TCM) vs 0xf04ff94b (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x36300]=0x2b804770 (TCM) vs 0x2b804770 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x369c8]=0x2b083301 (TCM) vs 0x2b083301 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3708c]=0x0904f109 (TCM) vs 0x0904f109 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x37754]=0x4640f965 (TCM) vs 0x4640f965 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x37e18]=0x7f1b69e3 (TCM) vs 0x7f1b69e3 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x384e0]=0x8281f040 (TCM) vs 0x8281f040 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x38ba4]=0x468a4605 (TCM) vs 0x468a4605 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3926c]=0x213ef240 (TCM) vs 0x213ef240 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x39930]=0x00056ea3 (TCM) vs 0x00056ea3 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x39ff8]=0xb1484603 (TCM) vs 0xb1484603 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3a6bc]=0xf7c64935 (TCM) vs 0xf7c64935 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3ad84]=0x6a63dd1d (TCM) vs 0x6a63dd1d (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3b448]=0xf8d5f95d (TCM) vs 0xf8d5f95d (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3bb10]=0xe00dfe71 (TCM) vs 0xe00dfe71 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3c1d4]=0xf8a4bfa8 (TCM) vs 0xf8a4bfa8 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3c89c]=0xbdf8d1f0 (TCM) vs 0xbdf8d1f0 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3cf60]=0x298cf8c4 (TCM) vs 0x298cf8c4 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3d628]=0x3e1c4866 (TCM) vs 0x3e1c4866 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3dcec]=0xf7d6da03 (TCM) vs 0xf7d6da03 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3e3b4]=0x4b37d032 (TCM) vs 0x4b37d032 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3ea78]=0xf7d54628 (TCM) vs 0xf7d54628 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3f140]=0x00c200a9 (TCM) vs 0x00c200a9 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3f804]=0x0f02f013 (TCM) vs 0x0f02f013 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x3fecc]=0x4d3bb537 (TCM) vs 0x4d3bb537 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x40590]=0x6664202c (TCM) vs 0x6664202c (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x40c58]=0x69766564 (TCM) vs 0x69766564 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x4131c]=0x74756f20 (TCM) vs 0x74756f20 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x419e4]=0x42005449 (TCM) vs 0x42005449 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x420a8]=0x725f6d63 (TCM) vs 0x725f6d63 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x42770]=0x00656c62 (TCM) vs 0x00656c62 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x42e34]=0x25000a75 (TCM) vs 0x25000a75 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x434fc]=0xa2677172 (TCM) vs 0xa2677172 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x43bc0]=0x10101010 (TCM) vs 0x10101010 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x44288]=0x78257830 (TCM) vs 0x78257830 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x4494c]=0x20617461 (TCM) vs 0x20617461 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x45014]=0x273a1d1d (TCM) vs 0x273a1d1d (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x456d8]=0x84c61120 (TCM) vs 0x84c61120 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x45da0]=0x55ab2a66 (TCM) vs 0x55ab2a66 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x46464]=0xc8c8c8c8 (TCM) vs 0xc8c8c8c8 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x46b2c]=0xb8d36bb8 (TCM) vs 0xb8d36bb8 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x471f0]=0xb3b3b3b3 (TCM) vs 0xb3b3b3b3 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x478b8]=0x94de724b (TCM) vs 0x94de724b (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x47f7c]=0x65766173 (TCM) vs 0x65766173 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x48644]=0x6f645f65 (TCM) vs 0x6f645f65 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x48d08]=0x444d0020 (TCM) vs 0x444d0020 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x493d0]=0x68637461 (TCM) vs 0x68637461 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x49a94]=0x7075656b (TCM) vs 0x7075656b (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x4a15c]=0x6d63695f (TCM) vs 0x6d63695f (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x4a820]=0x65656b5f (TCM) vs 0x65656b5f (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x4aee8]=0x5f636c77 (TCM) vs 0x5f636c77 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x4b5ac]=0x6f634e20 (TCM) vs 0x6f634e20 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x4bc74]=0x3230253a (TCM) vs 0x3230253a (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x4c338]=0x6e207369 (TCM) vs 0x6e207369 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x4ca00]=0x66666666 (TCM) vs 0x66666666 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x4d0c4]=0x53454100 (TCM) vs 0x53454100 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x4d78c]=0x33302520 (TCM) vs 0x33302520 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x4de50]=0x5f626d75 (TCM) vs 0x5f626d75 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x4e518]=0x5f6c676e (TCM) vs 0x5f6c676e (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x4ebdc]=0x524c5700 (TCM) vs 0x524c5700 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x4f2a4]=0x47524154 (TCM) vs 0x47524154 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x4f968]=0x4d4f435f (TCM) vs 0x4d4f435f (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x50030]=0x0004ef80 (TCM) vs 0x0004ef80 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x506f4]=0x64206c6c (TCM) vs 0x64206c6c (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x50dbc]=0x6574203a (TCM) vs 0x6574203a (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x51480]=0x3a64256c (TCM) vs 0x3a64256c (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x51b48]=0x6e666165 (TCM) vs 0x6e666165 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x5220c]=0x616f722f (TCM) vs 0x616f722f (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x528d4]=0x78207a48 (TCM) vs 0x78207a48 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x52f98]=0x656c635f (TCM) vs 0x656c635f (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x53660]=0x24222523 (TCM) vs 0x24222523 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x53d24]=0x53207465 (TCM) vs 0x53207465 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x543ec]=0x64207369 (TCM) vs 0x64207369 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x54ab0]=0x203a7325 (TCM) vs 0x203a7325 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x55178]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x5583c]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x55f04]=0x00a50319 (TCM) vs 0x00a50319 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x565c8]=0xffd0ffd0 (TCM) vs 0xffd0ffd0 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x56c90]=0x6b617720 (TCM) vs 0x6b617720 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x57354]=0x20732520 (TCM) vs 0x20732520 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x57a1c]=0x702f6576 (TCM) vs 0x702f6576 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x580e0]=0x616c6620 (TCM) vs 0x616c6620 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x587a8]=0x44495353 (TCM) vs 0x44495353 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x58e6c]=0x00000001 (TCM) vs 0x00000001 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x59534]=0x0010f32f (TCM) vs 0x0010f32f (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x59bf8]=0x00a70f00 (TCM) vs 0x00a70f00 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x5a2c0]=0x00cb8e39 (TCM) vs 0x00cb8e39 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x5a984]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x5b04c]=0x3400a500 (TCM) vs 0x3400a500 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x5b710]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x5bdd8]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x5c49c]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x5cb64]=0x00588cda (TCM) vs 0x00588cda (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x5d228]=0x00909091 (TCM) vs 0x00909091 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x5d8f0]=0x0039a707 (TCM) vs 0x0039a707 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x5dfb4]=0x00588cda (TCM) vs 0x00588cda (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x5e67c]=0x00603018 (TCM) vs 0x00603018 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x5ed40]=0x008a5392 (TCM) vs 0x008a5392 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x5f408]=0x0084d7df (TCM) vs 0x0084d7df (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x5facc]=0x0080722d (TCM) vs 0x0080722d (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x60194]=0xffffff05 (TCM) vs 0xffffff05 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x60858]=0x350404a4 (TCM) vs 0x350404a4 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x60f20]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x615e4]=0x1d6f000b (TCM) vs 0x1d6f000b (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x61cac]=0x00000cef (TCM) vs 0x00000cef (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x62370]=0xefff002f (TCM) vs 0xefff002f (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x62a38]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x630fc]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x637c4]=0x00000000 (TCM) vs 0x00000000 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x63e88]=0xfd48f79c (TCM) vs 0xfd48f79c (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x64550]=0x00040c27 (TCM) vs 0x00040c27 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x64c14]=0x4810462a (TCM) vs 0x4810462a (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x652dc]=0xd0060f01 (TCM) vs 0xd0060f01 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x659a0]=0x69a31aed (TCM) vs 0x69a31aed (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x66068]=0xf013681b (TCM) vs 0xf013681b (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x6672c]=0xf79a7240 (TCM) vs 0xf79a7240 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x66df4]=0x46204606 (TCM) vs 0x46204606 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x674b8]=0x00058f44 (TCM) vs 0x00058f44 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x67b80]=0x66036583 (TCM) vs 0x66036583 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x68244]=0x46534a75 (TCM) vs 0x46534a75 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x6890c]=0x484df891 (TCM) vs 0x484df891 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x68fd0]=0xf884005b (TCM) vs 0xf884005b (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x69698]=0x4b393601 (TCM) vs 0x4b393601 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x69d5c]=0x4a884989 (TCM) vs 0x4a884989 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x6a424]=0xf7aad005 (TCM) vs 0xf7aad005 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x6aae8]=0xf64ad906 (TCM) vs 0xf64ad906 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x6b1b0]=0x46200dc0 (TCM) vs 0x46200dc0 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x6b874]=0xfe1cf7d2 (TCM) vs 0xfe1cf7d2 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: fw-sample[0x6bf3c]=0x61633839 (TCM) vs 0x61633839 (fw->data) MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: CC-clk_ctl_st=0x00050040 (pre-release snapshot)
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: CC-pmucontrol=0x01770181 (pre-release snapshot)
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: CC-pmustatus=0x0000002a (pre-release snapshot)
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: CC-res_state=0x0000017b (pre-release snapshot)
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: CC-pmutimer=0x0b4a50f3 (pre-release snapshot)
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: CC-min_res_mask=0x0000013b (pre-release snapshot)
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: CC-max_res_mask=0x0000017f (pre-release snapshot)
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: CC-pmuwatchdog=0x00000000 (pre-release snapshot)
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: INTERNAL_MEM core not found — resetcore skipped (expected on BCM4360)
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: pre-set-active ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: pre-set-active D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: pre-BM PCI_COMMAND=0x0002 BM=OFF MMIO guard mailboxint=0x00000000
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: pci_set_master done; PCI_COMMAND=0x0006 BM=ON (before set_active)
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: post-BM-on MMIO guard mailboxint=0x00000000 (endpoint still responsive)
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: calling brcmf_chip_set_active resetintr=0xb80ef000 (BusMaster ENABLED — DMA-stall discriminator)
+Apr 22 09:01:11 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.65 activate: rstvec=0xb80ef000 to TCM[0]; CMD=0x0006 (BusMaster preserved)
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: brcmf_chip_set_active returned true
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-20ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-20ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-100ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-100ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier-1 fine-grain ~100-150 ms (10 × 5 ms)
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x06c60]=0x4682f889 vs 0x4682f889 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x0d8c0]=0xf007da03 vs 0xf007da03 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x14520]=0xf8d0d208 vs 0xf8d0d208 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x1b180]=0x23020900 vs 0x23020900 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x21de0]=0x4620fa03 vs 0x4620fa03 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x28a40]=0xf047b2bf vs 0xf047b2bf MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x2f6a0]=0xf0044620 vs 0xf0044620 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x36300]=0x2b804770 vs 0x2b804770 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x3cf60]=0x298cf8c4 vs 0x298cf8c4 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x43bc0]=0x10101010 vs 0x10101010 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x4a820]=0x65656b5f vs 0x65656b5f MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x51480]=0x3a64256c vs 0x3a64256c MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x580e0]=0x616c6620 vs 0x616c6620 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x5ed40]=0x008a5392 vs 0x008a5392 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+105ms fw-sample[0x659a0]=0x69a31aed vs 0x69a31aed MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x06c60]=0x4682f889 vs 0x4682f889 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x0d8c0]=0xf007da03 vs 0xf007da03 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x14520]=0xf8d0d208 vs 0xf8d0d208 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x1b180]=0x23020900 vs 0x23020900 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x21de0]=0x4620fa03 vs 0x4620fa03 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x28a40]=0xf047b2bf vs 0xf047b2bf MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x2f6a0]=0xf0044620 vs 0xf0044620 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x36300]=0x2b804770 vs 0x2b804770 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x3cf60]=0x298cf8c4 vs 0x298cf8c4 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x43bc0]=0x10101010 vs 0x10101010 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x4a820]=0x65656b5f vs 0x65656b5f MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x51480]=0x3a64256c vs 0x3a64256c MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x580e0]=0x616c6620 vs 0x616c6620 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x5ed40]=0x008a5392 vs 0x008a5392 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+115ms fw-sample[0x659a0]=0x69a31aed vs 0x69a31aed MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x06c60]=0x4682f889 vs 0x4682f889 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x0d8c0]=0xf007da03 vs 0xf007da03 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x14520]=0xf8d0d208 vs 0xf8d0d208 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x1b180]=0x23020900 vs 0x23020900 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x21de0]=0x4620fa03 vs 0x4620fa03 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x28a40]=0xf047b2bf vs 0xf047b2bf MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x2f6a0]=0xf0044620 vs 0xf0044620 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x36300]=0x2b804770 vs 0x2b804770 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x3cf60]=0x298cf8c4 vs 0x298cf8c4 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x43bc0]=0x10101010 vs 0x10101010 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x4a820]=0x65656b5f vs 0x65656b5f MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x51480]=0x3a64256c vs 0x3a64256c MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x580e0]=0x616c6620 vs 0x616c6620 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x5ed40]=0x008a5392 vs 0x008a5392 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+125ms fw-sample[0x659a0]=0x69a31aed vs 0x69a31aed MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x06c60]=0x4682f889 vs 0x4682f889 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x0d8c0]=0xf007da03 vs 0xf007da03 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x14520]=0xf8d0d208 vs 0xf8d0d208 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x1b180]=0x23020900 vs 0x23020900 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x21de0]=0x4620fa03 vs 0x4620fa03 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x28a40]=0xf047b2bf vs 0xf047b2bf MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x2f6a0]=0xf0044620 vs 0xf0044620 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x36300]=0x2b804770 vs 0x2b804770 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x3cf60]=0x298cf8c4 vs 0x298cf8c4 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x43bc0]=0x10101010 vs 0x10101010 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x4a820]=0x65656b5f vs 0x65656b5f MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x51480]=0x3a64256c vs 0x3a64256c MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x580e0]=0x616c6620 vs 0x616c6620 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x5ed40]=0x008a5392 vs 0x008a5392 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+135ms fw-sample[0x659a0]=0x69a31aed vs 0x69a31aed MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x06c60]=0x4682f889 vs 0x4682f889 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x0d8c0]=0xf007da03 vs 0xf007da03 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x14520]=0xf8d0d208 vs 0xf8d0d208 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x1b180]=0x23020900 vs 0x23020900 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x21de0]=0x4620fa03 vs 0x4620fa03 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x28a40]=0xf047b2bf vs 0xf047b2bf MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x2f6a0]=0xf0044620 vs 0xf0044620 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x36300]=0x2b804770 vs 0x2b804770 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x3cf60]=0x298cf8c4 vs 0x298cf8c4 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x43bc0]=0x10101010 vs 0x10101010 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x4a820]=0x65656b5f vs 0x65656b5f MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x51480]=0x3a64256c vs 0x3a64256c MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x580e0]=0x616c6620 vs 0x616c6620 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x5ed40]=0x008a5392 vs 0x008a5392 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1-t+145ms fw-sample[0x659a0]=0x69a31aed vs 0x69a31aed MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier1 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier-2 fine-grain ~150-1650 ms (30 × 50 ms)
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2-t+150ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2-t+400ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2-t+650ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:11 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2-t+900ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2-t+1150ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2-t+1400ms fw-sample[0x00000]=0xb80ef000 vs 0xb80ef000 MATCH
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:12 nixos kernel: brcmfmac: BCM4360 test.188: tier2 D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-250ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-250ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms CC-pmutimer=0x0b4b6749 (was 0x0b4a50f3) CHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-250ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-500ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-500ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms CC-pmutimer=0x0b4b8ae5 (was 0x0b4a50f3) CHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-500ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-750ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-750ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms CC-pmutimer=0x0b4baea3 (was 0x0b4a50f3) CHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-750ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-1000ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-1000ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+Apr 22 09:01:13 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms CC-pmutimer=0x0b4bd244 (was 0x0b4a50f3) CHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1000ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-1250ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-1250ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms CC-pmutimer=0x0b4bf40c (was 0x0b4a50f3) CHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1250ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-1500ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-1500ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms CC-pmutimer=0x0b4c17af (was 0x0b4a50f3) CHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1500ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-1750ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-1750ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms CC-pmutimer=0x0b4c3b9a (was 0x0b4a50f3) CHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+Apr 22 09:01:14 nixos kernel: brcmfmac: BCM4360 test.188: dwell-1750ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-2000ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-2000ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms CC-pmutimer=0x0b4c5f3c (was 0x0b4a50f3) CHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2000ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-2250ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-2250ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms CC-pmutimer=0x0b4c82e0 (was 0x0b4a50f3) CHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2250ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-2500ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-2500ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms CC-pmutimer=0x0b4ca671 (was 0x0b4a50f3) CHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2500ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-2750ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-2750ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms CC-pmutimer=0x0b4cc95d (was 0x0b4a50f3) CHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+Apr 22 09:01:15 nixos kernel: brcmfmac: BCM4360 test.188: dwell-2750ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-3000ms ARM CR4 IOCTL=0x00000001 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=NO
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: post-set-active-3000ms D11 IOCTL=0x00000007 IOSTATUS=0x00000000 RESET_CTL=0x00000001
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms NVRAM marker=0xffc70038 (was 0xffc70038) UNCHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0000]=0xb80ef000 (was 0xb80ef000) UNCHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0004]=0xb82ef000 (was 0xb82ef000) UNCHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0008]=0xb839f000 (was 0xb839f000) UNCHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x000c]=0xb844f000 (was 0xb844f000) UNCHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0010]=0xb852f000 (was 0xb852f000) UNCHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0014]=0xb860f000 (was 0xb860f000) UNCHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x0018]=0xb86ef000 (was 0xb86ef000) UNCHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms TCM[0x001c]=0xb87cf000 (was 0xb87cf000) UNCHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms CC-clk_ctl_st=0x00050040 (was 0x00050040) UNCHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms CC-pmucontrol=0x01770381 (was 0x01770181) CHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms CC-pmustatus=0x0000002a (was 0x0000002a) UNCHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms CC-res_state=0x0000017b (was 0x0000017b) UNCHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms CC-pmutimer=0x0b4ceba7 (was 0x0b4a50f3) CHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms CC-min_res_mask=0x0000013b (was 0x0000013b) UNCHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms CC-max_res_mask=0x0000017f (was 0x0000017f) UNCHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.188: dwell-3000ms CC-pmuwatchdog=0x00000000 (was 0x00000000) UNCHANGED
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.196: post-dwell fw-sample summary: 256 UNCHANGED, 0 REVERTED, 0 CHANGED (of 256)
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: dump range 0x40660..0x406c0
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40660: 006f745f 72646e68 615f6574 632e6d72 | _to.hndrte_arm.c
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40670: 646e6800 2e6d7261 61720063 6274736d | .hndarm.c.ramstb
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40680: 73696479 69637000 676e6465 73695f6c | ydis.pciedngl_is
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40690: 73250072 6c616320 0a64656c 69637000 | r.%s called..pci
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x406a0: 676e6465 73695f6c 61632072 64656c6c | edngl_isr called
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x406b0: 7325000a 6e69203a 696c6176 53492064 | ..%s: invalid IS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: dump range 0x40000..0x40400
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40000: 34333231 38373635 43424139 00464544 | 123456789ABCDEF.
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40010: 33323130 37363534 62613938 66656463 | 0123456789abcdef
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40020: 646e6800 70696863 00632e63 6c636572 | .hndchipc.c.recl
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40030: 206d6961 74636573 206e6f69 52203a31 | aim section 1: R
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40040: 72757465 2064656e 62206425 73657479 | eturned %d bytes
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40050: 206f7420 20656874 70616568 6572000a |  to the heap..re
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40060: 69616c63 6573206d 6f697463 3a30206e | claim section 0:
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40070: 74655220 656e7275 64252064 74796220 |  Returned %d byt
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40080: 74207365 6874206f 65682065 000a7061 | es to the heap..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40090: 6f6d654d 75207972 65676173 09000a3a | Memory usage:...
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x400a0: 74786554 6c25203a 6c252864 2c294b64 | Text: %ld(%ldK),
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x400b0: 74614420 25203a61 2528646c 294b646c |  Data: %ld(%ldK)
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x400c0: 7342202c 25203a73 2528646c 294b646c | , Bss: %ld(%ldK)
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x400d0: 7453202c 3a6b6361 4b642520 4109000a | , Stack: %dK...A
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x400e0: 616e6572 746f7420 203a6c61 25286425 | rena total: %d(%
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x400f0: 2c294b64 65724620 25203a65 64252864 | dK), Free: %d(%d
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40100: 202c294b 75206e49 203a6573 25286425 | K), In use: %d(%
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40110: 2c294b64 4d574820 6425203a 4b642528 | dK), HWM: %d(%dK
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40120: 09000a29 75206e49 2b206573 65766f20 | )...In use + ove
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40130: 61656872 25203a64 64252864 202c294b | rhead: %d(%dK), 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40140: 2078614d 6f6d656d 69207972 7375206e | Max memory in us
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40150: 25203a65 2528646c 294b646c 4d09000a | e: %ld(%ldK)...M
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40160: 6f6c6c61 61662063 72756c69 6f632065 | alloc failure co
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40170: 3a746e75 0a642520 74530900 206b6361 | unt: %d...Stack 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40180: 74746f62 68206d6f 62207361 206e6565 | bottom has been 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40190: 7265766f 74697277 0a6e6574 74530900 | overwritten...St
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x401a0: 206b6361 74746f62 203a6d6f 70257830 | ack bottom: 0x%p
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x401b0: 776c202c 30203a6d 2c702578 72756320 | , lwm: 0x%p, cur
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x401c0: 30203a72 2c702578 706f7420 7830203a | r: 0x%p, top: 0x
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x401d0: 000a7025 65724609 74732065 3a6b6361 | %p...Free stack:
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x401e0: 25783020 64252878 776c2029 30203a6d |  0x%x(%d) lwm: 0
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x401f0: 28782578 0a296425 6e490900 20657375 | x%x(%d)...Inuse 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40200: 63617473 30203a6b 28782578 20296425 | stack: 0x%x(%d) 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40210: 3a6d7768 25783020 64252878 09000a29 | hwm: 0x%x(%d)...
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40220: 75206e49 70206573 206c6f6f 25286425 | In use pool %d(%
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40230: 203a2964 25286425 2c294b64 6f2f7720 | d): %d(%dK), w/o
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40240: 25203a68 64252864 000a294b 206e4909 | h: %d(%dK)...In 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40250: 20657375 6f70202d 203a6c6f 25286425 | use - pool: %d(%
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40260: 2c294b64 6f2f7720 25203a68 64252864 | dK), w/oh: %d(%d
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40270: 000a294b 74206f4e 72656d69 74000a73 | K)..No timers..t
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40280: 72656d69 2c702520 6e756620 2c702520 | imer %p, fun %p,
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40290: 67726120 2c702520 20642520 000a736d |  arg %p, %d ms..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x402a0: 206e7566 20746f6e 6c6c756e 206e6920 | fun not null in 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x402b0: 70257830 6974202c 2072656d 65726c61 | 0x%p, timer alre
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x402c0: 20796461 6c206e69 3f747369 4e55000a | ady in list?..UN
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x402d0: 4c504d49 6172203a 0a70253d 494e5500 | IMPL: ra=%p..UNI
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x402e0: 204c504d 20435345 20214e46 6c696166 | MPL ESC FN! fail
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x402f0: 21676e69 74657220 72646461 0a70253a | ing! retaddr:%p.
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40300: 53534100 20545245 66206e69 20656c69 | .ASSERT in file 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40310: 6c207325 20656e69 28206425 25206172 | %s line %d (ra %
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40320: 66202c70 70252061 45000a29 203a7272 | p, fa %p)..Err: 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40330: 69746361 74206576 72656d69 65726620 | active timer fre
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40340: 000a6465 3d742020 74207025 2e743e2d | ed..  t=%p t->t.
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40350: 3d6e7566 74207025 2e743e2d 3d677261 | fun=%p t->t.arg=
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40360: 000a7025 72646e68 632e6574 206f4e00 | %p..hndrte.c.No 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40370: 6f6d656d 74207972 6173206f 66736974 | memory to satisf
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40380: 65722079 73657571 64252074 74796220 | y request %d byt
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40390: 202c7365 73756e69 64252065 6e49000a | es, inuse %d..In
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x403a0: 6e726574 6d206c61 6f6c6c61 72652063 | ternal malloc er
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x403b0: 20726f72 253a7a73 61202c64 64253a6c | ror sz:%d, al:%d
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x403c0: 7374202c 64253a7a 6572202c 35253a6d | , tsz:%d, rem:%5
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x403d0: 61202c64 303a6464 2c782578 706f7420 | d, add:0x%x, top
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x403e0: 2578303a 68000a78 7472646e 6e695f65 | :0x%x..hndrte_in
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x403f0: 745f7469 72656d69 6e68203a 65747264 | it_timer: hndrte
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: dump range 0x40400..0x40660
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40400: 6c616d5f 20636f6c 6c696166 000a6465 | _malloc failed..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40410: 72646e68 615f6574 695f6464 203a7273 | hndrte_add_isr: 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40420: 72646e68 6d5f6574 6f6c6c61 61662063 | hndrte_malloc fa
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40430: 64656c69 756d000a 5f626c00 6f6c6c61 | iled..mu.lb_allo
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40440: 73203a63 20657a69 206f6f74 20676962 | c: size too big 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40450: 29752528 6c61203b 20636f6c 6c696166 | (%u); alloc fail
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40460: 0a3b6465 5f626c00 6f6c6c61 73203a63 | ed;..lb_alloc: s
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40470: 20657a69 29752528 6c61203b 20636f6c | ize (%u); alloc 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40480: 6c696166 0a3b6465 646e6800 5f657472 | failed;..hndrte_
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40490: 6675626c 6c00632e 61735f62 0a3a656e | lbuf.c.lb_sane:.
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x404a0: 6675626c 20702520 61746164 20702520 | lbuf %p data %p 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x404b0: 64616568 20702520 20646e65 6c207025 | head %p end %p l
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x404c0: 25206e65 6c662064 20736761 000a6425 | en %d flags %d..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x404d0: 635f626c 656e6f6c 6973203a 2820657a | lb_clone: size (
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x404e0: 3b297525 6c6c6120 6620636f 656c6961 | %u); alloc faile
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x404f0: 000a3b64 6f6c6c61 69616663 6425206c | d;..allocfail %d
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40500: 6962000a 64255b6e 6425205d 6e680020 | ..bin[%d] %d .hn
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40510: 65747264 6e6f635f 00632e73 6e6b6e55 | drte_cons.c.Unkn
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40520: 206e776f 6d6d6f63 20646e61 7325202d | own command - %s
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40530: 63000a21 2220646d 3a227325 28702520 | !..cmd "%s": %p(
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40540: 0a297025 57460a00 30204449 78252d31 | %p)...FWID 01-%x
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40550: 540a000a 20504152 25287825 203a2978 | ...TRAP %x(%x): 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40560: 25206370 6c202c78 78252072 7073202c | pc %x, lr %x, sp
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40570: 2c782520 73706320 78252072 7073202c |  %x, cpsr %x, sp
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40580: 25207273 20000a78 73666420 78252072 | sr %x..  dfsr %x
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40590: 6664202c 25207261 20000a78 73666920 | , dfar %x..  ifs
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x405a0: 78252072 6669202c 25207261 20000a78 | r %x, ifar %x.. 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x405b0: 20307220 202c7825 25203172 72202c78 |  r0 %x, r1 %x, r
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x405c0: 78252032 3372202c 2c782520 20347220 | 2 %x, r3 %x, r4 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x405d0: 202c7825 25203572 72202c78 78252036 | %x, r5 %x, r6 %x
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x405e0: 2020000a 25203772 72202c78 78252038 | ..  r7 %x, r8 %x
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x405f0: 3972202c 2c782520 30317220 2c782520 | , r9 %x, r10 %x,
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40600: 31317220 2c782520 32317220 0a782520 |  r11 %x, r12 %x.
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40610: 20200a00 2b707320 30252030 25207838 | ..   sp+0 %08x %
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40620: 20783830 78383025 38302520 20000a78 | 08x %08x %08x.. 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40630: 2b707320 25203031 20783830 78383025 |  sp+10 %08x %08x
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40640: 38302520 30252078 0a0a7838 2b707300 |  %08x %08x...sp+
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x40650: 25207825 0a783830 61656400 6e616d64 | %x %08x..deadman
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: dump range 0x64280..0x64500
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64280: e01cfbd7 214c4640 fd6af7a3 b9484606 | ....@FL!..j..FH.
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64290: 3000f8d9 0f01f013 490cd011 f79c480e | ...0.......I.H..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x642a0: e00cfbc7 224c2100 fb38f79c f886783b | .....!L"..8.;x..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x642b0: 33013044 f8c66035 60b48004 4630703b | D0.35`.....`;p0F
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x642c0: 83f8e8bd 00058d24 00040980 000408e2 | ....$...........
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x642d0: 00062a10 0004098c 000409a0 4a064b05 | .*...........K.J
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x642e0: 70197dd1 70597e11 70997e51 70da7e92 | .}.p.~YpQ~.p.~.p
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x642f0: bf004770 00062eb0 0006beda 4ff0e92d | pG..........-..O
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64300: f7ffb091 2100fd4b 46044d8b fb9bf7a5 | ....K..!.M.F....
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64310: 21004620 fb4af7a5 b1684606 2b006a03 |  F.!..J..Fh..j.+
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64320: 682bda0a 0f01f013 4884d003 f79c4984 | ..+h.......H.I..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64330: f04ffb7f 62334300 2208a90e f7a16be0 | ..O..C3b...".k..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64340: f8d4f8e9 4602b040 920a4620 fb67f7a5 | ....@..F F....g.
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64350: 46204682 fb63f7a5 4a42f50a 7aa8f50a | .F F..c...BJ...z
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64360: 46204681 fb5bf7a5 4942f509 79a8f509 | .F F..[...BI...y
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64370: 46204680 fb2cf7a5 4842f508 78a8f508 | .F F..,...BH...x
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64380: 46204607 fb24f7a5 4742f507 77a8f507 | .F F..$...BG...w
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64390: 46204606 fb1cf7a5 4642f506 76a8f506 | .F F......BF...v
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x643a0: 46204601 f79d910b 4684fc3c f8cd4620 | .F F....<..F F..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x643b0: f79dc030 900dfc36 f79d4620 990bfc32 | 0...6... F..2...
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x643c0: 92029a0a 4142f501 f5014a5e f8df71a8 | ......BA^J...q..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x643d0: fbb1e1b4 f8cdf1f2 fbb8e004 fb02f8f2 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x643e0: f8df6611 fbbae1a4 f8ddfaf2 fbb7c030 | .f..........0...
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x643f0: fbb6f7f2 f50cf6fe f50c4c42 fbbc7ca8 | ........BL...|..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64400: 9607f1f2 91089e0d 4142f506 71a8f501 | ..........BA...q
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64410: 9918fb02 fbb94b4c 9300f9fe b00cf8cd | ....LK..........
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64420: a010f8cd 9014f8cd f5009706 f5004042 | ............B@..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64430: fbb070a8 fb02f0f2 48441210 f2fefbb2 | .p........DH....
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64440: 92094943 f79c4a43 682bfaf3 0f02f013 | CI..CJ....+h....
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64450: 4841d003 f79c493a 4840faeb 013cf640 | ..AH:I....@H@.<.
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64460: 1299f644 fb68f7ff 4a3db920 601a4b3d | D.....h. .=J=K.`
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64470: e0004e3a 46202600 ffa8f002 77fff64f | :N...& F....O..w
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64480: 3318f244 bf1442b8 461f4607 f013682b | D..3.B...F.F+h..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64490: d0040f02 463a4834 f79c4929 463afac9 | ....4H:F)I....:F
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x644a0: f6404832 f7ff0112 4f30fb47 bf182800 | 2H@.....G.0O.(..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x644b0: b9262700 f240482e f79c11bf b927fe95 | .'&..H@.......'.
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x644c0: f44f482b f79c71e0 2e00fe8f 2f00d02f | +HO..q....../../
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x644d0: 4b24d02d 46394630 685b681b 28004798 | -.$K0F9F.h[h.G.(
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x644e0: 682bda09 0f01f013 4822d005 4a224914 | ..+h......"H.I"J
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x644f0: f79c4b18 6933fa9d 685b4630 b1484798 | .K....3i0F[h.GH.
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: dump range 0x63e00..0x64280
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63e00: b9206020 f6404813 f79d0188 6820f9ed |  ` ..H@....... h
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63e10: ff56f7ff f0006820 f7fff865 2200febf | ..V. h..e......"
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63e20: 490f480e fd28f79d 490f480e f79d2200 | .H.I..(..H.I."..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63e30: f7fffd23 6820fecd bf00bd1c deaddead | #..... h........
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63e40: 00058c7c 00062ea8 00062968 00062eac | |.......h)......
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63e50: 0006beda 00040364 0006296c 0005795e | ....d...l)..^y..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63e60: 00001925 00040436 00000d1d 4d1ab570 | %...6.......p..M
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63e70: 2c00682c 20a4d12a f79d4621 6028fa0d | ,h.,*.. !F....(`
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63e80: d0262800 22a44621 fd48f79c 4080f44f | .(&.!F."..H.O..@
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63e90: 682e4621 fa00f79d 682860b0 b91e6886 | !F.h.....`(h.h..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63ea0: fe3af79c e011602e 4280f44f 46216146 | ..:..`..O..BFa!F
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63eb0: 463060c2 fd32f79c 4b08682a 601a4620 | .`0F..2.*h.K F.`
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63ec0: 4b073208 6919681b bd70611a 30fff04f | .2.K.h.i.ap.O..0
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63ed0: f04fbd70 bd7030ff 000629bc 000629c0 | p.O..0p..)...)..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63ee0: 00062ea8 41f0e92d f0004604 482af8eb | ....-..A.F....*H
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63ef0: f9a6f79c f79d4620 4b28fe94 4e294a28 | .... F....(K(J)N
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63f00: fbb318c3 4a28f3f2 60134620 fd91f7a5 | ......(J F.`....
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63f10: 737af44f f5004925 30077078 f0f3fbb0 | O.zs%I..xp.0....
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63f20: 60184b23 2b006a23 bfcc4b22 427ff06f | #K.`#j.+"K..o..B
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63f30: 32fff240 681a601a f0f0fbb2 60182220 | @..2.`.h.... ".`
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63f40: 46202300 fdbef7ff 491b2000 f9a9f7a1 | .# F..... .I....
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63f50: 60304607 4620b1f0 fe63f79d f7f0fbb7 | .F0`.. F..c.....
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63f60: 2f003f02 4d15dd16 22342100 f79c4628 | .?./...M.!4"(F..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63f70: 4b13fcd5 717af44f 46284379 60ab2201 | ...KO.zqyC(F.".`
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63f80: f79d606c b128f8d9 68314620 41f0e8bd | l`....(. F1h...A
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63f90: be51f79d 81f0e8bd 00001951 000f423f | ..Q.....Q...?B..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63fa0: 000f4240 00062a04 00058c98 00001ba5 | @B...*..........
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63fb0: 00058c90 00058c94 00040659 000629d0 | ........Y....)..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63fc0: 00001a8d 4b012278 4770601a 00058c98 | ....x".K.`pG....
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63fd0: 41f0e92d 461e4604 f7a54617 4620fc99 | -..A.F.F.F.... F
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63fe0: fcb9f7a5 46324639 46204605 fcbcf7a5 | ....9F2F.F F....
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x63ff0: 013ef640 46062200 f7a54620 4607fcc9 | @.>..".F F.....F
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64000: 4808b920 1101f240 f8eef79d 69bb2201 |  ..H@........".i
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64010: fa124620 431ef606 61be4629 41f0e8bd |  F.....C)F.a...A
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64020: bcc4f7a5 00040671 47f0e92d 460d4604 | ....q...-..G.F.F
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64030: f7a54616 2200fc90 46804629 f7a54620 | .F.....")F.F F..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64040: 2811fc93 d1034681 21df481d f8ccf79d | ...(.F...H.!....
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64050: 46204649 fcaaf7a5 f7a54620 f009fc71 | IF F.... F..q...
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64060: f1b90503 bf8c0f03 27002704 468100ed | .........'.'...F
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64070: f7a54620 b116fc67 f689fa5f b2c6e000 |  F..g..._.......
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64080: f6402200 4620013e fc82f7a5 46202200 | ."@.>. F....." F
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64090: 46134639 fc92f7a5 f00040e8 42b0001f | 9F.F.....@.....B
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x640a0: 221fd007 46394620 fa1640aa f7a5f305 | ..." F9F.@......
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x640b0: 4620fc85 e8bd4641 f7a547f0 bf00bc77 | .. FAF...G..w...
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x640c0: 00040671 41f0e92d f7a54604 4620fc21 | q...-..A.F..!. F
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x640d0: 010ef640 f7a52200 4605fc5b d0372800 | @...."..[..F.(7.
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x640e0: f8d06803 f0038000 091e03f0 4851b923 | .h..........#.QH
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x640f0: 112ff240 f878f79d f7a54620 2804fc33 | @./...x. F..3..(
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64100: d8054607 f408d124 f5b828e0 d11f3f40 | .F..$....(..@?..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64110: 49492000 f8c5f7a1 4b48b9d0 3e01e010 | . II......HK...>
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64120: 612e2f07 2f0cd908 6c2ad006 6240f402 | ./.a.../..*l..@b
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64130: 6f40f5b2 b118d000 5304f043 616b2001 | ..@o....C..S. ka
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64140: d1ec2e00 31e8f8d5 0310f023 31e8f8c5 | .......1#......1
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64150: f6404620 2200013e fc1af7a5 60284d38 |  F@.>.."....8M(`
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64160: 4834b920 1165f240 f83ef79d f7a54620 |  .4H@.e...>. F..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64170: 4b34fbf9 682b6018 f042681a 601a0202 | ..4K.`+h.hB....`
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64180: f8c32200 696221e0 dd052a27 21e0f8d3 | ."...!bi'*.....!
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64190: 0240f042 21e0f8c3 6629f644 200ae003 | B.@....!D.)f... 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x641a0: fc9cf79d 682b3e0a 21e0f8d3 3f00f412 | .....>+h...!...?
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x641b0: 2e09d101 f8d3d1f3 f41331e0 d1043f00 | .........1...?..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x641c0: f240481c f79d118d 6ca3f80f 7f80f413 | .H@........l....
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x641d0: 2100d00d 4620460b 6200f44f fef8f7ff | ...!.F FO..b....
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x641e0: 46202100 021af640 f7ff460b 2100fef1 | .! F@....F.....!
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x641f0: 4620460b 6200f44f feeaf7ff 460b2100 | .F FO..b.....!.F
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64200: f6404620 f7ff023c 2100fee3 4620460b |  F@.<......!.F F
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64210: 0212f640 fedcf7ff 46202200 0112f640 | @........" F@...
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64220: ff02f7ff 681a682b 0204f042 e8bd601a | ....+h.hB....`..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64230: bf0081f0 00040671 0004067a 00017fff | ....q...z.......
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64240: 00062a08 00062a0c 43f8e92d 4b1d4698 | .*...*..-..C.F.K
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64250: 46054614 681a4699 0f02f012 481ad003 | .F.F.F.h.......H
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64260: f79c491a 4f1afbe5 2b07783b f8d9d90a | .I.....O;x.+....
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x64270: f0166000 d0220601 26004816 f79c4913 | .`...."..H.&.I..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: dump range 0x62a00..0x62c00
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62a00: 00000000 00000000 18002000 00000002 | ......... ......
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62a10: 00000000 00000000 00000000 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62a20: 00000000 00000000 00000000 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62a30: 00000000 00000000 00000000 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62a40: 00000000 00000000 00000000 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62a50: 00000000 00000000 00000000 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62a60: 00000000 00000000 00000000 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62a70: 00000000 00000000 00000000 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62a80: 00000000 00000000 00000000 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62a90: 00000001 00000020 00000001 00000000 | .... ...........
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62aa0: 00000700 ffffffff 00000011 0000002b | ............+...
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62ab0: 58680001 00000003 00000011 10a22b11 | ..hX.........+..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62ac0: 0000ffff 00000000 000014e4 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62ad0: 00000000 00004360 00000003 00000000 | ....`C..........
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62ae0: 00008a4d 00000000 00000000 00000000 | M...............
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62af0: 00096f60 00000000 00000000 00000000 | `o..............
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62b00: 00000000 00000000 00000000 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62b10: 00000000 00000000 0009d0c8 157d1f36 | ............6.}.
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62b20: 18002000 18000000 18001000 18002000 | . ........... ..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62b30: 18003000 18004000 00000000 00000000 | .0...@..........
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62b40: 00000000 00000000 00000000 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62b50: 00000000 00000000 00000000 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62b60: 00000000 00000002 00000005 00000800 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62b70: 00000812 0000083e 0000083c 0000081a | ....>...<.......
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62b80: 00000135 00000000 00000000 00000000 | 5...............
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62b90: 00000000 00000000 00000000 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62ba0: 00000000 00000000 00000000 18000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62bb0: 18001000 18002000 18003000 18004000 | ..... ...0...@..
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62bc0: 18000000 00000000 00000000 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62bd0: 00000000 00000000 00000000 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62be0: 00000000 00000000 00000000 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x62bf0: 00000000 00000000 00000000 00000000 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: dump range 0x9cc00..0x9d000
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cc00: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cc10: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cc20: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cc30: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cc40: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cc50: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cc60: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cc70: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cc80: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cc90: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cca0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ccb0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ccc0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ccd0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cce0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ccf0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cd00: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cd10: 5354414b 5354414b 00303030 8009cd7e | KATSKATS000.~...
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cd20: 00000000 0000000a 0009cd87 8009cd7e | ............~...
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cd30: 32623131 31306132 10a22b11 00000010 | 11b22a01.+......
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cd40: 0009cdce 0009cf80 00323832 8009cdae | ........282.....
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cd50: 0000011a 0000000a 0009cdb7 8009cdae | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cd60: 63666530 30303039 0009cfe0 00000010 | 0efc9000........
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cd70: 0009cded 0009cfb0 00040327 0009cfdc | ........'.......
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cd80: 00000000 00000713 00000008 00040010 | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cd90: 000629c0 0009af80 0000000a 0000185d | .)..........]...
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cda0: 00040010 00000047 00062910 00000a87 | ....G....)......
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cdb0: 31303431 322e3733 41203238 52455353 | 140137.282 ASSER
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cdc0: 6e692054 6c696620 6e682065 6d726164 | T in file hndarm
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cdd0: 6c20632e 20656e69 20373933 20617228 | .c line 397 (ra 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cde0: 36303030 62633134 6166202c 30303020 | 000641cb, fa 000
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cdf0: 65666339 000a2930 203d2076 202c3334 | 9cfe0)..v = 43, 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ce00: 6d5f6477 63697473 3d20736b 0a323320 | wd_msticks = 32.
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ce10: 53544100 5354414b 5354414b 5354414b | .ATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ce20: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ce30: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ce40: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ce50: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ce60: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ce70: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ce80: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ce90: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cea0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ceb0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cec0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ced0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cee0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cef0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cf00: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cf10: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cf20: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cf30: 0009cf31 0009cfa7 00000001 0000000a | 1...............
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cf40: 0009cf31 0009cfb7 00000001 0000000a | 1...............
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cf50: 0009cfab 0009cfb7 000449bc 0009cfa8 | .........I......
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cf60: 00000000 00000713 00000000 0003ffff | ................
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cf70: 00062a98 00000001 18000000 00000002 | .*..............
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cf80: 00000002 00001202 200001df 200001ff | ........... ... 
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cf90: 00000047 00000000 000000fa 00000001 | G...............
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cfa0: 0000018d 00062a08 00000009 0009cfe0 | .....*..........
+Apr 22 09:01:16 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cfb0: 00058c8c 00002f5c bbadbadd bbadbadd | ....\/..........
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cfc0: 00000000 0009cfd8 00001201 00001202 | ................
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cfd0: 00001202 200001ff 0009cfe0 00062a98 | ....... .....*..
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cfe0: 18002000 00062a98 000a0000 000641cb | . ...*.......A..
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9cff0: 00062a98 0009d0a0 00000000 000a0000 | .*..............
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: dump range 0x9ff00..0xa0000
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ff00: bb7edd47 a1f2f4fc 9d3c7ab6 6d6f7273 | G.~......z<.srom
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ff10: 3d766572 62003131 6472616f 6d6f7273 | rev=11.boardsrom
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ff20: 3d766572 62003131 6472616f 65707974 | rev=11.boardtype
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ff30: 3078303d 00323535 72616f62 76657264 | =0x0552.boardrev
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ff40: 3178303d 00313031 72616f62 616c6664 | =0x1101.boardfla
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ff50: 303d7367 34303178 30303130 6f620031 | gs=0x10401001.bo
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ff60: 66647261 7367616c 78303d32 30303030 | ardflags2=0x0000
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ff70: 32303030 616f6200 6c666472 33736761 | 0002.boardflags3
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ff80: 3078303d 30303030 00303030 72616f62 | =0x00000000.boar
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ff90: 6d756e64 6d00303d 64616361 303d7264 | dnum=0.macaddr=0
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ffa0: 43313a30 3a33423a 313a3130 31303a32 | 0:1C:B3:01:12:01
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ffb0: 6f636300 583d6564 65720030 76657267 | .ccode=X0.regrev
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ffc0: 7600303d 69646e65 78303d64 34653431 | =0.vendid=0x14e4
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ffd0: 76656400 303d6469 61333478 74780030 | .devid=0x43a0.xt
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9ffe0: 72666c61 343d7165 30303030 32616100 | alfreq=40000.aa2
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.212: 0x9fff0: 00373d67 67356161 0000373d ffc70038 | g=7.aa5g=7..8...
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x97028]=0x34310a0d (was 0x33310a0d) CHANGED
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9702c]=0x37333130 (was 0x31363739) CHANGED
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x97030]=0x3238322e (was 0x3139392e) CHANGED
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cd48]=0x00323832 (was 0x00393931) CHANGED
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cd50]=0x0000011a (was 0x000003df) CHANGED
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cdb0]=0x31303431 (was 0x37393331) CHANGED
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cdb4]=0x322e3733 (was 0x392e3136) CHANGED
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cdb8]=0x41203238 (was 0x41203139) CHANGED
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.197: fine-TCM summary: 8 of 16384 cells CHANGED
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.197: fine-TCM CHANGED span 0x97028..0x9cdb8 (23956 bytes)
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.188: final PCIE2 mailboxint=0x00000001 (D2H bits would be 0x10000+, FN0 bits 0x0100/0x0200)
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.188: pci_clear_master done; PCI_COMMAND=0x0002 BM=OFF
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.188: post-BM-clear MMIO guard mailboxint=0x00000001 (endpoint alive after BM-off)
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.188: released fw/nvram after BM-before-set_active + tiers + 3000ms dwell + BM-clear; returning -ENODEV
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+Apr 22 09:01:17 nixos kernel: brcmfmac: BCM4360 test.163: fw released; returning from setup (state still DOWN)
