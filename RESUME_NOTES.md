@@ -1,5 +1,89 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.225 RERUN (2026-04-22 16:10 BST) — deeper PCI state dive; safe to rerun
+
+### Deeper dive: BAR0 timing depends on `enable`, not just chip health
+
+Re-measuring BAR0 after enabling the device showed a surprise:
+`enable=1` (D0) produced **65–85ms CTO-regime** reads, while `enable=0`
+(also reported D0 after transition) produced clean **21–28ms fast-UR**.
+Five consecutive reads in each state confirmed the pattern.
+
+Interpretation: the test script's `dd ... resource0` pre-check is
+sensitive to the `enable` bit, not purely to chip backplane health.
+With `enable=0` the kernel has PCI memory decoding disabled for the
+device and returns a fast rejection; with `enable=1` the transaction
+actually reaches the PCIe link and, if the chip backplane is
+unresponsive, times out at ~50ms + overhead → looks like CTO.
+
+**This does not mean the chip needs an SMC reset.** Two datapoints
+for that:
+
+1. Boot -1's test.225 run proved the chip is reachable via the
+   kernel-side probe path: SBR via root-port bridge → BAR0 CC
+   probe returned `0x15034360` (twice, stable) → full chip_attach
+   → PMU mask writes succeeded (pmustatus=0x2e res_state=0x7ff,
+   identical to test.224).
+2. In the `enable=0` regime — which is the state the test script's
+   pre-check will actually see — BAR0 returns fast-UR cleanly at
+   ~25ms. The pre-check passes safely.
+
+### Rule-of-thumb for this platform
+
+- After user-space has touched `enable` or done bare `dd` probes,
+  always `echo 0 > enable` before running the test script.
+  Otherwise the pre-check sees `enable=1` CTO-regime timing and
+  refuses to insmod (same symptom as a genuinely dead chip).
+- The **meaningful** safety signal is BAR0 timing in `enable=0`
+  state (or on fresh boot where `enable=0` is the default). Fast-UR
+  in that state = chip alive; SBR in probe will recover it.
+- `enable=1` CTO timing on its own is NOT a chip-dead signal. Drop
+  to `enable=0` and re-measure before concluding anything.
+
+### Current hardware state
+
+- `lspci -s 03:00.0`: Region 0/2 `[disabled]`, DEVSEL=fast, MAbort-,
+  SERR-. Config space readable.
+- `enable=0`, `power_state=D0`
+- BAR0 `dd ... resource0`: 21–28ms fast-UR across 5 consecutive reads
+- `lsmod | grep brcm`: empty
+- DevSta 0x0010 (UnsupReq+ latched from bare `dd` probes; informational
+  only, non-W1C bit 4 is AuxPowerDetected — writable error bits
+  cleared to 0 via W1C write `CAP_EXP+0xa.w=0x000f`)
+
+### Build state
+
+- `brcmfmac.ko` 14.3 MB, mtime 15:25:45 (same build from 15:45 BST
+  session — no code changes between wedge and now)
+- `strings` confirms `BCM4360 test.225` readback marker present
+
+### Plan — rerun test.225 as-is
+
+Objective: split the two possible interpretations of boot -1's silent
+tail.
+
+- **If rerun reproduces "test.188 setup-entry, then silence"** — real
+  signal: something specific wedges in `msleep(300)` or the pre-attach
+  probe. Design test.226 with probe points inside that 300ms idle
+  and between the attach probes.
+- **If rerun emits chunk-loop lines (`test.225: wrote N words`)** —
+  boot -1 just lost the ring-buffer tail on wedge. Continue test.224
+  chunk-hang debugging plan.
+- **If download completes** — jackpot; move to ARM release.
+
+No code changes. Same module, same run command:
+
+```bash
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Expected artifacts:
+- `phase5/logs/test.225.rerun.run.txt` (depends on LOG_NUM; next free is test.226 slot, but overwrite guard handles it)
+- `phase5/logs/test.225.rerun.journalctl.txt` (grep-filtered, post-run)
+- `phase5/logs/test.225.rerun.journalctl.full.txt` (whole boot, post-run)
+
+---
+
 ## POST-TEST.225 (2026-04-22 15:57 BST, revised 16:05) — hang site uncertain; chip still alive; rerun test.225 as-is
 
 ### Revision note
