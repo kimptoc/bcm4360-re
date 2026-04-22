@@ -1,5 +1,77 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.197 (2026-04-22) — fine-grain TCM scan over 0x90000–0xa0000 to map full extent of firmware writes
+
+### Hypothesis
+
+Test.196 caught two firmware-originated writes (`[0x98000]=0x00000000`,
+`[0x9c000]=0x5354414b` "STAK") at exactly the 16 KB stride boundaries of
+the existing `wide_offsets` scan. Either:
+
+(a) Firmware wrote ONLY those two cells and they happened to land on the
+    sample stride. Unlikely on a chip running real init code; suggests
+    wide-stride aliasing.
+(b) Firmware wrote a contiguous structure (e.g. an init descriptor /
+    state block / shared-memory header) and our 16 KB stride only hit
+    two cells of it. A finer scan will reveal the full extent.
+(c) Firmware wrote multiple unrelated singletons at scattered offsets
+    that happen to align with 16 KB boundaries by coincidence.
+
+A 4-byte stride scan over the 64 KB upper-TCM region (0x90000–0xa0000)
+will distinguish (a) from (b)/(c) and, if (b) holds, map the structure
+boundaries — its size and content shape will tell us what state firmware
+reached and what it might be waiting for next.
+
+### Implementation
+
+**chip.c** — marker rename only: `test.196` → `test.197`. PMU state
+unchanged: `max_res_mask = 0x17f` (bit 6 only, proven safe).
+
+**pcie.c** — add a heap-allocated 16384-cell pre-release snapshot covering
+0x90000..0xa0000 at 4-byte stride (64 KB heap). The pre-release populate
+runs silently (just logs a single completion line — printing 16384 cells
+would spam the journal). The post-dwell scan reads all 16384 cells, prints
+only the CHANGED entries, and emits a summary line:
+- `fine-TCM summary: N of 16384 cells CHANGED`
+- `fine-TCM CHANGED span 0x..... ..0x..... (NN bytes)` if any changed
+
+The post-dwell single-shot scan adds ~16384 indirect-MMIO reads
+(~400 ms in steady state with HT clock active). Test.196's slim dwell
+harness already proved the chip survives extended post-dwell reads in
+this PMU configuration; the new scan extends that window by ~400 ms but
+does not poll mid-dwell.
+
+### Expected outcomes
+
+| Pattern of CHANGED cells | Interpretation | Next move |
+|---|---|---|
+| Only 0x98000 + 0x9c000 changed (same as test.196) | scattered singletons; firmware wrote two flags | grep firmware text image for these constants |
+| Contiguous block of changed cells around 0x9c000 ("STAK..." string + neighbours) | firmware wrote a structure or string buffer | dump full block to decode purpose |
+| Many scattered changes across 0x90000–0xa0000 | firmware writing init memory aggressively | classify into hot regions |
+| Firmware wrote outside 0x90000-0xa0000 too | scan range too narrow | extend in test.198 |
+| Hard crash | post-dwell read pressure with HT active is unsafe at 16 K reads | shrink range / increase stride |
+
+### Build + pre-test
+
+- chip.c, pcie.c edited; module built clean (only pre-existing
+  brcmf_pcie_write_ram32 unused-function warning).
+- PCIe state (verified before this run, still on boot 0):
+  - `MAbort-`, `CommClk+`, `LnkSta` x1/2.5GT/s — clean
+  - `UESta` all clear; `CESta` Timeout+ AdvNonFatalErr+ — accumulated
+    correctable errors from the test.196 unbind cycle, benign.
+  - `LnkCtl: ASPM Disabled` (we disabled it in chip_attach).
+- brcmfmac module currently loaded (from test.196 success, test will rmmod).
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Log → rename to `test.197.journalctl.txt`.
+
+---
+
 ## POST-TEST.196 (2026-04-22) — BREAKTHROUGH: bit 6 alone is safe AND firmware finally writes TCM (first ever observation)
 
 Logs: `phase5/logs/test.196.journalctl.txt` (885 brcmfmac lines) +

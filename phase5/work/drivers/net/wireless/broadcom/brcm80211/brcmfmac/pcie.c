@@ -2008,6 +2008,16 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		const u32 nr_fw_samples = 256;	/* test.188: fw-sample count */
 		u32 *pre_fw_sample = NULL;	/* test.188: heap-alloc'd — see below */
 		u32 *fw_sample_offsets = NULL;	/* heap-alloc'd offsets for each sample */
+		/* test.197: fine-grain scan over 0x90000..0xa0000 (upper TCM
+		 * where test.196 saw the only firmware-originated writes:
+		 * 0x98000 zeroed, 0x9c000 = "STAK" marker). 4-byte stride
+		 * over 64 KB = 16384 cells = 64 KB heap. Post-dwell scan
+		 * logs CHANGED entries only plus a summary count.
+		 */
+		const u32 fine_base = 0x90000;
+		const u32 fine_stride = 4;
+		const u32 nr_fine = 0x10000 / 4;	/* 16384 cells */
+		u32 *pre_fine = NULL;
 		static const u32 wide_offsets[40] = {
 			0x00000, 0x04000, 0x08000, 0x0c000,
 			0x10000, 0x14000, 0x18000, 0x1c000,
@@ -2034,6 +2044,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			pre_fw_sample = NULL;
 			fw_sample_offsets = NULL;
 		}
+
+		/* test.197: heap-alloc fine-grain scan buffer (64 KB) */
+		pre_fine = kcalloc(nr_fine, sizeof(u32), GFP_KERNEL);
+		if (!pre_fine)
+			pr_emerg("BCM4360 test.197: pre_fine kcalloc(64K) failed — fine scan disabled\n");
 
 		/* Pre-halt probe (hi-window only since test.169) */
 		brcmf_pcie_probe_armcr4_state(devinfo, "pre-halt");
@@ -2160,6 +2175,19 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pre_wide[j] = val;
 				pr_emerg("BCM4360 test.188: wide-TCM[0x%05x]=0x%08x (pre-release snapshot)\n",
 					 offset, val);
+			}
+			/* test.197: fine-grain pre-release snapshot of upper TCM
+			 * (0x90000..0xa0000) at 4-byte stride. Silent — only
+			 * post-dwell CHANGED entries get printed, plus a summary.
+			 */
+			if (pre_fine) {
+				for (j = 0; j < nr_fine; j++) {
+					u32 offset = fine_base + j * fine_stride;
+					pre_fine[j] = brcmf_pcie_read_ram32(devinfo,
+									    offset);
+				}
+				pr_emerg("BCM4360 test.197: fine-TCM pre-release snapshot complete (%u cells, base=0x%05x stride=%u)\n",
+					 nr_fine, fine_base, fine_stride);
 			}
 			/* test.188: last 64 bytes of TCM cover the sharedram
 			 * address slot (upstream convention: ramsize - 8) and
@@ -2462,6 +2490,37 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					pr_emerg("BCM4360 test.196: post-dwell wide-TCM[0x%05x]=0x%08x (was 0x%08x) CHANGED\n",
 						 offset, val, pre_wide[j]);
 			}
+
+			/* test.197: post-dwell fine-grain scan over upper TCM.
+			 * Logs CHANGED cells individually + summary count.
+			 * Single-pass — runs after dwell completes so the chip
+			 * is in steady state for the duration of the scan.
+			 */
+			if (pre_fine) {
+				u32 fine_changed = 0;
+				u32 fine_first = 0xffffffff;
+				u32 fine_last = 0;
+				for (j = 0; j < nr_fine; j++) {
+					u32 offset = fine_base + j * fine_stride;
+					u32 val = brcmf_pcie_read_ram32(devinfo,
+									offset);
+					if (val != pre_fine[j]) {
+						pr_emerg("BCM4360 test.197: post-dwell fine-TCM[0x%05x]=0x%08x (was 0x%08x) CHANGED\n",
+							 offset, val, pre_fine[j]);
+						fine_changed++;
+						if (offset < fine_first)
+							fine_first = offset;
+						if (offset > fine_last)
+							fine_last = offset;
+					}
+				}
+				pr_emerg("BCM4360 test.197: fine-TCM summary: %u of %u cells CHANGED",
+					 fine_changed, nr_fine);
+				if (fine_changed > 0)
+					pr_emerg("BCM4360 test.197: fine-TCM CHANGED span 0x%05x..0x%05x (%u bytes)\n",
+						 fine_first, fine_last,
+						 fine_last - fine_first + 4);
+			}
 		}
 		/* test.188: set_active ran with BusMaster ENABLED (set
 		 * above before the call). Tiers ran at ~100-1650 ms then
@@ -2498,6 +2557,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		brcmf_fw_nvram_free(nvram);
 		kfree(pre_fw_sample);
 		kfree(fw_sample_offsets);
+		kfree(pre_fine);
 		pr_emerg("BCM4360 test.188: released fw/nvram after BM-before-set_active + tiers + 3000ms dwell + BM-clear; returning -ENODEV\n");
 		return -ENODEV;
 	} else {
