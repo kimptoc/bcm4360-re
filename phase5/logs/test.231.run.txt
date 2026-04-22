@@ -1,0 +1,55 @@
+=== test.231 PRE sysctls (2026-04-22 21:34 BST, boot 0, post-test.230 run) ===
+  nmi_watchdog=1
+  hardlockup_panic=1
+  softlockup_panic=1
+  panic=30
+
+=== test.231 PRE lspci ===
+  	Control: I/O- Mem+ BusMaster- SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+  	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+  		Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=2 PME-
+  		DevSta:	CorrErr+ NonFatalErr- FatalErr- UnsupReq- AuxPwr+ TransPend-
+  		LnkCtl:	ASPM Disabled; RCB 64 bytes, LnkDisable- CommClk+
+  		LnkSta:	Speed 2.5GT/s, Width x1
+  		LnkSta2: Current De-emphasis Level: -3.5dB, EqualizationComplete- EqualizationPhase1-
+  		Status:	InProgress-
+  			Status:	NegoPending- InProgress-
+
+=== test.231 PRE BAR0 timing ===
+  sudo dd if=/sys/bus/pci/devices/0000:03:00.0/resource0 of=/dev/null bs=4  >    0.01s user 0.00s system 43% cpu 0.033 total
+  sudo dd if=/sys/bus/pci/devices/0000:03:00.0/resource0 of=/dev/null bs=4  >    0.01s user 0.00s system 45% cpu 0.028 total
+  sudo dd if=/sys/bus/pci/devices/0000:03:00.0/resource0 of=/dev/null bs=4  >    0.01s user 0.00s system 64% cpu 0.019 total
+  sudo dd if=/sys/bus/pci/devices/0000:03:00.0/resource0 of=/dev/null bs=4  >    0.01s user 0.01s system 63% cpu 0.018 total
+
+=== test.231 PRE pstore ===
+  total 0
+  drwxr-x--- 2 root root 0 Apr 22 21:06 .
+  drwxr-xr-x 6 root root 0 Apr 22 21:07 ..
+
+=== test.231 PRE module state ===
+
+=== test.231 PRE .ko strings (sorted) ===
+  -rw-r--r-- 1 kimptoc users 14251536 Apr 22 21:32 /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko
+  0brcmfmac: BCM4360 test.231: dwell start 
+  0brcmfmac: BCM4360 test.231: t=1000ms dwell done; proceeding to BM-clear + release
+  0brcmfmac: BCM4360 test.231: t=100ms
+  0brcmfmac: BCM4360 test.231: t=10ms
+  0brcmfmac: BCM4360 test.231: t=200ms
+  0brcmfmac: BCM4360 test.231: t=300ms
+  0brcmfmac: BCM4360 test.231: t=500ms
+  0brcmfmac: BCM4360 test.231: t=50ms
+  0brcmfmac: BCM4360 test.231: t=700ms
+  0brcmfmac: BCM4360 test.231: t=900ms
+
+=== test at Wed 22 Apr 21:34:20 BST 2026 ===
+=== Phase 5: brcmfmac BCM4360 test ===
+Log: /home/kimptoc/bcm4360-re/phase5/work/../logs/test.9
+
+Firmware: -rw-r--r-- 1 root root 442233 Apr 22 08:32 /lib/firmware/brcm/brcmfmac4360-pcie.bin
+NVRAM:    # BCM4360 NVRAM for MacBookPro11,1 (Apple 106b:0112)
+
+Pre-test: checking BAR0 MMIO (resource0)...
+BAR0 MMIO: Unsupported Request (7ms) — device alive, SBR in probe should fix. Proceeding.
+
+Loading patched brcmfmac modules...
+Modules loaded. Waiting 15s for probe + FW init timeout + debug dump...
