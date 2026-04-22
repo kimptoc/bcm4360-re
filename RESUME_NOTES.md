@@ -1,5 +1,219 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.211 (2026-04-22) — decode BL targets in asserting function; identify what it polls
+
+### Context
+
+POST-TEST.210 (below) located the asserting function:
+
+- **Entry:** `0x64028` — `PUSH.W {r4-r10, lr}`
+- **Exit:** `0x6422a` — `POP.W  {r4-r10, pc}`
+- **Spans:** ~514 bytes (~257 Thumb-2 halfwords)
+- **First 3 args** saved into `r4` (struct ptr), `r5`, `r6` at function entry
+- **Asserts** at 0x641c6 with `r0 = "ramstbydis"`, `r1 = #0x18d` (line 397)
+
+We have 0x64028..0x64280 already in the dump from test.210. The next missing
+puzzle pieces are:
+
+1. **What does `r4` (the struct pointer arg) point at?** It is used in the
+   polling loop (`LDR r3,[r4,#0x4c]; TST r3,#0x100`) and elsewhere via small
+   field offsets. The chip-info struct at `0x62a98` is one candidate, but the
+   function's own literal pool (0x64238..0x64244) holds pointers to `0x62a08`
+   and `0x62a0c` — different addresses inside the same struct page.
+2. **Where do the BL calls in 0x64030..0x64080 go?** The first BL (at 0x64030)
+   is followed by a `CMP r0, #0x11; BNE` → if the call returns ≠ 0x11, the
+   alternate path (which contains the assert) gets reached. Decoding the BL
+   target reveals which firmware helper is being called.
+3. **Where is the function called from?** Once we know its entry (0x64028)
+   we can scan the rest of the firmware for `BL`/`B.W` instructions whose
+   computed target = 0x64029 (Thumb bit set). That tells us which init phase
+   triggers this code path.
+
+### Hypothesis
+
+The assert path is reached when:
+
+- A polling loop (around 0x6419e..0x641b8) waits for hardware bit `r3 & 0x100`
+  to clear (or a timer to expire), and falls through with `r7 == 0`
+- `r7 == 0` triggers the assert — i.e. the loop ran out of iterations without
+  the expected condition occurring
+
+The expression label "ramstbydis" (RAM Standby Disable) suggests the firmware
+is waiting on a PMU/RAM-state bit related to standby/wake transitions.
+The bit `0x100` checked in `r3` is likely a status flag in the same memory-
+mapped register family. From the chip-info struct (test.201/203 dumps) the
+field at `+0x4c` is loaded — that's an offset into a per-core or per-block
+state record.
+
+### Implementation plan for test.211
+
+This iteration is **dump-only** (no driver state changes). Two new dump regions:
+
+1. **Decode caller — scan firmware code for callers of 0x64028.**
+   Compute encoded BL/B.W bytes that target 0x64029 (Thumb), then `grep`
+   the existing test.210 dump bytes for matches. If no match in the existing
+   dump, widen with: dump 0x40000..0x40400 (early init code, near `_to`/`hndrte_arm.c`
+   strings) and 0x60000..0x62a00 (PMU/clock init code per phase6 survey).
+   - **Cost:** at most +400 dump rows ≈ 100ms MMIO time
+2. **Decode callees — re-dump 0x64028..0x64080 already-captured area, but**
+   compute statically (no new dump needed) the BL targets for: 0x64030, 0x6403c,
+   0x64040, 0x6404c, 0x64054, 0x64064. Write decoded targets to RESUME_NOTES.md
+   as part of the PRE→POST documentation.
+
+We may also try a complementary probe: dump 0x96f78 (the `hndrte_cons`
+log-buffer pointer) to read any actual log message firmware emitted before
+the assert — useful even if zero bytes — see if pre-assert console output
+contains additional context.
+
+### Decision tree
+
+| Find | Interpretation | Next |
+|---|---|---|
+| BL targets land inside 0x60000..0x70000 (firmware text region) | normal helpers — name them by their entry-point literal pool content | trace what each one does |
+| BL targets land outside TCM (e.g. >0xa0000 or <0x40000) | indirect calls via function pointer table — globals-driven | dump pointer table |
+| Caller scan finds `BL 0x64028` in init code path | pinpoints the boot phase that triggers this assert | document call-stack and target the *caller's* failure path |
+| Caller scan finds no callers in the dumped range | function is reached via function-pointer table | dump pointer tables in known PMU init region |
+
+### Run command (no module rebuild needed if only dump_ranges change)
+
+```
+make -C /home/kimptoc/bcm4360-re/phase5/work
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.211.{run,journalctl,journalctl.full}.txt`.
+
+---
+
+## POST-TEST.210 (2026-04-22) — asserting function entry located at 0x64028
+
+Logs: `phase5/logs/test.210.{run,journalctl,journalctl.full}.txt`. Test ran
+cleanly — no crash. Same firmware (4352pci) as tests 200-208.
+
+### Result 1 — host-side core enumeration: 6 cores total
+
+Confirmed 6 cores (matches the chip-info struct count):
+
+```
+core[1] id=0x800 rev43  base=0x18000000 wrap=0x18100000   ChipCommon
+core[2] id=0x812 rev42  base=0x18001000 wrap=0x18101000   PCIe2
+core[3] id=0x83e rev2   base=0x18002000 wrap=0x18102000   D11 (radio)
+core[4] id=0x83c rev1   base=0x18003000 wrap=0x18103000   ARM CR4
+core[5] id=0x81a rev17  base=0x18004000 wrap=0x18104000   PMU/SR
+core[6] id=0x135 rev0   base=0x00000000 wrap=0x18108000   GCI/special
+```
+
+Reaffirms that the firmware "9-core mismatch" hypothesis from test.207 was
+wrong (the "9" lives in the assert format buffer at 0x9cfa8, not a core
+count field). Both sides see 6 cores.
+
+### Result 2 — code dump 0x63e00..0x64280 reveals function structure
+
+Multiple Thumb-2 function prologues identified by their PUSH instruction:
+
+| Address | Prologue | Function size | Notes |
+|---|---|---|---|
+| 0x63e00 | (mid-function from prior dump) | ends at 0x63e36 with `BD1C` (POP {r2-r4, pc}) followed by `bf00 deaddead` | trailing sentinel |
+| 0x63e6c | `b570` PUSH {r4-r6, lr} → `4d1a` LDR r5, [PC,#imm] | ~92 bytes (ends ~0x63ed8) | small handler — multiple BL into firmware helpers |
+| 0x63fc4 | `2278 4b01 601a 4770` MOVS/LDR/STR/BX LR | 8 bytes | tiny "store r2=#0x78 into ptr" stub — likely a setter |
+| 0x63fd0 | `e92d 41f0` PUSH.W {r4-r8, lr} | ~80 bytes (ends 0x6401e with `e8bd 41f0` POP + tail-call B.W at 0x64020) | medium helper |
+| **0x64028** | **`e92d 47f0` PUSH.W {r4-r10, lr}** | **~514 bytes (ends 0x6422a with `e8bd 81f0` POP+pc)** | **THE ASSERTING FUNCTION** |
+| 0x64248 | `e92d 43f8` PUSH.W {r3-r9, lr} | next function (out of dump scope) | unrelated helper below |
+
+### Result 3 — anatomy of the asserting function
+
+Function prologue (decoded from dump bytes):
+
+```
+0x64028: e92d 47f0    PUSH.W {r4-r10, lr}      ; 8-deep frame, lots of saved regs
+0x6402c: 4604         MOV r4, r0               ; save arg0 → r4 (struct base)
+0x6402e: 460d         MOV r5, r1               ; save arg1 → r5
+0x64030: 4616         MOV r6, r2               ; save arg2 → r6
+0x64030: f7a5 fc90    BL  <helper_A>           ; first call — uses r0 (arg0)
+0x64034: 2200         MOVS r2, #0
+0x64036: 4629         MOV r1, r5
+0x64038: 4680         MOV r8, r0               ; r8 = result of helper_A (saved)
+0x6403a: 4620         MOV r0, r4
+0x6403c: f7a5 fc93    BL  <helper_B>
+0x64040: 2811         CMP r0, #0x11            ; KEY GATE — expects 17
+0x64042: 4681         MOV r9, r0
+0x64044: d103         BNE  + (skip-success-path)
+0x64046: 481d         LDR r0, [PC, #imm]       ; load constant
+0x64048: 21df         MOVS r1, #0xdf
+0x6404a: f79d f8cc    BL  <helper_C>           ; conditional helper if r0==0x11
+0x6404e: 4649         MOV r1, r9
+0x64050: 4620         MOV r0, r4
+0x64052: f7a5 fcaa    BL  <helper_D>
+... (more BLs, branches to alternate paths) ...
+```
+
+The assert call site (already known from earlier tests, confirmed in this dump):
+
+```
+0x641c0: 481c         LDR r0, [PC, #0x70]      ; r0 = ptr to "ramstbydis" (0x4067a)
+0x641c2: f240 118d    MOVW r1, #0x18d          ; r1 = 397 (line number)
+0x641c6: f79d ff80    BL  <_assert>            ; calls assert helper
+```
+
+The assert-call target `_assert(expr_str, line)` likely loads `__FILE__`
+internally (the `0x40671 → "hndarm.c"` pointer is in the function's literal
+pool at `0x64230`, so the function loads it once and passes/uses it
+elsewhere — possibly via a global).
+
+Function literal pool (immediately after function body):
+
+```
+0x64230: 00040671   ptr to "hndarm.c"
+0x64234: 0004067a   ptr to "ramstbydis"   ← the failing-expression string
+0x64238: 00017fff   constant (max_res_mask candidate? 0x17fff = 98303)
+0x6423c: 00062a08   ptr to chip-info struct field
+0x64240: 00062a0c   ptr to chip-info struct field
+```
+
+### Result 4 — the assert is preceded by a polling loop with timeout
+
+Code at 0x6419e..0x641c6 (loop body and tail):
+
+```
+0x6419e: ...                         ; (loop top — exact body needs deeper trace)
+0x641b0: 2e09         CMP r6, #9     ; loop guard
+0x641b2: d101         BNE  +2        ; bypass exit-check
+0x641b4: f8d3 31e0    LDR.W r3, [r3, #0x1e0]   ; refresh status word
+0x641b8: f413 3f00    TST.W r3, #0x80000       ; bit-19 check
+0x641bc: d1f3         BNE  -22       ; back to loop top — keep polling
+0x641be: 3f00         SUBS r7, r7, #0          ; (set flags from r7)
+       wait — at 0x641be the encoding is 0x3f00 = SUBS r7, r7, #0
+0x641be: d104         BNE  +8        ; branch past assert if r7 != 0
+0x641c0: <ASSERT call sequence — r0/r1 setup>
+```
+
+The assert is reached when the **polling loop exits with r7 == 0** —
+i.e. retry counter exhausted without the expected `r3 & 0x80000` bit
+appearing. (The exact bit being polled is encoded in the `f413 3f00` TST.W
+mask — needs full Thumb-2 decode to confirm bit position.)
+
+### Conclusion — moving from "the firmware ASSERTs" to "we know what the assert checks"
+
+| Before test.210 | After test.210 |
+|---|---|
+| "Firmware halts at hndarm.c:397 with expression unknown" | "Firmware halts in a function at 0x64028, polling a status bit through r4 (struct base, arg0) at offset and timing out after r7 retries — RAM-standby-related" |
+| Function entry unknown | Entry confirmed at 0x64028, exits 0x6422a |
+| Caller unknown | Still unknown — need to scan code for callers of 0x64028 |
+| Helper functions called along the way: unknown | First two helpers called at 0x64030 and 0x6403c with their args saved into r4/r5/r6/r8 |
+
+This unblocks two further investigation paths in test.211 (see PRE-TEST.211
+above): (1) what calls the function, (2) what the helpers do.
+
+### Other state in test.210 (no change vs test.208)
+
+- Trap data at 0x9cfe0: `18002000 00062a98 000a0000 000641cb` — same as test.208
+- Format buffer at 0x9cf30..0x9cfb0: same structure (line=0x18d, ptr=0x62a08, val=9)
+- Console buffer at 0x96f78..0x97200: timestamps `125888.000` and `137635.697`
+- fine-TCM scan: 7 cells CHANGED (matches test.208 — firmware ran briefly)
+- NVRAM blob at 0x9ff00..0xa0000: present and intact, ends with `ffc70038` marker
+
+---
+
 ## PRE-TEST.210 (2026-04-22) — widen code dump to find assert function entry
 
 ### Hypothesis
