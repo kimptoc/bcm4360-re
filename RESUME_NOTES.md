@@ -166,6 +166,119 @@ not sub-second timing.
 ---
 
 
+## PRE-TEST.235 (2026-04-23 00:xx BST, post-SMC-reset boot from test.234 wedge) — observable run of test.234's zero+verify, set_active SKIPPED (test.230 baseline + module param)
+
+### Hypothesis
+
+Test.234 wedged in the journald-blackout window — none of its
+breadcrumbs landed. We cannot tell whether the zero loop (a) ran
+to completion, (b) wrote zeros that took, or (c) is itself the
+wedge cause. Cutoff comparison shows test.234 cut at the same
+post-chip_attach line as test.231 (one line later); test.232 cut
+much later (after set_active+dwells). So tail-loss budget varies
+and doesn't pin where the wedge happened in any of them.
+
+The minimum next step is to **run the exact same zero+verify code
+without calling set_active**. That is the test.230 baseline (no
+wedge), so all journald logs WILL land. Outcomes:
+
+- Pre-zero scan output reveals what 71 dwords in [0x9FE00..0x9FF1C)
+  actually contain on a fresh-boot — first observation of this
+  region (test.233 only sampled 0x90000/0x90004).
+- Verify pass count confirms zero writes landed (or didn't).
+- Combined with test.234's wedge: by elimination, the wedge in
+  test.234 was in the set_active path (the only difference between
+  this safe run and test.234), even with the suspect region zeroed.
+- That collapses the cheap tier of the staged plan: zeroing
+  [0x9FE00..0x9FF1C] does not stop the wedge.
+
+Then the next decision is whether to (a) widen the zero range
+(test.236, e.g. 0x70000..0x9FF1C ~195 KB) before declaring cheap
+tier dead, or (b) jump straight to medium tier (sentinel pointers
+into TCM). Defer that until this run's data is in.
+
+### Code change
+
+Add one module parameter and one early-exit in the test.234 block:
+
+```c
+static int bcm4360_test235_skip_set_active;
+module_param(bcm4360_test235_skip_set_active, int, 0644);
+MODULE_PARM_DESC(bcm4360_test235_skip_set_active, "BCM4360 test.235: skip brcmf_chip_set_active after zero+verify (1=skip, 0=normal test.234 path)");
+```
+
+After the existing test.234 zero+verify block (line ~2569), before
+the `pr_emerg("BCM4360 test.234: calling brcmf_chip_set_active...")`
+line (~2571), insert:
+
+```c
+if (bcm4360_test235_skip_set_active) {
+    pr_emerg("BCM4360 test.235: SKIPPING brcmf_chip_set_active (zero+verify-only run; test.230 baseline)\n");
+    msleep(1000);
+    pr_emerg("BCM4360 test.235: 1000 ms dwell done (no fw activation); proceeding to BM-clear + release\n");
+} else {
+    /* existing test.234 code path: pr_emerg "calling..." through dwells */
+}
+```
+
+Wrap lines 2571-2587 in the `else` branch. All existing test.234
+breadcrumbs preserved for any future Run B.
+
+### Run sequence
+
+```bash
+# Single run, this boot only:
+sudo insmod brcmutil.ko
+sudo insmod brcmfmac.ko bcm4360_test235_skip_set_active=1
+# (or via the test harness with module-args support)
+sleep 5
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil  # clean rmmod (test.230 baseline)
+```
+
+NMI watchdog/panic sysctls armed defensively even though no wedge
+expected (test.230 baseline ran cleanly across multiple tests).
+
+### Decision tree
+
+| Pre-zero scan summary | Verify summary | Interpretation | Next |
+|---|---|---|---|
+| N>0 / 71 non-zero | 0/71 non-zero (after zero loop) | Zero loop works; region had real fingerprint data; test.234 wedged with zeros in TCM ⇒ cheap tier failed | Decide: widen region (test.236) OR jump to medium-tier sentinel pointers |
+| 0/71 non-zero | 0/71 non-zero | Region was already zero on this boot — nothing to zero, test.234 was identical to a "do nothing" probe | Run a different region (still cheap), or move to medium tier |
+| Verify >0 non-zero | (any) | TCM writes to that range don't take — surprising; investigate write/read offsets, possibly a region brcmf hardware-blocks | Investigate before any further test.234-style run |
+| Wedge (unexpected) | n/a | Zero loop itself wedges? Highly unlikely (test.225 wrote 442 KB cleanly nearby); investigate | Read journal tail; consider write granularity bug |
+
+### Expected artifacts
+
+- `phase5/logs/test.235.run.txt` — PRE sysctls + lspci + BAR0 + pstore + strings + harness output
+- `phase5/logs/test.235.journalctl.full.txt` — boot 0 journal
+- `phase5/logs/test.235.journalctl.txt` — filtered subset
+
+### Hardware state (post-SMC-reset boot 0, started 2026-04-22 23:41:20 BST)
+
+- `lspci -vvv -s 03:00.0`: Control `Mem+ BusMaster+`, MAbort-,
+  CommClk+, LnkSta 2.5GT/s x1 — clean post-SMC-reset idiom.
+- No modules loaded. pstore directory present but empty (perm-denied
+  to non-root listing; previously confirmed empty).
+- BAR0 timing fast-UR (22ms) at boot start.
+
+### Build status — REBUILT CLEAN
+
+`brcmfmac.ko` rebuilt 2026-04-22 ~23:50 BST. `strings` confirms
+`bcm4360_test235_skip_set_active` module param + 2 test.235
+breadcrumbs present (SKIPPING line and dwell-done line). Pre-
+existing unused-variable warnings only — no regressions.
+
+### Pre-test checklist (CLAUDE.md)
+
+1. Build status: **PENDING** — will run `make -C phase5/work` before insmod.
+2. PCIe state: clean per above.
+3. Hypothesis: above.
+4. Plan: this block.
+5. Filesystem sync on commit.
+
+---
+
+
 ## PRE-TEST.234 (2026-04-23 00:xx BST, post-SMC-reset boot from test.233 Run 3) — zero TCM[0x9FE00..0x9FF1C] before `brcmf_chip_set_active`; cheapest-tier shared-memory-struct probe
 
 ### Hypothesis

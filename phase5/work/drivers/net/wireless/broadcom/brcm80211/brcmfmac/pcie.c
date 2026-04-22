@@ -81,6 +81,15 @@ static int bcm4360_skip_arm;
 module_param(bcm4360_skip_arm, int, 0644);
 MODULE_PARM_DESC(bcm4360_skip_arm, "BCM4360: skip ARM release (1=skip, 0=normal)");
 
+/* BCM4360 test.235: skip the brcmf_chip_set_active call AFTER the test.234
+ * zero+verify block has run. Lets us observe the zero loop's full output in
+ * journald (no wedge => no tail truncation), characterize the pre-zero TCM
+ * fingerprint, and confirm the verify lands at 0/71 non-zero. test.230
+ * baseline for safety. Default 0 (test.234 path: call set_active). */
+static int bcm4360_test235_skip_set_active;
+module_param(bcm4360_test235_skip_set_active, int, 0644);
+MODULE_PARM_DESC(bcm4360_test235_skip_set_active, "BCM4360 test.235: skip brcmf_chip_set_active after zero+verify (1=skip, 0=normal test.234 path)");
+
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
  * stage=1: write IOCTL = FGC|CLK (coredisable in_reset_configure step)
@@ -2568,23 +2577,29 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					 nz_post, count);
 			}
 
-			pr_emerg("BCM4360 test.234: calling brcmf_chip_set_active resetintr=0x%08x (after zero-upper-TCM)\n",
-				 resetintr);
-			mdelay(10);
-			if (!brcmf_chip_set_active(devinfo->ci, resetintr))
-				pr_emerg("BCM4360 test.234: brcmf_chip_set_active returned FALSE\n");
-			else
-				pr_emerg("BCM4360 test.234: brcmf_chip_set_active returned TRUE\n");
-			mdelay(100);
-			pr_emerg("BCM4360 test.234: t+100ms dwell\n");
-			mdelay(200);
-			pr_emerg("BCM4360 test.234: t+300ms dwell\n");
-			mdelay(200);
-			pr_emerg("BCM4360 test.234: t+500ms dwell\n");
-			mdelay(200);
-			pr_emerg("BCM4360 test.234: t+700ms dwell\n");
-			mdelay(300);
-			pr_emerg("BCM4360 test.234: t+1000ms dwell done (proceeding to BM-clear + release)\n");
+			if (bcm4360_test235_skip_set_active) {
+				pr_emerg("BCM4360 test.235: SKIPPING brcmf_chip_set_active (zero+verify-only run; test.230 baseline)\n");
+				msleep(1000);
+				pr_emerg("BCM4360 test.235: 1000 ms dwell done (no fw activation); proceeding to BM-clear + release\n");
+			} else {
+				pr_emerg("BCM4360 test.234: calling brcmf_chip_set_active resetintr=0x%08x (after zero-upper-TCM)\n",
+					 resetintr);
+				mdelay(10);
+				if (!brcmf_chip_set_active(devinfo->ci, resetintr))
+					pr_emerg("BCM4360 test.234: brcmf_chip_set_active returned FALSE\n");
+				else
+					pr_emerg("BCM4360 test.234: brcmf_chip_set_active returned TRUE\n");
+				mdelay(100);
+				pr_emerg("BCM4360 test.234: t+100ms dwell\n");
+				mdelay(200);
+				pr_emerg("BCM4360 test.234: t+300ms dwell\n");
+				mdelay(200);
+				pr_emerg("BCM4360 test.234: t+500ms dwell\n");
+				mdelay(200);
+				pr_emerg("BCM4360 test.234: t+700ms dwell\n");
+				mdelay(300);
+				pr_emerg("BCM4360 test.234: t+1000ms dwell done (proceeding to BM-clear + release)\n");
+			}
 #if 0
 			mdelay(20);
 			brcmf_pcie_probe_armcr4_state(devinfo,
