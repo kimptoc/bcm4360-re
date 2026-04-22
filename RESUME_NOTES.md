@@ -1,5 +1,100 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.229 (2026-04-22 21:08 BST, boot 0 of new session — boot -1 journal captured) — (H2) CONFIRMED: wedge is firmware-initiated bus stall, not our probe MMIO
+
+### Headline
+
+Test.229 ran the Option A binary discriminator (all post-set_active probes
+gated behind `#if 0`, replaced with a single `msleep(1000)`). Host still
+wedged bus-wide. **This is H2 from the PRE-229 decision tree: firmware-
+initiated bus stall — our probing was innocent.** Newly-alive firmware
+on ARM CR4 takes the front-side bus down on its own during the ~1 s
+window after `brcmf_chip_set_active` returns, regardless of what the
+host does next.
+
+### Evidence (boot -1 journal, Apr 22 21:04:41 → 21:04:59)
+
+- Full 442 KB firmware downloaded: **107** chunks in journal (complete).
+- TCM verify post-fw-download: **16/16 MATCH** at every sampled offset.
+- Pre-set-active probes ran cleanly:
+  - CR4 IOCTL=0x21 IOSTATUS=0 RESET_CTL=0 CPUHALT=YES
+  - D11 IOCTL=0x7 IOSTATUS=0 RESET_CTL=0x1 (IN_RESET=YES)
+  - CR4 clk_ctl_st=0x07030040 [HAVEHT/ALP_AVAIL/bit6]
+- FORCEHT applied: clk_ctl_st 0x01030040 → 0x010b0042 (post-write).
+- `brcmf_chip_set_active returned true` — reached.
+- `test.229: SKIPPING post-set_active probes — msleep(1000) before BM-clear`
+  emitted (21:04:59).
+- **Second breadcrumb `test.229: 1000 ms dwell done` never appeared.**
+  Journal ends there. No NMI watchdog trigger, no panic, no AER.
+- pstore empty on recovery (`/sys/fs/pstore/` — 0 files).
+- Auto-reboot did not complete in the armed 30 s; user performed SMC reset.
+
+### Why this is H2
+
+The post-set_active code path in test.229 is literally just a `pr_emerg`
++ `msleep(1000)` + `pr_emerg`. No MMIO, no config-space writes, no
+anything. The first pr_emerg landed in the journal (so CPU was alive
+then). During the `msleep(1000)` — where the kernel yields, other CPUs
+keep running, timer ticks fire — something froze every CPU
+simultaneously. That signature rules out "host did something that
+hung" and points to "bus went away under us". The most plausible
+cause on this bus (front-side) is PCIe completion starvation: firmware
+does something (a DMA read, a config TLP, an MSI) that never gets
+a completion; every CPU that subsequently touches the chip or the
+shared PCIe domain blocks; watchdog CPUs block too.
+
+### What we've now ruled out
+
+| Hypothesis | Status |
+|---|---|
+| Wedge caused by `probe_armcr4_state` MMIO at 0x408 (first post-set_active read) | **RULED OUT** — probes skipped, wedge still occurred |
+| Wedge caused by any of the tier-1/2 fine-grain probes | **RULED OUT** — all gated behind `#if 0` |
+| Wedge caused by 3000 ms dwell polling | **RULED OUT** — replaced with `msleep(1000)`, still wedged |
+| Firmware load / TCM corruption / NVRAM write | not yet ruled out, but highly unlikely (16/16 TCM MATCH, 107 chunks clean) |
+| Firmware-initiated post-activation bus event | **CONFIRMED** as the cause |
+
+### Artifacts captured
+
+- `phase5/logs/test.229.run.txt` — PRE sysctls + lspci + BAR0 timing
+  + pstore (empty) + the SKIPPING / dwell-done strings from .ko.
+  `test-brcmfmac.sh output` ends at `Loading patched brcmfmac modules...`
+  (script killed mid-run by wedge).
+- `phase5/logs/test.229.journalctl.full.txt` — 1390 lines whole boot -1.
+- `phase5/logs/test.229.journalctl.txt` — 397 lines brcmfmac/PCIe/NMI filtered.
+- No `test.229.pstore.txt` — pstore empty after recovery reboot.
+
+### Implication for test.230
+
+PRE-229 decision tree prescribes (H2 branch):
+
+> test.230 goes a different direction: either don't call set_active at
+> all (read all the state before firmware comes alive), or sample CR4
+> state via config-space-only path (no BAR0 MMIO after set_active).
+
+Cheapest next step: **don't call set_active**. Single-line change
+(gate the `brcmf_chip_set_active` call behind `#if 0`, or replace the
+call with a no-op breadcrumb + msleep). Decision tree:
+
+| Result | Interpretation | Next |
+|---|---|---|
+| Host stays alive, driver returns -ENODEV cleanly, rmmod works | Firmware activation IS the sole trigger. Bus stall happens after CR4 is released from reset. | test.231 narrows the timing: e.g. call set_active then msleep(100) vs msleep(500) to see when the stall starts. |
+| Host wedges anyway | Something pre-set_active is causing the stall (FORCEHT write, pci_set_master, fw/NVRAM write sequence). Much more work to isolate. | test.231 = progressively disable pre-set_active steps to isolate the culprit. |
+
+This keeps the experimentation binary and cheap.
+
+### Secondary possibility to consider (not test.230 but future)
+
+Upstream brcmfmac sets up extensive shared memory / ring descriptor
+infrastructure BEFORE `brcmf_chip_set_active` on other Broadcom PCIe
+parts: `brcmf_pcie_init_share`, ring allocation, mailbox setup. Our
+bypass path likely skips all of that for BCM4360. If newly-alive
+firmware tries to DMA ring descriptors from host memory that was
+never allocated, it could trigger exactly the kind of completion
+starvation we observe. Worth investigating once test.230 narrows the
+cause further — but test.230 is the cheaper next swing.
+
+---
+
 ## POST-TEST.228 (2026-04-22 20:42 BST, boot 0 of new session — boot -1 journal captured) — set_active reached AND returned true for the first time; pstore empty, bus-wide stall confirmed
 
 ### Headline
