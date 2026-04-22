@@ -1,5 +1,83 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.208 (2026-04-22) — extended chip-info dump + host-side core count
+
+### Hypothesis
+
+Test.207 ended with the working theory that the firmware ASSERT at hndarm.c:397
+fires because the firmware's ARM-side enumeration expected 9 distinct AI cores
+(r6==9 check) but the chip-info struct it walked only contains 6 populated AXI
+slots. If true, this is a "wrong firmware variant" failure — not a configuration
+problem we can fix from the host side.
+
+To confirm or refute, two complementary probes:
+
+1. **Widen the chip-info struct dump** from `0x62a00..0x62b80` →
+   `0x62a00..0x62c00`. The current dump shows the struct's chip-ID block and
+   the start of an AXI-core table (5 populated slots starting at
+   `0x18000000..0x18004000`). If the table continues past `0x62b80` with more
+   slots — or contains a "core count" field at a known offset — we want to
+   see it. Cost: +8 dump rows (~2 ms additional indirect MMIO time).
+
+2. **Log the host-side enumerated core count** from
+   `brcmf_chip_cores_check()`. brcmfmac walks the AXI core list itself during
+   `brcmf_chip_attach()` via `brcmf_chip_dmp_erom_scan` — the `idx` counter
+   in `brcmf_chip_cores_check` already tracks it. Promote the per-core
+   `brcmf_dbg(INFO,...)` line to `brcmf_err(...)` so we see each one, and
+   add a single summary line after the loop with the total count. Cost: zero
+   runtime change beyond a few extra log lines.
+
+### What the comparison will tell us
+
+| Host count | Firmware-table count | Interpretation |
+|---|---|---|
+| 6 | 6 | Both agree; r6==9 expectation is firmware-internal — we need a different firmware binary or a way to fool the check |
+| 9 | 6 | Host enumerated 9 but firmware's table missing 3 — firmware enumeration logic is broken (config or build mismatch we may influence) |
+| 6 | 9 | Host missed 3 cores firmware can see — would mean the firmware build *is* right, host enumeration is incomplete |
+| 9 | 9 | r6 isn't a core count after all; rethink |
+
+### Implementation
+
+**chip.c:**
+- `brcmf_chip_cores_check`: change per-core log from `brcmf_dbg(INFO,...)` to
+  `brcmf_err("BCM4360 test.208: core[%d] id=0x%x:rev%d base=0x%08x wrap=0x%08x", ...)`
+- After the loop, add a summary `brcmf_err("BCM4360 test.208: host-side enumerated %d cores total ...", idx-1)`
+- Bump test.207 → test.208 marker on the max_res_mask line
+
+**pcie.c:**
+- Extend chip-info dump_range upper bound from `0x62b80` → `0x62c00`
+- Bump test.207 → test.208 in dump label format strings
+
+**No NVRAM changes** (still on reverted/original NVRAM file).
+
+### Build + pre-test
+
+- Module rebuilt clean (just verified `make` completes; will rebuild after these edits)
+- PCIe state: clean (`Status: Cap+ ... <MAbort-`); no dirty state from prior crash
+- Filesystem will be synced before commit
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.208.journalctl{,.full}.txt` and `test.208.run.txt`.
+
+### Pre-arranged decision tree (read after test runs)
+
+- **Host=6, fw-table=6, no new field found** → strong evidence for "wrong firmware
+  variant" hypothesis. Action: locate alternate firmware (macOS, different vendor)
+  for this exact BCM4360 sub-revision.
+- **Host=9, fw-table=6** → firmware downloader/init is dropping cores. Investigate
+  what's in the EROM scan that brcmfmac sees vs. what firmware's enumeration gives.
+- **Host=6, fw-table=9 (continued)** → re-examine host enumeration; possibly the
+  EROM table walk is short-circuiting.
+- **Either count ≠ {6,9}** → my model of what r6 represents is wrong; reconsider
+  with the new core counts as data.
+
+---
+
 ## POST-TEST.207 (2026-04-22) — NVRAM delivery confirmed; r6 source partly identified
 
 Logs: `phase5/logs/test.207.journalctl.full.txt`. Run text:
