@@ -2355,11 +2355,17 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			pr_emerg("BCM4360 test.188: no NVRAM loaded before early return\n");
 		}
 
+		pr_emerg("BCM4360 test.226: past pre-release snapshot — entering INTERNAL_MEM lookup\n");
+		msleep(5);
+
 		{
 			struct brcmf_core *imem_core;
 
 			imem_core = brcmf_chip_get_core(devinfo->ci,
 							BCMA_CORE_INTERNAL_MEM);
+			pr_emerg("BCM4360 test.226: after brcmf_chip_get_core(INTERNAL_MEM) = %p\n",
+				 imem_core);
+			msleep(5);
 			if (imem_core) {
 				pr_emerg("BCM4360 test.188: pre-resetcore INTERNAL_MEM core->base=0x%08x rev=%u\n",
 					 imem_core->base, imem_core->rev);
@@ -2371,6 +2377,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pr_emerg("BCM4360 test.188: INTERNAL_MEM core not found — resetcore skipped (expected on BCM4360)\n");
 			}
 		}
+		pr_emerg("BCM4360 test.226: past INTERNAL_MEM block — entering pre-set-active probes\n");
+		msleep(5);
 		{
 			bool sa_rc;
 			/* test.196: 12 × 250 ms = 3000 ms dwell, low-poll
@@ -2396,6 +2404,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						   "pre-set-active");
 			brcmf_pcie_probe_d11_clkctlst(devinfo,
 						      "pre-set-active");
+			pr_emerg("BCM4360 test.226: past pre-set-active probes — before 50ms pre-BM delay\n");
+			msleep(5);
 			mdelay(50);
 
 			/* test.188: enable BusMaster BEFORE set_active so
@@ -2407,6 +2417,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				u16 cmd_pre_bm, cmd_post_bm;
 				u32 mmio_guard;
 
+				pr_emerg("BCM4360 test.226: before pre-BM mailboxint MMIO read\n");
+				msleep(5);
 				mmio_guard = brcmf_pcie_read_reg32(devinfo,
 						devinfo->reginfo->mailboxint);
 				pci_read_config_word(devinfo->pdev,
@@ -2418,7 +2430,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						"ON" : "OFF",
 					 mmio_guard);
 
+				pr_emerg("BCM4360 test.226: before pci_set_master\n");
+				msleep(5);
 				pci_set_master(devinfo->pdev);
+				pr_emerg("BCM4360 test.226: after pci_set_master\n");
+				msleep(5);
 				pci_read_config_word(devinfo->pdev,
 						     PCI_COMMAND,
 						     &cmd_post_bm);
@@ -2432,6 +2448,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pr_emerg("BCM4360 test.188: post-BM-on MMIO guard mailboxint=0x%08x (endpoint still responsive)\n",
 					 mmio_guard);
 			}
+			pr_emerg("BCM4360 test.226: past BusMaster dance — entering FORCEHT block\n");
+			msleep(5);
 
 			/* test.219: force HT clock by setting FORCEHT (bit 1)
 			 * of ChipCommon clk_ctl_st before set_active.
@@ -2443,6 +2461,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			{
 				u32 ccs_pre, ccs_post;
 
+				pr_emerg("BCM4360 test.226: before FORCEHT select_core+READCC32\n");
+				msleep(5);
 				brcmf_pcie_select_core(devinfo,
 						       BCMA_CORE_CHIPCOMMON);
 				ccs_pre = READCC32(devinfo, clk_ctl_st);
@@ -2456,6 +2476,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					 (ccs_post & BIT(16)) ? "YES" : "no ",
 					 (ccs_post & BIT(1))  ? "YES" : "no ");
 			}
+			pr_emerg("BCM4360 test.226: past FORCEHT write — before 2ms+probe+20ms+set_active\n");
+			msleep(5);
 			mdelay(2);
 			brcmf_pcie_probe_d11_clkctlst(devinfo,
 						      "post-FORCEHT-write");
@@ -2464,8 +2486,12 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			pr_emerg("BCM4360 test.219: calling brcmf_chip_set_active resetintr=0x%08x (FORCEHT pre-applied)\n",
 				 resetintr);
 			mdelay(30);
+			pr_emerg("BCM4360 test.226: immediately before brcmf_chip_set_active()\n");
+			msleep(5);
 			sa_rc = brcmf_chip_set_active(devinfo->ci,
 						      resetintr);
+			pr_emerg("BCM4360 test.226: immediately after brcmf_chip_set_active() returned\n");
+			msleep(5);
 			pr_emerg("BCM4360 test.188: brcmf_chip_set_active returned %s\n",
 				 sa_rc ? "true" : "false");
 			mdelay(20);
