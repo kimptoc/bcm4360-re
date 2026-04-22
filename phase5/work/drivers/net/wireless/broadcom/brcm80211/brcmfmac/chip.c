@@ -530,7 +530,7 @@ static int brcmf_chip_cores_check(struct brcmf_chip_priv *ci)
 	int idx = 1;
 
 	list_for_each_entry(core, &ci->cores, list) {
-		brcmf_err("BCM4360 test.213: core[%-2d] id=0x%x:rev%-3d base=0x%08x wrap=0x%08x\n",
+		brcmf_err("BCM4360 test.214: core[%-2d] id=0x%x:rev%-3d base=0x%08x wrap=0x%08x\n",
 			  idx++, core->pub.id, core->pub.rev, core->pub.base,
 			  core->wrapbase);
 
@@ -553,7 +553,7 @@ static int brcmf_chip_cores_check(struct brcmf_chip_priv *ci)
 		}
 	}
 
-	brcmf_err("BCM4360 test.213: host-side enumerated %d cores total\n",
+	brcmf_err("BCM4360 test.214: host-side enumerated %d cores total\n",
 		  idx - 1);
 	if (!cpu_found) {
 		brcmf_err("CPU core not detected\n");
@@ -1188,10 +1188,10 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		before_max = chip->ops->read32(chip->ctx, max_addr);
 		chip->ops->write32(chip->ctx, max_addr, 0x17f);
 		after_max = chip->ops->read32(chip->ctx, max_addr);
-		brcmf_err("BCM4360 test.213: max_res_mask 0x%08x -> 0x%08x (0x17f)\n",
+		brcmf_err("BCM4360 test.214: max_res_mask 0x%08x -> 0x%08x (0x17f)\n",
 			  before_max, after_max);
 
-		/* test.213: pin min_res_mask = 0x17f to force PMU bit 2 always-on.
+		/* test.214: pin min_res_mask = 0x17f to force PMU bit 2 always-on.
 		 * Across .210/.211/.212 res_state stuck at 0x17b (missing bit 2)
 		 * while max_res=0x17f requested it; firmware appears to poll for
 		 * bit 2 to assert and asserts "ramstbydis" when it doesn't.
@@ -1200,7 +1200,7 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		before_min = chip->ops->read32(chip->ctx, min_addr);
 		chip->ops->write32(chip->ctx, min_addr, 0x17f);
 		after_min = chip->ops->read32(chip->ctx, min_addr);
-		brcmf_err("BCM4360 test.213: min_res_mask 0x%08x -> 0x%08x (force bit 2 on)\n",
+		brcmf_err("BCM4360 test.214: min_res_mask 0x%08x -> 0x%08x (force bit 2 on)\n",
 			  before_min, after_min);
 	}
 

@@ -2026,7 +2026,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 */
 		static const u32 dump_ranges[][2] = {
 			{0x40660, 0x406c0},	/* strings */
-			{0x40000, 0x40400},	/* early boot/init code (likely caller of 0x64028) */
+			{0x40700, 0x41000},	/* test.214: hunt "v = %d, wd_msticks = %d" fmt */
+			{0x40000, 0x40400},	/* early boot/init code */
 			{0x40400, 0x40660},	/* code immediately before strings */
 			{0x64280, 0x64500},	/* code immediately after asserting function */
 			{0x63e00, 0x64280},	/* asserting function 0x64028..0x6422a */
@@ -2525,7 +2526,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				u32 lo = dump_ranges[j][0];
 				u32 hi = dump_ranges[j][1];
 
-				pr_emerg("BCM4360 test.213: dump range 0x%05x..0x%05x\n",
+				pr_emerg("BCM4360 test.214: dump range 0x%05x..0x%05x\n",
 					 lo, hi);
 				for (addr = lo; addr < hi; addr += 16) {
 					u32 w[4];
@@ -2542,7 +2543,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							(char)c : '.';
 					}
 					ascii[16] = '\0';
-					pr_emerg("BCM4360 test.213: 0x%05x: %08x %08x %08x %08x | %s\n",
+					pr_emerg("BCM4360 test.214: 0x%05x: %08x %08x %08x %08x | %s\n",
 						 addr, w[0], w[1], w[2], w[3],
 						 ascii);
 				}
