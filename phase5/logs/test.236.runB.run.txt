@@ -1,0 +1,20 @@
+=== test.236 Run B PRE (2026-04-23 00:06:59 BST) ===
+=== sysctls ===
+  nmi_watchdog=1
+  hardlockup_panic=1
+  softlockup_panic=1
+  panic=30
+=== lspci ===
+  	Control: I/O- Mem+ BusMaster- SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+  	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+=== BAR0 timing ===
+  exit=1 elapsed=45ms
+=== module state ===
+  brcmutil               16384  0
+  cfg80211             1413120  5 mt76,mt76x02_lib,mac80211,mt76x02_usb,mt76x2_common
+  rfkill                 40960  3 bluetooth,cfg80211
+
+=== test.236 Run B insmod (skip_set_active=0, force_seed=1) ===
+2026-04-23 00:06:59.256 BST
+  insmod brcmfmac.ko bcm4360_test235_skip_set_active=0 bcm4360_test236_force_seed=1
+  modules loaded; sleeping 15s (wedge window)

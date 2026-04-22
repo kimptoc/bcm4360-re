@@ -1,3 +1,229 @@
+## POST-TEST.233 (2026-04-22 22:41 BST, 3 runs across 2 boots) — SMC reset wipes our TCM magic; TCM ring-buffer logger RULED OUT
+
+### Headline
+
+All 3 runs completed cleanly (test.230 baseline, no wedge). Writes
+verified each time (post-write readback = 0xDEADBEEF/0xCAFEBABE).
+The critical evidence is the **pre-read** values at probe entry:
+
+| Run | Boot | Timestamp | Pre-read TCM[0x90000] | Pre-read TCM[0x90004] |
+|---|---|---|---|---|
+| 1 | boot -1 first insmod (fresh post-SMC-reset) | 22:25:50 | 0x842709e1 | 0x90dd4512 |
+| 2 | boot -1 second insmod (same boot) | 22:26:52 | **0xDEADBEEF** | **0xCAFEBABE** |
+| 3 | boot 0 first insmod (post-SMC-reset + reboot) | 22:40:xx | 0x842709e1 | 0xb0dd4512 |
+
+### Interpretation
+
+**Run 2 = MATCH (magic preserved within a boot):** TCM retains
+writes across a full driver-module cycle including the probe-start
+Secondary Bus Reset via bridge. Useful bank: within a single boot,
+if a wedge leaves the host recoverable without SMC reset, the TCM
+can carry data across the reload.
+
+**Run 3 ≠ magic (magic wiped across SMC reset):** Our 0xDEADBEEF/
+0xCAFEBABE is gone; the pre-read reverted to a value very close to
+Run 1's fresh-boot baseline (first word byte-identical, second word
+off by one bit in the high byte). SMC reset + reboot either cut
+power to the SRAM, or the brcmfmac re-init on a fresh boot traverses
+more initialization than the within-boot cycle does.
+
+**The Run 1 / Run 3 non-zero pre-reads are themselves interesting.**
+Offset 0x90000 is past the 442 KB fw image (ends at 0x6bf78) and
+before the 228 B NVRAM slot (0x9ff1c). Our code never writes there
+in the normal flow, yet we see specific non-zero bytes consistent
+across SMC resets with only a single-bit difference. Likely
+candidates:
+- BCM4360 SRAM power-on fingerprint (SRAM cells settling to
+  deterministic-but-instance-specific values; known PUF-adjacent
+  property).
+- Some early-probe routine (CR4 halt / buscore_reset / bridge
+  SBR) writes a pattern here as a side effect.
+Not worth chasing now; the binary answer (SMC reset wipes our
+magic) is what matters.
+
+### Binary conclusion: TCM ring-buffer logger NOT viable
+
+Every wedge in this investigation (tests 226, 227, 228, 229, 231,
+232) has required an SMC reset to recover the host. Since SMC reset
+wipes our TCM magic, a TCM-resident ring-buffer logger cannot
+survive the recovery path we actually use. Ruled out.
+
+Caveat: if a future wedge were ever host-recoverable without SMC
+reset (e.g. driver hang that doesn't freeze the watchdog), the
+logger could still help for that narrow case. Not worth building
+speculatively.
+
+### Pivot — test.234 plan (per PRE decision tree, "all pre-reads → 0/garbage" branch landed)
+
+Primary direction: **build a minimal shared-memory struct in TCM
+before `brcmf_chip_set_active`**, per upstream brcmfmac
+`brcmf_pcie_init_share` pattern. Two payoffs:
+
+1. **Diagnostic:** If the wedge stops, we've located the missing
+   piece fw was dereferencing. If timing/signature shifts, we have
+   a new observable.
+2. **Forward step:** Valid shared-memory infrastructure is part of
+   the eventual correct driver path anyway — progress on the
+   reverse-engineering goal regardless of the wedge outcome.
+
+Advisor previously flagged this as potentially simpler/cheaper than
+building a full logger — and we have no logger alternative left.
+
+### Evidence summary / artifacts
+
+- `phase5/logs/test.233.runs12.journal.txt` — 697 lines covering
+  runs 1-2 (already committed in f203c0b).
+- `phase5/logs/test.233.run3.journal.txt` — 349 lines, boot 0
+  post-SMC-reset journal with Run 3.
+- `phase5/logs/test.9, test.10, test.12` — harness dmesg captures.
+- All 3 runs: clean writes (post-write readback matched magic every
+  time), clean -ENODEV, clean rmmod. test.230 baseline held.
+- No wedges. No SMC reset required for any test.233 run — only the
+  one between run 2 and run 3 that the test design asked for.
+
+### Hardware state (post-Run-3 rmmod, 22:41 BST)
+
+- `lspci -vvv -s 03:00.0` — Control `Mem+ BusMaster-` (kernel
+  reverted after rmmod), MAbort-, DevSta would still show sticky
+  UR+ but no new dirty signature.
+- No modules loaded, no pstore dumps.
+- Host is ready for test.234 (code development, no hardware test
+  needed for initial implementation read-through).
+
+---
+
+
+## PRE-TEST.233 (2026-04-22 22:25 BST, fresh SMC-reset boot) — TCM persistence probe: does SMC reset wipe TCM?
+
+### Hypothesis
+
+We don't know whether TCM (chip's internal SRAM, mapped via BAR2)
+survives an SMC reset. The answer determines whether the TCM ring-
+buffer logger (our strongest remaining wedge-timing transport) is
+viable at all. Design: write a magic pattern to a known-safe TCM
+offset on one run, read it back on a later run, and log survival.
+
+### Design — 3 runs across 1 SMC reset
+
+Each run uses the test.230 baseline probe path (FORCEHT ✓,
+pci_set_master ✓, **`brcmf_chip_set_active` SKIPPED**). No wedge
+risk in any run — this exact path ran cleanly end-to-end in
+test.230. Probe writes a magic pattern to TCM[0x90000] /
+TCM[0x90004] as late as possible in the probe, then dwells
+1000 ms, then does clean BM-clear + release → -ENODEV. Driver
+rmmods cleanly.
+
+Offset 0x90000 is past the 442 KB firmware image (last fw byte at
+0x6bf78) and before the NVRAM slot (0x9ff1c), so it's untouched
+by the normal fw/NVRAM writes.
+
+| Run | Context | Pre-read expected (if TCM preserved) | Pre-read expected (if wiped) |
+|---|---|---|---|
+| 1 | fresh SMC-reset boot, first insmod | 0 / garbage (baseline — no prior write) | 0 / garbage (same) |
+| 2 | same boot, second insmod after rmmod | 0xDEADBEEF / 0xCAFEBABE | 0 / garbage → probe-start SBR wipes TCM |
+| 3 | after SMC reset + reboot, first insmod | 0xDEADBEEF / 0xCAFEBABE | 0 / garbage → SMC reset wipes TCM |
+
+Run 2 is a bonus: tells us whether the driver's own probe-start
+SBR (via bridge) wipes TCM. If SBR itself wipes, cross-boot
+persistence via the driver path is impossible.
+
+### Code change
+
+`drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c` in
+`brcmf_pcie_download_fw_nvram`:
+
+1. **Restored** test.232's SKIP of `pci_set_master` → `pci_set_master`
+   called as in test.230 baseline. No functional difference with
+   set_active skipped, but matches a proven-clean path.
+2. **Added pre-read** (near function entry, after the BAR2 probe):
+   reads TCM[0x90000] and [0x90004], logs as
+   `test.233: PRE-READ TCM[0x90000]=... TCM[0x90004]=...`.
+3. **Added write + verify + skip-set_active** (where the
+   brcmf_chip_set_active call used to be, replacing test.231's 10
+   timing dwells): writes 0xDEADBEEF to TCM[0x90000] and
+   0xCAFEBABE to TCM[0x90004], logs, reads back, logs. Then a
+   `test.233: SKIPPING brcmf_chip_set_active` marker, 1000 ms
+   dwell, `dwell done` marker.
+
+All other test.230 breadcrumbs (fw download, TCM verify, NVRAM
+write, pre-release snapshots, FORCEHT, pci_set_master, BM-clear,
+-ENODEV return) retained.
+
+### Build status — REBUILT CLEAN (2026-04-22 22:23 BST)
+
+`brcmfmac.ko` 14249552 bytes. `strings` confirms 5 test.233
+breadcrumbs present and 0 test.232 leftovers:
+- `test.233: PRE-READ TCM[0x90000]=0x%08x TCM[0x90004]=0x%08x ...`
+- `test.233: writing magic TCM[0x90000]=0xDEADBEEF TCM[0x90004]=0xCAFEBABE`
+- `test.233: POST-WRITE readback TCM[0x90000]=0x%08x ... (expect DEADBEEF/CAFEBABE)`
+- `test.233: SKIPPING brcmf_chip_set_active ...`
+- `test.233: 1000 ms dwell done ...`
+
+### Hardware state (post-SMC-reset boot at ~21:54 BST, user did SMC reset)
+
+- Boot 0 started 2026-04-22 21:54:48 BST (following test.232 wedge
+  reboot + user SMC reset).
+- `lspci -vvv -s 03:00.0`: Control `Mem+ BusMaster+`, Status
+  MAbort- (clean), DevSta CorrErr+ UnsupReq+ (sticky) AuxPwr+
+  TransPend-, LnkCtl ASPM L0s L1 Enabled CommClk+, LnkSta 2.5GT/s
+  x1. Matches post-SMC-reset idiom from prior tests.
+- No modules loaded. pstore empty.
+
+### Run sequence (this PRE entry covers all 3 runs; POST will
+summarize outcomes)
+
+```bash
+# Run 1: fresh SMC-reset boot — captures baseline TCM state
+sudo phase5/work/test-brcmfmac.sh   # (or insmod equivalent)
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil
+
+# Run 2: same boot, tests probe-SBR persistence
+sudo phase5/work/test-brcmfmac.sh
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil
+
+# >>> Intermission: user SMC-resets host. Reboot. <<<
+
+# Run 3: post-SMC-reset boot — tests SMC-reset persistence
+sudo phase5/work/test-brcmfmac.sh
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil
+```
+
+The harness test-brcmfmac.sh already arms NMI watchdog / panic
+sysctls + captures run artifacts. Each run's journal is read
+live (no wedge expected).
+
+### Decision tree
+
+| Run 2 pre-read | Run 3 pre-read | Interpretation | Next |
+|---|---|---|---|
+| magic | magic | **TCM survives everything** (SBR + SMC reset). Logger fully viable. | Build TCM ring-buffer logger |
+| magic | 0/garbage | TCM survives SBR within boot, wiped by SMC reset. Logger only helps if host survives without SMC reset (rare). | Investigate alt transports or proceed to shared-memory struct implementation |
+| 0/garbage | (any) | Probe-start SBR wipes TCM. Logger cannot use driver-probe path to seed state cross-boot. | Shared-memory-struct forward step, or alternative reset path |
+| 0/garbage | magic | Contradictory — SBR wipes but SMC reset preserves? Unlikely; re-investigate. | Rerun runs 1-2 to confirm baseline |
+
+### Logging / watchdog arming
+
+```bash
+echo 1 | sudo tee /proc/sys/kernel/nmi_watchdog
+echo 1 | sudo tee /proc/sys/kernel/hardlockup_panic
+echo 1 | sudo tee /proc/sys/kernel/softlockup_panic
+echo 30 | sudo tee /proc/sys/kernel/panic
+sync
+```
+
+No wedge expected — test.230 baseline. If a wedge somehow occurs,
+the test design catches it the same way test.230 would (BM-clear
++ -ENODEV or visible hang).
+
+### Expected artifacts
+
+- `phase5/logs/test.233.run1.journal.txt` — current-boot journal after run 1
+- `phase5/logs/test.233.run2.journal.txt` — current-boot journal after run 2 (both runs visible)
+- `phase5/logs/test.233.run3.journal.txt` — boot -1 or boot 0 journal after run 3 (depending on whether host survived; expected survive)
+- PRE/POST lspci captures for each run
+---
+
+
 ## POST-TEST.232 (2026-04-22 21:52 BST, boot -1 journal captured) — BM=OFF did NOT prevent wedge; DMA-completion-waiting theory falsified
 
 ### Headline
