@@ -1,87 +1,90 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
-## PRE-TEST.218 (2026-04-22) — verify D11 wrapper window (low vs high)
+## PRE-TEST.218 (2026-04-22) — sample ARM CR4 clk_ctl_st (the actually-polled register)
 
-### What POST-TEST.217 just delivered
+### What POST-TEST.217 + EROM dump together delivered (BIG pivot)
 
 Test.217 ran cleanly, no crash. Two signals captured:
 
-**1. D11 RESET_CTL via the canonical high window (base+0x100000+0x800)
-reads 0x00000001 (IN_RESET=YES) for EVERY probe** — including pre-halt
-(before chip_set_passive even runs), pre-set-active, post-set-active,
-all of tier1/tier2, and every dwell tick (3 seconds total). IOCTL=0x07
-consistent throughout. Cross-checked against the existing
-`brcmf_pcie_probe_d11_state` (test.188) — same numbers.
-
-That is **internally inconsistent** with test.114b's earlier finding
-(line 2768) that D11 was NOT in reset when probed via the legacy low
-window at base+0x1800. Two possible explanations:
-
-- (A) D11 wrapper is genuinely at base+0x100000 (high window). D11 stays
-  in BCMA reset throughout. ramstbydis traps because the polled register
-  cannot ack while D11 is in reset (firmware accesses it via ARM CR4
-  backplane bypassing PCIe wrapper gating, but the underlying reset is
-  what blocks the ack).
-- (B) D11 wrapper is at base+0x1000 (low window) and base+0x100000 is
-  unmapped — what we read as `RESET_CTL=0x1, IOCTL=0x07` is some other
-  register's content. Test.114b's low-window read was correct; D11 is
-  actually OUT of reset and the polling failure has a different cause.
-
-**2. ARM exception vectors located at TCM 0x00000:**
+**1. EROM core enumeration (logged at chip init by chip.c) gives the truth
+about wrapper layout AND identifies the polled register's host core:**
 
 ```
-0x00000  B 0x?? (Reset)
-0x00004  B 0x?? (Undef)
-0x00008  B 0x?? (SVC) ← branches to SVC trap handler
-0x0000c  B 0x?? (PrefetchAbort)
-0x00010  B 0x?? (DataAbort)
-0x00014  B 0x?? (Reserved/Hyp)
-0x00018  B 0x?? (IRQ)
-0x0001c  B 0x?? (FIQ)
-0x00020  ... reset-vector body (general regs init, jump to _start)
-0x00080  ... handler body (PUSH/POP, conditional branches)
+core[1] id=0x800:rev43  base=0x18000000 wrap=0x18100000  ChipCommon
+core[2] id=0x812:rev42  base=0x18001000 wrap=0x18101000  D11 (80211)
+core[3] id=0x83e:rev2   base=0x18002000 wrap=0x18102000  ARM CR4
+core[4] id=0x83c:rev1   base=0x18003000 wrap=0x18103000  PCIe2
+core[5] id=0x81a:rev17  base=0x18004000 wrap=0x18104000  PMU/USB20_DEV
+core[6] id=0x135:rev0   base=0x00000000 wrap=0x18108000  unknown
 ```
 
-Code body in 0x80-0x130 looks like a context-saving prologue — likely
-the SVC handler that emits `v = %d, wd_msticks = %d`. Format string
-location still TBD (need to scan further into 0x130-0x1000 or 0x100-0x200
-for printf-style template — defer until after wrapper-window question
-resolved).
+Confirms canonical AI layout: **wrap = base + 0x100000** for every core.
+Test.114b's old low-window read at base+0x1800 was reading into unmapped
+memory; the test.217 high-window read is correct.
 
-**3. ramstbydis trap recurred** — same assert text "v = 43, wd_msticks = 32"
-at PC 0x000641cb. Independent of dwell sampling.
+**2. The polled register in ramstbydis is NOT D11 — it's ARM CR4.**
+
+Trap data slot[0] = 0x18002000 = **ARM CR4 core base** (not D11 base —
+D11 base is 0x18001000). The static-analysis hypothesis "[r5 = chip_info
+ptr; *r5 = 0x18002000]" places the polled register at:
+
+```
+[*r5 + 0x1e0] = 0x18002000 + 0x1e0 = 0x180021e0 = ARM CR4 + 0x1e0
+```
+
+Per BCMA convention, **base + 0x1e0** is the **per-core clk_ctl_st**
+register (test.114b decoded the same offset for D11 with bits HAVEHT(17),
+ALP_AVAIL(16), BP_ON_HT(19), FORCEHT(1), FORCEALP(0)).
+
+**Revised understanding:** firmware running ON ARM CR4 calls `ramstbydis`
+("RAM standby disable" — for ARM CR4's own TCM/data memory), which:
+- Sets bit 6 of ARM CR4's clk_ctl_st (chip-specific standby-disable
+  request, or related clock-domain request)
+- Polls bit 17 (HAVEHT — HT clock available to ARM CR4) for ~20 ms
+- If HAVEHT never asserts → ASSERT "v=43, wd_msticks=32"
+
+This re-frames the issue: **the failure is HT-clock distribution to ARM
+CR4, not anything about D11.** ARM CR4 wrapper RESET_CTL=0 throughout
+(test.188 already shows this); ARM CR4 IOCTL=0x01 (CLK enable only),
+IOSTATUS=0. Yet ARM CR4 doesn't see HT clock when it requests one.
+
+**3. ARM exception vectors located at TCM 0x00000:**
+
+8 standard ARM vectors at 0x00..0x1c (Reset, Undef, SVC, PrefetchAbort,
+DataAbort, Reserved, IRQ, FIQ). Reset-vector body at 0x20; SVC handler
+body around 0x80. `v = %d, wd_msticks = %d` format string still TBD —
+deferred (the polled-register identity is now the priority).
+
+**4. ramstbydis trap recurred** — same assert text. Independent of probe
+overhead.
 
 ### Implementation plan for test.218
 
-Distinguish (A) vs (B) by reading D11 wrapper RESET_CTL/IOCTL from BOTH
-windows in the same probe call:
+Replace `brcmf_pcie_probe_d11_clkctlst()` with `brcmf_pcie_probe_clkctlst()`
+that samples **ARM CR4 + 0x1e0** (the actually-polled register) and also
+samples D11 + 0x1e0 (kept for context, but expected to skip on
+IN_RESET=YES since D11 hasn't been brought out of reset by firmware yet).
 
-```
-brcmf_pcie_probe_d11_clkctlst() amended to:
-  - Save BAR0 window
-  - WIN1 = base + 0x100000 (canonical AI high window)
-    log RESET_CTL@0x800, IOCTL@0x408, IOSTATUS@0x40c
-  - WIN2 = base + 0x1000 (legacy low window)
-    log RESET_CTL@0x800, IOCTL@0x408, IOSTATUS@0x40c
-  - WIN3 = base + 0  (alternative legacy: try wrapbase = base + 0x100,
-                       which means RESET_CTL@0x900, IOCTL@0x508 — log raw
-                       0x800/0x808 in low window)
-  - Whichever window shows values that CHANGE between pre-halt and
-    post-set-active is the true wrapper.
-  - If safe (IN_RESET=NO from the truthy window), read core 0x1e0
-    (clk_ctl_st) as before.
-```
+For each core:
+- Read wrapper RESET_CTL via base + 0x100000 + 0x800 (now confirmed
+  layout)
+- If IN_RESET=NO, read core register 0x1e0 (low window @ base + 0x1e0)
+- Decode clk_ctl_st bits 0,1,6,16,17,19
+
+Call sites unchanged from test.217 (~52 reads per dwell). The dump
+range 0x00000..0x01000 stays.
 
 `min_res_mask=0x17f` patch retained. Test marker .217 → .218.
 
 ### Decision tree
 
-| Observation | Interpretation | Next |
+| ARM CR4 clk_ctl_st observation | Interpretation | Next |
 |---|---|---|
-| Both windows show identical RESET_CTL=0x1 throughout | true wrapper still unknown; D11 might actually be in reset OR a third window applies | dump EROM scan output (enable brcmf_dbg(INFO) or add log in chip.c) |
-| Window A changes between pre/post probes; B is constant | A is the real wrapper | trust A's IN_RESET reading; if NO, sample 0x1e0 to test bit 17 |
-| One window reads 0xffffffff (UR) | unmapped — that window is wrong | use the other |
-| Low window shows IN_RESET=NO and HAVEHT toggles | D11 functional; firmware's polled bit isn't HAVEHT — re-decode the SET-bit at +0x1e0 in ramstbydis (likely bit 6 — chip-specific standby-disable bit) | dump 0x101e0 nearby for related registers |
+| HAVEHT(17) = 0 throughout dwell, FORCEHT(1) = 0 | firmware never set FORCEHT (or its set-bit-6 request didn't translate into HT clock); HT not granted | test.219: write FORCEHT=1 to ARM CR4 clk_ctl_st BEFORE set_active and observe whether assert disappears |
+| HAVEHT(17) = 0 throughout, bit 6 = SET | firmware set bit 6, but PMU never granted HT — likely a PMU resource missing | force the relevant PMU resource (research which bit corresponds to HT for CR4); add to min_res_mask |
+| HAVEHT(17) = 1 at any sample | HT clock IS available at probe time; firmware's poll missed it OR firmware reads via a different path; re-examine the SET-bit semantics | examine the bit-6 set vs poll timing; consider firmware-side race |
+| ARM CR4 clk_ctl_st reads 0xffffffff or seems garbled | wrapper window guess wrong for CR4 (already disproved by test.169 / EROM) | unlikely — re-check |
+| ChipCommon clk_ctl_st (existing sample) shows HAVEHT but ARM CR4 doesn't | HT enabled at chip level but not at CR4 — clock-domain partition issue | inspect PMU resources gating CR4-specific clock |
 
 ### Build/run
 
