@@ -1,5 +1,61 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.198 (2026-04-22) — per-tick time-series of 7 firmware-active TCM cells
+
+### Hypothesis
+
+Test.197 caught firmware updating 7 cells in the post-dwell scan window
+(~400 ms after the 3000 ms dwell ended), including a binary counter
+at `0x9cd50` whose value (0x335 = 821) matches an ASCII suffix at
+`0x97030` (".821") — strong evidence of an active sprintf-style
+loop. Test.198 reads the same 7 cells once per dwell tick (every
+250 ms × 12 ticks) so we can measure the actual update cadence.
+
+Expected outcomes (each is a useful datapoint):
+
+| Pattern | Interpretation | Next move |
+|---|---|---|
+| Counter at 0x9cd50 increments by ~constant N every tick | firmware loop is periodic, N/250 ms = tick rate | use this rate to time other probes; investigate what gates the loop |
+| Counter increments by varying N | firmware doing variable-cost work per loop | look at neighbouring cells for state |
+| Counter does not change between ticks | activity we caught in test.197 was a one-shot, or update cadence > 250 ms | widen sample window, or use post-set_active baseline |
+| Counter increments rapidly then stops | firmware hit an error / wait-for-host condition | examine what register state changed at the stop point |
+| Hard crash (no precedent — these reads are very cheap) | something pathological with these specific addresses | retreat to test.197 baseline |
+
+### Implementation
+
+**chip.c** — marker rename `test.197` → `test.198`. PMU state unchanged
+(`max_res_mask = 0x17f`, bit 6 only).
+
+**pcie.c** — adds:
+- `static const u32 ts_offsets[7]` containing the 7 active offsets
+- `u32 ts_prev[7]` (stack) + `bool ts_seeded` flag
+- Inside the existing dwell loop (after the CC backplane sample), a new
+  block reads each of the 7 cells. First tick seeds `ts_prev` and logs
+  the seed value. Subsequent ticks log value + delta vs prev tick.
+
+Existing fine-grain post-dwell scan retained — we still want a chance
+to spot any *new* active region we missed.
+
+Per-tick cost: 7 indirect-MMIO reads ≈ ~50 µs each ≈ <0.5 ms per tick.
+Negligible vs the 250 ms dwell increment. Should be crash-safe.
+
+### Build + pre-test
+
+- Module rebuilt clean (only pre-existing brcmf_pcie_write_ram32 warning).
+- PCIe state from prior check (post-test.197): `MAbort-`, `FatalErr-`,
+  `LnkSta` x1/2.5GT/s, `ASPM Disabled` — clean.
+- brcmfmac module loaded from test.197 (test script will rmmod).
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Log → rename to `test.198.journalctl.txt`.
+
+---
+
 ## POST-TEST.197 (2026-04-22) — BREAKTHROUGH 2: firmware is *running loops* (ASCII counter strings updating in real time)
 
 Logs: `phase5/logs/test.197.journalctl.txt` (892 brcmfmac lines) +

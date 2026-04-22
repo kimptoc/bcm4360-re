@@ -2018,6 +2018,18 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		const u32 fine_stride = 4;
 		const u32 nr_fine = 0x10000 / 4;	/* 16384 cells */
 		u32 *pre_fine = NULL;
+		/* test.198: per-tick sampling of the 7 cells test.197 found
+		 * firmware actively updating. Cheap (7 indirect-MMIO reads
+		 * per tick); pin down the firmware loop tick rate from the
+		 * binary counter at 0x9cd50.
+		 */
+		static const u32 ts_offsets[7] = {
+			0x9702c, 0x97030,
+			0x9cd48, 0x9cd50,
+			0x9cdb0, 0x9cdb4, 0x9cdb8
+		};
+		u32 ts_prev[7] = {0};
+		bool ts_seeded = false;
 		static const u32 wide_offsets[40] = {
 			0x00000, 0x04000, 0x08000, 0x0c000,
 			0x10000, 0x14000, 0x18000, 0x1c000,
@@ -2457,6 +2469,50 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							 pre_bp[j] ?
 								"UNCHANGED" :
 								"CHANGED");
+				}
+
+				/* test.198: per-tick time-series of the 7 cells
+				 * test.197 caught firmware actively updating.
+				 * On the first tick we just seed prev; from
+				 * tick 2 onward we log delta per cell so we
+				 * can read the firmware loop tick rate
+				 * directly from the binary counter at
+				 * 0x9cd50 (and watch the ASCII string fields
+				 * advance in lockstep).
+				 */
+				{
+					u32 ts_now[7];
+					for (j = 0; j < 7; j++)
+						ts_now[j] = brcmf_pcie_read_ram32(
+								devinfo,
+								ts_offsets[j]);
+
+					if (!ts_seeded) {
+						for (j = 0; j < 7; j++) {
+							ts_prev[j] = ts_now[j];
+							pr_emerg("BCM4360 test.198: ts-seed dwell-%ums [0x%05x]=0x%08x\n",
+								 dwell_labels_ms[d],
+								 ts_offsets[j],
+								 ts_now[j]);
+						}
+						ts_seeded = true;
+					} else {
+						for (j = 0; j < 7; j++) {
+							s32 delta = (s32)(ts_now[j] -
+								    ts_prev[j]);
+							pr_emerg("BCM4360 test.198: ts dwell-%ums [0x%05x]=0x%08x prev=0x%08x delta=%d %s\n",
+								 dwell_labels_ms[d],
+								 ts_offsets[j],
+								 ts_now[j],
+								 ts_prev[j],
+								 delta,
+								 ts_now[j] ==
+								 ts_prev[j] ?
+									"SAME" :
+									"CHANGED");
+							ts_prev[j] = ts_now[j];
+						}
+					}
 				}
 			}
 
