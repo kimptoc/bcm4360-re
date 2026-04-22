@@ -1,5 +1,129 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.208 (2026-04-22) — both sides see 6 cores; "9-core mismatch" hypothesis killed
+
+Logs: `phase5/logs/test.208.journalctl.full.txt`,
+`phase5/logs/test.208.run.txt`. Test ran cleanly — no crash.
+
+### Result 1: host-side enumerated 6 cores (matches firmware-side count exactly)
+
+```
+test.208: core[1] id=0x800:rev43 base=0x18000000 wrap=0x18100000  (ChipCommon)
+test.208: core[2] id=0x812:rev42 base=0x18001000 wrap=0x18101000  (PCIe2)
+test.208: core[3] id=0x83e:rev2  base=0x18002000 wrap=0x18102000  (D11/PHY)
+test.208: core[4] id=0x83c:rev1  base=0x18003000 wrap=0x18103000
+test.208: core[5] id=0x81a:rev17 base=0x18004000 wrap=0x18104000  (PMU)
+test.208: core[6] id=0x135:rev0  base=0x00000000 wrap=0x18108000  (special — wrap-only)
+test.208: host-side enumerated 6 cores total
+```
+
+### Result 2: firmware chip-info struct decoded further
+
+Extended dump `0x62a00..0x62c00` reveals additional structure:
+
+```
+0x62a00..0x62a08  = (00, 00, 0x18002000)            [trap-PC slot]
+0x62a90..0x62aa4  = (1, 0x20, 1, 0, 0x700, -1)       [unknown header]
+0x62aa8..0x62ab8  = (17, 43, 0x58680001, 3, 17, 0x10a22b11)
+                    pmurev=17, ccrev=43, ?, chiprev=3, pmurev=17, pmucaps
+0x62ac0..0x62af0  = (0xffff, 0, 0x14e4, 0,           [vendid]
+                     0, 0x4360, 3, 0,                 [chipid, chiprev]
+                     0x8a4d, 0, 0, 0,                 [chipst]
+                     0x96f60, 0, 0, 0)                [console-descriptor ptr]
+0x62b18..0x62b1c  = (0x9d0c8, 0x157d1f36)            [?, magic?]
+0x62b20..0x62b3c  = (0x18002000, 0x18000000, 0x18001000,
+                     0x18002000, 0x18003000, 0x18004000) [AXI base list 1]
+0x62b60..0x62b6c  = (0, 2, 5, 0x800)                  [?, ?, COUNT=5, first ID]
+0x62b70..0x62b80  = (0x812, 0x83e, 0x83c, 0x81a)      [next 4 IDs]
+0x62b80           = 0x135                             [6th ID — special]
+0x62ba0..0x62bb8  = (0x18000000, 0x18001000, 0x18002000,
+                     0x18003000, 0x18004000)          [AXI base list 2]
+0x62bbc           = 0x18000000                        [extra/wrap?]
+```
+
+The struct contains a `count = 5` at `0x62b68` — followed by exactly the same
+5 "real" core IDs the host enumerates. Plus the 6th special ID `0x135`
+(the wrap-only one).
+
+**Conclusion: host=6, firmware=6. Both agree. The earlier "firmware expects
+9 cores" reading from test.207 was wrong.**
+
+### Result 3: where does the `9` come from?
+
+Re-examination of the trap-data area `0x9cfa0..0x9cfb0`:
+
+```
+0x9cfa0  0000018d 00062a08 00000009 0009cfe0   (line, ptr, value=9, fa)
+0x9cfb0  00058c8c 00002f5c bbadbadd bbadbadd   (?, ?, BAD-BAD magic, magic)
+```
+
+- `0x18d = 397` (line number — known)
+- `0x62a08` = pointer **into the chip-info struct**, offset 8 — which holds the
+  trap-PC value `0x18002000` (D11 core base address)
+- `0x00000009` = the literal value `9`
+- `0x9cfe0` = `fa` (fault-data pointer — matches trap data location)
+
+This 4-tuple looks like the **assert-formatting buffer**: `(line, file_ptr_or_ra,
+expr_value, fault_addr)`. The assert macro likely captures 4-5 args for the
+report.
+
+So the `9` is NOT a core count — it's some *value being asserted*, probably the
+return code of an internal function. The printed `v = 43` in the message text
+is `ccrev` (passed as a separate arg for context).
+
+### Result 4: assert call-chain re-interpretation
+
+Combining test.207 code dump with the new chip-info findings, my updated
+working model of the asserting routine:
+
+1. Receive a request to operate on a core (the trap-PC `0x18002000` =
+   core 0x83e at AXI base 0x18002000 = D11 core).
+2. Look up that core in the chip-info table, walking the count=5 list.
+3. The lookup returns a status code in r6.
+4. If `r6 == 9` (probably "lookup failed" or "core type unsupported by this
+   firmware build"), trigger ASSERT with `v = ccrev` for context — meaning
+   "we don't know how to handle ccrev=43 for this core".
+
+So **both interpretations point back to the same root cause**: this firmware
+build doesn't fully support our chip's specific (chip × ccrev × core-rev)
+combination — most likely because it was built for a different sub-revision.
+
+### Implications and decision tree forward
+
+The "wrong firmware variant" hypothesis is now **strongly supported**, just for
+a different reason than I thought yesterday. Three concrete next directions:
+
+1. **Source an alternate firmware blob.** Apple's wl.kext for this Mac contains
+   `firmware_4360pci.bin` (we already extracted similar binaries for 4350/4352
+   in phase1). If we can extract & convert the 4360 variant from macOS, it
+   should be the *exact* match for this hardware. This is the cleanest test
+   of the hypothesis.
+
+2. **Decode the assert callsite at `0x641cb` (return address) onwards** — see
+   what code path is hit if assert returns. May reveal whether assert is fatal
+   here or is followed by error recovery.
+
+3. **Bypass / patch the assert** — since it just calls a check that returns 9,
+   patch the firmware blob in TCM after download to neuter the BNE/CMP and
+   continue. High risk but informative.
+
+### Plan for test.209
+
+Direction 1 has the best signal-to-noise ratio. Action plan:
+
+- Check `phase1/output/` and `phase1/extraction.json` for whether we already
+  pulled the matching 4360 blob from Apple's wl.kext during phase1
+- If not, document in PLAN.md that we need to revisit phase1 to extract it,
+  and add a small test variant (`brcmfmac4360-pcie.bin.alt`) we can swap in
+
+For test.209 itself (no firmware swap yet — that's a longer side-quest), do a
+**focused dump of `0x9cf80..0x9cfd0`** (the assert-args region) plus
+`0x641c8..0x64280` (post-BL code) to capture (a) all saved assert state and
+(b) what the firmware does immediately after the BL to assert. If the assert
+handler returns and we see a recovery path, we may have a way to keep going.
+
+---
+
 ## PRE-TEST.208 (2026-04-22) — extended chip-info dump + host-side core count
 
 ### Hypothesis

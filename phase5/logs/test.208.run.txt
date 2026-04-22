@@ -1,0 +1,80 @@
+[ 3354.352198] brcmfmac: BCM4360 test.208: 0x9cdd0: 6c20632e 20656e69 20373933 20617228 | .c line 397 (ra 
+[ 3354.353077] brcmfmac: BCM4360 test.208: 0x9cde0: 36303030 62633134 6166202c 30303020 | 000641cb, fa 000
+[ 3354.353978] brcmfmac: BCM4360 test.208: 0x9cdf0: 65666339 000a2930 203d2076 202c3334 | 9cfe0)..v = 43, 
+[ 3354.354869] brcmfmac: BCM4360 test.208: 0x9ce00: 6d5f6477 63697473 3d20736b 0a323320 | wd_msticks = 32.
+[ 3354.355765] brcmfmac: BCM4360 test.208: 0x9ce10: 53544100 5354414b 5354414b 5354414b | .ATSKATSKATSKATS
+[ 3354.356681] brcmfmac: BCM4360 test.208: 0x9ce20: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.357636] brcmfmac: BCM4360 test.208: 0x9ce30: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.358600] brcmfmac: BCM4360 test.208: 0x9ce40: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.359603] brcmfmac: BCM4360 test.208: 0x9ce50: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.360578] brcmfmac: BCM4360 test.208: 0x9ce60: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.361550] brcmfmac: BCM4360 test.208: 0x9ce70: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.362525] brcmfmac: BCM4360 test.208: 0x9ce80: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.363450] brcmfmac: BCM4360 test.208: 0x9ce90: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.364461] brcmfmac: BCM4360 test.208: 0x9cea0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.365619] brcmfmac: BCM4360 test.208: 0x9ceb0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.366805] brcmfmac: BCM4360 test.208: 0x9cec0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.367947] brcmfmac: BCM4360 test.208: 0x9ced0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.368986] brcmfmac: BCM4360 test.208: 0x9cee0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.369955] brcmfmac: BCM4360 test.208: 0x9cef0: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.370913] brcmfmac: BCM4360 test.208: 0x9cf00: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.371819] brcmfmac: BCM4360 test.208: 0x9cf10: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.372710] brcmfmac: BCM4360 test.208: 0x9cf20: 5354414b 5354414b 5354414b 5354414b | KATSKATSKATSKATS
+[ 3354.373606] brcmfmac: BCM4360 test.208: 0x9cf30: 0009cf31 0009cfa7 00000001 0000000a | 1...............
+[ 3354.374556] brcmfmac: BCM4360 test.208: 0x9cf40: 0009cf31 0009cfb7 00000001 0000000a | 1...............
+[ 3354.375510] brcmfmac: BCM4360 test.208: 0x9cf50: 0009cfab 0009cfb7 000449bc 0009cfa8 | .........I......
+[ 3354.376469] brcmfmac: BCM4360 test.208: 0x9cf60: 00000000 00000713 00000000 0003ffff | ................
+[ 3354.377445] brcmfmac: BCM4360 test.208: 0x9cf70: 00062a98 00000001 18000000 00000002 | .*..............
+[ 3354.378428] brcmfmac: BCM4360 test.208: 0x9cf80: 00000002 00001202 200001df 200001ff | ........... ... 
+[ 3354.379421] brcmfmac: BCM4360 test.208: 0x9cf90: 00000047 00000000 000000fa 00000001 | G...............
+[ 3354.380462] brcmfmac: BCM4360 test.208: 0x9cfa0: 0000018d 00062a08 00000009 0009cfe0 | .....*..........
+[ 3354.381695] brcmfmac: BCM4360 test.208: 0x9cfb0: 00058c8c 00002f5c bbadbadd bbadbadd | ....\/..........
+[ 3354.382985] brcmfmac: BCM4360 test.208: 0x9cfc0: 00000000 0009cfd8 00001201 00001202 | ................
+[ 3354.384188] brcmfmac: BCM4360 test.208: 0x9cfd0: 00001202 200001ff 0009cfe0 00062a98 | ....... .....*..
+[ 3354.385273] brcmfmac: BCM4360 test.208: 0x9cfe0: 18002000 00062a98 000a0000 000641cb | . ...*.......A..
+[ 3354.386368] brcmfmac: BCM4360 test.208: 0x9cff0: 00062a98 0009d0a0 00000000 000a0000 | .*..............
+[ 3354.387465] brcmfmac: BCM4360 test.208: dump range 0x9ff00..0xa0000
+[ 3354.388528] brcmfmac: BCM4360 test.208: 0x9ff00: bb7edd47 a1f2f4fc 9d3c7ab6 6d6f7273 | G.~......z<.srom
+[ 3354.389613] brcmfmac: BCM4360 test.208: 0x9ff10: 3d766572 62003131 6472616f 6d6f7273 | rev=11.boardsrom
+[ 3354.390865] brcmfmac: BCM4360 test.208: 0x9ff20: 3d766572 62003131 6472616f 65707974 | rev=11.boardtype
+[ 3354.392305] brcmfmac: BCM4360 test.208: 0x9ff30: 3078303d 00323535 72616f62 76657264 | =0x0552.boardrev
+[ 3354.393792] brcmfmac: BCM4360 test.208: 0x9ff40: 3178303d 00313031 72616f62 616c6664 | =0x1101.boardfla
+[ 3354.395231] brcmfmac: BCM4360 test.208: 0x9ff50: 303d7367 34303178 30303130 6f620031 | gs=0x10401001.bo
+[ 3354.395240] brcmfmac: BCM4360 test.208: 0x9ff60: 66647261 7367616c 78303d32 30303030 | ardflags2=0x0000
+[ 3354.395248] brcmfmac: BCM4360 test.208: 0x9ff70: 32303030 616f6200 6c666472 33736761 | 0002.boardflags3
+[ 3354.395255] brcmfmac: BCM4360 test.208: 0x9ff80: 3078303d 30303030 00303030 72616f62 | =0x00000000.boar
+[ 3354.395410] brcmfmac: BCM4360 test.208: 0x9ff90: 6d756e64 6d00303d 64616361 303d7264 | dnum=0.macaddr=0
+[ 3354.395417] brcmfmac: BCM4360 test.208: 0x9ffa0: 43313a30 3a33423a 313a3130 31303a32 | 0:1C:B3:01:12:01
+[ 3354.396597] brcmfmac: BCM4360 test.208: 0x9ffb0: 6f636300 583d6564 65720030 76657267 | .ccode=X0.regrev
+[ 3354.397731] brcmfmac: BCM4360 test.208: 0x9ffc0: 7600303d 69646e65 78303d64 34653431 | =0.vendid=0x14e4
+[ 3354.398886] brcmfmac: BCM4360 test.208: 0x9ffd0: 76656400 303d6469 61333478 74780030 | .devid=0x43a0.xt
+[ 3354.400038] brcmfmac: BCM4360 test.208: 0x9ffe0: 72666c61 343d7165 30303030 32616100 | alfreq=40000.aa2
+[ 3354.401199] brcmfmac: BCM4360 test.208: 0x9fff0: 00373d67 67356161 0000373d ffc70038 | g=7.aa5g=7..8...
+[ 3354.413668] brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9702c]=0x35333637 (was 0x36333137) CHANGED
+[ 3354.414907] brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x97030]=0x3739362e (was 0x3630372e) CHANGED
+[ 3354.425460] brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cd48]=0x00363937 (was 0x00373036) CHANGED
+[ 3354.426629] brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cd50]=0x000002b9 (was 0x000002c2) CHANGED
+[ 3354.427828] brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cdb0]=0x36373331 (was 0x31373331) CHANGED
+[ 3354.428980] brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cdb4]=0x362e3533 (was 0x372e3633) CHANGED
+[ 3354.430118] brcmfmac: BCM4360 test.197: post-dwell fine-TCM[0x9cdb8]=0x41203739 (was 0x41203630) CHANGED
+[ 3354.436249] brcmfmac: BCM4360 test.197: fine-TCM summary: 7 of 16384 cells CHANGED
+[ 3354.436251] brcmfmac: BCM4360 test.197: fine-TCM CHANGED span 0x9702c..0x9cdb8 (23952 bytes)
+[ 3354.438625] brcmfmac: BCM4360 test.188: final PCIE2 mailboxint=0x00000001 (D2H bits would be 0x10000+, FN0 bits 0x0100/0x0200)
+[ 3354.439817] brcmfmac: BCM4360 test.188: pci_clear_master done; PCI_COMMAND=0x0002 BM=OFF
+[ 3354.441036] brcmfmac: BCM4360 test.188: post-BM-clear MMIO guard mailboxint=0x00000001 (endpoint alive after BM-off)
+[ 3354.442359] brcmfmac: BCM4360 test.188: released fw/nvram after BM-before-set_active + tiers + 3000ms dwell + BM-clear; returning -ENODEV
+[ 3354.443681] brcmfmac: BCM4360 test.163: download_fw_nvram returned ret=-19 (expected -ENODEV for skip_arm=1)
+[ 3354.750793] brcmfmac: BCM4360 test.163: fw released; returning from setup (state still DOWN)
+
+=== Network interfaces ===
+2: wlp0s20u2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DORMANT group default qlen 1000
+    link/ether 2c:30:33:a7:29:5a brd ff:ff:ff:ff:ff:ff
+    altname wlx2c3033a7295a
+
+=== Module state ===
+brcmfmac_wcc           12288  0
+brcmfmac              503808  1 brcmfmac_wcc
+brcmutil               16384  1 brcmfmac
+cfg80211             1413120  6 mt76,mt76x02_lib,brcmfmac,mac80211,mt76x02_usb,mt76x2_common
+
+Log saved to /home/kimptoc/bcm4360-re/phase5/work/../logs/test.8
