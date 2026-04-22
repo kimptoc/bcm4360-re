@@ -1,5 +1,98 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.225 (2026-04-22 15:35 BST) — pinpoint download hang: 4 KB chunks + readback verify
+
+### What changed vs test.224
+
+**pcie.c (`brcmf_pcie_download_fw_nvram` chunk loop)**:
+- `chunk_words` **4096 → 1024** (16 KB → 4 KB per breadcrumb). Total
+  chunks 27 → ~108. Gives 4× finer hang resolution (we'll know to
+  within 4 KB where it stops).
+- Chunk-boundary marker **test.188 → test.225**. New log line adds a
+  readback of the last word written to distinguish three failure modes:
+  - `readback == src32[i]` → write OK, bus alive. Keep going.
+  - `readback == 0xffffffff` → BAR2 window dead (PMU/TCM gone), but
+    bus still responsive on the read side.
+  - readback hangs → whole backplane dead.
+
+No changes to PMU mask, probe order, firmware, or anything else.
+
+### Build state (just verified)
+
+- `brcmfmac.ko` rebuilt clean; `strings` shows the new `test.225`
+  marker in pcie.o. One harmless unused-function warning on
+  `brcmf_pcie_write_ram32` (same as before).
+- Kernel 6.12.80 vermagic match.
+
+### Pre-test hardware state (current boot 0)
+
+- `lspci -vvv -s 03:00.0`: LnkCtl ASPM Disabled, LnkSta 2.5GT/s x1,
+  MAbort-, SERR-, CommClk-. Clean config state.
+- `lsmod | grep brcm` empty.
+- **No SMC reset between test.223, test.224, and this boot.** Chip
+  may retain PMU state from prior runs. Expect the first two PMU
+  mask writes to show `0x13f -> 0x7ff` and `0x13b -> 0x7ff`; if
+  baseline is already `0x7ff` the chip has dirty state and we'd want
+  an SMC reset for a clean rerun.
+
+### Hypothesis
+
+Given test.224 hung after 8 × 16 KB chunks (131072 bytes = 32768
+words), test.225 will emit chunks at 1024, 2048, 3072, ... word
+boundaries. Expected outcomes:
+
+1. **Time-correlated hang** — chunks 33..34 (131072..135168 B) hang
+   with the same ~2 s post-start pattern. Confirms it's not the
+   payload content, but either cumulative host backpressure or a
+   chip state that drops mid-download.
+2. **Address-correlated hang** — hang moves to exactly the same byte
+   offset (131072 B, which is TCM +0x20000). Suggests a TCM block /
+   window boundary; would look like a lot like rambase=0 + 128 KB =
+   a natural 128 KB aperture limit.
+3. **Readback "DEAD" (0xffffffff) just before hang** — BAR2 window
+   went dark, most likely a PMU resource dropped. Look at
+   `clk_ctl_st` on next test.
+4. **Readback "MISMATCH"** — silent write corruption, would be
+   surprising on BAR2.
+5. **Readback "OK" through the hang boundary, then the next chunk
+   never fires** — the NEXT chunk's first iowrite32 wedged the host.
+   Test.226 would inject a liveness probe *between* chunks to narrow
+   which specific word does it.
+
+### Decision tree
+
+| Observation | Interpretation | Next |
+|---|---|---|
+| All chunks readback OK, download completes | 4 KB cadence gives the chip enough breathing room; proceed to ARM release | Re-enable post-release TCM sampling (test.228+) |
+| Hang at byte offset 131072 ± 4 KB | Address boundary, not a time effect. Probably TCM window / RAM size edge | Inspect `ramsize=0xa0000` and whether TCM really maps 0x00000..0xa0000 |
+| Hang at a *later* byte offset (e.g. 256 KB, 384 KB) | Chunk size / cadence matters — smaller chunks helped | Confirm with test.226 chunk_words=512 (2 KB) |
+| Readback=0xffffffff for N chunks before hang | BAR2 went dark silently while bus was alive | test.226 adds clk_ctl_st sample per chunk |
+| Host hangs during test.225 (no oops, silent) | Same as test.224; didn't help | Consider pre-download warm-up (idle dwell after HAVEHT) or move to BAR0-windowed writes |
+| Baseline mask read shows 0x7ff at first PMU write line | Chip retained state from test.224; SMC reset needed | Halt, request SMC reset, re-run |
+
+### Risk note — same as test.224
+
+Download hangs silently; host will likely wedge again if the same
+failure mode repeats. No SMC reset since test.223; chip state could
+be subtly off. This test is worth running in its current state
+because the information cost of **not** narrowing the hang location
+is high — test.226 will design differently if test.225 pinpoints a
+specific byte offset or distinguishes bus-dead from BAR2-dead.
+
+### Run command
+
+```bash
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Expected artifacts:
+- `phase5/logs/test.225.run.txt`
+- `phase5/logs/test.225.journalctl.txt` (grep-filtered, post-run)
+- `phase5/logs/test.225.journalctl.full.txt` (whole boot, post-run)
+- On crash: capture from `journalctl -k -b -1` on next boot.
+
+---
+
 ## POST-TEST.224 (2026-04-22 15:20 BST) — narrow mask works; download now hangs at 131 KB / 442 KB (new failure mode)
 
 ### Summary

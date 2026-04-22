@@ -2079,7 +2079,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 *     fall back to direct RESET_CTL=1 write.
 		 */
 		const __le32 *src32 = (const __le32 *)fw->data;
-		u32 chunk_words = 16384 / 4;	/* 16KB breadcrumbs (test.164 cadence) */
+		u32 chunk_words = 4096 / 4;	/* test.225: 4KB breadcrumbs (was 16KB); finer hang resolution */
 		u32 total_words = (u32)(fw->size / 4);
 		u32 tail = fw->size & 3u;
 		void __iomem *wbase = devinfo->tcm + devinfo->ci->rambase;
@@ -2176,8 +2176,18 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		for (i = 0; i < total_words; i++) {
 			iowrite32(le32_to_cpu(src32[i]), wbase + i * 4);
 			if ((i + 1) % chunk_words == 0) {
-				pr_emerg("BCM4360 test.188: wrote %u words (%u bytes)\n",
-					 i + 1, (i + 1) * 4);
+				/* test.225: read back the last word we wrote.
+				 * - matches src32[i] → BAR2 write OK, bus alive
+				 * - 0xffffffff → BAR2 window dead (PMU/TCM gone)
+				 * - hang → whole backplane dead
+				 * This lets us distinguish silent drops from bus death.
+				 */
+				u32 want = le32_to_cpu(src32[i]);
+				u32 got = ioread32(wbase + i * 4);
+				pr_emerg("BCM4360 test.225: wrote %u words (%u bytes) last=0x%08x readback=0x%08x %s\n",
+					 i + 1, (i + 1) * 4, want, got,
+					 got == want ? "OK" :
+					 got == 0xffffffff ? "DEAD" : "MISMATCH");
 				mdelay(50);
 			}
 		}
