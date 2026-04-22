@@ -5,14 +5,20 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-22, after test.229)
+## Current state (2026-04-22, after test.230)
 
-**Latest confirmed fact (test.229):** The post-set_active host wedge is a
-**firmware-initiated bus-wide PCIe stall**, not caused by any host probe
-MMIO. Test.229 skipped all post-set_active probes (`#if 0`) and replaced
-them with a single `msleep(1000)`; the host still wedged. Signature: bus-
-wide stall that freezes every CPU simultaneously (NMI watchdog armed but
-never fired; pstore empty).
+**Latest confirmed fact (test.230):** `brcmf_chip_set_active` is the
+**SOLE trigger** for the bus-wide wedge. With that call skipped (everything
+else unchanged — FORCEHT, pci_set_master, fw download, NVRAM, TCM verify,
+BM-clear, release, return -ENODEV), the host survived cleanly: both
+breadcrumbs landed, driver returned -ENODEV, `rmmod brcmfmac*` worked,
+host alive ≥30 s afterwards, BAR0 still fast-UR (18 ms), DevSta UnsupReq
+even cleared. First-ever clean full run of the probe path.
+
+**Prior fact (test.229):** Post-set_active probe MMIO is innocent —
+probes `#if 0`'d, host still wedged after `brcmf_chip_set_active`
+returned. That narrowed the trigger to "set_active itself"; test.230
+confirms.
 
 **Hardware invariants:**
 - Chip: BCM4360, chiprev=3, ccrev=43, pmurev=17
@@ -36,33 +42,37 @@ never fired; pstore empty).
 | Wedge caused by probe_armcr4_state MMIO 0x408 (H1) | 229 | ruled out — probes disabled, wedge still occurred |
 | Wedge caused by any tier-1/2 fine-grain probe | 229 | ruled out — gated `#if 0`, wedge still occurred |
 | Wedge caused by 3000 ms dwell polling | 229 | ruled out — replaced with msleep(1000), still wedged |
+| Wedge caused by pre-set_active path (FORCEHT / pci_set_master / fw write) | 230 | ruled out — skipped set_active, host survived cleanly end-to-end |
+| Wedge caused by anything OTHER than `brcmf_chip_set_active` | 230 | ruled out — that call is the single-point trigger |
 
-**Current leading theory for the wedge cause (H2):**
-Newly-alive firmware on CR4 does something on the PCIe bus (DMA, MSI,
-config TLP) within ~1 s of `brcmf_chip_set_active` returning that
-triggers a completion-starvation stall. All CPUs block on subsequent
-bus access, including the watchdog CPU.
+**Refined wedge model (post test.230):**
+The moment ARM CR4 starts executing firmware (rstvec written via
+`brcmf_chip_set_active`), something happens on the PCIe bus within
+~1 s that freezes every CPU that touches the chip or the shared
+PCIe domain — including the watchdog CPU. All pre-set_active work
+(FORCEHT, pci_set_master, 442 KB fw download, NVRAM write, TCM verify)
+is now proven safe.
 
-**Secondary-possibility worth investigating later:**
+**Strong candidate — DMA target not set up:**
 Upstream brcmfmac sets up extensive shared-memory / ring-descriptor
 infrastructure (`brcmf_pcie_init_share`, ring alloc, mailbox setup)
-BEFORE set_active. Our BCM4360 path bypasses all of that. If firmware
-expects ring descriptor addresses in TCM shared memory and tries to
-DMA there, the DMA target is invalid → no completion → bus stall.
+BEFORE set_active. Our BCM4360 path bypasses all of that. Newly-alive
+firmware likely tries to DMA-read ring descriptor addresses from the
+shared-memory struct in TCM; those fields are all-zero or garbage;
+firmware dereferences a NULL/garbage host address; PCIe TLPs issued
+to that host address never get a completion; bus stalls.
 
-**Immediate next step (test.230 — code built, about to run):**
-Skip the `brcmf_chip_set_active` call entirely. Post-set_active probe
-block stays at `#if 0` (keep the one-variable-at-a-time discipline).
+**Immediate next step (test.231 — proposed timing bisect):**
+Re-enable `brcmf_chip_set_active`, but insert `msleep(N)` between
+set_active return and the BM-clear tail, with N bisected across
+50 / 250 / 500 / 900 ms (per advisor). Then observe which breadcrumb
+makes it to the journal. This tells us *when* in fw startup the
+stall lands — fast = fw hits bus instantly (DMA-target-missing shape);
+slow = fw runs some init routine then wedges (different signature).
 
-| Result | Interpretation | Next |
-|---|---|---|
-| Host stays alive, driver returns -ENODEV cleanly, rmmod works, host survives ≥30 s after rmmod | Firmware activation IS the sole trigger. | test.231: timing bisect within the first second (msleep 50/250/500/900 after set_active) to locate *when* the stall lands — fast = fw hits bus instantly (ring-setup-missing shape); slow = fw runs some init then wedges. |
-| Host wedges anyway | Something pre-set_active is the cause (FORCEHT write / pci_set_master / fw-write sequence). | test.231: progressively disable pre-set_active steps. |
-
-Strict success criteria for "host stayed alive" (advisor): BOTH
-breadcrumbs in journal AND -ENODEV return AND `rmmod brcmfmac` works
-AND host ≥30 s alive after rmmod. Don't let "more lines than test.229"
-alone count — test.228 had more lines than test.227 and still wedged.
+Fallback if the bisect doesn't clarify: attempt to set up a minimal
+valid shared-memory structure in TCM (zero-length rings + sentinel
+markers) BEFORE set_active, and see if the wedge moves or disappears.
 
 **Logging transport status:**
 - journald: truncates the last ~5–10 s of tail once host loses userspace (confirmed in tests 226/227).
@@ -72,6 +82,82 @@ alone count — test.228 had more lines than test.227 and still wedged.
 
 ---
 
+
+## POST-TEST.230 (2026-04-22 21:25 BST, boot 0 — NO CRASH, host survived cleanly) — `brcmf_chip_set_active` is the SOLE wedge trigger
+
+### Headline
+
+First-ever clean full run of the probe path. Skipping the
+`brcmf_chip_set_active` call (single code change from test.229 baseline)
+produced a clean -ENODEV return, clean rmmod, host alive ≥30 s after
+rmmod, and a healthy PCIe bus throughout. All strict success criteria
+met. H2 is confirmed at the strongest possible level: firmware
+activation is the sole bus-stall trigger.
+
+### Evidence (current-boot journal, 21:24:49 → 21:24:58, no reboot needed)
+
+- Pre-set-active path: all breadcrumbs landed in order
+  (pci_set_master, FORCEHT, pre-set-active probes, etc. — identical to
+  test.229).
+- Firmware download: 107 chunks, full 442 KB.
+- TCM verify: 16/16 MATCH.
+- `test.219: calling brcmf_chip_set_active resetintr=0xb80ef000
+  (FORCEHT pre-applied)` — breadcrumb landed but the call itself skipped.
+- `test.230: SKIPPING brcmf_chip_set_active — resetintr=0xb80ef000
+  NOT written to CR4` — 1136.529876 s boot-time.
+- `test.230: 1000 ms dwell done (no fw activation); proceeding to
+  BM-clear + release` — 1137.566367 s boot-time (≈1.04 s later — the
+  msleep(1000) actually completed).
+- `test.188: pci_clear_master done; PCI_COMMAND=0x0002 BM=OFF` — clean BM-clear.
+- `test.188: post-BM-clear MMIO guard mailboxint=0x00000001 (endpoint
+  alive after BM-off)` — endpoint responsive through end of probe.
+- `test.163: download_fw_nvram returned ret=-19 (expected -ENODEV
+  for skip_arm=1)` — probe path completed as designed.
+- `test.163: fw released; returning from setup (state still DOWN)` —
+  full return, no stall.
+
+### Post-run host / bus health (rmmod at 21:25:32 BST, +30 s dwell at 21:26:03)
+
+- `rmmod brcmfmac_wcc && rmmod brcmfmac && rmmod brcmutil` — all clean.
+- `lsmod | grep -E 'brcm|wl'` after rmmod — empty.
+- lspci after rmmod: Control `Mem+ BusMaster-`; DevSta **UnsupReq-**
+  (sticky bit cleared — nothing in this test generated an UR after
+  the pre-test UR probe), TransPend-; LnkCtl ASPM Disabled (kernel
+  reverted after rmmod), LnkSta 2.5GT/s x1.
+- BAR0 timing 18/18/18/18 ms — fast-UR regime intact.
+- pstore still empty.
+- 30 s dwell passed uneventfully.
+
+### What this proves
+
+| Hypothesis | Status |
+|---|---|
+| Pre-set_active bus-hostile write (FORCEHT / pci_set_master / fw download) | **RULED OUT** — entire sequence ran, host fine |
+| `brcmf_chip_set_active` itself or its immediate aftermath is the trigger | **CONFIRMED** |
+| Firmware activation → DMA to missing shared-memory rings → completion starvation | still the leading theory; test.231 will probe it |
+
+### Next: test.231 (timing bisect, per advisor)
+
+Re-enable `brcmf_chip_set_active` and place an `msleep(N)` between the
+`returned %s` breadcrumb and the BM-clear tail, running the test at
+N=50 / 250 / 500 / 900 ms. The *last* N for which the msleep-done
+breadcrumb lands tells us the window in which firmware first does
+something bus-hostile. Rationale:
+- Fast (<100 ms) → fw stumbles immediately on missing DMA target.
+- Slow (>500 ms) → fw runs some init first, then stumbles — different
+  signature, maybe it's polling for a host-readiness marker.
+
+### Artifacts captured
+
+- `phase5/logs/test.230.run.txt` — PRE sysctls + lspci + BAR0 + pstore
+  + strings + harness output (405 lines).
+- `phase5/logs/test.230.journalctl.full.txt` — current-boot full
+  journal (1419 lines).
+- `phase5/logs/test.230.journalctl.txt` — brcmfmac/PCIe/NMI filtered
+  (401 lines).
+- No pstore dump (none expected — no crash).
+
+---
 
 ## PRE-TEST.230 (2026-04-22 21:22 BST, boot 0 post-SMC-reset) — skip `brcmf_chip_set_active` entirely; binary test of H2-sub-hypothesis
 
