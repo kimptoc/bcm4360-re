@@ -1,5 +1,73 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.203 (2026-04-22) — read literal pool + chip-info struct neighbours
+
+### Hypothesis
+
+Two more cheap dumps will close the loop on what the assert is checking:
+
+1. **Literal pool at `0x64200..0x64280`** (8 rows). Test.202 showed the
+   assert call uses `LDR r0, [pc, #0x70]` at `0x641c0`, which loads
+   from `(0x641c0+4)+0x70 = 0x64234`. This region holds the
+   format-string pointer (and possibly other pointers used by the
+   variadic args). Dumping it lets us:
+   - Confirm the format string is `"ASSERT in file %s line %d (ra %p, fa %p)\n"`
+   - See if there are *more* arguments being formatted that we haven't
+     decoded yet (e.g., the `v = 43, wd_msticks = 32` text we see in
+     the log might be from a *follow-on* printf, not a single one)
+
+2. **Chip-info struct neighbours `0x62b00..0x62b80`** (8 rows).
+   Test.201 dumped `0x62a80..0x62b00` and showed the chip-info struct.
+   We already see fields like ccrev=0x2b, chiprev=3, pmurev=0x11,
+   pmucaps=0x10a22b11, vendor=0x14e4, chipid=0x4360. The 8 rows
+   immediately after may hold the byte that r6 was loaded from
+   (a value 9 would mean the chip variant matches, anything else
+   triggers the assert).
+
+Both reads are pure observation. Total +16 rows vs test.202.
+
+### Implementation
+
+**chip.c** — bump marker `test.202` → `test.203`.
+
+**pcie.c** — replace `dump_ranges[]`:
+
+| Range              | Purpose                                              | Rows |
+|--------------------|------------------------------------------------------|-----:|
+| `0x6418c..0x641e0` | Assert call-site                                     |    6 |
+| `0x64200..0x64280` | Literal pool used by the assert call                 |    8 |
+| `0x62a80..0x62b80` | Chip-info struct + neighbours (extended)             |   16 |
+| `0x96f40..0x96fc0` | hndrte_cons descriptor                               |    8 |
+| `0x97000..0x97200` | Console ring                                         |   32 |
+| `0x9cc00..0x9d000` | Trap data + assert text                              |   64 |
+
+Total = 134 rows ≈ 27 ms. +16 rows over test.202 (118 rows).
+
+### Build + pre-test
+
+- About to rebuild module.
+- Last PCIe state: clean post-test.202.
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.203.journalctl.full.txt`.
+
+### Expected outcomes
+
+- **Format string identified literally**: confirms our reading of
+  the assert message and reveals any additional `%`-substitutions.
+- **The compared value found**: if a byte at `0x62b00..0x62b80`
+  equals 9, we know what the firmware was looking for. If it
+  doesn't equal 9, the value is loaded via a more indirect path
+  (struct chain), and we'll need to decode the load chain in a
+  later test (read instructions before the CMP at `0x641b0`).
+
+---
+
 ## POST-TEST.202 (2026-04-22) — console buffer mapped + assert call site decoded
 
 Logs: `phase5/logs/test.202.journalctl.full.txt`. Run text:

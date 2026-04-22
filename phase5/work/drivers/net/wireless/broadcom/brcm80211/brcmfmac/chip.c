@@ -1184,7 +1184,7 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		before_max = chip->ops->read32(chip->ctx, max_addr);
 		chip->ops->write32(chip->ctx, max_addr, 0x17f);
 		after_max = chip->ops->read32(chip->ctx, max_addr);
-		brcmf_err("BCM4360 test.202: max_res_mask 0x%08x -> 0x%08x (write 0x17f — bit 6 only, hndrte_cons descriptor + assert call-site literal pool)\n",
+		brcmf_err("BCM4360 test.203: max_res_mask 0x%08x -> 0x%08x (write 0x17f — bit 6 only, literal pool + chip-info neighbours)\n",
 			  before_max, after_max);
 	}
 
