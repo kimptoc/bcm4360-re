@@ -1,5 +1,191 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## POST-TEST.225 RERUN (2026-04-22 19:29 BST, boot 0) — JACKPOT: full 442 KB firmware download + TCM verification, host wedged in post-snapshot / set_active block
+
+### Headline
+
+The test.225 rerun is the **jackpot branch** of the original decision tree.
+The 442 KB firmware download completed end-to-end with per-chunk readback
+verification, the full TCM snapshot was emitted, and every fw-sample
+readback MATCHED. This is the first time firmware bytes have been
+observed in place in TCM on this chip.
+
+The host then wedged. The next boot (boot 0) is healthy — BAR0 fast-UR
+19–25 ms across four reads, SMC reset was performed between crashes.
+
+### What boot -1 (19:12–19:24:11) captured
+
+Logs now archived:
+- `phase5/logs/test.225.rerun.journalctl.full.txt` (1400 lines, whole boot)
+- `phase5/logs/test.225.rerun.journalctl.txt` (310 lines, brcmfmac-filtered)
+
+Download progress — full 107 × 1024-word chunks + final partial 990-word
+chunk emitted, all readbacks OK:
+
+```
+19:24:05 test.225: wrote 1024 words (4096 bytes) last=0xb19c6018 readback=0xb19c6018 OK
+... (107 chunks) ...
+19:24:11 test.225: wrote 109568 words (438272 bytes) last=0x46200db9 readback=0x46200db9 OK
+```
+
+Total written = 110558 words / 442232 bytes (final 990-word tail
+implicit — chunk-size guard, no marker line on partial chunk).
+
+Post-download snapshot — all emitted at 19:24:11 in a tight burst:
+- wide-TCM 40 × 4 KB stride readbacks (full 0–0x9c000 range)
+- fine-TCM snapshot complete (16384 cells, base=0x90000)
+- tail-TCM 16 × 4 B readbacks (NVRAM region 0x9ffc0–0x9fffc)
+- fw-sample 17 × readback vs fw->data: **ALL MATCH**
+- CC-regs: clk_ctl_st=0x01030040, pmucontrol=0x01770181,
+  pmustatus=0x0000002e, res_state=0x000007ff
+
+Post-download CC state vs pre-download:
+- Pre-download: clk_ctl_st=0x07030040 [HAVEHT=YES ALP_AVAIL=YES]
+- Post-download: clk_ctl_st=0x01030040 [HAVEHT still bit 17 SET;
+  upper status nibble 0x07→0x01 — PMU request counters reset]
+
+Log tail ends at `CC-res_state=0x000007ff (pre-release snapshot)`. No
+oops, BUG, MCE, watchdog, rcu stall, or soft-lockup in the full-boot
+journal.
+
+### Where the wedge actually happened — open question
+
+Two interpretations survive:
+
+1. **Real wedge immediately after CC-res_state print.** In test.218
+   and test.219 logs (same code path), the next expected lines are:
+   - `INTERNAL_MEM core not found — resetcore skipped (expected on BCM4360)`
+   - `pre-set-active ARM CR4 IOCTL=... CPUHALT=YES`
+   - `pre-set-active D11 IOCTL=... RESET_CTL=0x1`
+   - `pre-BM PCI_COMMAND=0x0002 BM=OFF MMIO guard mailboxint=...`
+   - `pci_set_master done; PCI_COMMAND=0x...`
+   - `post-BM-on MMIO guard mailboxint=...`
+   - `test.219: FORCEHT write CC clk_ctl_st pre=... post=... [HAVEHT=? ...]`
+   - `test.219: calling brcmf_chip_set_active resetintr=...`
+   - `brcmf_chip_set_active returned true`
+   - `tier1 ARM CR4 IOCTL=... CPUHALT=NO`  ← firmware starts running
+   None of these appeared in test.225.
+
+2. **Log tail was truncated.** test.225's chunk loop emitted 107 lines
+   in ~6 s, followed by 78 snapshot lines all at 19:24:11. That's
+   heavy ring-buffer pressure with no mdelay between lines. A wedge
+   deeper in the flow (in set_active or tier1) could drop the last N
+   lines before flush-to-disk. test.218 by contrast had much less log
+   volume leading into this block (no chunked readback), so journald
+   stayed caught up — its emissions cannot be used as a flush-budget
+   comparison.
+
+Without discriminator, the test.226 design has to cover **both**
+possibilities (markers before AND after set_active). Per advisor,
+msleep is better than mdelay between breadcrumbs because it yields
+to the journald worker kthread.
+
+### BCM4360 INTERNAL_MEM confirmed NOT a concern
+
+test.218 log confirms `INTERNAL_MEM core not found` on BCM4360 — so
+`brcmf_chip_resetcore(imem_core, 0, 0, 0)` is never reached and SOCRAM
+(the TCM holding our freshly-written firmware) is never wiped. The
+resetcore branch is safe to leave as-is.
+
+### Chip state on current boot 0 (19:25 onward)
+
+- `lspci -vvv -s 03:00.0`: `I/O- Mem+ BusMaster+` (BIOS residual).
+  DEVSEL=fast, MAbort-, SERR-. Config space clean.
+- `enable=0`, `power_state=unknown`
+- BAR0 `dd resource0` timing: 21 / 19 / 19 / 25 ms (fast-UR,
+  well under the test script's 40 ms threshold)
+- `lsmod | grep brcm`: empty
+- Uptime ~4 min post-SMC-reset boot
+
+Safe to insmod after a test.226 build.
+
+---
+
+## PRE-TEST.226 (2026-04-22 19:35 BST) — pinpoint the post-snapshot wedge with msleep-spaced breadcrumbs
+
+### Objective
+
+test.225 rerun cleared the firmware-download debugging chapter. The
+wedge has moved to the post-snapshot / set_active path. The next cheap,
+non-invasive test is to drop msleep-spaced breadcrumbs between every
+operation from `CC-res_state` through `brcmf_chip_set_active` and into
+tier1, so we can pinpoint the wedge location regardless of whether it's
+"real wedge in this block" or "log tail truncation on deeper wedge".
+
+### What changes in pcie.c
+
+Insert a `test.226` pr_emerg marker + `msleep(5)` between each of the
+following operations in the block starting after the CC-reg print loop
+(around pcie.c line 2353) through the end of `brcmf_chip_set_active`:
+
+1. `past pre-release snapshot — entering INTERNAL_MEM lookup`
+2. Before `brcmf_chip_get_core(BCMA_CORE_INTERNAL_MEM)`
+3. After `brcmf_chip_get_core` (print `imem_core=%p`)
+4. Before pre-set-active ARM CR4 probe
+5. After pre-set-active ARM CR4 probe
+6. Before pre-set-active D11 probe
+7. After pre-set-active D11 probe
+8. Before pre-set-active D11 clkctlst probe
+9. After pre-set-active D11 clkctlst probe
+10. Before `pci_read_config_word(PCI_COMMAND)` (pre-BM)
+11. After pre-BM read
+12. Before `pci_set_master`
+13. After `pci_set_master`
+14. Before `post-BM` MMIO guard
+15. After post-BM MMIO guard
+16. Before FORCEHT write (CC select + READCC32)
+17. After FORCEHT write (post-write readback + log)
+18. Before `brcmf_chip_set_active` call
+19. After `brcmf_chip_set_active` return (before its existing print)
+20. Before tier1 loop entry
+
+No logic changes. No behavior changes beyond extra msleep(5) × ~20 =
+100 ms added latency. No changes to PMU mask, chunk loop, firmware
+payload, or anything else.
+
+### Decision tree
+
+| Last test.226 marker emitted | Interpretation | Next |
+|---|---|---|
+| "before `brcmf_chip_get_core`" but not "after" | impossibly early — must be log flush issue, not real wedge | rethink flush budget; add mdelay(100) instead of msleep(5) |
+| "after brcmf_chip_get_core" / pre-set-active probes but not pci_set_master | wedge on ARM CR4 / D11 wrapper MMIO read | look at select_core left from prior readbacks |
+| "before pci_set_master" but not "after" | config-space write wedged PCIe link | check AER / root-port state; may need separate probe |
+| FORCEHT write visible, set_active marker not | wedge in FORCEHT path (unlikely; test.219 proved this works) | n/a |
+| `brcmf_chip_set_active returned` visible, tier1 not | wedge in firmware execution — real behavior, not probe artefact | move to tier1 response debugging; compare against test.218 tier1 outcomes |
+| All markers through tier1 visible, host wedges later | wedge is in dwell or D11 bring-up — reset plan to deeper window | design test.227 around the later probe set |
+
+### Hardware risk
+
+Low. Each breadcrumb is a pr_emerg + 5 ms sleep. Worst case this
+adds ~100 ms latency and no new MMIO. Chip state is the same as
+test.225 rerun, which got this far safely. Host wedge hypothesis
+unchanged — retest will either reproduce the wedge (in which case
+breadcrumbs pinpoint it) or — less likely — the extra msleep gives
+the PMU enough slack to complete set_active cleanly.
+
+### Build + run
+
+1. Edit `phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c`
+   (insert 20 breadcrumbs in the block between line ~2353 and line ~2470)
+2. `make -C /home/kimptoc/bcm4360-re/phase5/work`
+3. Verify `strings brcmfmac.ko | grep -c "test\\.226"` ≥ 20
+4. `sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh`
+
+Expected artifacts:
+- `phase5/logs/test.226.run.txt`
+- `phase5/logs/test.226.journalctl.txt` (grep-filtered, post-run)
+- `phase5/logs/test.226.journalctl.full.txt` (whole boot, post-run)
+- On crash: capture `sudo journalctl -k -b -1` from next boot.
+
+### Pre-test checks (will re-verify right before insmod)
+
+- Build succeeded, .ko mtime fresh, test.226 marker count ≥ 20
+- `lspci -vvv -s 03:00.0` clean (no MAbort/SERR)
+- BAR0 dd < 40 ms (fast-UR regime)
+- `lsmod | grep brcm` empty
+
+---
+
 ## PRE-TEST.225 RERUN (2026-04-22 19:25 BST, boot 0) — post-git-recovery refresh
 
 ### Session context
