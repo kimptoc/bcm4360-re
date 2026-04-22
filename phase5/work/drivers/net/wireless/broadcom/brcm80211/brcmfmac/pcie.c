@@ -2025,8 +2025,10 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 		 * fields and any format-string templates.
 		 */
 		static const u32 dump_ranges[][2] = {
-			{0x96000, 0x97200},	/* extended: catch earlier ring-buffer history */
-			{0x9cc00, 0x9d000},	/* extended: covers 0x9cdb0+ assert text continuation AND fa=0x9cfe0 */
+			{0x62a80, 0x62b00},	/* live TCM at trap PC 0x62a98 — code or BSS? */
+			{0x641a0, 0x641e0},	/* live TCM at assert site (control — known code) */
+			{0x97000, 0x97200},	/* console ring (trimmed: 0x96000+ was entropy) */
+			{0x9cc00, 0x9d000},	/* trap data + assert text */
 		};
 		static const u32 wide_offsets[40] = {
 			0x00000, 0x04000, 0x08000, 0x0c000,
@@ -2519,7 +2521,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				u32 lo = dump_ranges[j][0];
 				u32 hi = dump_ranges[j][1];
 
-				pr_emerg("BCM4360 test.200: dump range 0x%05x..0x%05x\n",
+				pr_emerg("BCM4360 test.201: dump range 0x%05x..0x%05x\n",
 					 lo, hi);
 				for (addr = lo; addr < hi; addr += 16) {
 					u32 w[4];
@@ -2536,7 +2538,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							(char)c : '.';
 					}
 					ascii[16] = '\0';
-					pr_emerg("BCM4360 test.200: 0x%05x: %08x %08x %08x %08x | %s\n",
+					pr_emerg("BCM4360 test.201: 0x%05x: %08x %08x %08x %08x | %s\n",
 						 addr, w[0], w[1], w[2], w[3],
 						 ascii);
 				}

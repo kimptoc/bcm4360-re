@@ -1184,7 +1184,7 @@ static int brcmf_chip_setup(struct brcmf_chip_priv *chip)
 		before_max = chip->ops->read32(chip->ctx, max_addr);
 		chip->ops->write32(chip->ctx, max_addr, 0x17f);
 		after_max = chip->ops->read32(chip->ctx, max_addr);
-		brcmf_err("BCM4360 test.200: max_res_mask 0x%08x -> 0x%08x (write 0x17f — bit 6 only, extended TCM dump incl. fault address area)\n",
+		brcmf_err("BCM4360 test.201: max_res_mask 0x%08x -> 0x%08x (write 0x17f — bit 6 only, image-translation TCM reads at trap PC + assert site)\n",
 			  before_max, after_max);
 	}
 

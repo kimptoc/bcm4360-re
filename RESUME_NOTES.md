@@ -1,5 +1,87 @@
 # BCM4360 RE — Resume Notes (auto-updated before each test)
 
+## PRE-TEST.201 (2026-04-22) — image translation: read TCM around trap PC and assert site
+
+### Hypothesis
+
+`PC=0x00062a98` from the trap data (decoded in test.200) reads as
+all-zero bytes in the firmware *image file* at offset `0x62a98`. Two
+possible explanations:
+
+(a) Firmware loads with a non-zero base offset, so trap-PC values are
+   virtual addresses that need translation before they map into the
+   image.
+
+(b) `0x62a98` is in the firmware's BSS/data area, and the trap PC is
+   actually a function-pointer variable — the crash happened when the
+   CPU branched through a function pointer that was uninitialized
+   (pointing into BSS where the byte pattern is naturally zero).
+
+If (b) is correct, then dumping live TCM at `0x62a98` should also show
+zeros (BSS at runtime) — and the asymmetry between `0x62a98` (zeros)
+and `0x641b8` (definitely instructions, we proved this desktop-side
+already) confirms that one is data and the other is code.
+
+If (a) is correct, the live TCM read at `0x62a98` will show
+*instructions* — proving that the firmware is loaded with rambase=0
+and we need a different image-offset translation to find the bytes
+desktop-side.
+
+### Implementation
+
+**chip.c** — bump marker `test.200` → `test.201`. PMU still `0x17f`
+bit-6-only (proven safe).
+
+**pcie.c** — replace `dump_ranges[]`:
+
+| Range              | Purpose                                        | Rows |
+|--------------------|------------------------------------------------|-----:|
+| `0x62a80..0x62b00` | Live bytes around trap PC (decide a vs b)      |    8 |
+| `0x641a0..0x641e0` | Live bytes around assert call site (control)   |    4 |
+| `0x97000..0x97200` | Console ring (trimmed — 0x96000 was entropy)   |   32 |
+| `0x9cc00..0x9d000` | Trap data + assert text (proven useful)        |   64 |
+
+Total = 108 rows = ~432 indirect MMIO reads ≈ 22 ms. Much cheaper
+than test.200's 352-row dump.
+
+The two new ranges are pure observation (live-TCM reads via the
+existing indirect-MMIO helper). No firmware modification, no driver
+behavior change — just adds 12 dump rows at the same dwell point.
+
+### Build + pre-test
+
+- About to rebuild module after edits.
+- Last known PCIe state: clean post-test.200 (no MAbort).
+- brcmfmac will be rmmod'd by the test script before insmod.
+
+### Run
+
+```
+sudo /home/kimptoc/bcm4360-re/phase5/work/test-brcmfmac.sh
+```
+
+Logs → `phase5/logs/test.201.journalctl.full.txt` (use the `.full.txt`,
+the test script's truncated `.journalctl.txt` cuts off the dump rows).
+
+### Expected outcomes (advance scoring)
+
+- **PC 0x62a80 region all-zero in live TCM** → hypothesis (b)
+  confirmed. Trap PC is a stale/null function pointer. Next step:
+  search firmware for symbols/strings near offset 0x62a98 to identify
+  which fp variable lives there, and trace where it should be set.
+
+- **PC 0x62a80 region looks like instructions in live TCM** →
+  hypothesis (a) confirmed. Firmware must load at non-zero rambase.
+  Next step: compute the load offset (compare live `0x62a98` bytes
+  against image bytes at known offsets to find the delta) and re-look
+  at the trapping code from a corrected image position.
+
+- **Assert site `0x641b8` matches the image bytes we found
+  desktop-side** → control check passes; our offset model is right
+  for at least the code we've already located.
+
+---
+
 ## POST-TEST.200 (2026-04-22) — decoded ARM trap-data structure at fa=0x9cfe0
 
 Logs: `phase5/logs/test.200.journalctl.full.txt` (always use `.full.txt`,
