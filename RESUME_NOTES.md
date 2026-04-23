@@ -313,3 +313,9 @@ sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
 5. **Hardware drift awareness**: n=16+ crashes today — if T266 produces weird results, re-fire once before claiming anything.
 
 Advisor-confirmed. Code + build + fire pending.
+
+### PCIe state check before T266 fire (2026-04-24 00:1x BST)
+
+**PCIe DIRTY after T265 auto-reboot**: `03:00.0 Control: Mem- BusMaster-`, BARs `[disabled]`, `LnkCtl: ASPM Disabled`, `CommClk-`. BCM4360 endpoint unresponsive. Platform watchdog reboot did not fully recover chip state.
+
+**SMC reset needed** before firing T266.
