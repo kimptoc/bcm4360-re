@@ -373,27 +373,38 @@ T254 was a local-analysis pass (no kernel module load, no crash). Deliverable: `
 - **Delay helper 0x1ADC is bounded via PMCCNTR** (CP15 `mrc p15,0,r0,c9,c13,0` at 0x1EC). PMCCNTR is enabled early in boot (PMCR writes at 0x1D6 and 0x1DC: `mcr p15,0,r1,c9,c12,0/1`). Blob init tick-scale at TCM[0x58C98] = 0x50 → `delay(10)` ≈ 10 µs → 82ms total wall-clock for the 0x1722C poll.
 - **"40/160/160MHz" line IS the RTE boot banner** at blob[0x6BAE5]: `"RTE (%s-%s%s%s) %s on BCM%s r%d @ %d.%d/%d.%d/%d.%dMHz"` — printed very early in fw boot, NOT by wlc_attach. T251 reading "last printed line is wlc_attach banner" is **revised**. Fw hung AFTER RTE banner, anywhere in the remaining init.
 - **Chiprev banner call site pinpointed**: blob[0x06876E] LDR + blob[0x06877A] BL to printf 0xA30. Uses format at blob[0x4C534]. Same function references `"wlc_bmac_attach"` string at blob[0x4B121] from 0x68778 → **confirmed inside wlc_bmac_attach**. Fw never reached this printf → hang is in wlc_bmac_attach's execution BEFORE byte 0x06877A.
-- **WFI check**: exactly 1 WFI (0xBF30) in blob at offset 0x001C1E — in early boot code, not reachable from wlc path. None inside wlc_bmac_attach / wlc_phy_attach range.
-- **Self-loop (`b .` = 0xE7FE) check**: 6 occurrences total. Four at 0x25E/0x290/0x326/0x53E are real early-boot fault handlers. Two apparent hits at blob[0x464F6] and blob[0x468F4] are **false positives** — surrounding bytes disassemble as garbage (junk strings `"kkkk::::"`, `"V22dN::t"` nearby, repeated identical instructions at adjacent offsets, no reachable BL/B targeting them). Data, not code. **No reachable unbounded-wait primitive in wlc path.**
+- **WFI check (revised)**: 1 WFI (0xBF30) at blob[0x001C1E] — a 4-byte leaf function (`wfi; bx lr`). **IS REACHABLE** via tail-call chain: 0x1C1E ← b.w 0x1C0C (thunk) ← b.w 0x11CC (inside fn 0x115C — the RTE scheduler main loop). 0x115C walks a callback list at BSS[0x629A4], dispatches matching callbacks, falls through to a sleep path (writes flag at BSS[0x629B4], calls 0x1038 barrier, rechecks), returns or loops. If no runnable work → WFI. Classic RTOS idle hook. Initial T254 "not reachable" reading was WRONG (based on address-range guessing; advisor flagged this for explicit check).
+- **WFE (0xBF20) check**: no valid WFE instructions found in code region.
+- **Self-loop (`b .` = 0xE7FE) check**: 6 occurrences total. Four at 0x25E/0x290/0x326/0x53E are real early-boot fault handlers. Two at 0x464F6/0x468F4 are false positives (data region, no callers, junk strings nearby).
+- **α caveat**: T253 falsified "0x934C0 is a TCB" but did NOT fully settle "saved-state region is a call-context snapshot vs. a paused-task save frame." α remains the working model but is not load-bearing evidence. Downstream claims ("fw was executing inside 0x1415C at hang time") carry this uncertainty.
 
 ### What test.254 settled (facts)
 
 - **The hang is NOT a direct polling loop in the fw code region**. All three candidate polling loops (0x1415C, 0x1722C, 0x14CAC) are built on PMCCNTR-backed `bl #0x1ADC` and have finite wall-clock timeouts ≤ 82ms. Bounded loops do not silently hang for 60+ seconds.
 - **Saved LR 0x68321 is the return address of `bl #0x1415C` at 0x6831E** inside wlc_bmac_attach (T253 identified 0x1415C as SB-core reset waiter; T254 confirms caller context). So fw was inside 0x1415C or one of its transitive callees at capture time — but those are also all bounded.
-- **Remaining hang candidates** (in priority order, post-T254):
-  - **(A) Cross-core / backplane wait** — fw issued a transaction targeting an unclocked or stuck SB core; the bus read backpressures the ARM core indefinitely. CPU is stalled at memory-subsystem level, not at instruction level. Saved LR reflects the last completed call return before the stall. This best matches all observed evidence (silent hang, no advancement in any counter, ring/canary intact, probes from host-side work fine).
-  - **(B) Inter-thread wait** — an RTOS task waiting on a semaphore/queue; the hung task may be different from the one captured in the saved-state. T253 didn't find TCB/task-table primitives in any captured struct — reducing likelihood.
-  - **(C) Tick-scale corruption** — TCM[0x58C98] (blob default 0x50) overwritten mid-run to 0xFFFFFFFF, making `target = units * scale` overflow and the delay loop effectively unbounded.
+- **Remaining hang candidates** (priority revised post-WFI reachability finding):
+  - **(A) Cross-core / backplane wait** — fw issued a transaction to an unclocked/stuck SB core; bus read backpressures the ARM core indefinitely. CPU stalled at memory-subsystem level.
+  - **(A') RTE scheduler WFI-stall** — fw's scheduler at 0x115C ran out of runnable callbacks, wrote the sleep-flag, fell through to `wfi` at 0x1C1E. If no IRQ fires (e.g., PCIe MSI not set up because host-fw protocol handshake is incomplete), fw sleeps indefinitely. **Now a first-class candidate** — indistinguishable from (A) on host-side observables (no code runs = no TCM drift).
+  - **(B) Inter-thread wait** — an RTOS task blocked on a semaphore/queue. If scheduler is also in WFI, collapses to (A'). Otherwise observed stasis (no TCM drift at T247/T239/T240 across 22 dwells in T252 journal) argues against mixed case.
+  - **(C) Tick-scale corruption** — TCM[0x58C98] (blob default 0x50) overwritten to an extreme value, making `target = units * scale` overflow and inner delay loop effectively unbounded. Cheap to falsify.
+- **Drift test already present in captured data**: T247/T239/T240 values are **IDENTICAL across all 22 dwells** within the T252 boot — fw has not written any of these regions between t+100ms and t+90s. Consistent with both (A) and (A'); inconsistent with any theory where fw is executing code.
 - **wlc_phy_attach's own body NOT under suspicion**: 213 insns, only 2 direct dispatch calls both to idx-0 (benign), no tight loops, all BL targets have bounded loops or no loops. Moves emphasis AWAY from the "inside wlc_phy_attach" reading.
 
 ### Next-test direction (T255 — candidates for advisor review)
 
-Back to hardware probes, informed by T254 narrowing:
+Hardware probe, informed by T254 narrowing + WFI reachability:
 
-1. **Cheapest: TCM[0x58C98..+4]** — verify tick-scale at hang time (1 u32 read). Settles (C) — if value == 0x50, (C) falsified; if corrupted, strong new lead.
-2. **TCM[0x93550..0x9358C]** (16 u32) — decode 0x9355C, the forward-linked pointer from 0x934C0. Same risk profile as T253.
-3. **Higher-risk: sample PHY/MAC `[core_base + 0x128]` via BAR0** — the register the 0x1722C polling loop reads. Needs careful gate-on-core-reset-state check; accessing an unclocked core can wedge the bus. Design caution warranted.
-4. **Enumerate RTOS task-table** — requires finding the task-control-block magic layout. Defer until cheaper paths exhausted.
+1. **PRIMARY: RTE scheduler state probe** — 3 u32 reads:
+   - TCM[0x629A4]: callback-list head (if zero, no runnable callbacks — idle)
+   - TCM[0x6299C]: current-task pointer (if zero or points-at-zero struct → idle)
+   - TCM[0x629B4]: sleep-flag (if nonzero, scheduler wrote it before falling through to WFI)
+   If list empty AND sleep-flag set → **(A') WFI-stall confirmed**. High-info per u32.
+2. **Tick-scale check**: TCM[0x58C98..+4] — 1 u32. If value != 0x50, (C) is a factor.
+3. **Decode 0x9355C family**: TCM[0x93550..0x9358C] — 16 u32. Extends the 0x934C0 struct-graph mapping.
+4. **Deferred**: PHY/MAC register probe via BAR0 (higher-risk, needs gate-on-reset check). Only if (1)+(2)+(3) don't converge.
+5. **Deferred**: RTOS task-table enumeration (need TCB layout).
+
+Proposed T255 payload: probes (1) + (2) + (3) at t+60s = 20 u32 total. Cheaper than T253 (32 u32). Discriminates (A) vs (A') vs (C).
 
 Advisor call before committing to T255 design.
 
