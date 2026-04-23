@@ -317,6 +317,107 @@ static const u32 bcm4360_t248_offsets[16] = {
 	} \
 } while (0)
 
+/* BCM4360 test.249: console-buffer + assert-text window dump.
+ * Fw freezes at T+12ms (per test.89) with counter 0x9d000=0x43b1;
+ * console write-idx at 0x9cc5c evolved in T248 (→0x8009ccbe), so
+ * any fw log output from the 0-12ms pre-freeze window is frozen
+ * in place. This probe dumps:
+ *  - A 640B window TCM[0x9CA00..0x9CCA0] (160 u32s) covering the
+ *    console_info struct at 0x9cc5c and the preceding buffer area,
+ *    fired at t+60000ms to keep ~30s headroom before the wedge
+ *    (T248 landed its snapshot ≤1s before wedge at t+90000ms).
+ *  - A 96B window TCM[0x9CDB0..0x9CE10] (24 u32s) covering the
+ *    historic assert-text region (tests 213/216/217), fired at
+ *    t+90000ms (low cost alongside T248's existing snapshot).
+ *  - Per-dwell read of TCM[0x9d000] via the T239 poll extension,
+ *    to directly reproduce test.89's "counter single-write at
+ *    T+12ms, frozen thereafter" reading across all 23 dwells.
+ * All BAR2 reads; no register side effects. Default 0. See
+ * PRE-TEST.249 in RESUME_NOTES.md. */
+static int bcm4360_test249_console_dump;
+module_param(bcm4360_test249_console_dump, int, 0644);
+MODULE_PARM_DESC(bcm4360_test249_console_dump, "BCM4360 test.249: console window 0x9CA00..0x9CCA0 at t+60s + assert window 0x9CDB0..0x9CE10 at t+90s + per-dwell 0x9d000 read (1=enable, 0=off)");
+
+/* BCM4360 test.249: console-window dump helper. Reads 160 u32s
+ * starting at 0x9CA00 and emits 5 pr_emerg lines of 32 u32s each
+ * (288 chars + prefix < kernel LOG_LINE_MAX 1024). stage_tag is a
+ * compile-time string literal. Zero cost when param off. */
+#define BCM4360_T249_CONSOLE_WINDOW(stage_tag) do { \
+	if (bcm4360_test249_console_dump) { \
+		u32 _c249[160]; \
+		int _k249; \
+		for (_k249 = 0; _k249 < 160; _k249++) \
+			_c249[_k249] = brcmf_pcie_read_ram32(devinfo, \
+				0x9CA00 + _k249 * 4); \
+		pr_emerg("BCM4360 test.249: " stage_tag " TCM[0x9ca00..0x9ca7c] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _c249[0], _c249[1], _c249[2], _c249[3], _c249[4], _c249[5], _c249[6], _c249[7], \
+			 _c249[8], _c249[9], _c249[10], _c249[11], _c249[12], _c249[13], _c249[14], _c249[15], \
+			 _c249[16], _c249[17], _c249[18], _c249[19], _c249[20], _c249[21], _c249[22], _c249[23], \
+			 _c249[24], _c249[25], _c249[26], _c249[27], _c249[28], _c249[29], _c249[30], _c249[31]); \
+		pr_emerg("BCM4360 test.249: " stage_tag " TCM[0x9ca80..0x9cafc] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _c249[32], _c249[33], _c249[34], _c249[35], _c249[36], _c249[37], _c249[38], _c249[39], \
+			 _c249[40], _c249[41], _c249[42], _c249[43], _c249[44], _c249[45], _c249[46], _c249[47], \
+			 _c249[48], _c249[49], _c249[50], _c249[51], _c249[52], _c249[53], _c249[54], _c249[55], \
+			 _c249[56], _c249[57], _c249[58], _c249[59], _c249[60], _c249[61], _c249[62], _c249[63]); \
+		pr_emerg("BCM4360 test.249: " stage_tag " TCM[0x9cb00..0x9cb7c] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _c249[64], _c249[65], _c249[66], _c249[67], _c249[68], _c249[69], _c249[70], _c249[71], \
+			 _c249[72], _c249[73], _c249[74], _c249[75], _c249[76], _c249[77], _c249[78], _c249[79], \
+			 _c249[80], _c249[81], _c249[82], _c249[83], _c249[84], _c249[85], _c249[86], _c249[87], \
+			 _c249[88], _c249[89], _c249[90], _c249[91], _c249[92], _c249[93], _c249[94], _c249[95]); \
+		pr_emerg("BCM4360 test.249: " stage_tag " TCM[0x9cb80..0x9cbfc] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _c249[96], _c249[97], _c249[98], _c249[99], _c249[100], _c249[101], _c249[102], _c249[103], \
+			 _c249[104], _c249[105], _c249[106], _c249[107], _c249[108], _c249[109], _c249[110], _c249[111], \
+			 _c249[112], _c249[113], _c249[114], _c249[115], _c249[116], _c249[117], _c249[118], _c249[119], \
+			 _c249[120], _c249[121], _c249[122], _c249[123], _c249[124], _c249[125], _c249[126], _c249[127]); \
+		pr_emerg("BCM4360 test.249: " stage_tag " TCM[0x9cc00..0x9cc7c] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _c249[128], _c249[129], _c249[130], _c249[131], _c249[132], _c249[133], _c249[134], _c249[135], \
+			 _c249[136], _c249[137], _c249[138], _c249[139], _c249[140], _c249[141], _c249[142], _c249[143], \
+			 _c249[144], _c249[145], _c249[146], _c249[147], _c249[148], _c249[149], _c249[150], _c249[151], \
+			 _c249[152], _c249[153], _c249[154], _c249[155], _c249[156], _c249[157], _c249[158], _c249[159]); \
+	} \
+} while (0)
+
+/* BCM4360 test.249: assert-text window helper. Reads 24 u32s from
+ * 0x9CDB0 and emits one line. Historic assert-text region per
+ * tests 213/216/217; T248 saw 0x9CDB0=0x77203030 hinting ASCII
+ * content. Zero cost when param off. */
+#define BCM4360_T249_ASSERT_WINDOW(stage_tag) do { \
+	if (bcm4360_test249_console_dump) { \
+		u32 _a249[24]; \
+		int _m249; \
+		for (_m249 = 0; _m249 < 24; _m249++) \
+			_a249[_m249] = brcmf_pcie_read_ram32(devinfo, \
+				0x9CDB0 + _m249 * 4); \
+		pr_emerg("BCM4360 test.249: " stage_tag " TCM[0x9cdb0..0x9ce0c] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _a249[0], _a249[1], _a249[2], _a249[3], _a249[4], _a249[5], _a249[6], _a249[7], \
+			 _a249[8], _a249[9], _a249[10], _a249[11], _a249[12], _a249[13], _a249[14], _a249[15], \
+			 _a249[16], _a249[17], _a249[18], _a249[19], _a249[20], _a249[21], _a249[22], _a249[23]); \
+	} \
+} while (0)
+
 
 
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
@@ -3062,6 +3163,12 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							 _s247[12], _s247[13], _s247[14], _s247[15], \
 							 _s247[16], _s247[17]); \
 					} \
+					if (bcm4360_test249_console_dump) { \
+						u32 _ctr249 = brcmf_pcie_read_ram32(devinfo, \
+							0x9d000); \
+						pr_emerg("BCM4360 test.249: t+" ms_tag \
+							 " ctr[0x9d000]=0x%08x\n", _ctr249); \
+					} \
 				} while (0)
 
 				/* BCM4360 test.242: MAILBOXMASK sentinel round-trip
@@ -3227,10 +3334,12 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				msleep(15000);
 				pr_emerg("BCM4360 test.238: t+60000ms dwell\n");
 				BCM4360_T239_POLL("60000ms");
+				BCM4360_T249_CONSOLE_WINDOW("t+60000ms");
 				msleep(30000);
 				pr_emerg("BCM4360 test.238: t+90000ms dwell\n");
 				BCM4360_T239_POLL("90000ms");
 				BCM4360_T248_WIDESCAN("t+90000ms");
+				BCM4360_T249_ASSERT_WINDOW("t+90000ms");
 				msleep(30000);
 				pr_emerg("BCM4360 test.238: t+120000ms dwell done (proceeding to BM-clear + release)\n");
 				BCM4360_T239_POLL("120000ms");

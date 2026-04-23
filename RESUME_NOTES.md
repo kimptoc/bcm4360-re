@@ -197,13 +197,13 @@ sleep 240
 sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
 ```
 
-### Pre-test checklist (to fill after build)
+### Pre-test checklist (complete — READY TO FIRE)
 
-1. Build status: PENDING rebuild + verify via `modinfo` (param present) + `strings` (format lines present).
-2. PCIe state: `Mem+ BusMaster+`, MAbort-, CommClk+ verified above at 14:44.
-3. Hypothesis: stated — pre-freeze fw log output lives in 0x9CA00..0x9CCA0 console window or 0x9CDB0..0x9CE10 assert region.
-4. Plan: this block; commit + push + sync before any code edits (per CLAUDE.md).
-5. Host state: boot 0 started 14:41, uptime ~5 min, stable. No brcm modules loaded.
+1. Build status: **REBUILT + VERIFIED.** md5sum `22fbd23dbcf68479c3689f0d8e7db2a1` on `brcmfmac.ko`. `modinfo` shows `parm: bcm4360_test249_console_dump`. `strings` confirms all 6 format lines (5 × 32-u32 console window at t+60s + 1 × 24-u32 assert window at t+90s) and 23 per-dwell 0x9d000 ctr format lines. Only pre-existing unused-variable warnings (no new regressions).
+2. PCIe state: **clean.** `Mem+ BusMaster+`, MAbort-, CommClk+, LnkSta 2.5GT/s x1, UESta all zero, CESta AdvNonFatalErr+ (pre-existing sticky, same as T248). Re-verified 15:00 BST.
+3. Hypothesis: stated — pre-freeze fw log output in 0x9CA00..0x9CCA0 console window or 0x9CDB0..0x9CE10 assert region; counter 0x43b1 frozen across all 23 dwells.
+4. Plan: this block + code change committed; push + sync before insmod.
+5. Host state: boot 0 started 14:41, uptime ~19 min, stable. No brcm modules loaded (mt76 Wi-Fi adapter unrelated).
 
 ### Expected artifacts
 
