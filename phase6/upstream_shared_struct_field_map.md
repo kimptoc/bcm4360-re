@@ -114,12 +114,43 @@ Based on code analysis, **firmware must have**:
 
 ### Verdict on Test.247 Probe (72 bytes, version=5, rest zero)
 
-**Would firmware reject this?**
-- Version=5: ✓ Passes range check [pcie.c:2131-2137]
-- Console addr=0: ✓ Acceptable; console_init handles zero gracefully
-- Ring info addr=0: **✗ FAILS** — memcpy_fromio from TCM[0] would read invalid ringinfo; max_flowrings would be garbage, likely failing bounds check at pcie.c:1751-1753
+**Important framing:** T247 observed firmware *never* publish a
+`sharedram_addr` at TCM[ramsize-4] (unchanged across 23 dwells). The
+host code that reads and validates the shared struct
+(`brcmf_pcie_init_share_ram_info`, `pcie.c:2120`) is only reached
+*after* the host detects an FW-published sharedram pointer. In T247
+the host never got there. So the analysis below is conditional — it
+describes what *would* happen *if* firmware had published the struct
+and host had reached the validation path, not what did happen.
 
-**Inference:** Test.247 would NOT see firmware read the struct if ring_info_addr=0. Firmware would not have advanced past the point where init_ringbuffers is called (pcie.c:5445). **Host-side code does not call init_ringbuffers until after set_active succeeds.**
+**Hypothetical: if host had reached `init_share_ram_info`, what would
+it do with our 72-byte, version=5, rest-zero struct?**
+- Version=5: *would* pass the host's range check at
+  `pcie.c:2131-2137` (5 ∈ [MIN=5, MAX=7]).
+- Console addr=0: host-side `console_init` handles zero gracefully.
+- Ring info addr=0: host-side `memcpy_fromio` from TCM[0] would read
+  invalid ringinfo; `max_flowrings` would be garbage, likely failing
+  the bounds check at `pcie.c:1751-1753`. This failure would occur
+  during `brcmf_pcie_init_ringbuffers` (`pcie.c:5445`), which is
+  itself only called after `brcmf_chip_set_active` succeeds.
+
+**What T247 actually observed:**
+Firmware never wrote the sharedram pointer. The host-side validation
+path above was never invoked. The null result therefore does not
+falsify either the version choice or the ring_info layout — it is
+upstream of both checks. The distinguishing question T247 leaves open
+is why firmware never publishes a sharedram_addr, not whether our
+placeholder struct would have passed validation.
+
+**Implication for T249 / follow-on runs:**
+Signature/version sweeps at the same pre-placement offset test the
+same off-path hypothesis T247 tested. If firmware does not publish
+sharedram_addr regardless of signature, varying version=5/6/7 at
+TCM[0x80000] will continue to produce null results for the same
+reason. A sweep would still be informative as a falsifier — it bounds
+the class of "pre-placement content that might get firmware to
+engage" — but the matrix should enumerate the more likely outcome
+(all-null) and plan for the PMU/PLL pivot accordingly.
 
 ---
 
