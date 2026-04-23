@@ -30,7 +30,90 @@ Last journal line: Apr 23 11:48:18 t+90000ms dwell ladder entries.
 
 ### Open question to resolve before PRE-TEST.248
 
-**Does "fw touches none of our observed regions" falsify (S1) as a class, or only "(S1) with minimal host-pre-placed signature"?** Observation windows cover ~80 bytes out of 640KB TCM. A wide-scan probe across ~8–16 offsets would cheaply distinguish "fw is stalled doing nothing" from "fw is writing somewhere we're not looking." That vs a Phase-6 pivot is the next decision. Advisor queued.
+**Does "fw touches none of our observed regions" falsify (S1) as a class, or only "(S1) with minimal host-pre-placed signature"?** Observation windows cover ~80 bytes out of 640KB TCM. A wide-scan probe across ~8–16 offsets would cheaply distinguish "fw is stalled doing nothing" from "fw is writing somewhere we're not looking." That vs a Phase-6 pivot is the next decision.
+
+### Advisor response (2026-04-23 12:2x BST, post-T247 reconcile call)
+
+Two cheap intermediate probes to run before any Phase-6 pivot:
+1. **Wide-TCM scan** — snapshot ~16 u32 offsets spread across TCM[0..0xA0000) at pre-FORCEHT and at t+90000ms (pre-wedge); diff = "fw wrote here." Distinguishes "fw stalled doing nothing" from "fw writing somewhere we're not looking."
+2. **Multi-signature sweep** — our version=5 may be wrong for BCM4360's Apple-variant fw. Try version=5,6,7 (MIN/MAX bounds upstream accepts) or an alternate magic word. Only if T248 wide-scan returns null.
+
+Order: wide-scan first (T248); signature sweep deferred to T249 if T248 null. Rationale: if wide-scan finds fw writing *anywhere*, signature sweep is probably moot — we'd know fw is working, not stalled.
+
+---
+
+## PRE-TEST.248 (2026-04-23 12:2x BST, boot 0 after test.247 crash + SMC reset) — **wide-TCM scan.** Keep T247's pre-placed struct at TCM[0x80000] for continuity; add 16-u32 snapshot at pre-FORCEHT and at t+90000ms across TCM. Discriminator between "fw stalled" and "fw writing somewhere outside our observation windows."
+
+### Hypothesis
+
+T247 null result covers only ~80 bytes (struct region + ramsize-4 + tail-TCM) out of 640KB TCM. Fw may be executing and modifying TCM outside those windows. A wide-scan diff (baseline vs pre-wedge) exposes any such activity. Three outcomes:
+
+- **(W1) Wide-scan null** (all 16 offsets unchanged between baseline and pre-wedge). Strengthens (S2) fw-stalled reading to "fw touches no TCM region we sampled." Next: T249 signature sweep (version=5/6/7 + alternate magic) to falsify (S1) as a class.
+- **(W2) Wide-scan shows changes at offset(s) ∉ {0x80000, ramsize-4, tail}**. Falsifies "fw stalled doing nothing." Fw is working; we've just been looking in the wrong place. Next: densify around the changing offset(s); decode what fw is writing.
+- **(W3) Wide-scan shows changes inside fw code region [0..0x6bf78]**. Would mean fw is self-modifying or writing to its own code segment — very unlikely. Flag and decompose.
+
+### Design (advisor-to-review before code)
+
+- **Struct continuity**: keep the existing `bcm4360_test247_preplace_shared` param and struct at 0x80000 version=5. No change to T247's block.
+- **Wide-scan offsets (16 u32 = 64 bytes total read per snapshot)**: chosen to span the address space with denser coverage in dead region, lighter in fw image:
+  - 0x00000 (fw vector table)
+  - 0x10000, 0x20000, 0x30000, 0x40000, 0x50000, 0x60000 (inside fw image, 6 samples)
+  - 0x68000 (near fw end 0x6bf78)
+  - 0x70000, 0x78000, 0x84000, 0x88000, 0x8C000 (dead region spread)
+  - 0x90000 (T245/T246 BAR2 round-trip location — adjacent already-observed)
+  - 0x98000 (close to NVRAM start 0x9ff1c)
+- **Baseline snapshot** at pre-FORCEHT just before the T247 block fires (same stage, same probe cost tier).
+- **Pre-wedge snapshot** at the t+90000ms dwell (last dwell we reliably reach). Adding a per-dwell read at all 16 offsets across 23 dwells would be 368 reads total — still cheap BAR2 reads, but only two snapshots keep the ladder pattern identical to T247.
+- **Observable**: diff(pre-FORCEHT snapshot, t+90000ms snapshot) per offset.
+
+### Next-step matrix
+
+| Wide-scan diff | Implication | Test.249 direction |
+|---|---|---|
+| All 16 offsets unchanged | (W1) — "fw stalled doing nothing" strengthened to near-certainty. Fw never writes anywhere we've observed across ~96 bytes spread over 640KB + struct region + ramsize-4 + tail-TCM. | T249: signature sweep (version=5/6/7 + alternate magic at struct [0]) to falsify (S1) as a class. If that also nulls, Phase 6 pivot is justified. |
+| Changes only at in-fw-image offsets (0x00000..0x60000) | (W3) — unusual; fw writing its own code segment. | Decompose: does it happen with `set_active` skipped? Was fw image corrupted in download? |
+| Changes at dead-region offsets (0x70000..0x98000) outside our old windows | (W2) — fw IS working, just not at the addresses we picked. | Densify around the changing offset(s); decode what's being written. |
+
+### Safety
+
+- BAR2 reads only (no writes beyond T247's existing struct placement); no register touch beyond T247 baseline.
+- +32 BAR2 reads total vs T247 (16 pre-FORCEHT, 16 at t+90000ms). Well within T247's probe-cost envelope.
+- Reads from fw image offsets do not perturb fw execution (read-only).
+- SMC reset expected to be required after wedge (consistent with T247).
+
+### Code change outline
+
+1. **New module param** `bcm4360_test248_wide_tcm_scan` (default 0) near T247's param (pcie.c).
+2. **New macro** `BCM4360_T248_WIDESCAN(stage_tag)` — reads 16 u32s from fixed offset list; logs single `pr_emerg` line.
+3. **Two invocation sites**:
+   - Right after T247's pre-FORCEHT block (before FORCEHT).
+   - Right after the existing t+90000ms dwell poll (add a `if (bcm4360_test248_wide_tcm_scan)` conditional).
+
+### Run sequence (after build+verify)
+
+```bash
+sudo modprobe cfg80211
+sudo modprobe brcmutil
+sudo insmod phase5/work/drivers/.../brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 \
+    bcm4360_test248_wide_tcm_scan=1
+sleep 240
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+### Pre-test checklist status
+
+1. Build status: **PENDING** — new param + macro + 2 invocation sites; `make`, verify via `modinfo`/`strings` before insmod.
+2. PCIe state: clean (captured above, boot 0 uptime ~1 min after SMC reset).
+3. Hypothesis: (W1)/(W2)/(W3) matrix.
+4. Plan: this block. Commit + push + sync before code changes.
+5. Advisor final review after code + build, before insmod.
+
+---
 
 ### Hardware state (current, 2026-04-23 12:1x BST, boot 0 after test.247 crash **with SMC reset**)
 
