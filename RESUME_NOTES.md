@@ -495,10 +495,16 @@ sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
 - No brcm modules loaded.
 - Boot 0 started 2026-04-23 08:33:44 BST.
 
-### Build status — PENDING
+### Build status — REBUILT CLEAN
 
-Need to edit pcie.c + `make -C phase5/work` + strings/modinfo
-verify before insmod.
+`brcmfmac.ko` rebuilt 2026-04-23 ~08:58 BST via
+`make -C $KDIR M=phase5/work/drivers/.../brcmfmac modules`.
+Verified in module:
+- `strings` shows both test.242 round-trip format lines
+  (`t+100ms MAILBOXMASK ...`, `t+2000ms MAILBOXMASK ...`).
+- `modinfo` reports `parm: bcm4360_test242_writeverify_postactive: ...`.
+Only pre-existing unused-variable / unused-function warnings;
+no new regressions.
 
 ### Expected artifacts
 

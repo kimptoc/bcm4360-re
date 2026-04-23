@@ -179,6 +179,20 @@ static int bcm4360_test241_writeverify;
 module_param(bcm4360_test241_writeverify, int, 0644);
 MODULE_PARM_DESC(bcm4360_test241_writeverify, "BCM4360 test.241: BAR0 write-path verification (sentinel round-trip on MAILBOXMASK) post-pci_set_master, pre-set_active (1=verify, 0=off)");
 
+/* BCM4360 test.242: repeat the test.241 MAILBOXMASK round-trip at
+ * dwell points INSIDE the ultra ladder — t+100ms and t+2000ms —
+ * i.e. POST-set_active. test.241 failed at the pre-FORCEHT stage
+ * but that's confounded with "MAILBOXMASK is in a clock/reset
+ * domain that's only writable later". This test measures the
+ * write path at the same stage test.240 rang DB1, so we can
+ * cleanly discriminate "BAR0 writes broken" from "stage-gated
+ * register". Safe: MAILBOXMASK is the same register
+ * brcmf_pcie_intr_disable writes 0 to in production cleanup.
+ * Default 0. */
+static int bcm4360_test242_writeverify_postactive;
+module_param(bcm4360_test242_writeverify_postactive, int, 0644);
+MODULE_PARM_DESC(bcm4360_test242_writeverify_postactive, "BCM4360 test.242: MAILBOXMASK sentinel round-trip at t+100ms and t+2000ms dwells (post-set_active) to discriminate stage-gating from broken write path (1=verify, 0=off)");
+
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
  * stage=1: write IOCTL = FGC|CLK (coredisable in_reset_configure step)
@@ -2778,6 +2792,32 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					} \
 				} while (0)
 
+				/* BCM4360 test.242: MAILBOXMASK sentinel round-trip
+				 * at a dwell point. Gated on
+				 * bcm4360_test242_writeverify_postactive so test.239/
+				 * test.240 runs aren't perturbed. Writes 0xDEADBEEF,
+				 * reads back, writes 0 to restore, reads back. All
+				 * three readbacks logged. Safe: MAILBOXMASK=0 is the
+				 * state brcmf_pcie_intr_disable leaves the register
+				 * in during cleanup (pcie.c:1333). */
+#define BCM4360_T242_WRITEVERIFY(ms_tag) do { \
+					if (bcm4360_test242_writeverify_postactive) { \
+						const u32 _mbm = devinfo->reginfo->mailboxmask; \
+						u32 _base, _after_sent, _after_clear; \
+						int _sent_match, _clear_match; \
+						_base = brcmf_pcie_read_reg32(devinfo, _mbm); \
+						brcmf_pcie_write_reg32(devinfo, _mbm, 0xDEADBEEF); \
+						_after_sent = brcmf_pcie_read_reg32(devinfo, _mbm); \
+						brcmf_pcie_write_reg32(devinfo, _mbm, 0); \
+						_after_clear = brcmf_pcie_read_reg32(devinfo, _mbm); \
+						_sent_match = (_after_sent == 0xDEADBEEF); \
+						_clear_match = (_after_clear == 0); \
+						pr_emerg("BCM4360 test.242: t+" ms_tag " MAILBOXMASK (BAR0+0x%x) baseline=0x%08x sent=0x%08x (match=%d) cleared=0x%08x (match=%d) RESULT %s\n", \
+							 _mbm, _base, _after_sent, _sent_match, _after_clear, _clear_match, \
+							 (_sent_match && _clear_match) ? "PASS" : "FAIL"); \
+					} \
+				} while (0)
+
 				pr_emerg("BCM4360 test.238: calling brcmf_chip_set_active resetintr=0x%08x (ultra-extended ladder t+120s)\n",
 					 resetintr);
 				mdelay(10);
@@ -2787,6 +2827,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned TRUE\n");
 				mdelay(100);
 				pr_emerg("BCM4360 test.238: t+100ms dwell\n");
+				BCM4360_T242_WRITEVERIFY("100ms");
 				BCM4360_T239_POLL("100ms");
 				mdelay(200);
 				pr_emerg("BCM4360 test.238: t+300ms dwell\n");
@@ -2805,6 +2846,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				BCM4360_T239_POLL("1500ms");
 				msleep(500);
 				pr_emerg("BCM4360 test.238: t+2000ms dwell\n");
+				BCM4360_T242_WRITEVERIFY("2000ms");
 				if (bcm4360_test240_ring_h2d_db1) {
 					u32 _rb;
 					pr_emerg("BCM4360 test.240: ringing H2D_MAILBOX_1 (BAR0+0x%x)=1 at t+2000ms\n",
