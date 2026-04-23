@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 18:2x BST, POST-TEST.253 — **branch (α) confirmed: saved-state region is a call-context snapshot, NOT a paused TCB**. T253 fired at 18:02:17 (t+60s, both probes captured); wedge ≤1s after t+90s T248 probe at 18:02:47 (n=7 streak T247..T253). Boot 0 started 18:11:33 BST, PCIe clean (Mem+ BusMaster+, MAbort-), no brcm loaded, host healthy. Key findings: (1) **0x934C0 is a 120-byte partially-initialized struct** (allocator header 0x78=120 at 0x934B8). Three non-zero fields only: +0x04=0x9355C (TCM ptr), +0x24=0x6908, +0x34=0x3. NO magic tag, NO Thumb-mode fn-pointers, NO sp-like value → **TCB pattern absent → β falsified**. (2) **α stands**: hang is in wlc_attach → wlc_bmac_attach call tree, before chiprev banner fires (T251 saved PCs are call-context). T253 local analysis (see `phase5/analysis/T253_wlc_phy_attach.md`) already narrowed: hang is NOT in wlc_phy_attach body itself; most likely inside one of its callees (0x34DE0 dispatcher → 0x6A2D8 PHY worker → 0x38A50/0x38A24 dispatch tables). (3) **list_head peer-pair reading DOWNGRADED**: 0x91E54 and 0x91E84 are both ZERO, not self-referencing (as Linux empty-list would be) and not pointing to populated content. Either non-Linux list convention, uninitialized BSS, or those 0x92460 fields aren't list_head pointers at all — T252 "two adjacent embedded list_head pairs" claim is weaker, not confirmed.)
+## Current state (2026-04-23 19:0x BST, POST-TEST.254 — **hang is NOT a direct polling loop; all wlc PHY-subtree loops are PMCCNTR-bounded.** Host stable, boot 0 up since 18:11:33 BST, PCIe clean (Mem+ BusMaster+ MAbort-), no brcm loaded. T254 was a LOCAL analysis pass (no hardware test, no crash) — scripts + deliverable `phase5/analysis/T254_phy_subtree.md`. Key findings: (1) **All three PHY-subtree polling loops** (0x1415C, 0x1722C = `wlc_bmac_suspend_mac_and_wait`, 0x14CAC) use `bl #0x1ADC` delay helper which reads PMCCNTR (CP15 c9,c13,0) — **bounded, cannot hang**. PMCCNTR is enabled at boot via PMCR writes at 0x1D6/0x1DC. Each poll has ≤82ms wall-clock timeout. (2) **"40/160/160MHz" last-printed line is the RTE BOOT banner** (blob[0x6BAE5]), NOT wlc_attach — T251 reading revised. Fw hung AFTER RTE prints, anywhere in subsequent init. (3) **Chiprev banner call site = blob[0x06877A]** (inside wlc_bmac_attach, confirmed by wlc_bmac_attach literal ref from same function). Fw never reached this printf → hang is in wlc_bmac_attach pre-0x06877A. (4) **No WFI, no reachable `b .` self-loop** in wlc path. Two apparent hits at 0x464F6/0x468F4 are false positives (data region, no callers, junk strings nearby). (5) **Best-fit hang mechanism**: cross-core / backplane wait — fw issued a transaction to an unclocked/stuck SB core, CPU stalled at memory-subsystem level. Ruled out: direct polling-loop hang; RTOS task wait (no task-table primitives found); all known delay loops. Next-test T255: cheap hardware probe of TCM[0x58C98] (tick-scale) + TCM[0x93550..0x9358C] (decode 0x9355C, the forward-linked struct pointer from 0x934C0).)
 
 
 
@@ -357,5 +357,44 @@ Two tracks, both cheap:
 2. **T254 HARDWARE (if local work leaves gaps)**: probe TCM[0x93550..0x9358C] (16 u32) to decode 0x9355C — the only unfollowed pointer in 0x934C0's populated fields. Same cost as T253 (~32 reads), same wedge expectation. Deferred until local analysis of 0x6A2D8 is done, since local work may change what we want to know about 0x9355C.
 
 Advisor call before committing to T254 design.
+
+---
+
+## POST-TEST.254 (2026-04-23 19:0x BST — local disassembly only, no hardware test)
+
+T254 was a local-analysis pass (no kernel module load, no crash). Deliverable: `phase5/analysis/T254_phy_subtree.md`. Scripts: `t254_6a2d8_worker.py`, `t254_dispatch_scan.py`, `t254_poll_detail.py`.
+
+### What test.254 landed (facts)
+
+- **0x6A2D8 has no backward branches** — no loops, cannot be the hang. Structured as setup + tail-call to 0x52B8 (a comma-separated-string iterator — not hardware).
+- **wlc_phy_attach's dispatch-table exposure is narrow**: only TWO direct calls into 0x38A50 table, both at index 0 → target 0x15940 (also loop-free).
+- **Scanned all 17 dispatch-table targets reachable via 0x38A50/0x38A24**: only one tight hardware-poll candidate, at target **0x1722C**.
+- **0x1722C is `wlc_bmac_suspend_mac_and_wait`** (function name string at blob[0x4B189]). Polling loop at 0x173D8..0x173EC (8 insns) reads `[r4 + 0x128]` bit 0 with r7 countdown from 0x14441. On timeout **falls through without assert** — and uses the bounded `bl #0x1ADC` delay.
+- **Delay helper 0x1ADC is bounded via PMCCNTR** (CP15 `mrc p15,0,r0,c9,c13,0` at 0x1EC). PMCCNTR is enabled early in boot (PMCR writes at 0x1D6 and 0x1DC: `mcr p15,0,r1,c9,c12,0/1`). Blob init tick-scale at TCM[0x58C98] = 0x50 → `delay(10)` ≈ 10 µs → 82ms total wall-clock for the 0x1722C poll.
+- **"40/160/160MHz" line IS the RTE boot banner** at blob[0x6BAE5]: `"RTE (%s-%s%s%s) %s on BCM%s r%d @ %d.%d/%d.%d/%d.%dMHz"` — printed very early in fw boot, NOT by wlc_attach. T251 reading "last printed line is wlc_attach banner" is **revised**. Fw hung AFTER RTE banner, anywhere in the remaining init.
+- **Chiprev banner call site pinpointed**: blob[0x06876E] LDR + blob[0x06877A] BL to printf 0xA30. Uses format at blob[0x4C534]. Same function references `"wlc_bmac_attach"` string at blob[0x4B121] from 0x68778 → **confirmed inside wlc_bmac_attach**. Fw never reached this printf → hang is in wlc_bmac_attach's execution BEFORE byte 0x06877A.
+- **WFI check**: exactly 1 WFI (0xBF30) in blob at offset 0x001C1E — in early boot code, not reachable from wlc path. None inside wlc_bmac_attach / wlc_phy_attach range.
+- **Self-loop (`b .` = 0xE7FE) check**: 6 occurrences total. Four at 0x25E/0x290/0x326/0x53E are real early-boot fault handlers. Two apparent hits at blob[0x464F6] and blob[0x468F4] are **false positives** — surrounding bytes disassemble as garbage (junk strings `"kkkk::::"`, `"V22dN::t"` nearby, repeated identical instructions at adjacent offsets, no reachable BL/B targeting them). Data, not code. **No reachable unbounded-wait primitive in wlc path.**
+
+### What test.254 settled (facts)
+
+- **The hang is NOT a direct polling loop in the fw code region**. All three candidate polling loops (0x1415C, 0x1722C, 0x14CAC) are built on PMCCNTR-backed `bl #0x1ADC` and have finite wall-clock timeouts ≤ 82ms. Bounded loops do not silently hang for 60+ seconds.
+- **Saved LR 0x68321 is the return address of `bl #0x1415C` at 0x6831E** inside wlc_bmac_attach (T253 identified 0x1415C as SB-core reset waiter; T254 confirms caller context). So fw was inside 0x1415C or one of its transitive callees at capture time — but those are also all bounded.
+- **Remaining hang candidates** (in priority order, post-T254):
+  - **(A) Cross-core / backplane wait** — fw issued a transaction targeting an unclocked or stuck SB core; the bus read backpressures the ARM core indefinitely. CPU is stalled at memory-subsystem level, not at instruction level. Saved LR reflects the last completed call return before the stall. This best matches all observed evidence (silent hang, no advancement in any counter, ring/canary intact, probes from host-side work fine).
+  - **(B) Inter-thread wait** — an RTOS task waiting on a semaphore/queue; the hung task may be different from the one captured in the saved-state. T253 didn't find TCB/task-table primitives in any captured struct — reducing likelihood.
+  - **(C) Tick-scale corruption** — TCM[0x58C98] (blob default 0x50) overwritten mid-run to 0xFFFFFFFF, making `target = units * scale` overflow and the delay loop effectively unbounded.
+- **wlc_phy_attach's own body NOT under suspicion**: 213 insns, only 2 direct dispatch calls both to idx-0 (benign), no tight loops, all BL targets have bounded loops or no loops. Moves emphasis AWAY from the "inside wlc_phy_attach" reading.
+
+### Next-test direction (T255 — candidates for advisor review)
+
+Back to hardware probes, informed by T254 narrowing:
+
+1. **Cheapest: TCM[0x58C98..+4]** — verify tick-scale at hang time (1 u32 read). Settles (C) — if value == 0x50, (C) falsified; if corrupted, strong new lead.
+2. **TCM[0x93550..0x9358C]** (16 u32) — decode 0x9355C, the forward-linked pointer from 0x934C0. Same risk profile as T253.
+3. **Higher-risk: sample PHY/MAC `[core_base + 0x128]` via BAR0** — the register the 0x1722C polling loop reads. Needs careful gate-on-core-reset-state check; accessing an unclocked core can wedge the bus. Design caution warranted.
+4. **Enumerate RTOS task-table** — requires finding the task-control-block magic layout. Defer until cheaper paths exhausted.
+
+Advisor call before committing to T255 design.
 
 ---
