@@ -688,6 +688,22 @@ static int bcm4360_test258_enable_irq;
 module_param(bcm4360_test258_enable_irq, int, 0644);
 MODULE_PARM_DESC(bcm4360_test258_enable_irq, "BCM4360 test.258: after t+120s dwell, write MAILBOXMASK + H2D_MAILBOX_1 and sample console buf_ptr before+after 5s wait; detects fw wake-from-WFI (1=enable, 0=off)");
 
+/* BCM4360 test.259: like test.258 but registers a minimal safe IRQ handler
+ * BEFORE enabling MAILBOXMASK so any fw-raised IRQ is consumed cleanly
+ * (no kernel-level unhandled-IRQ storm). Handler reads MAILBOXINT, ACKs
+ * by write-back, then masks further IRQs to prevent storm. Counter +
+ * last-seen value are atomic so probe can read them. Does NOT touch
+ * devinfo->shared.* — only reginfo registers + atomic counters. */
+static int bcm4360_test259_safe_enable_irq;
+module_param(bcm4360_test259_safe_enable_irq, int, 0644);
+MODULE_PARM_DESC(bcm4360_test259_safe_enable_irq, "BCM4360 test.259: safe variant of test.258 — registers a minimal no-op IRQ handler BEFORE enabling MAILBOXMASK so fw-raised IRQs don't wedge the host. Logs IRQ-count + last MAILBOXINT value (1=enable, 0=off)");
+
+static atomic_t bcm4360_t259_irq_count = ATOMIC_INIT(0);
+static atomic_t bcm4360_t259_last_mailboxint = ATOMIC_INIT(0);
+
+/* bcm4360_t259_safe_handler is defined later (needs struct brcmf_pciedev_info
+ * + brcmf_pcie_read_reg32/write_reg32 to be forward-declared first). */
+
 /* BCM4360 test.256 scheduler-walk helper. 2 pr_emerg lines, 16 u32 each.
  * gate_flag arg lets caller pick between sched_walk (t+60s) and
  * sched_walk_early (t+100ms). */
@@ -716,7 +732,7 @@ MODULE_PARM_DESC(bcm4360_test258_enable_irq, "BCM4360 test.258: after t+120s dwe
  * at TCM[0x9CC5C] + 16 u32 ring content at TCM[0x9CC20..0x9CC5C] (the
  * 0x40 bytes ending at buf_ptr storage word). 1 pr_emerg line. */
 #define BCM4360_T258_BUFPTR_PROBE(stage_tag) do { \
-	if (bcm4360_test258_enable_irq) { \
+	if (bcm4360_test258_enable_irq || bcm4360_test259_safe_enable_irq) { \
 		u32 _d258bp = brcmf_pcie_read_ram32(devinfo, 0x9CC5C); \
 		u32 _d258r[16]; \
 		int _n258; \
@@ -1179,6 +1195,25 @@ brcmf_pcie_write_reg32(struct brcmf_pciedev_info *devinfo, u32 reg_offset,
 	void __iomem *address = devinfo->regs + reg_offset;
 
 	iowrite32(value, address);
+}
+
+
+/* BCM4360 test.259 safe IRQ handler — defined here because it needs
+ * struct brcmf_pciedev_info + the reg32 helpers above. */
+static irqreturn_t bcm4360_t259_safe_handler(int irq, void *arg)
+{
+	struct brcmf_pciedev_info *devinfo = arg;
+	u32 status;
+
+	status = brcmf_pcie_read_reg32(devinfo, devinfo->reginfo->mailboxint);
+	if (!status)
+		return IRQ_NONE;
+
+	atomic_set(&bcm4360_t259_last_mailboxint, status);
+	brcmf_pcie_write_reg32(devinfo, devinfo->reginfo->mailboxint, status);
+	brcmf_pcie_write_reg32(devinfo, devinfo->reginfo->mailboxmask, 0);
+	atomic_inc(&bcm4360_t259_irq_count);
+	return IRQ_HANDLED;
 }
 
 
@@ -3507,7 +3542,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					    bcm4360_test255_struct_decode || \
 					    bcm4360_test256_sched_walk || \
 					    bcm4360_test256_sched_walk_early || \
-					    bcm4360_test258_enable_irq) { \
+					    bcm4360_test258_enable_irq || \
+					    bcm4360_test259_safe_enable_irq) { \
 						u32 _ctr249 = brcmf_pcie_read_ram32(devinfo, \
 							0x9d000); \
 						pr_emerg("BCM4360 test.249: t+" ms_tag \
@@ -3706,6 +3742,40 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					pr_emerg("BCM4360 test.238: t+125000ms post-enable dwell\n");
 					BCM4360_T239_POLL("125000ms");
 					BCM4360_T258_BUFPTR_PROBE("t+125000ms");
+				}
+				if (bcm4360_test259_safe_enable_irq) {
+					struct pci_dev *_pdev259 = devinfo->pdev;
+					int _prev_irq = _pdev259->irq;
+					int _msi_ret, _req_ret;
+					atomic_set(&bcm4360_t259_irq_count, 0);
+					atomic_set(&bcm4360_t259_last_mailboxint, 0);
+					_msi_ret = pci_enable_msi(_pdev259);
+					pr_emerg("BCM4360 test.259: pci_enable_msi=%d prev_irq=%d new_irq=%d\n",
+						 _msi_ret, _prev_irq, _pdev259->irq);
+					_req_ret = request_irq(_pdev259->irq,
+							       bcm4360_t259_safe_handler,
+							       IRQF_SHARED, "t259_safe", devinfo);
+					pr_emerg("BCM4360 test.259: request_irq ret=%d\n", _req_ret);
+					if (_req_ret == 0) {
+						pr_emerg("BCM4360 test.259: triggering intr_enable + hostready at t+120s (handler registered)\n");
+						brcmf_pcie_intr_enable(devinfo);
+						brcmf_pcie_hostready(devinfo);
+						pr_emerg("BCM4360 test.259: intr_enable + hostready done; sleeping 5s\n");
+						msleep(5000);
+						pr_emerg("BCM4360 test.259: post-wait irq_count=%d last_mailboxint=0x%08x\n",
+							 atomic_read(&bcm4360_t259_irq_count),
+							 atomic_read(&bcm4360_t259_last_mailboxint));
+						pr_emerg("BCM4360 test.238: t+125000ms post-enable dwell\n");
+						BCM4360_T239_POLL("125000ms");
+						BCM4360_T258_BUFPTR_PROBE("t+125000ms");
+						brcmf_pcie_intr_disable(devinfo);
+						free_irq(_pdev259->irq, devinfo);
+					} else {
+						pr_emerg("BCM4360 test.259: request_irq FAILED (%d), skipping enable sequence\n",
+							 _req_ret);
+					}
+					if (_msi_ret == 0)
+						pci_disable_msi(_pdev259);
 				}
 #undef BCM4360_T239_POLL
 			} else if (bcm4360_test237_extended_dwells) {
