@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 15:3x BST, POST-TEST.250 — **Firmware identified: "RTE (PCIE-CDC) 6.30.223 (TOB)"** — Broadcom Runtime Environment, PCIe/CDC protocol, build 6.30.223 Tip-of-Branch. T250 gap dump succeeded: full **Chipc init log** ("Chipc: rev 43, caps 0x58680001, chipst 0x9a4d pmurev 17, pmucaps 0x10a22b11") + **wl_probe called** + **dngl_probe called** + **fw version banner** all visible in the 0x9CCB0..0x9CE30 dump. Console is a **log-RECORD ring** (binary header + fmt-ptr + args + ASCII timestamp "125888.XXX" + inline text), not a flat text ring. Fmt-string pointers (0x62910, 0x629C0) resolve into fw code region. Counter 0x9d000 = 0x43b1 across all 23 dwells (t+100ms..t+90000ms) → test.89 single-write reading replicated at **n=2** (T249+T250). Boot -1 ended 15:34:26 BST (post-T249 host-side wedge pattern, SMC reset required — n=4 streak T247..T250). Boot 0 started 15:37:02 BST, PCIe clean (MAbort-, CommClk+, CESta AdvNonFatalErr+ sticky). Host healthy.)
+## Current state (2026-04-23 16:5x BST, POST-TEST.251 — **forward-write ring + last-line-before-hang + saved-state region all captured**. T251 t+60s probe landed at 15:55:04, last journal entry at 15:55:33 (t+90s probe burst → wedge ≤1s after, n=5 streak T247..T251). Three findings: (1) **last text line printed by fw before hang**: `"...(r) on BCM4360 r3 @ 40.0/160.0/160.0MHz\n"` at 0x9CE30..0x9CE58 — likely wlc_attach init banner showing chip rev + radio config. After "\n\0" at 0x9CE58, ring ends at STAK canary fill — **ring upper bound ≈ 0x9CE5A**. (2) **Backward-from-buf_ptr region 0x9CC94..0x9CCAC** contains a binary log record continuation (header `0x40010 / fmt=0x629C0 / 0x9af80 / 0xa / 0x185d`) — same record format as T250's wl_probe/dngl_probe records → **forward-write ring confirmed**. (3) **Saved-state region 0x9CE98..0x9CF34** (after STAK canary): 30+ u32s with repeated TCM offsets (0x93610 ×5, 0x92440 ×3, 0x91cc4 ×3) and odd-LSB fw addresses (0x12c69, 0x68321, 0x68d2f, 0x5271 — all **Thumb-mode PCs**). 0x9CEA0=0x000934C0 matches T248's 0x9CFE0 trap-region value. **0x9CF2C=0x000043B1 matches frozen "counter" at 0x9d000** → 0x43B1 may not be a counter but a saved register/token. Boot 0 started 16:50:08 BST, PCIe clean.)
 
 ### What test.250 landed (facts)
 
@@ -290,8 +290,75 @@ Note: `bcm4360_test249_console_dump` and `bcm4360_test250_console_gap` are NOT s
 
 ---
 
-### Hardware state (current, 2026-04-23 15:37+ BST, boot 0 after test.250 crash **with SMC reset**)
+## POST-TEST.251 (2026-04-23 16:5x BST — boot 0 after test.251 crash + SMC reset)
 
-`sudo lspci -s 03:00.0`: `Mem+ BusMaster+`, MAbort-, DEVSEL=fast, LnkSta 2.5GT/s x1, UESta all zero, CESta AdvNonFatalErr+ (pre-existing sticky). No brcm modules loaded. Boot 0 started 15:37:02 BST. Host healthy.
+Boot -1 timeline: insmod 15:53:40 → t+60s probe 15:55:04 (success) → t+90s probe 15:55:33 (success, last journal entry) → wedge → boot ended 15:55:33. Wedge ≤1s after t+90s probe burst — consistent with n=5 streak T247..T251. Full journal at `phase5/logs/test.251.journalctl.txt` (1528 lines kept).
+
+### What test.251 landed (facts)
+
+**Backward-read TCM[0x9CC80..0x9CCAC] — 12 u32 (just above buf_ptr@0x9CCBE):**
+```
+0x9cc80: 0009cd0e 0009cec0 000475b5 0009cef0   [4-field struct: TCM/TCM/Thumb-PC/TCM]
+0x9cc90: 00000000 00000713 00000000 00040010   [pad + record-tail args + record header]
+0x9cca0: 000629c0 0009af80 0000000a 0000185d   [fmt-ptr, arg, arg, line# 6237]
+```
+- 0x9CC80..0x9CC8C looks like a **second console-state struct** (4 fields):
+  - 0x0009CD0E (TCM offset, ring interior)
+  - 0x0009CEC0 (TCM offset — points 9 bytes into "BCM4360 r3" text region!)
+  - 0x000475B5 (Thumb-mode fw code addr — last printf caller PC?)
+  - 0x0009CEF0 (TCM offset — points into the saved-state region we just discovered)
+- 0x9CC9C..0x9CCAC: **binary log record header in same format as T250's wl_probe/dngl_probe records** (0x40010 type word, 0x629C0 fmt-ptr, 0x185D line#) → **forward-write ring layout confirmed** — backward content is freshest log records.
+
+**Forward-read TCM[0x9CE30..0x9CE58] — ASCII (continuation past T250's banner):**
+```
+0x9ce30: " (r) on BCM4360 r3 @ 40.0/160.0/160.0MHz\n\0"
+0x9ce58..0x9ce80: STAK STAK STAK STAK STAK STAK STAK STAK   [stack canary fill]
+```
+**Last printed line**: `"...(r) on BCM4360 r3 @ 40.0/160.0/160.0MHz"` — likely full form: "wlc_attach: BCM4360 802.11n (r) on BCM4360 r3 @ 40.0/160.0/160.0MHz" (a wlc_attach init banner showing chip rev a3 + bandwidth config). Ring upper bound ≈ 0x9CE5A.
+
+**Forward-read TCM[0x9CE84..0x9CF34] — saved-state region (30+ u32 after STAK canary):**
+```
+0x9ce84: 00000004 5354414b 00000000 00000000        [tail of canary + zeros]
+0x9ce94: 00093610 00000030 0009cf44 000934c0        [TCM, 48, TCM-self, T248-trap-val]
+0x9cea4: 00091c04 00000000 00012c69 0009cf44 00000000   [TCM, 0, Thumb-PC, TCM-self, 0]
+0x9ceb8: 00093610 00092440 00091cc4 00068d2f 00000000   [TCM ×3, Thumb-PC, 0]
+0x9cecc: 00091cc4 00091cc4 00092440 00000000 00068321   [TCM ×3, 0, Thumb-PC]
+0x9cee0: 0009cf1c 0009f08a 0000000a 00005271 00000000   [TCM, TCM-elsewhere, 10, Thumb-PC, 0]
+0x9cef4: 000927bc 0000003c 00000004 00000000 0009238c   [TCM, 60, 4, 0, TCM]
+0x9cf08: 00000000 00093610 000000c4 00000004 00093610   [0, TCM, 196, 4, TCM]
+0x9cf1c: 00092440 00000000 00093610 00000028 000043b1   [TCM, 0, TCM, 40, FROZEN-CTR-MATCH]
+0x9cf30: 00093610 00091e54                              [TCM, TCM]
+```
+**Repeated TCM offsets**: 0x00093610 (×5), 0x00092440 (×3), 0x00091CC4 (×3). All in TCM data region.
+**Thumb-mode fw code PCs (LSB=1)**: 0x000475B5 (in console struct), 0x00012C69, 0x00068D2F, 0x00068321, 0x00005271. All within fw code region (< 0x6BF78).
+**Cross-references found:**
+- 0x9CEA0 = 0x000934C0 — exact match to T248's 0x9CFE0 trap-region value.
+- 0x9CF2C = 0x000043B1 — exact match to frozen "counter" at 0x9D000.
+
+### What test.251 settled (facts)
+
+- **Forward-write ring layout confirmed.** Backward-from-buf_ptr region holds freshest log records (binary header in same format as T250). Ring boundary ≈ 0x9CE5A (where "\n\0" transitions to STAK canary fill).
+- **Last text line fw printed before hang identified**: the wlc_attach init banner with BCM4360 r3 silicon + 40.0/160.0/160.0MHz radio config. This is normal wireless-driver init progress — fw has done substantial chip/radio bring-up before hanging.
+- **Saved-state / trap-record region exists at 0x9CE98..0x9CF34+** (after stack canary, before T248's 0x9CFE0 marker). Multiple Thumb-mode fw PCs and repeated data-region TCM offsets suggest a structured record (call frame, task table, or trap dump). 0x934C0 also appears here, cross-referenced from T248.
+- **0x000043B1 reframe**: appears at both 0x9D000 (the "frozen counter") and 0x9CF2C (the saved-state region). Strongly suggests 0x43B1 is **not a counter** — it's a register save value or token written multiple times by fw (perhaps a task ID, a register snapshot, or a fixed sentinel). Test.89 "single-write" reading was correct in mechanism (one write, then frozen) but wrong in interpretation (it's saved state, not a tick counter).
+- **Ring size estimate**: from STAK-end (~0x9CC9F-ish — but we saw the ring runs from at least 0x9CC94 backwards — ring start unknown) to 0x9CE5A → minimum ring length ≈ 0x1C0 = 448 bytes. Could be larger (we haven't dumped before 0x9CC80).
+- **SMC reset required** (n=5 streak T247..T251).
+- **Counter 0x9d000 = 0x43b1 across all 23 dwells (n=3 replication)** — test.89 single-write confirmed at n=3.
+
+### Next-test direction (T252 — pending advisor consultation)
+
+Branches:
+1. **Decode saved-state region as a possible trap/exception record.** The Thumb-mode PCs (0x12C69, 0x68D2F, 0x68321, 0x5271) are the strongest direct hint at hang location. If fw kept a call stack snapshot, disassembling these PCs in the public 6.30.223 fw blob (clean-room: observe → document) could identify the hung function.
+2. **Read fw data at the repeated TCM offsets (0x93610, 0x92440, 0x91CC4)** — these may be active task descriptors or globals fw is waiting on.
+3. **Look at fmt-string at fw 0x629C0 and 0x62910** to identify the printf templates that produced the record headers (would tell us *which printf* was last fired before hang).
+4. **Walk the ring backwards further** (TCM[0x9C800..0x9CC80] = 256 u32) to find ring start + record sequence leading up to wlc_attach banner.
+
+Advisor call before design.
+
+---
+
+### Hardware state (current, 2026-04-23 16:50+ BST, boot 0 after test.251 crash **with SMC reset**)
+
+`sudo lspci -s 03:00.0`: `Mem+ BusMaster+`, MAbort-, DEVSEL=fast, LnkSta 2.5GT/s x1, UESta all zero, CESta AdvNonFatalErr+ (pre-existing sticky). No brcm modules loaded. Boot 0 started 16:50:08 BST. Host healthy.
 
 ---
