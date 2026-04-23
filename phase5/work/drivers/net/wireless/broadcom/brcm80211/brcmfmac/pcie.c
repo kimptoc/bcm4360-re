@@ -165,6 +165,20 @@ static int bcm4360_test240_wide_poll;
 module_param(bcm4360_test240_wide_poll, int, 0644);
 MODULE_PARM_DESC(bcm4360_test240_wide_poll, "BCM4360 test.240: scan tail-TCM [ramsize-64..ramsize-4] (15 dwords) at every dwell instead of single slot (1=wide, 0=narrow)");
 
+/* BCM4360 test.241: write-verify that driver BAR0 writes actually
+ * land on the chip. Test.240 rang H2D_MAILBOX_1 (BAR0+0x144) with
+ * value=1 and read back 0x00000000 — uninterpretable without
+ * proving the BAR0-write path itself. When set, just after
+ * pci_set_master and before set_active: read MAILBOXMASK baseline
+ * (expect 0), write sentinel 0xDEADBEEF, read back (expect
+ * 0xDEADBEEF), write 0 to restore (expect 0). MAILBOXMASK is a
+ * RAM-backed mask register upstream already uses — round-trip of
+ * sentinel + zero leaves the chip in the same state as a run
+ * without test.241. Default 0. */
+static int bcm4360_test241_writeverify;
+module_param(bcm4360_test241_writeverify, int, 0644);
+MODULE_PARM_DESC(bcm4360_test241_writeverify, "BCM4360 test.241: BAR0 write-path verification (sentinel round-trip on MAILBOXMASK) post-pci_set_master, pre-set_active (1=verify, 0=off)");
+
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
  * stage=1: write IOCTL = FGC|CLK (coredisable in_reset_configure step)
@@ -2601,6 +2615,35 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						devinfo->reginfo->mailboxint);
 				pr_emerg("BCM4360 test.188: post-BM-on MMIO guard mailboxint=0x%08x (endpoint still responsive)\n",
 					 mmio_guard);
+			}
+
+			/* BCM4360 test.241: BAR0 write-path sentinel round-trip
+			 * on MAILBOXMASK (0x4C). De-confounds test.240's
+			 * readback=0 on DB1 ring. Expected PASS outcome:
+			 * baseline=0, after-sentinel=0xDEADBEEF, after-clear=0. */
+			if (bcm4360_test241_writeverify) {
+				u32 baseline, after_sent, after_clear;
+				const u32 MBM = devinfo->reginfo->mailboxmask;
+
+				pr_emerg("BCM4360 test.241: write-verify target MAILBOXMASK offset=0x%x (BAR0)\n",
+					 MBM);
+				baseline = brcmf_pcie_read_reg32(devinfo, MBM);
+				pr_emerg("BCM4360 test.241: MAILBOXMASK baseline=0x%08x (expect 0x00000000)\n",
+					 baseline);
+				brcmf_pcie_write_reg32(devinfo, MBM, 0xDEADBEEF);
+				after_sent = brcmf_pcie_read_reg32(devinfo, MBM);
+				pr_emerg("BCM4360 test.241: after write=0xDEADBEEF readback=0x%08x (expect 0xDEADBEEF)\n",
+					 after_sent);
+				brcmf_pcie_write_reg32(devinfo, MBM, 0);
+				after_clear = brcmf_pcie_read_reg32(devinfo, MBM);
+				pr_emerg("BCM4360 test.241: after write=0x00000000 readback=0x%08x (expect 0x00000000)\n",
+					 after_clear);
+				pr_emerg("BCM4360 test.241: RESULT %s (sentinel-match=%d baseline-zero=%d clear-zero=%d)\n",
+					 (after_sent == 0xDEADBEEF &&
+					  baseline == 0 && after_clear == 0) ?
+						"PASS" : "FAIL",
+					 after_sent == 0xDEADBEEF,
+					 baseline == 0, after_clear == 0);
 			}
 			pr_emerg("BCM4360 test.226: past BusMaster dance — entering FORCEHT block\n");
 			msleep(5);

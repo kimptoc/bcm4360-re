@@ -355,14 +355,40 @@ following gated on new module param `bcm4360_test241_writeverify`:
   the wedge-window wait; write-verify result is logged at probe
   entry and lands in journald long before any wedge.
 
-### Code change
+### Code change (IMPLEMENTED)
 
-1. Module param `bcm4360_test241_writeverify` (default 0). When 1:
-   - After `pci_set_master`, read baseline, write sentinel, read
-     back, write 0, read back — log each step with
-     `pr_emerg("BCM4360 test.241: %s OFFSET=0x%x value=0x%08x\n", ...)`.
-2. Do NOT ring H2D_MAILBOX_1 this run (keep `ring_h2d_db1=0`).
-3. All other test.236/238/239 paths preserved.
+1. Module param `bcm4360_test241_writeverify` (default 0) added in
+   pcie.c near the test.240 params.
+2. Insertion point: inside the BusMaster dance block, immediately
+   after the "post-BM-on MMIO guard mailboxint" read at the
+   `pr_emerg("BCM4360 test.188: post-BM-on ...")` line, and BEFORE
+   the "past BusMaster dance — entering FORCEHT block" line. This
+   is after `pci_set_master` succeeds and well before
+   `brcmf_chip_set_active`, so write-verify lines hit journald at
+   fresh probe entry (pre-wedge) and will land even if the wedge
+   bracket is unchanged.
+3. Target register: `devinfo->reginfo->mailboxmask` which on BCM4360
+   resolves to `BRCMF_PCIE_PCIE2REG_MAILBOXMASK = 0x4C` (non-64
+   variant). Upstream already reads/writes this at brcmf_pcie_*
+   attach+setup paths (lines 3514/3536 in our tree), so it's a
+   proven R/W, RAM-backed mask register that defaults to 0 and
+   accepts arbitrary 32-bit writes.
+4. Round-trip sequence:
+   ```c
+   const u32 MBM = devinfo->reginfo->mailboxmask;
+   baseline    = read_reg32(MBM);                        /* expect 0 */
+   write_reg32(MBM, 0xDEADBEEF);
+   after_sent  = read_reg32(MBM);                        /* expect 0xDEADBEEF */
+   write_reg32(MBM, 0);
+   after_clear = read_reg32(MBM);                        /* expect 0 */
+   ```
+   Each step emitted via `pr_emerg()`; final line emits a PASS/FAIL
+   RESULT with three individual match bits, so the result is
+   unambiguous regardless of journald formatting.
+5. `ring_h2d_db1` is NOT set at insmod for this run — the goal is
+   to measure the bare write-verify, not re-mix DB1 disturbance
+   into the result.
+6. All other test.236/238/239 paths preserved unchanged.
 
 ### Run sequence
 
@@ -378,6 +404,12 @@ sleep 240
 sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
 ```
 
+Write-verify lines land in journald at probe entry (well before any
+set_active-triggered wedge), so the RESULT will be retrievable
+even if the host wedges again. The ultra-dwell ladder continues
+to run after write-verify so we also capture whether the 22-of-23
+dwell pattern is steady (same wedge bracket) or has shifted.
+
 ### Safety notes
 
 - Write-verify happens BEFORE set_active, so it's inside the
@@ -391,19 +423,20 @@ sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
   intmask register where a round-trip of 0xdeadbeef→0 is a no-op
   once we clear it.
 
-### Open items to settle before coding
+### Open items — resolved during code implementation
 
-- Exact BAR0 offset for write-verify — needs a few minutes of
-  upstream brcmfmac `pcie.c` reading (grep for `brcmf_pcie_write_reg32`
-  and classify each offset's semantics: control vs scratch vs mailbox).
-- Whether upstream ever guards BAR0 writes with a core-select
-  window register (e.g. `brcmf_chip_setcore`). If so, our test.240
-  write may have been in the wrong window — and the fix is to
-  explicitly setcore(PCIE2) before DB writes.
-
-These are NOT blockers for committing the PLAN. They will be
-resolved during code implementation and logged in PRE-TEST.241's
-**Code change** block when concrete.
+- **Exact BAR0 offset**: MAILBOXMASK (0x4C on BCM4360, accessed via
+  `devinfo->reginfo->mailboxmask`). Picked because upstream
+  actively uses this register (proven R/W) and it defaults to 0
+  at our pre-init stage, so sentinel round-trip + restore to 0 is
+  a true no-op on chip state.
+- **Core-select window concern**: `brcmf_pcie_write_reg32` is
+  `iowrite32(value, devinfo->regs + offset)` — a plain linear BAR0
+  write with NO core-select indirection. So interpretation (c)
+  sub-case "wrong core window" does not apply at the MMIO layer.
+  (c) can still fire if the specific offset returns 0 by design
+  or isn't RAM-backed — which is exactly what MAILBOXMASK
+  round-trip rules out (or in, cleanly).
 
 ### Hardware state (current, 08:15 BST boot 0 post-SMC-reset)
 
@@ -411,10 +444,15 @@ resolved during code implementation and logged in PRE-TEST.241's
 - No brcm modules loaded.
 - Boot 0 started 2026-04-23 08:09:57 BST.
 
-### Build status — PENDING
+### Build status — REBUILT CLEAN
 
-Module needs to be rebuilt after code change for test.241. Will
-`make` and verify with `strings` + `modinfo` before insmod.
+`brcmfmac.ko` rebuilt 2026-04-23 ~08:45 BST via
+`make -C $KDIR M=phase5/work/drivers/.../brcmfmac modules`.
+Confirmed in built module:
+- `strings` shows all 5 test.241 format lines + param name.
+- `modinfo` reports `parm: bcm4360_test241_writeverify: ...`.
+Only pre-existing unused-variable and `brcmf_pcie_write_ram32`
+warnings — no new regressions.
 
 ### Expected artifacts
 
