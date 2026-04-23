@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 23:08 BST, POST-TEST.262 — **Neither register write is the crash trigger. The common scaffold alone (pci_enable_msi + request_irq + 50×{read MAILBOXINT + buf_ptr + msleep(100) + pr_emerg}) crashes at the SAME t+125s boundary as T260 mask-only and T261 doorbell-only. 49 stable samples from t+120100 through t+124900, all flat (MAILBOXINT=0, buf_ptr=0x8009CCBE, irq_count=0). Crash happens between printing t+124900 and emitting t+125000 line. This eliminates both writes AND is consistent with a time-anchored trigger — either a chip-side watchdog firing ~125s after chip activation, or a kernel/PCIe state effect of keeping MSI+IRQ bound for 5s. Host auto-rebooted at 23:07 BST, up 1 min.**)
+## Current state (2026-04-23 23:26 BST, POST-TEST.263 — **Absolute-time chip-watchdog hypothesis FALSIFIED. T263-short (10-iter scaffold, 1s loop) crashed after 9 prints at t+120900ms — SAME N-1 / N pattern as T260/T261/T262 (49/50), but at wall-clock t+121000ms instead of t+125000ms. Crash timing SCALES with loop duration, not fixed time. Two equally-consistent readings: (a) crash fires at scaffold-elapsed-time ~= loop duration (duration-anchor), or (b) crash fires at the final loop iteration specifically. Neither privileged by current evidence. Advisor-framed T264 plan: drop the loop entirely, just MSI + request_irq + single msleep(2000) + cleanup — discriminates loop-structure vs duration-of-MSI-bound. Host auto-rebooted 23:24 BST, up 2 min.**)
 
 ---
 
@@ -227,3 +227,78 @@ T258/T259/T260/T262 NOT set.
 5. **Host state**: boot 0 up since 23:07 BST.
 
 Advisor-confirmed. Code + build + fire pending.
+
+---
+
+## POST-TEST.263 (2026-04-23 23:19 BST run, recovered from boot -1 journal — **Scaffold-short crashed at scaled-down boundary: 9 prints out of 10 at t+120900ms. Absolute-time watchdog FALSIFIED; crash timing scales with loop duration.**)
+
+### Timeline (from `phase5/logs/test.263.journalctl.txt`)
+
+- `23:17:31` insmod; dwell ladder ran through t+120000ms
+- `23:19:47` baseline: `buf_ptr[0x9CC5C]=8009ccbe` — fw still asleep (matches T260/T261/T262)
+- `23:19:47` scaffold entry:
+  - `pci_enable_msi=0 prev_irq=18 new_irq=79`
+  - `request_irq ret=0`
+  - `skipping intr_enable + hostready; starting 10×100ms timeline (1s loop)`
+- `23:19:47` → `23:19:47` (within same wall-clock second): 9 emitted samples from `t+120100ms` through `t+120900ms`
+  - every single sample: `mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0`
+- `23:19:47` after `t+120900ms` sample: journal ends. No `t+121000ms` sample. No `timeline done` print. No `free_irq` marker. No `pci_disable_msi` marker. Host wedged.
+- `23:24` platform watchdog reboot
+
+### What test.263 settled (facts)
+
+- **Absolute-time watchdog at t+125s is FALSIFIED.** T260/T261/T262 all crashed at wall-clock t+125000ms (which is 5s after scaffold entry AND 125s after chip-active — indistinguishable). T263-short crashed at wall-clock t+121000ms (1s after scaffold entry, 121s after chip-active). These are different wall-clocks. If a fixed-time chip watchdog existed at t+125s, T263 should have emitted all 10 samples and then crashed AFTER the loop ended, during cleanup (at wall-clock ~t+125s, 4s after T263's loop finished). It did not — it crashed during the loop.
+- **Crash timing scales with scaffold duration.** T263 scaffold: 1s → crash at ~1s. T260/T261/T262 scaffold: 5s → crash at ~5s. Proportional to loop length.
+- **The N-prints-out-of-N-expected pattern is consistent.** 9/10 for T263, 49/50 for T260/T261/T262. Host consistently dies after the last PRINTED iteration — either during the last iteration's body or at loop exit.
+- **Cleanup path is still invisible.** None of the post-loop prints fired in T263 either (`timeline done`, `calling free_irq`, `free_irq returned`, `calling pci_disable_msi`, `pci_disable_msi returned`). So either the cleanup code never ran, OR it ran and crashed before its first print.
+- **No kernel panic / MCE / AER / "unhandled IRQ" in boot -1 journal.** Silent lockup pattern unchanged.
+
+### Readings (both equally consistent, advisor-framed — do not privilege)
+
+| Reading | Interpretation |
+|---|---|
+| (X) Duration-anchor | Crash fires at fixed elapsed time from scaffold start, ~= loop duration. Loop length is irrelevant to the trigger — it just determines when the scaffold ends, and the crash is coincident with scaffold end. |
+| (Y) Final-iteration-specific | Crash is triggered by something specific to the final iteration of the loop (e.g., scheduler exit from the final msleep/pr_emerg cycle, or the i<N comparison becoming false). |
+
+T263 alone cannot discriminate these. T264 design below.
+
+### Surviving candidate mechanisms (after T263)
+
+1. ~~Chip PMU watchdog at fixed absolute time~~ — **FALSIFIED by T263**.
+2. **PCIe/ASPM state after MSI+poll duration**: link enters L1 when scaffold ends, retrain fails. Still live.
+3. **Scaffold-duration bomb**: something about the combination of MSI enabled + IRQ bound + wall-clock passing ~= scaffold duration triggers a fault. Still live.
+4. **Cumulative MMIO effect**: 50 reads for T260, 10 reads for T263. Crash still happens. Weak, but not fully eliminated.
+5. **Loop-structural**: exit from the for-loop cleanup / scheduler rescheduling at that point. Still live.
+
+### Advisor-framed next test: T264 — loop-less scaffold
+
+**Design goal**: remove the loop entirely. If T264 still crashes at ~msleep-duration into the sleep, loop structure is irrelevant (duration-anchor confirmed). If T264 completes cleanly, loop content (MMIO reads) is necessary.
+
+**Scaffold**:
+```
+pci_enable_msi
+request_irq (same safe handler)
+pr_emerg "entering msleep(2000)"
+msleep(2000)
+pr_emerg "msleep done"
+pr_emerg "calling free_irq"
+free_irq
+pr_emerg "free_irq returned"
+pr_emerg "calling pci_disable_msi"
+pci_disable_msi
+pr_emerg "pci_disable_msi returned"
+```
+
+No MMIO reads. No loop. Single 2s sleep.
+
+| Outcome | Reading |
+|---|---|
+| Crash at ~2s into msleep (before "msleep done") | Fixed-duration from MSI-bound state; loop structure is irrelevant. Candidate (2) or (3) favored. |
+| Crash during/after free_irq (first time visible) | Cleanup path is the crasher. New failure mode. |
+| Clean completion (all markers fire, module unloads) | Loop body (MMIO reads) are necessary for the trigger. T265 will bisect which read (MAILBOXINT vs buf_ptr). |
+
+**Module param**: `bcm4360_test264_noloop=1`. Single variable change from T262 (loop → single msleep).
+
+Ready to implement + fire.
+
+---
