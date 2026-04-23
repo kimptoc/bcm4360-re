@@ -758,6 +758,16 @@ static int bcm4360_test266_ultra_short_noloop;
 module_param(bcm4360_test266_ultra_short_noloop, int, 0644);
 MODULE_PARM_DESC(bcm4360_test266_ultra_short_noloop, "BCM4360 test.266: ultra-short-sleep variant — T264/T265 scaffold but msleep(50) instead of 500. Shrinks trigger upper bound 10×. (1=enable, 0=off)");
 
+/* BCM4360 test.267: no-msleep variant. Scaffold = pci_enable_msi +
+ * request_irq + IMMEDIATE free_irq + pci_disable_msi. No sleep between
+ * request_irq and free_irq. Existing cleanup markers (calling free_irq,
+ * free_irq returned, calling pci_disable_msi, pci_disable_msi returned)
+ * give 5-position discrimination of crash location. Clean completion
+ * would mean msleep duration is necessary — headline finding. */
+static int bcm4360_test267_no_msleep;
+module_param(bcm4360_test267_no_msleep, int, 0644);
+MODULE_PARM_DESC(bcm4360_test267_no_msleep, "BCM4360 test.267: no-msleep scaffold — MSI + request_irq + IMMEDIATE cleanup. No sleep between request_irq and free_irq. Tests whether msleep duration is necessary for the crash trigger. (1=enable, 0=off)");
+
 /* BCM4360 test.256 scheduler-walk helper. 2 pr_emerg lines, 16 u32 each.
  * gate_flag arg lets caller pick between sched_walk (t+60s) and
  * sched_walk_early (t+100ms). */
@@ -790,7 +800,7 @@ MODULE_PARM_DESC(bcm4360_test266_ultra_short_noloop, "BCM4360 test.266: ultra-sh
 	    bcm4360_test260_mask_only || bcm4360_test260_doorbell_only || \
 	    bcm4360_test262_msi_poll_only || bcm4360_test263_short || \
 	    bcm4360_test264_noloop || bcm4360_test265_short_noloop || \
-	    bcm4360_test266_ultra_short_noloop) { \
+	    bcm4360_test266_ultra_short_noloop || bcm4360_test267_no_msleep) { \
 		u32 _d258bp = brcmf_pcie_read_ram32(devinfo, 0x9CC5C); \
 		u32 _d258r[16]; \
 		int _n258; \
@@ -3608,7 +3618,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					    bcm4360_test263_short || \
 					    bcm4360_test264_noloop || \
 					    bcm4360_test265_short_noloop || \
-					    bcm4360_test266_ultra_short_noloop) { \
+					    bcm4360_test266_ultra_short_noloop || \
+					    bcm4360_test267_no_msleep) { \
 						u32 _ctr249 = brcmf_pcie_read_ram32(devinfo, \
 							0x9d000); \
 						pr_emerg("BCM4360 test.249: t+" ms_tag \
@@ -4004,6 +4015,34 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						pr_emerg("BCM4360 test.266 ultra_short: calling pci_disable_msi\n");
 						pci_disable_msi(_pdev266);
 						pr_emerg("BCM4360 test.266 ultra_short: pci_disable_msi returned\n");
+					}
+				}
+				if (bcm4360_test267_no_msleep) {
+					struct pci_dev *_pdev267 = devinfo->pdev;
+					int _prev_irq267 = _pdev267->irq;
+					int _msi_ret267, _req_ret267;
+					atomic_set(&bcm4360_t259_irq_count, 0);
+					atomic_set(&bcm4360_t259_last_mailboxint, 0);
+					_msi_ret267 = pci_enable_msi(_pdev267);
+					pr_emerg("BCM4360 test.267 no_msleep: pci_enable_msi=%d prev_irq=%d new_irq=%d\n",
+						 _msi_ret267, _prev_irq267, _pdev267->irq);
+					_req_ret267 = request_irq(_pdev267->irq,
+								  bcm4360_t259_safe_handler,
+								  IRQF_SHARED, "t267_nosleep", devinfo);
+					pr_emerg("BCM4360 test.267 no_msleep: request_irq ret=%d\n", _req_ret267);
+					if (_req_ret267 == 0) {
+						pr_emerg("BCM4360 test.267 no_msleep: SKIPPING msleep — immediate cleanup\n");
+						pr_emerg("BCM4360 test.267 no_msleep: calling free_irq\n");
+						free_irq(_pdev267->irq, devinfo);
+						pr_emerg("BCM4360 test.267 no_msleep: free_irq returned\n");
+					} else {
+						pr_emerg("BCM4360 test.267 no_msleep: request_irq FAILED (%d)\n",
+							 _req_ret267);
+					}
+					if (_msi_ret267 == 0) {
+						pr_emerg("BCM4360 test.267 no_msleep: calling pci_disable_msi\n");
+						pci_disable_msi(_pdev267);
+						pr_emerg("BCM4360 test.267 no_msleep: pci_disable_msi returned\n");
 					}
 				}
 #undef BCM4360_T239_POLL
