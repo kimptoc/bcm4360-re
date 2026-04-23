@@ -142,13 +142,29 @@ sleep 240
 sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
 ```
 
-### Pre-test checklist status
+### Pre-test checklist status (updated 13:45 BST)
 
-1. Build status: **PENDING** — new param + macro + 2 invocation sites; `make`, verify via `modinfo`/`strings` before insmod.
-2. PCIe state: clean (captured above, boot 0 uptime ~1 min after SMC reset).
-3. Hypothesis: (W1)/(W2)/(W3) matrix.
-4. Plan: this block. Commit + push + sync before code changes.
-5. Advisor final review after code + build, before insmod.
+1. Build status: **REBUILT + VERIFIED.** md5sum `6f87f1ff91f0cc300e5fa7e13f03e80b` on `brcmfmac.ko`. `modinfo` shows new param. `strings` shows both format lines (pre-FORCEHT + t+90000ms). Only pre-existing unused-variable warnings (no new regressions). Commit: 549bc0e.
+2. PCIe state: **clean.** `Mem+ BusMaster+`, MAbort-, CommClk+, LnkSta 2.5GT/s x1. UESta all zero, CESta AdvNonFatalErr+ (pre-existing sticky, consistent with prior tests).
+3. Hypothesis: (W1)/(W2)/(W3) matrix stated above.
+4. Plan: committed and pushed. Filesystem synced.
+5. Host state: boot 0 started 12:13:29 BST, uptime ~90 min, stable. No brcm modules loaded.
+
+### Run command (exact)
+
+```bash
+sudo modprobe cfg80211 && \
+sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 \
+    bcm4360_test248_wide_tcm_scan=1
+sleep 240
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
 
 ---
 
