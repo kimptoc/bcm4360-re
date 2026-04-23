@@ -269,6 +269,108 @@ not sub-second timing.
 ---
 
 
+## PRE-TEST.247 (2026-04-23 11:3x BST, boot 0 after test.246 crash + SMC reset) — **first shared-struct probe.** Pre-place a ~72-byte `brcmf_pcie_shared_info`-shaped struct (version=5 at offset 0, rest zero) at TCM[0x80000] via BAR2 at the pre-FORCEHT stage. Leave NVRAM trailer at ramsize-4 (`0xffc70038`) unchanged — NVRAM-parser load-bearing per our own pcie.c test.64 note. Add a per-dwell poll of `[0x80000..0x80047]` (18 u32s, 72 bytes) to observe whether fw reads or writes any struct field across ≥90s. Discriminator between **(S1) BCM4360 fw expects host-pre-placed struct** and **(S2) fw follows upstream and is stalled upstream of allocate-and-publish step**.
+
+### Hypothesis
+
+T239 proved fw never overwrites TCM[ramsize-4] within ≥90s — slot stays at our NVRAM marker `0xffc70038`. Per upstream protocol (`brcmf_pcie_init_share_ram_info`, pcie.c:2106), fw is supposed to allocate its own `pcie_shared` struct in TCM and write that address to `ramsize-4`; host reads from it. So either:
+
+- **(S1) BCM4360 fw reads a host-pre-placed struct.** Some firmware variants (Apple's in-tree `wl` driver behavior, older SDKs) expect the host to pre-place signature/version fields at a known offset. If so, placing a plausible struct in TCM should cause fw to touch it or to progress further (wedge shift, struct-field changes, or ramsize-4 finally being written).
+- **(S2) Fw follows upstream protocol.** T239's no-overwrite then reflects fw stalled before the allocate-and-publish step — struct placement is ignored. Discriminator: no fw activity in our struct region, ramsize-4 still at `0xffc70038`, wedge unchanged — same as T244/T245/T246 baseline.
+
+### Design (advisor-reviewed)
+
+- **Struct layout:** 72 bytes (0x48), u32 at offset 0 = `BRCMF_PCIE_MIN_SHARED_VERSION` (= 5). All other 17 u32s (offsets 4..68) = 0. Covers the full range of offsets upstream reads (0, 20, 34, 36, 40, 44, 48, 52, 56, 64, 68).
+- **TCM placement:** base at `0x80000` inside the dead region `[0x6C000..0x9FE00]` (above fw end 0x6BF78, below random_seed region start 0x9FE14). T233 proved this region is untouched by fw and host in normal flow; T245/T246 proved BAR2 writes land there.
+- **ramsize-4 NOT overwritten.** 0xffc70038 is the NVRAM length/magic token per our own test.64 comment (pcie.c:3527); T63 zeroed it and broke NVRAM discovery. Fw is expected to overwrite it itself if following upstream protocol.
+- **Observables:**
+  1. Pre-FORCEHT write + readback of all 18 u32s (confirms BAR2 write landed and struct looks as intended on chip).
+  2. Per-dwell poll of all 18 u32s at every existing T239 breadcrumb (t+100ms..t+120000ms) — any change vs baseline = fw touched our struct.
+  3. Existing `poll_sharedram=1` continues to track ramsize-4 — any change from 0xffc70038 to another value = fw wrote its own sharedram_addr (upstream path).
+  4. Existing `wide_poll=1` continues to track ramsize-64..ramsize-4.
+
+### Next-step matrix
+
+| ramsize-4 | Struct fields (at 0x80000..0x80047) | Interpretation | Test.248 direction |
+|---|---|---|---|
+| changes (fw writes sharedram_addr) | unchanged | **(S2) confirmed.** Fw followed upstream; struct pre-placement was ignored. Our sharedram_addr-waiting loop timeout was probably just too short before T238's ultra_dwells. | Feed fw-written sharedram_addr into `brcmf_pcie_init_share_ram_info`; observe what fw has populated (signature/version, ring pointers, console addr, mb data addrs). Major forward step regardless. |
+| unchanged (still 0xffc70038) | some word(s) change | **(S1) confirmed.** Fw reads from host-pre-placed struct. Iterate: study which fields changed to learn what fw needs populated and what it populates itself. | Populate the fields fw wrote to; observe whether it progresses further. |
+| unchanged | unchanged | (S1) falsified AND (S2) consistent with fw stalled pre-allocate. Pivot to Phase-6 `wl`-trace work, IMEM inspection at BAR2[0xef000], or NVRAM-parameter audit. | Phase 6 study / register trace / NVRAM-dump comparison against Apple macOS config. |
+| changes | AND fields change | Both channels active — surprising but informative. Fw may have read struct, then allocated its own and told us. | Read fw-written struct; compare against what we pre-placed. |
+
+### Expected wedge behavior
+
+Keep `ultra_dwells=1` so the ladder runs to t+120000ms. Probe adds ~20 BAR2 writes at pre-FORCEHT and 18 BAR2 reads per dwell (vs T245/T246's ~12 BAR2 MMIO ops). Still comfortably within the noise of pre-FORCEHT probe cost that T246 pegged at ~30s. Wedge bracket expected [t+90s, t+150s]; not a primary observable per advisor — **fw activity is primary, timing is noise at n=1**.
+
+### Code change outline
+
+1. **New module param** `bcm4360_test247_preplace_shared` (default 0) near the test.246 param block (pcie.c:243).
+2. **New pre-FORCEHT probe block** after the existing test.246 block (pcie.c:2805) and before `pr_emerg("BCM4360 test.226: past BusMaster dance...")` (pcie.c:2807). Logic:
+   - For i=0..17: `brcmf_pcie_write_ram32(devinfo, 0x80000 + i*4, 0);`
+   - `brcmf_pcie_write_ram32(devinfo, 0x80000, BRCMF_PCIE_MIN_SHARED_VERSION);` (= 5)
+   - Readback all 18 u32s; log as a single `pr_emerg` line.
+3. **Extend `BCM4360_T239_POLL` macro** (pcie.c:2916) with a third conditional `if (bcm4360_test247_preplace_shared)`:
+   - Read 18 u32s from `[0x80000..0x80047]`;
+   - Log as single line with the `test.247: t+XXXms struct[0x80000..0x80047] = ...` prefix.
+
+### Safety
+
+- Struct write is pure TCM memory (BAR2), no register side-effect. Same class as NVRAM and random_seed writes, which are known safe.
+- Struct region `[0x80000..0x80047]` is inside the dead zone proven untouched by fw and host in normal flow (T233).
+- ramsize-4 is NOT overwritten — NVRAM trailer intact, NVRAM parser unaffected.
+- Each dwell-poll adds 18 BAR2 reads — pure reads, no side effects.
+- T245/T246 probes OFF for this run (one new-variable rule): ~20 pre-FORCEHT writes + 18 reads, then 18 reads per dwell × 23 dwells = 414 reads total + 20 writes. All BAR2, no register touch.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211
+sudo modprobe brcmutil
+sudo insmod phase5/work/drivers/.../brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1
+sleep 240
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+Note: `modprobe brcmutil` before insmod is required (T246 attempt 1 failed without it).
+
+### Hardware state (current, 11:2x BST boot 0, post-SMC-reset from test.246)
+
+`lspci -s 03:00.0` (sudo): `Mem+ BusMaster+`, MAbort-, DEVSEL=fast, LnkSta 2.5GT/s x1, AER `UESta`/`CESta` zero. No brcm modules loaded. Boot 0 started 10:50:28 BST; uptime ~47 min at planning time.
+
+### Build status — REBUILT
+
+Module rebuilt 2026-04-23 ~11:40 BST via
+`make -C /nix/store/.../linux-6.12.80/build M=.../brcmfmac modules`.
+Verified:
+- `modinfo` reports `parm: bcm4360_test247_preplace_shared: ...`.
+- `strings brcmfmac.ko | grep "test.247"` returns the pre-FORCEHT
+  format line plus all 23 dwell-poll format lines (one per dwell
+  tag: t+100ms, t+300ms, t+500ms, t+700ms, ...).
+- Only pre-existing unused-variable warnings (dump_ranges,
+  dwell_labels_ms/dwell_increments_ms in `test.188` dead block, j/d
+  in `test.188` dead block); no new regressions.
+
+### Expected artifacts
+
+- `phase5/logs/test.247.run.txt`
+- `phase5/logs/test.247.journalctl.full.txt`
+- `phase5/logs/test.247.journalctl.txt`
+
+### Pre-test checklist (CLAUDE.md)
+
+1. Build status: PENDING — make + modinfo/strings verify before insmod.
+2. PCIe state: verified clean above.
+3. Hypothesis: stated above — (S1) vs (S2) discriminator matrix.
+4. Plan: this block; commit + push + fsync before insmod.
+5. Advisor final sanity check after code + build, before insmod.
+
+---
+
 ## PRE-TEST.246 (2026-04-23 10:3x BST, boot 0 after test.245 crash **without** SMC reset) — disambiguate test.245's MBM partial-latch by writing upstream's exact production MBM value (`int_d2h_db | int_fn0` = 0x00FF0300) at the same pre-FORCEHT stage. Single-focus probe, no BAR2 round-trip (already proven PASS), no post-set_active work (known-hazardous per test.244). **OUTCOME: matrix row (II) confirmed — write=0x00FF0300 readback=0x00000300 (fn0_latched=1, d2h_db_latched=0). D2H_DB bits of MBM are stage-gated at pre-FORCEHT. T245 re-run reproduced (same MBM FAIL, BAR2 PASS with slight fingerprint jitter). Ladder ran to t+90000ms — same as T245 alone, confirming pre-FORCEHT probe cost is constant, not cumulative. SMC reset required this time (break in T244/T245 no-SMC-reset streak). See Current state at top. T247 direction: pivot to shared-struct forward step per matrix + advisor.**
 
 ### Hypothesis

@@ -244,6 +244,20 @@ static int bcm4360_test246_writeverify_legal;
 module_param(bcm4360_test246_writeverify_legal, int, 0644);
 MODULE_PARM_DESC(bcm4360_test246_writeverify_legal, "BCM4360 test.246: write upstream's production MBM value (int_d2h_db|int_fn0=0x00FF0300) at pre-FORCEHT to disambiguate test.245's partial-latch (1=verify, 0=off)");
 
+/* BCM4360 test.247: first shared-struct probe. Pre-place a 72-byte
+ * brcmf_pcie_shared_info-shaped struct at TCM[0x80000] via BAR2 at the
+ * pre-FORCEHT stage. Struct contents: version byte (=5,
+ * BRCMF_PCIE_MIN_SHARED_VERSION) at offset 0; all other 17 u32s zero.
+ * ramsize-4 (NVRAM trailer 0xffc70038) is NOT overwritten. Per-dwell
+ * poll of the same 18 u32s observes whether fw reads/writes any struct
+ * field across ≥90s. Discriminator between (S1) BCM4360 fw reads host-
+ * pre-placed struct and (S2) fw follows upstream protocol and is stalled
+ * upstream of allocate-and-publish step. See PRE-TEST.247 in
+ * RESUME_NOTES.md for full rationale. Default 0. */
+static int bcm4360_test247_preplace_shared;
+module_param(bcm4360_test247_preplace_shared, int, 0644);
+MODULE_PARM_DESC(bcm4360_test247_preplace_shared, "BCM4360 test.247: pre-place a 72-byte pcie_shared-shaped struct at TCM[0x80000] at pre-FORCEHT and poll it at every dwell (1=enable, 0=off)");
+
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
  * stage=1: write IOCTL = FGC|CLK (coredisable in_reset_configure step)
@@ -2804,6 +2818,36 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					BRCMF_PCIE_BAR0_WINDOW, _t246_win_before);
 			}
 
+			/* BCM4360 test.247: pre-place a 72-byte pcie_shared-shaped
+			 * struct at TCM[0x80000]. Version byte at offset 0; all
+			 * other u32s zero. Readback all 18 u32s (72 bytes) so we
+			 * confirm BAR2 write landed on-chip before set_active.
+			 * Dwell-poll reads these same 18 u32s at every ladder
+			 * breadcrumb (see BCM4360_T239_POLL extension below). */
+			if (bcm4360_test247_preplace_shared) {
+				const u32 _t247_base = 0x80000;
+				u32 _t247_rb[18];
+				int _t247_i;
+
+				for (_t247_i = 0; _t247_i < 18; _t247_i++)
+					brcmf_pcie_write_ram32(devinfo,
+						_t247_base + _t247_i * 4, 0);
+				brcmf_pcie_write_ram32(devinfo, _t247_base,
+					BRCMF_PCIE_MIN_SHARED_VERSION);
+				for (_t247_i = 0; _t247_i < 18; _t247_i++)
+					_t247_rb[_t247_i] = brcmf_pcie_read_ram32(devinfo,
+						_t247_base + _t247_i * 4);
+				pr_emerg("BCM4360 test.247: pre-FORCEHT pre-placed shared-struct at TCM[0x%05x] (72 bytes, version=%u @offset 0, rest=0); readback = %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x\n",
+					 _t247_base,
+					 BRCMF_PCIE_MIN_SHARED_VERSION,
+					 _t247_rb[0], _t247_rb[1], _t247_rb[2],
+					 _t247_rb[3], _t247_rb[4], _t247_rb[5],
+					 _t247_rb[6], _t247_rb[7], _t247_rb[8],
+					 _t247_rb[9], _t247_rb[10], _t247_rb[11],
+					 _t247_rb[12], _t247_rb[13], _t247_rb[14],
+					 _t247_rb[15], _t247_rb[16], _t247_rb[17]);
+			}
+
 			pr_emerg("BCM4360 test.226: past BusMaster dance — entering FORCEHT block\n");
 			msleep(5);
 
@@ -2934,6 +2978,22 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 								 _w[8], _w[9], _w[10], _w[11], \
 								 _w[12], _w[13], _w[14]); \
 						} \
+					} \
+					if (bcm4360_test247_preplace_shared) { \
+						u32 _s247[18]; \
+						int _j247; \
+						for (_j247 = 0; _j247 < 18; _j247++) \
+							_s247[_j247] = brcmf_pcie_read_ram32(devinfo, \
+								0x80000 + _j247 * 4); \
+						pr_emerg("BCM4360 test.247: t+" ms_tag \
+							 " struct[0x80000..0x80047] = " \
+							 "%08x %08x %08x %08x %08x %08x %08x %08x %08x " \
+							 "%08x %08x %08x %08x %08x %08x %08x %08x %08x\n", \
+							 _s247[0], _s247[1], _s247[2], _s247[3], \
+							 _s247[4], _s247[5], _s247[6], _s247[7], \
+							 _s247[8], _s247[9], _s247[10], _s247[11], \
+							 _s247[12], _s247[13], _s247[14], _s247[15], \
+							 _s247[16], _s247[17]); \
 					} \
 				} while (0)
 
