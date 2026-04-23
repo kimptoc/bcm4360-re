@@ -1,5 +1,188 @@
 ---
 
+## T253 PRE/POST pair + T254 (2026-04-23 — migrated from RESUME_NOTES at POST-TEST.256)
+
+> Migrated from RESUME_NOTES.md when POST-TEST.256 landed (policy: ~3 tests in live notes).
+> Contains PRE-TEST.253, POST-TEST.253 (0x934C0 central-shared-object decode, list_head
+> peer-pair downgrade, α confirmed, β falsified) and POST-TEST.254 (local-only blob analysis,
+> PHY-subtree polling loops all PMCCNTR-bounded, WFI reachability verified via 0x11D0 idle-loop).
+
+## PRE-TEST.253 (2026-04-23 17:5x BST, boot 0 after test.252 crash + SMC reset) — **central-shared-object probe + list_head validation**. Single t+60s probe reads 16 u32 at 0x934B8 (covers 0x934C0 and 8 pre-bytes for allocator-header check) + 16 u32 at 0x91E50 (list_head peers + context). Advisor-confirmed post-T253 local analysis.
+
+### Hypothesis
+
+Two branches of the saved-state reading need discrimination:
+
+- **Branch (α) — stack-or-call-context reading**: the saved-state region at TCM[0x9CE98..0x9CF34] is an active task's call context, so the LR values there (0x68321 in wlc_bmac_attach area, 0x68D2F in wlc_attach area) reflect the current hung call chain. T252 local analysis narrows the hang to a callee of wlc_phy_attach (likely via 0x34DE0 → 0x6A2D8 dispatcher chain).
+- **Branch (β) — task context save / TCB reading**: the saved-state region is a paused task's TCB. The hang is in a DIFFERENT task entirely; the saved LRs just show what this paused task was doing. This makes T253's local analysis of 0x6A2D8 irrelevant (wrong task).
+
+**The 0x934C0 probe discriminates**. If 0x934C0 looks like a TCB — magic/type tag + state field + stack pointer + entry function pointer — then (β) is strongly supported and "which task hung" becomes the question. If it looks like a regular struct (no magic, no state, no sp/entry-fn pattern), (α) remains tenable.
+
+**The 0x91E54/0x91E84 probe validates the list_head pair reading**. An empty doubly-linked list embedded in a struct has prev=self+offset, next=self+offset (pointing back to the slot). If `[0x91E54]={next=0x92460, prev=0x92460}` (or similar, pointing back to the si_info struct's list-head slot at 0x92460/0x92468), the list is empty and our "embedded list_head" inference is correct. If they point elsewhere, the list has members and we can walk them (new info). If they're garbage, list-head reading needs revision.
+
+### Design
+
+**Single probe at t+60000ms** (T252 phy_data is OFF — already captured):
+
+| Dwell | Added probe | u32 reads | Rationale |
+|---|---|---|---|
+| t+60000ms | `TCM[0x934B8..0x934F8]` (16 u32 = 64 B) | 16 | Central-shared-object decode. 8 pre-bytes (0x934B8..0x934BF) catch allocator header if present; main region 0x934C0..0x934F8 holds the object. |
+| t+60000ms | `TCM[0x91E50..0x91E90]` (16 u32 = 64 B) | 16 | list_head peer probe. Reads 0x91E54 (peer A) + 0x91E84 (peer B) + surrounding context. |
+| every dwell (23 points) | `TCM[0x9d000]` (1 u32) | 23 total | Per-dwell ctr poll. n=5 replication of test.89. |
+
+Total: 32 + 23 = 55 reads. Cheaper than T252 (71) and T251 (99).
+
+**Log format (2 pr_emerg lines at t+60s):**
+```
+test.253: t+60000ms TCM[0x934b8..0x934f4] = 16 hex values (central shared object + header)
+test.253: t+60000ms TCM[0x91e50..0x91e8c] = 16 hex values (list_head peer pair + context)
+```
+Each line ~190 chars. Under LOG_LINE_MAX 1024.
+
+**Runtime config**: `bcm4360_test253_shared_obj=1`. Drops T249/T250/T251/T252 probes (all already captured).
+
+### Next-step matrix
+
+| Observation at 0x934C0 | Implication | T254 direction |
+|---|---|---|
+| Magic/type tag + state + sp + entry-fn pattern | Branch (β) confirmed: saved-state is a **paused task TCB**. Hang is in a different task. | Enumerate RTOS task list; probe the other TCBs. |
+| Regular struct (no magic, no sp/entry-fn) — e.g., config or routing table | Branch (α) still tenable. | Resume local disassembly: 0x6A2D8 (real PHY worker) for polling loops. |
+| Sparse zeros / garbage | 0x934C0 ref across structs was coincidental or a stale pointer. | Revisit: reread T251/T252 decodes. |
+
+| Observation at 0x91E54 / 0x91E84 | Implication | T254 direction |
+|---|---|---|
+| prev/next point back to 0x92460/0x92468 | Empty list_head embedded in si_info. Confirms reading. | No further action on this axis. |
+| prev/next point to other TCM addresses (e.g., 0x91E54/0x91E84 themselves, or other peers) | List has members — can walk to enumerate. | Walk list from 0x91E54 to enumerate members. |
+| Garbage values | list_head reading wrong. | Revisit si_info-class inference. |
+
+| Counter 0x9d000 = 0x43b1 across all 23 dwells (n=5 replication) | test.89 single-write confirmed at n=5. Reframe holds. | No further action. |
+
+### Safety
+
+- All BAR2 reads, no register side effects.
+- Total added reads: 32 at t+60s + 23 per-dwell = 55 reads (cheapest probe since T248).
+- SMC reset expected after wedge (n=7 streak T247..T253 expected).
+
+### Code change outline
+
+1. New module param `bcm4360_test253_shared_obj` near T252's.
+2. New macro `BCM4360_T253_SHARED_PROBE(stage_tag)` reading 2 × 16 u32 → 2 pr_emerg lines.
+3. Extend T239 ctr gate: `if (...T252 || bcm4360_test253_shared_obj)`.
+4. Invocation: right after `BCM4360_T252_DATA_PROBE("t+60000ms")` in pcie.c.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 \
+    bcm4360_test248_wide_tcm_scan=1 \
+    bcm4360_test253_shared_obj=1
+sleep 240
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+Note: T249/T250/T251/T252 params NOT set (already captured those windows).
+
+### Expected artifacts
+
+- `phase5/logs/test.253.run.txt`
+- `phase5/logs/test.253.journalctl.txt`
+
+### Pre-test checklist (complete — READY TO FIRE)
+
+1. **Build status**: **REBUILT + VERIFIED.** md5sum `bce1d0f08e661f1b0df50c0fdc3a04f4` on `brcmfmac.ko`. `modinfo` shows new param `bcm4360_test253_shared_obj`. `strings` confirms both T253 format lines (16 u32 each at 0x934b8 / 0x91e50). Only pre-existing unused-variable warnings.
+2. **PCIe state**: `Mem+ BusMaster+`, MAbort-, CommClk+, UESta clean, CESta AdvNonFatalErr+ (sticky). Re-verified 17:5x BST.
+3. **Hypothesis**: stated above — if 0x934C0 looks like a TCB, the saved-state is a paused task (reframes hang as "which task") → (β); if regular struct, stack-like-reading (α) tenable. list_head peer self-ref confirms empty-list inference.
+4. **Plan**: this block + code change to be committed and pushed before insmod.
+5. **Host state**: boot 0 started 17:28 BST, stable. No brcm modules loaded.
+
+---
+
+## POST-TEST.253 (2026-04-23 18:0x BST — boot -1 after test.253 crash + SMC reset)
+
+Boot -1 timeline: boot start 17:28:11 → insmod 18:00:54 → t+60s probe 18:02:17 (T253 + T247/238/239/240/248/249 success) → t+90s probe 18:02:46 (T248 + T249 ctr final) → wedge ≤1s after → boot ended 18:03:03. Wedge n=7 streak T247..T253. PCIe cleanly recovered after SMC reset (Mem+ BusMaster+ MAbort- UESta clean, CESta AdvNonFatalErr+ sticky). Full journal at `phase5/logs/test.253.journalctl.txt` (458 lines). Both T253 probe regions captured successfully.
+
+### What test.253 landed (facts)
+
+**TCM[0x934B8..0x934F4] — 16 u32 (central shared object + pre-header):**
+```
+0x934B8: 00000078 00000000 00000000 0009355c   [+0: 0x78=120, +8: zero, +12: TCM ptr 0x9355C]
+0x934C8: 00000000 00000000 00000000 00000000   [+0x10..+0x1C zeros]
+0x934D8: 00000000 00000000 00000000 00006908   [+0x20..+0x28 zeros, +0x2C: 0x6908 (26888)]
+0x934E8: 00000000 00000000 00000000 00000003   [+0x30..+0x38 zeros, +0x3C: 0x3]
+```
+
+Mapping with 0x934B8 as base:
+- 0x934B8 = 0x00000078 (= 120 dec) — looks like an allocator size header (next struct = 120 bytes).
+- 0x934C0 (the "central shared object") is 8 bytes later. Contents 0x40-byte tail shown:
+  - 0x934C0 = 0 (object base)
+  - +0x04 = 0x0009355C (TCM ptr — new, forward into the struct family)
+  - +0x08 = 0
+  - +0x0C = 0
+  - +0x10..+0x20 = 0 (all zero across 5 u32)
+  - +0x24 = 0x00006908 (= 26888)
+  - +0x28 = 0
+  - +0x2C = 0
+  - +0x30 = 0
+  - +0x34 = 0x00000003
+
+**TCM[0x91E50..0x91E8C] — 16 u32 (list_head peer pair region, probing targets 0x91E54 + 0x91E84):**
+```
+0x91E50: 00000000 00000000 00000000 00000000   [all zeros]
+0x91E60: 00000000 00000000 00000000 00000000   [all zeros]
+0x91E70: 00000000 00000000 00000000 00000030   [+0x28: 0x30 (48)]
+0x91E80: 00000000 00000000 00000000 00000000   [all zeros]
+```
+- 0x91E54 = 0 (expected "peer A" — was referenced from 0x92460 in T252 as list_head next).
+- 0x91E84 = 0 (expected "peer B" — was referenced from 0x92464 in T252 as list_head prev).
+- Only non-zero in the 64-byte window: 0x91E7C = 0x30.
+
+**Counter 0x9D000 = 0x000043B1 for all 22 dwells** this run (n=5 replication of test.89 single-write reading).
+
+### What test.253 settled (facts)
+
+- **Branch (α) — saved-state region is a call-context snapshot — CONFIRMED.** 0x934C0 TCB-pattern test was the pre-test discriminator. All three TCB signals absent (no magic, no LSB=1 fn-pointer in the 16-u32 dump, no sp-like value). Reading "the saved-state region at 0x9CE98..0x9CF34 is a task's call context, and the LR values 0x68321/0x68D2F there reflect the hung call chain" **stands unrevised**. The T251-era β alternative ("paused TCB reading, hang in different task") is **falsified** — T253 closes this fork.
+- **0x934C0 is a partially-initialized 120-byte struct** (size 0x78 in the pre-header at 0x934B8 is consistent with an ARM-style allocator prefix). Only three fields populated out of ~30 u32 slots. Consistent with fw being stuck mid-init — the allocator ran and a few fields were written, but fw hung before completing this struct's initialization. Fields that ARE populated:
+  - +0x04 = 0x9355C — another TCM ptr into the struct family (cheap probe target).
+  - +0x24 = 0x6908 — unexplained constant (not a blob offset, not in 0x18xxxxxx range, fits "count / index / token").
+  - +0x34 = 0x3 — small integer (state, index, or flag set).
+- **list_head peer-pair reading DOWNGRADED.** T253 probe at 0x91E50..0x91E8C shows both 0x91E54 and 0x91E84 are zero. Linux empty-list convention requires self-reference; non-empty requires populated peers; both-zero is neither. The T252 "two adjacent embedded list_head pairs at 0x92460" claim is **not confirmed** by T253. Plausible alternatives: (a) non-Linux list convention with NULL terminators; (b) uninitialized BSS read via stale pointers in 0x92440; (c) those 0x92460 fields are not list_head pointers at all — possibly integer values or different-sized record offsets. This does NOT change the si_info-class reading of 0x92440 (CC core base 0x18001000 evidence still holds) — only the list_head sub-inference.
+- **0x9355C is now the cheapest next-probe target** — same family as 0x934C0, forward linkage, same risk profile as T253.
+- **n=5 replication of test.89 frozen-ctr.** 0x43B1 at 0x9D000 stable across 22 dwells × 5 boots.
+- **n=7 wedge streak T247..T253.** Probe costs remain flat (not cumulative).
+- **SMC reset required.**
+
+### Where the hang is — reading after T253
+
+Consolidated picture (no contradictions in observed data):
+
+1. wlc_attach entered (LR 0x68D2F in saved-state).
+2. wlc_bmac_attach entered (LR 0x68321 in saved-state).
+3. si_info (0x92440) populated with CC core base 0x18001000 → si_attach() completed before hang.
+4. wlc_attach printed the RTE banner + BCM4360 r3 40/160/160MHz line (T251). Next line (chiprev banner, printed after wlc_phy_attach returns) never fires.
+5. 0x934C0 partially initialized — allocator ran, first few fields written, struct body unfinished.
+6. Hang is inside a callee reached from wlc_bmac_attach → wlc_phy_attach → [callee]. Per T253 local analysis (phase5/analysis/T253_wlc_phy_attach.md), the most likely sub-tree is the 0x34DE0 dispatcher chain → 0x6A2D8 (real PHY worker) → 0x38A50/0x38A24 dispatch tables (PHY-op vtable entries).
+
+### Next-test direction (T254 — candidates for advisor review)
+
+Two tracks, both cheap:
+
+1. **T254 LOCAL (preferred, no hardware)**: disassemble 0x6A2D8 (the real PHY worker that 0x34DE0 tail-calls 8× from inside wlc_phy_attach). Look for tight polling loops (`ldr/tst/bne-back`) targeting PHY-core registers. This is the next narrowing step after T253's local analysis. Output: identify specific register/mask fw is polling. Deliverable: `phase5/analysis/T254_6a2d8_worker.md`.
+
+2. **T254 HARDWARE (if local work leaves gaps)**: probe TCM[0x93550..0x9358C] (16 u32) to decode 0x9355C — the only unfollowed pointer in 0x934C0's populated fields. Same cost as T253 (~32 reads), same wedge expectation. Deferred until local analysis of 0x6A2D8 is done, since local work may change what we want to know about 0x9355C.
+
+Advisor call before committing to T254 design.
+
+---
+
+
+---
+
 ## T252 PRE/POST pair (2026-04-23 — migrated from RESUME_NOTES at POST-TEST.255)
 
 > Migrated from RESUME_NOTES.md when POST-TEST.255 landed (policy: ~3 tests

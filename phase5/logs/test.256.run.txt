@@ -34,3 +34,5 @@ Boot -1: 20:31:08 -> 20:34:59. insmod at 20:32:38. Last log = "CC-clk_ctl_st=0x0
 === test.256 RE-FIRE with sched_walk_early added ===
 Added bcm4360_test256_sched_walk_early param + t+100ms invocation for redundancy.
 New md5: cc6e9304e7fbf287b4e68facd036dd47
+=== RE-FIRE 2026-04-23T20:43:05+01:00 (adding sched_walk_early=1) ===
+insmod PID=9315 at 2026-04-23T20:43:05+01:00
