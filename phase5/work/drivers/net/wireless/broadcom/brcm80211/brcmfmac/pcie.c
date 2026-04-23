@@ -731,6 +731,16 @@ static int bcm4360_test263_short;
 module_param(bcm4360_test263_short, int, 0644);
 MODULE_PARM_DESC(bcm4360_test263_short, "BCM4360 test.263: short-scaffold variant — same as T262 but only 10 iterations (1s loop instead of 5s). Discriminates absolute-time crash (t+125s) vs scaffold-duration crash vs cleanup-path crash. (1=enable, 0=off)");
 
+/* BCM4360 test.264: loop-less scaffold. MSI + request_irq + single
+ * msleep(2000) + cleanup, with pr_emerg markers bracketing each step.
+ * No MMIO reads inside the sleep. No loop structure. Discriminates
+ * duration-anchor (crash ~2s into msleep) vs cleanup-path-is-crasher
+ * (crash between msleep-done and pci_disable_msi-returned) vs
+ * loop-content-necessary (clean completion — loop MMIO reads mattered). */
+static int bcm4360_test264_noloop;
+module_param(bcm4360_test264_noloop, int, 0644);
+MODULE_PARM_DESC(bcm4360_test264_noloop, "BCM4360 test.264: loop-less scaffold — MSI + request_irq + single msleep(2000) + cleanup with markers. No MMIO reads inside the sleep. Isolates whether the trigger is duration-of-MSI-bound, cleanup-path, or loop-content. (1=enable, 0=off)");
+
 /* BCM4360 test.256 scheduler-walk helper. 2 pr_emerg lines, 16 u32 each.
  * gate_flag arg lets caller pick between sched_walk (t+60s) and
  * sched_walk_early (t+100ms). */
@@ -761,7 +771,8 @@ MODULE_PARM_DESC(bcm4360_test263_short, "BCM4360 test.263: short-scaffold varian
 #define BCM4360_T258_BUFPTR_PROBE(stage_tag) do { \
 	if (bcm4360_test258_enable_irq || bcm4360_test259_safe_enable_irq || \
 	    bcm4360_test260_mask_only || bcm4360_test260_doorbell_only || \
-	    bcm4360_test262_msi_poll_only || bcm4360_test263_short) { \
+	    bcm4360_test262_msi_poll_only || bcm4360_test263_short || \
+	    bcm4360_test264_noloop) { \
 		u32 _d258bp = brcmf_pcie_read_ram32(devinfo, 0x9CC5C); \
 		u32 _d258r[16]; \
 		int _n258; \
@@ -3576,7 +3587,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					    bcm4360_test260_mask_only || \
 					    bcm4360_test260_doorbell_only || \
 					    bcm4360_test262_msi_poll_only || \
-					    bcm4360_test263_short) { \
+					    bcm4360_test263_short || \
+					    bcm4360_test264_noloop) { \
 						u32 _ctr249 = brcmf_pcie_read_ram32(devinfo, \
 							0x9d000); \
 						pr_emerg("BCM4360 test.249: t+" ms_tag \
@@ -3876,6 +3888,38 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						pr_emerg("BCM4360 test.%s %s: calling pci_disable_msi\n", _tnum, _variant);
 						pci_disable_msi(_pdev260);
 						pr_emerg("BCM4360 test.%s %s: pci_disable_msi returned\n", _tnum, _variant);
+					}
+				}
+				if (bcm4360_test264_noloop) {
+					struct pci_dev *_pdev264 = devinfo->pdev;
+					int _prev_irq264 = _pdev264->irq;
+					int _msi_ret264, _req_ret264;
+					atomic_set(&bcm4360_t259_irq_count, 0);
+					atomic_set(&bcm4360_t259_last_mailboxint, 0);
+					_msi_ret264 = pci_enable_msi(_pdev264);
+					pr_emerg("BCM4360 test.264 noloop: pci_enable_msi=%d prev_irq=%d new_irq=%d\n",
+						 _msi_ret264, _prev_irq264, _pdev264->irq);
+					_req_ret264 = request_irq(_pdev264->irq,
+								  bcm4360_t259_safe_handler,
+								  IRQF_SHARED, "t264_noloop", devinfo);
+					pr_emerg("BCM4360 test.264 noloop: request_irq ret=%d\n", _req_ret264);
+					if (_req_ret264 == 0) {
+						pr_emerg("BCM4360 test.264 noloop: entering msleep(2000) — no loop, no MMIO\n");
+						msleep(2000);
+						pr_emerg("BCM4360 test.264 noloop: msleep done; irq_count=%d last_mailboxint=0x%08x\n",
+							 atomic_read(&bcm4360_t259_irq_count),
+							 atomic_read(&bcm4360_t259_last_mailboxint));
+						pr_emerg("BCM4360 test.264 noloop: calling free_irq\n");
+						free_irq(_pdev264->irq, devinfo);
+						pr_emerg("BCM4360 test.264 noloop: free_irq returned\n");
+					} else {
+						pr_emerg("BCM4360 test.264 noloop: request_irq FAILED (%d), skipping msleep\n",
+							 _req_ret264);
+					}
+					if (_msi_ret264 == 0) {
+						pr_emerg("BCM4360 test.264 noloop: calling pci_disable_msi\n");
+						pci_disable_msi(_pdev264);
+						pr_emerg("BCM4360 test.264 noloop: pci_disable_msi returned\n");
 					}
 				}
 #undef BCM4360_T239_POLL
