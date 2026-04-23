@@ -5,9 +5,75 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 08:5x, after test.241 — write-verify at MAILBOXMASK pre-FORCEHT FAILED; read path works, sentinel writes did not latch; test confounded with stage, not conclusive about (c))
+## Current state (2026-04-23 09:1x, after test.242 — write-verify at MAILBOXMASK FAILed post-set_active at BOTH t+100ms and t+2000ms; baseline flipped 0x318→0x00 across the FORCEHT/set_active boundary; writes to this register still do not latch post-set_active)
 
-**Latest outcome (test.241):** With `force_seed=1`,
+**Latest outcome (test.242):** With `force_seed=1`,
+`ultra_dwells=1`, `poll_sharedram=1`, `wide_poll=1`,
+`writeverify_postactive=1`, the probe deferred write-verify into
+the dwell ladder and logged the MBM round-trip at the FIRST two
+ladder breadcrumbs (post-set_active, same stage where test.240
+rang DB1). Result:
+
+```
+test.242: t+100ms MAILBOXMASK (BAR0+0x4c) baseline=0x00000000 sent=0x00000000 (match=0) cleared=0x00000000 (match=1) RESULT FAIL
+test.242: t+2000ms MAILBOXMASK (BAR0+0x4c) baseline=0x00000000 sent=0x00000000 (match=0) cleared=0x00000000 (match=1) RESULT FAIL
+```
+
+Set_active returned TRUE at 09:00:17 BST. Ladder then landed
+**22 of 23 dwells** (t+100ms..t+90000ms, identical pattern to
+tests 238/239/240/241). sharedram_ptr = `0xffc70038` at every
+poll; wide-TCM[-64..-8] held NVRAM text at every poll. Journal
+ends 09:01:49 BST at t+90000ms; t+120000ms never landed. Wedge
+bracket still [t+90s, t+120s]. Host wedged; SMC reset
+performed; current boot 0 started 09:15:26 BST.
+
+**Critical discriminator result — FAIL/FAIL row of the PRE-TEST.242 matrix:**
+The matrix pre-committed this outcome to
+*"BAR0 write path is broken post-set_active too. test.240 DB1
+never reached chip; (c) confirmed. Stop all doorbell attempts.
+Investigate core-select window / aperture; compare to upstream's
+pre-set_active MBMASK writer block."* That pivot is now on the
+table for test.243 — detailed framing in PRE-TEST.243.
+
+**But watch the caveats** (surface before deciding on test.243):
+
+- **"cleared match=1" is trivially true at both points.** We wrote
+  `0` and read `0`, which matches whether or not our write landed
+  (baseline was already 0). The only informative comparison is
+  the `sent` readback vs `0xDEADBEEF`, which FAILed at both stages.
+- **Baseline changed 0x318 → 0x00** between pre-FORCEHT (test.241)
+  and post-set_active (test.242). Something (FORCEHT, chip_set_active,
+  fw start, CR4 rstvec, or a combination) cleared MBM's bits. So
+  MBM's *read* side responds to stage changes — it's not a dead
+  slot — but its *write* side didn't take writes from us at either
+  stage we tested.
+- **MAILBOXMASK may be specifically write-gated at our probe points.**
+  Upstream brcmfmac only *writes* MBM via `brcmf_pcie_intr_enable`
+  at pcie.c:1339, which fires post-fw-up and post-shared-init — far
+  later than both our stages. So MAILBOXMASK writes may legitimately
+  be silently dropped until a specific enable-condition is met
+  (interrupt-capability handshake? ring-base programmed? share-magic
+  seen?). If that's true, **the FAIL/FAIL result does NOT rule out
+  the general BAR0 write path** — it only rules out writes to
+  MAILBOXMASK at these two specific stages.
+- **No other BAR0 register has been tested for write-verify.** The
+  MBM-only evidence is not a comprehensive "BAR0 write path" test.
+
+**Implication for test.243:** before wholesale abandoning doorbells,
+test.243 should broaden the write-verify to register(s) we *know*
+upstream brcmfmac writes **at or before** our probe stages — e.g.
+`PCIe2_IntMask` (MAILBOXINT, `devinfo->reginfo->mailboxint` at
+BAR0+0x48) which upstream reads/writes during probe setup, or the
+ring-base registers that `brcmf_pcie_init_share` programs. If those
+*also* FAIL the round-trip, the BAR0-write-path theory strengthens.
+If they PASS, MBM is simply stage-gated and doorbells re-open as a
+valid branch. Details in PRE-TEST.243.
+
+---
+
+## Prior outcome (test.241 — write-verify at MAILBOXMASK pre-FORCEHT FAILED; read path works, sentinel writes did not latch; test confounded with stage, not conclusive about (c))
+
+**Test.241 outcome:** With `force_seed=1`,
 `ultra_dwells=1`, `poll_sharedram=1`, `wide_poll=1`,
 `writeverify=1`, the probe logged the MAILBOXMASK round-trip right
 after `pci_set_master` (post-BM-on, pre-FORCEHT, pre-set_active).
@@ -226,6 +292,7 @@ probes `#if 0`'d, host still wedged. Narrowed the trigger to
 | Fw writes ANY of the last 60 bytes of TCM (not just ramsize-4) during the ≥90 s pre-wedge window | 240 | ruled out — a 15-dword wide-poll at ramsize-64..ramsize-8, sampled at 22 ladder points, returned the unchanged NVRAM tail text every time. Fw's post-init work, if any, does not touch the tail region. |
 | Ringing H2D_MAILBOX_1 (upstream "HostRDY" offset, BAR0+0x144) at t+2000ms releases fw's pre-shared-alloc stall | 240 | **inconclusive** — readback after write=1 was 0x00000000 AND no downstream observable change (sharedram_ptr, tail-TCM, wedge timing all identical to test.239). Three candidate readings: (a) doorbell self-clears / fw saw it and chose not to act; (b) offset not RAM-backed pre-shared-init; (c) our BAR0 write path landed on the wrong register. (c) blocks cleanly concluding anything about DB1 as a signal. |
 | BAR0 write path via `brcmf_pcie_write_reg32` reaches chip at our **pre-FORCEHT** probe stage (using MAILBOXMASK round-trip) | 241 | **inconclusive** — baseline read 0x318 (not the expected 0); both writes (0xDEADBEEF and 0) did NOT change readback. Read path is live. Stage-mismatch with test.240's DB1 (post-set_active) means FAIL here may be register-stage-gating, not a general write-path defect. Test.242 repeats at post-set_active dwell points to resolve. |
+| BAR0 write to MAILBOXMASK latches **post-set_active** (t+100ms or t+2000ms) | 242 | **ruled out for MAILBOXMASK at these stages** — both writes (0xDEADBEEF) failed to latch; `sent` readback = 0 in both cases. Baseline changed 0x318 → 0x00 across the pre-FORCEHT → post-set_active boundary (state evolves — reg isn't dead). Does NOT rule out writes to *other* BAR0 registers; MBM is specifically only written by upstream post-shared-init (`brcmf_pcie_intr_enable`, pcie.c:1339), so MBM may be write-gated until an enable condition is met. Test.243 will broaden to `mailboxint` / ring-base to discriminate "BAR0 broken" from "MBM specifically stage-gated". |
 
 **Refined wedge model (post test.230):**
 The moment ARM CR4 starts executing firmware (rstvec written via
@@ -270,6 +337,113 @@ Logging for test.234 falls back to journald tail-truncation as
 before. Resolution ≥15-20 s is fine because the goal is shape-
 comparison (does the wedge still happen? at the same place?),
 not sub-second timing.
+
+---
+
+
+## POST-TEST.242 (2026-04-23 09:01 BST, boot -1 — write-verify at MAILBOXMASK **post-set_active** at t+100ms AND t+2000ms both FAILED; baseline cleared 0x318→0x00 across stage boundary; write side still non-responsive; dwell ladder + wedge unchanged)
+
+### Summary
+
+`bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1
+bcm4360_test239_poll_sharedram=1 bcm4360_test240_wide_poll=1
+bcm4360_test242_writeverify_postactive=1`. test.241's pre-FORCEHT
+write-verify was disabled for this run; test.240's DB1 ring was
+also disabled. Probe reached `brcmf_chip_set_active`; it returned
+TRUE at 09:00:17 BST. Write-verify fired at the t+100ms and
+t+2000ms ladder breadcrumbs:
+
+```
+Apr 23 09:00:17 test.242: t+100ms  MBM baseline=0x00000000 sent=0x00000000 (match=0) cleared=0x00000000 (match=1) RESULT FAIL
+Apr 23 09:00:19 test.242: t+2000ms MBM baseline=0x00000000 sent=0x00000000 (match=0) cleared=0x00000000 (match=1) RESULT FAIL
+```
+
+Ladder ran normally after each probe: 22 of 23 dwells landed
+(t+100, 300, 500, 700, 1000, 1500, 2000, 3000, 5000, 10000, 15000,
+20000, 25000, 26000, 27000, 28000, 29000, 30000, 35000, 45000,
+60000, 90000 ms). Last line 09:01:49 BST. `t+120000ms` never
+landed. Host wedged; user performed SMC reset; current boot 0
+started 09:15:26 BST.
+
+### Matrix outcome (per PRE-TEST.242)
+
+FAIL / FAIL row: *"BAR0 write path is broken post-set_active too.
+test.240 DB1 never reached chip; (c) confirmed. Stop all doorbell
+attempts. Investigate core-select window / aperture."* That is the
+strong reading — but the caveats in "Current state" above apply:
+the evidence is specific to MAILBOXMASK and does not yet
+generalise to "all BAR0 writes" until we test at least one other
+BAR0 register that upstream brcmfmac writes at a stage ≤ ours.
+
+### Stage-transition signal (new)
+
+| Stage | Baseline read of MBM |
+|---|---|
+| After `pci_set_master`, pre-FORCEHT (test.241) | `0x00000318` (bits 3,4,8,9) |
+| First dwell post-set_active (test.242 t+100ms) | `0x00000000` |
+| Second dwell post-set_active (test.242 t+2000ms) | `0x00000000` |
+
+Something between "post-BM-on pre-FORCEHT" and "post-set_active
+t+100ms" clears MBM's read-side bits. Candidates (not yet
+distinguished): FORCEHT turning on HT clocks; the BAR window
+reselect that `brcmf_chip_set_active` performs; fw executing a
+mask clear immediately after CR4 rstvec. The chipcontrol /
+backplane indirection is NOT in our MMIO-32 path, so the change
+has to be mediated by chip-side logic, not by our code writing to
+MBM (which we couldn't do). This is additional evidence that MBM
+*state* is real and stage-sensitive — the register is not a dead
+address.
+
+### "cleared match=1" caveat
+
+Both dwell probes report `cleared match=1` (wrote 0, read 0). This
+is trivially true because the baseline was already 0 — the write
+of 0 is indistinguishable from a silent drop at readback time. The
+only informative signal in this run is the sentinel compare, which
+is `match=0` at both stages.
+
+### Wedge / ladder behaviour
+
+Same as test.238/239/240/241:
+
+- Dwell breadcrumbs: 22 of 23, missing only t+120000ms.
+- `sharedram_ptr`: `0xffc70038` at every poll (fw never advances
+  to shared-struct allocation within the observed ≥90s window).
+- Wide-TCM[ramsize-64..-8]: NVRAM text unchanged at every poll.
+- Journal ends 09:01:49 BST → wedge in same [t+90s, t+120s]
+  bracket. No Oops / Call Trace / softlockup / hardlockup in
+  boot -1 journal.
+
+Adding the post-set_active write-verify (two round-trips during
+the ladder) did NOT shift the wedge timing — consistent with
+every prior incremental instrumentation addition being invisible
+to the wedge trigger.
+
+### Artifacts
+
+- `phase5/logs/test.242.run.txt` — PRE harness + insmod output
+  (truncated at "sleeping 240s" as expected; host wedged during
+  sleep).
+- `phase5/logs/test.242.journalctl.full.txt` (1504 lines) — full
+  boot -1 journal.
+- `phase5/logs/test.242.journalctl.txt` (422 lines) — filtered
+  BCM4360 / brcmfmac / watchdog subset.
+
+### What test.243 must settle (framing for PRE block)
+
+Before pivoting wholesale to "core-select window / aperture"
+investigation, verify whether MAILBOXMASK specifically is
+stage-gated vs. whether BAR0 writes are broken in general. One
+extra register round-trip at both ladder points (t+100ms,
+t+2000ms) against a register upstream brcmfmac writes at or
+before our probe stage — candidates: `devinfo->reginfo->mailboxint`
+(BAR0+0x48), or the PCIe2 INT_MASK / PCIE2_INTMASK registers
+which `brcmf_pcie_intr_disable`/_attach_bus/_probe touch earlier
+— would give a clean discriminator. If the second register
+PASSes, MBM is register-gated and doorbells remain on the table.
+If the second register also FAILs, the BAR0 write path theory
+strengthens and core-select / aperture investigation becomes
+the right path.
 
 ---
 
@@ -694,451 +868,7 @@ warnings — no new regressions.
 ---
 
 
-## POST-TEST.240 (2026-04-23 08:03 BST, boot -1 — DB1 ring at t+2000ms landed with readback=0x00000000; wide-TCM scan held NVRAM text across all 22 dwells; wedge bracket unchanged from test.238/239)
+## Older test history (test.240 and earlier)
 
-### Summary
-
-`bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1
-bcm4360_test239_poll_sharedram=1 bcm4360_test240_ring_h2d_db1=1
-bcm4360_test240_wide_poll=1`. Probe ran fw download → NVRAM write
-→ seed write → FORCEHT → `pci_set_master` → `brcmf_chip_set_active`
-cleanly; set_active returned TRUE at 08:02:46 BST. At the t+2000ms
-breadcrumb, the driver wrote `1` to BAR0+0x144 via
-`brcmf_pcie_write_reg32`; readback immediately after was
-`0x00000000`, not `1`.
-
-The ultra-extended ladder then emitted **22 dwell+sharedram_poll+
-wide-poll triples** at t+100, 300, 500, 700, 1000, 1500, 2000, 3000,
-5000, 10000, 15000, 20000, 25000, 26000, 27000, 28000, 29000, 30000,
-35000, 45000, 60000, 90000 ms (last line 08:03:53 BST). The
-`t+120000ms` triple never landed; host wedged. User performed SMC
-reset; current boot 0 started 08:09:57 BST.
-
-### DB1 ring evidence
-
-```
-Apr 23 08:02:46 test.238: t+2000ms dwell
-Apr 23 08:02:46 test.240: ringing H2D_MAILBOX_1 (BAR0+0x144)=1 at t+2000ms
-Apr 23 08:02:46 test.240: H2D_MAILBOX_1 ring done; readback=0x00000000
-Apr 23 08:02:46 test.239: t+2000ms sharedram_ptr=0xffc70038
-```
-
-The sharedram_ptr poll immediately after the ring returned the
-NVRAM marker unchanged — DB1 had no effect on that slot at t+2000ms
-or any later dwell.
-
-### sharedram_ptr polls
-
-All 22 returned `0xffc70038` — identical to test.239.
-
-### Wide-TCM scan (ramsize-64..ramsize-8, 15 dwords per dwell)
-
-All 22 dwells returned the same 15 little-endian dwords, which
-decode byte-wise to NVRAM text:
-
-```
-7600303d 69646e65 78303d64 34653431 76656400 303d6469 61333478 74780030
-72666c61 343d7165 30303030 32616100 00373d67 67356161 0000373d
-→ "=0.vendian=0x14e4.devid=0x43a0.xtalfreq=40000000.aa2g=7.aa5g=7.."
-```
-
-This is the tail of the NVRAM text we write to TCM before
-set_active, followed by the 0xffc70038 length marker at ramsize-4
-(not included in the 15-dword window). Conclusion: fw has not
-written any of these 15 slots during the ≥90 s window.
-
-### Wedge bracket
-
-Unchanged from test.238 ([t+90s, t+120s]). Journal cut at 08:03:53
-BST, ~25 s after the last landed dwell (t+90000ms at 08:03:52).
-No Oops / Call Trace / softlockup / hardlockup in boot -1.
-
-### Key interpretations
-
-1. **Fw's post-init work, if any, is not in the last 60 bytes of
-   TCM.** Upstream brcmfmac's shared-struct slot is TCM[ramsize-4],
-   which is within but not the whole of this window; we've now
-   proven fw does not touch ANY of ramsize-64..ramsize-4 during the
-   pre-wedge window. So if fw IS advancing, it's writing somewhere
-   else entirely (e.g., scratch aperture on the chip, a shared
-   ring not in tail-TCM, or fw internal RAM outside the BAR2
-   window).
-2. **DB1 ring is pre-shared-init null.** The readback=0 is
-   uninterpretable in isolation because of reading (c) — see
-   Current State at top of file for the (a)/(b)/(c) breakdown.
-3. **PRE `dd` harness error** at `/sys/bus/pci/.../resource0`
-   recurred (third test in a row: test.238/239/240 — misread as
-   "clean" in the test.239 block, dword `0x203a6464` ≡ ASCII "dd: ").
-   Pre-insmod userspace sysfs read failures are distinct from
-   in-driver BAR0 MMIO writes but justify verifying the latter
-   explicitly (PRE-TEST.241 plan).
-
-### Artifacts
-
-- `phase5/logs/test.240.run.txt` — PRE harness + insmod output
-  (truncated at "sleeping 240s" because host wedged during sleep)
-- `phase5/logs/test.240.journalctl.full.txt` (1527 lines) — full
-  boot -1 journal
-- `phase5/logs/test.240.journalctl.txt` (422 lines) — filtered
-  BCM4360 / brcmfmac / watchdog subset
-
----
-
-
-## PRE-TEST.240 (2026-04-23 07:4x BST, boot 0 post-SMC-reset from test.239) — ring upstream's HostRDY doorbell (H2D_MAILBOX_1) at t+2000ms + scan a wider tail-TCM window at every dwell
-
-### Hypothesis
-
-Test.239 proved fw is alive ≥90s post-set_active but never overwrites
-TCM[ramsize-4] with `sharedram_addr` (upstream brcmfmac's
-`BRCMF_PCIE_FW_UP_TIMEOUT` is 5s — we waited 18× that). Branch
-hit in PRE-TEST.239's pre-committed decision tree: *"Test.240: add a
-host 'HostRDY' doorbell ring (H2D_MAILBOX_0 or equivalent) during
-an early dwell"*.
-
-Two choices folded into one cycle:
-1. **Doorbell ring on H2D_MAILBOX_1 (BAR0+0x144=1) at t+2000ms.**
-   Upstream's `brcmf_pcie_hostready` writes to that exact register
-   when the `BRCMF_PCIE_SHARED_HOSTRDY_DB1` flag is set in the
-   pcie_shared struct. fw provides that flag, so upstream's gate is
-   only satisfied AFTER fw allocates the shared struct — but the
-   underlying mailbox register is a hardware register that fw can
-   poll any time post-reset. If fw is blocked on host doorbell
-   pre-shared-struct, ringing DB1 unconditionally should release it.
-   We use DB1 (not DB0) because DB1 is the upstream "host ready"
-   slot; DB0 is the general H2D-message-queue slot which expects a
-   shared HTOD_MB_DATA struct fw can't have without sharedram.
-
-2. **Wider tail-TCM scan (15 dwords, ramsize-64..ramsize-4) at every
-   dwell.** Test.239 only watched a single slot. Fw could be writing
-   status / heartbeat / a non-standard sharedram_addr at another
-   tail-TCM offset. One MMIO read per dwell already proven safe in
-   test.239 (wedge timing unchanged); 15 reads adds negligible bus
-   load.
-
-### Expected discriminator outcomes
-
-| Observation | Interpretation |
-|---|---|
-| sharedram_ptr changes to a valid RAM address within a few dwells of the t+2000ms ring | DB1 was the missing handshake — major progress; document it and start building the full host-side init sequence (next test reads pcie_shared from the new addr). |
-| Wide-poll lights up with new values somewhere in tail-TCM (status / heartbeat counter / unknown struct), regardless of where sharedram_ptr stays | Fw IS doing post-init work but at non-standard offsets — read those next test to identify the structure(s). |
-| Wedge moves dramatically EARLIER (e.g. wedges within a few s of the t+2000ms ring) | DB1 ring caused destabilisation — possibly fw saw an out-of-sequence doorbell and aborted. Tells us fw IS reading DB1 at this stage, just doesn't expect a write yet — refine timing for next test. |
-| Wedge moves dramatically LATER or disappears | Best case: ring was the missing piece; rest of test gets clean BM-clear / -ENODEV / rmmod. |
-| All identical to test.239 (wedge same window, sharedram_ptr unchanged, wide-poll all 0xffc70038/garbage) | DB1 ring is a null op pre-shared-init. Pivots to test.241: try DB0 (H2D_MAILBOX_0 = BAR0+0x140), then if also null, pivot to pre-allocating a shared struct in TCM before set_active (build `brcmf_pcie_init_share`-style block ourselves and write its address to TCM[ramsize-4] before set_active so fw has it from the start). |
-
-### Code change
-
-1. Two new module params:
-   - `bcm4360_test240_ring_h2d_db1` (default 0) — ring DB1 at t+2000ms
-   - `bcm4360_test240_wide_poll` (default 0) — wide tail-TCM scan
-2. `BCM4360_T239_POLL` macro extended: when wide_poll is set, scan
-   15 extra dwords starting at ramsize-64 in addition to the
-   single-slot read at ramsize-4. Only wide-poll lines are new
-   (existing test.239 single-slot lines preserved).
-3. At the t+2000ms dwell breadcrumb in the ultra ladder, if
-   ring_h2d_db1 is set, write 1 to BAR0+0x144 via
-   `brcmf_pcie_write_reg32` then read back and log.
-
-All other paths (test.234, test.235, test.237, test.238 baseline,
-test.239 baseline) preserved unchanged.
-
-### Run sequence
-
-```bash
-sudo insmod phase5/work/.../brcmutil.ko
-sudo insmod phase5/work/.../brcmfmac.ko \
-    bcm4360_test236_force_seed=1 \
-    bcm4360_test238_ultra_dwells=1 \
-    bcm4360_test239_poll_sharedram=1 \
-    bcm4360_test240_ring_h2d_db1=1 \
-    bcm4360_test240_wide_poll=1
-sleep 240
-sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
-```
-
-Budget 240 s per test.238/239 precedent. Sysctls nmi_watchdog=1,
-hardlockup_panic=1, softlockup_panic=1, softlockup_all_cpu_backtrace=1
-armed.
-
-### Pre-committed test.241 decision tree
-
-Per advisor — pre-commit branches before running:
-
-| Test.240 outcome | Test.241 direction |
-|---|---|
-| sharedram_ptr changes / wedge shifts after DB1 ring | Read pcie_shared struct from new addr; log fields (flags, ringinfo_addr, console_addr, htod/dtoh mailbox addrs). No new fw write — pure observation. |
-| Wide-poll shows fw writing somewhere in tail-TCM (not ramsize-4) | Dump that region next test; widen scan further if needed. |
-| All identical to test.239 (DB1 is null) | Test.241: ring DB0 instead (H2D_MAILBOX_0=0x140) at t+2000ms, otherwise identical. Cheap discriminator. |
-| Wedge moves earlier | Investigate timing: try ringing DB1 at later dwell (t+5000ms, t+10000ms) — locate fw's expected window. |
-
-### Safety notes
-
-- H2D_MAILBOX_1 write is a single iowrite32 to BAR0+0x144. Same op
-  upstream uses in production. If fw raises a D2H IRQ in response,
-  no IRQ handler is registered yet — the line stays at default and
-  the host doesn't take an interrupt. Worst case is fw sees a
-  doorbell, panics on out-of-sequence handshake, and wedges earlier
-  → still informative.
-- Wide-poll is read-only MMIO (15 dwords per dwell). Test.239
-  already proved single-dword tail-TCM reads don't shift the wedge.
-
-### Hardware state (current, 07:4x BST boot 0 post-SMC-reset)
-
-- `sudo lspci -vvv -s 03:00.0`: Control `Mem- BusMaster-` (driver
-  not loaded yet — normal pre-insmod state); Status MAbort-, fast.
-  CommClk- (normal for this Apple board pre-driver, NOT the dirty
-  pattern; CLAUDE.md dirty-state marker is `MAbort+ AND CommClk-`
-  together). LnkSta Speed 2.5GT/s Width x1.
-- No modules loaded.
-- Boot 0 started 2026-04-23 07:41:38 BST.
-
-### Build status — REBUILT CLEAN
-
-`brcmfmac.ko` rebuilt 2026-04-23 ~07:55 BST via `make -C
-/lib/modules/$(uname -r)/build M=...brcmfmac modules`. `strings`
-and `modinfo` confirm both new params + new test.240 breadcrumbs
-(ring + readback + wide-poll lines for all 23 dwell tags). Only
-pre-existing unused-variable warnings — no regressions.
-
-### Expected artifacts
-
-- `phase5/logs/test.240.run.txt` — PRE harness + insmod output
-- `phase5/logs/test.240.journalctl.full.txt` — full boot -1 journal
-- `phase5/logs/test.240.journalctl.txt` — filtered subset
-
-### Pre-test checklist (CLAUDE.md)
-
-1. Build status: REBUILT CLEAN above.
-2. PCIe state: clean per `sudo lspci` above.
-3. Hypothesis: stated above.
-4. Plan: in this block; commit + push + sync before insmod.
-5. Filesystem sync on commit.
-
----
-
-
-## Older test history (test.239 and earlier)
-
-Full detail for POST-TEST.239 and PRE-TEST.239 →
-[RESUME_NOTES_HISTORY.md](RESUME_NOTES_HISTORY.md)
-
----
-
-<!-- REMOVED: POST-TEST.239 and PRE-TEST.239 — now in HISTORY
-## POST-TEST.239 (2026-04-23 01:12 BST, boot -1 — same wedge bracket as test.238; sharedram_ptr held `0xffc70038` for all 22 polls) — fw never advanced to shared-struct allocation
-
-### Summary
-
-`bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1
-bcm4360_test239_poll_sharedram=1`. Probe ran cleanly through fw
-download, NVRAM write, seed write (footer at 0x9ff14, magic
-0xfeedc0de, len 0x100), FORCEHT, `pci_set_master`, and
-`brcmf_chip_set_active` (returned TRUE at 01:10:43.523 BST). Ladder
-emitted **22 dwell+poll pairs** at t+100, 300, 500, 700, 1000, 1500,
-2000, 3000, 5000, 10000, 15000, 20000, 25000, 26000, 27000, 28000,
-29000, 30000, 35000, 45000, 60000, 90000 ms (last line 01:12:15
-BST). The expected `t+120000ms` pair never landed; journal cut at
-01:12:24 (~22 s before that breadcrumb was due). Host wedged; SMC
-reset performed by user; current boot 0 started 07:41:38 BST.
-
-### sharedram_ptr poll results
-
-**All 22 polls returned `0xffc70038`** — identical to the NVRAM
-length marker our host writes at TCM[ramsize-4] before set_active.
-Fw never overwrote that slot during the ≥90 s window. No transient
-to a valid RAM address, no `0xffffffff` (no bus-error read), no
-garbage value.
-
-```
-Apr 23 01:10:43 test.238: t+100ms dwell
-Apr 23 01:10:43 test.239: t+100ms sharedram_ptr=0xffc70038
-Apr 23 01:10:44 test.238: t+300ms dwell
-Apr 23 01:10:44 test.239: t+300ms sharedram_ptr=0xffc70038
-... (every pair identical pattern; sharedram_ptr never changes) ...
-Apr 23 01:12:15 test.238: t+90000ms dwell
-Apr 23 01:12:15 test.239: t+90000ms sharedram_ptr=0xffc70038
-<journal ends 01:12:24 — host wedged in [t+90s, t+120s] window>
-```
-
-### Key interpretations
-
-1. **Wedge bracket unchanged from test.238** — same [t+98s, t+118s]
-   window. So the addition of one MMIO read per dwell did NOT
-   destabilise fw or shift the wedge (rules out the
-   "polling-causes-wedge" branch from PRE-TEST.239 decision tree).
-2. **Fw does not progress through normal init** — upstream brcmfmac's
-   `BRCMF_PCIE_FW_UP_TIMEOUT` is 5 s. We waited 18× that. Fw never
-   wrote `sharedram_addr` to TCM[ramsize-4]. So fw is either:
-   - blocked on a host-side handshake (no doorbell, no IRQ, no
-     write to a polling-watched slot by the host), or
-   - executing an unrelated internal init that completes (or
-     panics) at ~t+100-120s, which then wedges the bus.
-3. **Wedge is not an early bus event** — every poll at t<90s read
-   the BAR2 window cleanly (returned the marker, never `0xffffffff`).
-   So PCIe is healthy throughout fw's ≥90 s execution.
-4. **Decision-tree branch hit:** PRE-TEST.239 pre-committed
-   *"sharedram_ptr stays 0xffc70038 → Test.240: HostRDY doorbell ring"*.
-   That is the next action.
-
-### Caveats
-
-- We did not measure whether fw writes anywhere ELSE in TCM —
-  only TCM[ramsize-4]. Fw could be advancing through some other
-  state machine that doesn't touch this slot. Test.240 may want to
-  spot-check a few other tail-TCM addresses too.
-- `brcmf_pcie_read_ram32` uses BAR2 window MMIO. Same op already
-  proven safe in tests 188/218/226. Not a new risk.
-
-### Artifacts
-
-- `phase5/logs/test.239.run.txt` — PRE harness output (truncated at
-  "sleeping 240s" because host wedged during sleep)
-- `phase5/logs/test.239.journalctl.full.txt` (1458 lines) — full
-  boot -1 journal
-- `phase5/logs/test.239.journalctl.txt` (387 lines) — filtered
-  BCM4360 / brcmfmac subset
-
----
-
-
-## PRE-TEST.239 (2026-04-23 00:5x BST, boot 0 post-SMC-reset from test.238) — poll TCM[ramsize-4] at every ladder breadcrumb to observe whether fw writes `sharedram_addr` before the wedge
-
-### Hypothesis
-
-Test.238 proved fw+driver run for ≥90 s post-set_active with the
-Apple random_seed present. The wedge window is [t+98 s, t+118 s].
-During those ~100 seconds, fw is executing *something* — but we
-have no visibility into what.
-
-**Upstream brcmfmac convention** (confirmed in pcie.c@3144-3158):
-- Host writes NVRAM → TCM[ramsize-4] = 0xffc70038 (NVRAM length
-  marker token).
-- Fw boots, parses NVRAM, inits PCIe2 internals, allocates its
-  `pcie_shared` struct in its own TCM/scratch, then
-  **overwrites TCM[ramsize-4] with the address of that struct**
-  (`sharedram_addr`).
-- Host detects the change (value ≠ 0xffc70038) and reads the
-  struct at that address to bootstrap ringinfo / console /
-  mailboxes.
-
-We have never observed this value *during* the dwell ladder. If
-fw is functional post-set_active, the sharedram_addr write should
-happen at some t* ∈ (0, wedge] — and knowing its timing plus
-the address fw hands us is highly diagnostic:
-
-| Observation at ramsize-4 during the ladder | Interpretation |
-|---|---|
-| Stays at 0xffc70038 through t+90 s | Fw is running (dwells landed) but **has not completed its shared-struct init** — possibly stuck at a pre-alloc step, or waiting on host signal. |
-| Changes to a valid RAM address at some t* | Fw completed shared-struct init at t*; we now know (a) fw boots correctly up to that step, (b) WHERE its pcie_shared struct lives → we can read ringinfo/console from that address on subsequent tests. |
-| Changes to 0xffffffff (all-ones) | Bus error on the readback, not a fw write — indicates device disappeared from PCIe bus at that point. |
-| Changes to a bogus value (e.g. 0x0, or address outside RAM) | Fw wrote something, but its internal state is inconsistent; likely this path diverges before sharedram alloc completes. |
-
-This is a **zero-intervention observation test** — we only READ
-TCM during dwells, no writes. No new hypothesis about fw expected
-behaviour; just instrumentation of an already-documented protocol.
-
-### Why polling, not sentinel-write (per prior advisor)
-
-Advisor proposed writing a sentinel (e.g. 0xdeadbeef) at ramsize-4
-before set_active to test whether fw reads from that slot. But the
-upstream flow is **fw WRITES there, not reads** — the NVRAM marker
-0xffc70038 already sits there (host writes it via NVRAM). Fw is
-documented to overwrite, not dereference, that slot on init. So
-polling is strictly more informative and costs nothing extra (just
-a single MMIO read per dwell line vs. a full pre-set_active write
-that fw will clobber anyway). Sentinel-write is strictly inferior
-here.
-
-### Code change
-
-1. New module param `bcm4360_test239_poll_sharedram` (default 0).
-2. In the test.238 ladder, after each `pr_emerg("... dwell\n")`,
-   if `test239_poll_sharedram` is set, perform:
-   ```c
-   u32 v = brcmf_pcie_read_ram32(devinfo, devinfo->ci->ramsize - 4);
-   pr_emerg("BCM4360 test.239: t+Xms sharedram_ptr=0x%08x\n", v);
-   ```
-   Emit one breadcrumb per ladder step (23 lines total alongside
-   the 23 dwell lines).
-3. Keep everything else identical — same ultra ladder, same seed,
-   same pre-set_active path.
-
-### Run sequence
-
-```bash
-# Build first
-make -C phase5/work
-
-# Then, this boot (after SMC-reset post-test.238):
-sudo insmod phase5/work/.../brcmutil.ko
-sudo insmod phase5/work/.../brcmfmac.ko \
-    bcm4360_test236_force_seed=1 \
-    bcm4360_test238_ultra_dwells=1 \
-    bcm4360_test239_poll_sharedram=1
-sleep 240
-sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
-```
-
-Budget 240 s per test.238 precedent. Sysctls nmi_watchdog=1,
-hardlockup_panic=1, softlockup_panic=1 armed as before.
-
-### Pre-committed test.240 decision tree (per advisor)
-
-Before running test.239, here's what each outcome branches to —
-pre-committed to avoid post-hoc "consistent with plan" bias:
-
-| Test.239 observation | Test.240 direction |
-|---|---|
-| sharedram_ptr stays 0xffc70038 through last landed dwell | Fw boots but never reaches shared-struct allocation. Test.240: add a host "HostRDY" doorbell ring (H2D_MAILBOX_0 or equivalent) during an early dwell to see if fw is blocked on host handshake. |
-| sharedram_ptr changes to a valid RAM address at t=T* | Fw completed shared-struct init at T*. Test.240: read the pcie_shared struct from that address, log its fields (ring_info_addr, console_addr, mailbox addrs) and share-magic. No fw change needed — pure observation, should be clean. |
-| sharedram_ptr changes to 0xffffffff | Bus error reading the slot (device disappeared from BAR2 window). Test.240: narrow when the bus-error condition starts by cross-referencing with last landed dwell; investigate PCIe config space post-test. |
-| sharedram_ptr changes to a non-RAM non-marker non-all-ones value | Fw wrote garbage. Test.240: inspect what it wrote — could be a bug in our test, a chip quirk, or a firmware internal that overwrites the slot for different reasons. Read nearby TCM to see if a struct was written. |
-| Wedge moves EARLIER than test.238 (< t+90s) | Polling destabilises the bus during fw run (advisor's H2). Test.240: reduce poll frequency (only at t+10, 30, 60, 90 s) to confirm the dose-response; if wedge moves with poll count, polling itself is the cause. |
-| Wedge moves LATER (> t+118 s) | Polling somehow buys fw time — the read MMIO may act as a heartbeat to fw. Test.240: deliberately add extra reads spaced through the ladder to see if wedge recedes further. |
-
-### Safety — MMIO read during dwells
-
-`brcmf_pcie_read_ram32` uses BAR2 window access — pure read, no
-side effects. Test.188/test.226/test.218 already demonstrate
-repeated TCM reads inside the probe are safe. One extra read per
-dwell point is within the noise of existing activity.
-
-### Hardware state (current, 00:55 BST boot 0 post-SMC-reset)
-
-- `lspci -vvv -s 03:00.0`: Control Mem+ BusMaster+, MAbort-, fast.
-- **BAR0 timing PRE**: reads cleanly (dword `0x203a6464` via dd
-  against resource0). The I/O error recorded in test.238's PRE
-  was a one-off, not a persistent issue — current boot is clean.
-- No modules loaded.
-
-### Build status — REBUILT CLEAN
-
-Built 2026-04-23 ~00:57 BST via
-`make -C $KDIR M=phase5/work/drivers/.../brcmfmac modules`.
-`strings brcmfmac.ko | grep test.239` shows all 23 breadcrumbs
-(t+100ms..t+120000ms sharedram_ptr=%08x) plus the new module
-param `bcm4360_test239_poll_sharedram`. Pre-existing
-unused-variable warnings only — no regressions.
-
-### Expected artifacts
-
-- `phase5/logs/test.239.run.txt` — PRE harness + insmod output
-- `phase5/logs/test.239.journalctl.full.txt` — full boot -1 journal
-- `phase5/logs/test.239.journalctl.txt` — filtered subset
-
-### Pre-test checklist (CLAUDE.md)
-
-1. Build status: PENDING — make + strings verify before insmod.
-2. PCIe state: clean post-SMC-reset above.
-3. Hypothesis: stated above.
-4. Plan: in this block; commit+push+sync before insmod.
-5. Filesystem sync on commit.
--->
-
----
-
-
-## Older test history (earlier tests)
-
-Full detail for tests prior to test.239 →
+Full detail for test.240 and all earlier tests →
 [RESUME_NOTES_HISTORY.md](RESUME_NOTES_HISTORY.md).

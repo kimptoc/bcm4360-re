@@ -18256,3 +18256,224 @@ unused-variable warnings only — no regressions.
 5. Filesystem sync on commit.
 
 ---
+## POST-TEST.240 (2026-04-23 08:03 BST, boot -1 — DB1 ring at t+2000ms landed with readback=0x00000000; wide-TCM scan held NVRAM text across all 22 dwells; wedge bracket unchanged from test.238/239)
+
+### Summary
+
+`bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1
+bcm4360_test239_poll_sharedram=1 bcm4360_test240_ring_h2d_db1=1
+bcm4360_test240_wide_poll=1`. Probe ran fw download → NVRAM write
+→ seed write → FORCEHT → `pci_set_master` → `brcmf_chip_set_active`
+cleanly; set_active returned TRUE at 08:02:46 BST. At the t+2000ms
+breadcrumb, the driver wrote `1` to BAR0+0x144 via
+`brcmf_pcie_write_reg32`; readback immediately after was
+`0x00000000`, not `1`.
+
+The ultra-extended ladder then emitted **22 dwell+sharedram_poll+
+wide-poll triples** at t+100, 300, 500, 700, 1000, 1500, 2000, 3000,
+5000, 10000, 15000, 20000, 25000, 26000, 27000, 28000, 29000, 30000,
+35000, 45000, 60000, 90000 ms (last line 08:03:53 BST). The
+`t+120000ms` triple never landed; host wedged. User performed SMC
+reset; current boot 0 started 08:09:57 BST.
+
+### DB1 ring evidence
+
+```
+Apr 23 08:02:46 test.238: t+2000ms dwell
+Apr 23 08:02:46 test.240: ringing H2D_MAILBOX_1 (BAR0+0x144)=1 at t+2000ms
+Apr 23 08:02:46 test.240: H2D_MAILBOX_1 ring done; readback=0x00000000
+Apr 23 08:02:46 test.239: t+2000ms sharedram_ptr=0xffc70038
+```
+
+The sharedram_ptr poll immediately after the ring returned the
+NVRAM marker unchanged — DB1 had no effect on that slot at t+2000ms
+or any later dwell.
+
+### sharedram_ptr polls
+
+All 22 returned `0xffc70038` — identical to test.239.
+
+### Wide-TCM scan (ramsize-64..ramsize-8, 15 dwords per dwell)
+
+All 22 dwells returned the same 15 little-endian dwords, which
+decode byte-wise to NVRAM text:
+
+```
+7600303d 69646e65 78303d64 34653431 76656400 303d6469 61333478 74780030
+72666c61 343d7165 30303030 32616100 00373d67 67356161 0000373d
+→ "=0.vendian=0x14e4.devid=0x43a0.xtalfreq=40000000.aa2g=7.aa5g=7.."
+```
+
+This is the tail of the NVRAM text we write to TCM before
+set_active, followed by the 0xffc70038 length marker at ramsize-4
+(not included in the 15-dword window). Conclusion: fw has not
+written any of these 15 slots during the ≥90 s window.
+
+### Wedge bracket
+
+Unchanged from test.238 ([t+90s, t+120s]). Journal cut at 08:03:53
+BST, ~25 s after the last landed dwell (t+90000ms at 08:03:52).
+No Oops / Call Trace / softlockup / hardlockup in boot -1.
+
+### Key interpretations
+
+1. **Fw's post-init work, if any, is not in the last 60 bytes of
+   TCM.** Upstream brcmfmac's shared-struct slot is TCM[ramsize-4],
+   which is within but not the whole of this window; we've now
+   proven fw does not touch ANY of ramsize-64..ramsize-4 during the
+   pre-wedge window. So if fw IS advancing, it's writing somewhere
+   else entirely (e.g., scratch aperture on the chip, a shared
+   ring not in tail-TCM, or fw internal RAM outside the BAR2
+   window).
+2. **DB1 ring is pre-shared-init null.** The readback=0 is
+   uninterpretable in isolation because of reading (c) — see
+   Current State at top of file for the (a)/(b)/(c) breakdown.
+3. **PRE `dd` harness error** at `/sys/bus/pci/.../resource0`
+   recurred (third test in a row: test.238/239/240 — misread as
+   "clean" in the test.239 block, dword `0x203a6464` ≡ ASCII "dd: ").
+   Pre-insmod userspace sysfs read failures are distinct from
+   in-driver BAR0 MMIO writes but justify verifying the latter
+   explicitly (PRE-TEST.241 plan).
+
+### Artifacts
+
+- `phase5/logs/test.240.run.txt` — PRE harness + insmod output
+  (truncated at "sleeping 240s" because host wedged during sleep)
+- `phase5/logs/test.240.journalctl.full.txt` (1527 lines) — full
+  boot -1 journal
+- `phase5/logs/test.240.journalctl.txt` (422 lines) — filtered
+  BCM4360 / brcmfmac / watchdog subset
+
+---
+
+
+## PRE-TEST.240 (2026-04-23 07:4x BST, boot 0 post-SMC-reset from test.239) — ring upstream's HostRDY doorbell (H2D_MAILBOX_1) at t+2000ms + scan a wider tail-TCM window at every dwell
+
+### Hypothesis
+
+Test.239 proved fw is alive ≥90s post-set_active but never overwrites
+TCM[ramsize-4] with `sharedram_addr` (upstream brcmfmac's
+`BRCMF_PCIE_FW_UP_TIMEOUT` is 5s — we waited 18× that). Branch
+hit in PRE-TEST.239's pre-committed decision tree: *"Test.240: add a
+host 'HostRDY' doorbell ring (H2D_MAILBOX_0 or equivalent) during
+an early dwell"*.
+
+Two choices folded into one cycle:
+1. **Doorbell ring on H2D_MAILBOX_1 (BAR0+0x144=1) at t+2000ms.**
+   Upstream's `brcmf_pcie_hostready` writes to that exact register
+   when the `BRCMF_PCIE_SHARED_HOSTRDY_DB1` flag is set in the
+   pcie_shared struct. fw provides that flag, so upstream's gate is
+   only satisfied AFTER fw allocates the shared struct — but the
+   underlying mailbox register is a hardware register that fw can
+   poll any time post-reset. If fw is blocked on host doorbell
+   pre-shared-struct, ringing DB1 unconditionally should release it.
+   We use DB1 (not DB0) because DB1 is the upstream "host ready"
+   slot; DB0 is the general H2D-message-queue slot which expects a
+   shared HTOD_MB_DATA struct fw can't have without sharedram.
+
+2. **Wider tail-TCM scan (15 dwords, ramsize-64..ramsize-4) at every
+   dwell.** Test.239 only watched a single slot. Fw could be writing
+   status / heartbeat / a non-standard sharedram_addr at another
+   tail-TCM offset. One MMIO read per dwell already proven safe in
+   test.239 (wedge timing unchanged); 15 reads adds negligible bus
+   load.
+
+### Expected discriminator outcomes
+
+| Observation | Interpretation |
+|---|---|
+| sharedram_ptr changes to a valid RAM address within a few dwells of the t+2000ms ring | DB1 was the missing handshake — major progress; document it and start building the full host-side init sequence (next test reads pcie_shared from the new addr). |
+| Wide-poll lights up with new values somewhere in tail-TCM (status / heartbeat counter / unknown struct), regardless of where sharedram_ptr stays | Fw IS doing post-init work but at non-standard offsets — read those next test to identify the structure(s). |
+| Wedge moves dramatically EARLIER (e.g. wedges within a few s of the t+2000ms ring) | DB1 ring caused destabilisation — possibly fw saw an out-of-sequence doorbell and aborted. Tells us fw IS reading DB1 at this stage, just doesn't expect a write yet — refine timing for next test. |
+| Wedge moves dramatically LATER or disappears | Best case: ring was the missing piece; rest of test gets clean BM-clear / -ENODEV / rmmod. |
+| All identical to test.239 (wedge same window, sharedram_ptr unchanged, wide-poll all 0xffc70038/garbage) | DB1 ring is a null op pre-shared-init. Pivots to test.241: try DB0 (H2D_MAILBOX_0 = BAR0+0x140), then if also null, pivot to pre-allocating a shared struct in TCM before set_active (build `brcmf_pcie_init_share`-style block ourselves and write its address to TCM[ramsize-4] before set_active so fw has it from the start). |
+
+### Code change
+
+1. Two new module params:
+   - `bcm4360_test240_ring_h2d_db1` (default 0) — ring DB1 at t+2000ms
+   - `bcm4360_test240_wide_poll` (default 0) — wide tail-TCM scan
+2. `BCM4360_T239_POLL` macro extended: when wide_poll is set, scan
+   15 extra dwords starting at ramsize-64 in addition to the
+   single-slot read at ramsize-4. Only wide-poll lines are new
+   (existing test.239 single-slot lines preserved).
+3. At the t+2000ms dwell breadcrumb in the ultra ladder, if
+   ring_h2d_db1 is set, write 1 to BAR0+0x144 via
+   `brcmf_pcie_write_reg32` then read back and log.
+
+All other paths (test.234, test.235, test.237, test.238 baseline,
+test.239 baseline) preserved unchanged.
+
+### Run sequence
+
+```bash
+sudo insmod phase5/work/.../brcmutil.ko
+sudo insmod phase5/work/.../brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_ring_h2d_db1=1 \
+    bcm4360_test240_wide_poll=1
+sleep 240
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+Budget 240 s per test.238/239 precedent. Sysctls nmi_watchdog=1,
+hardlockup_panic=1, softlockup_panic=1, softlockup_all_cpu_backtrace=1
+armed.
+
+### Pre-committed test.241 decision tree
+
+Per advisor — pre-commit branches before running:
+
+| Test.240 outcome | Test.241 direction |
+|---|---|
+| sharedram_ptr changes / wedge shifts after DB1 ring | Read pcie_shared struct from new addr; log fields (flags, ringinfo_addr, console_addr, htod/dtoh mailbox addrs). No new fw write — pure observation. |
+| Wide-poll shows fw writing somewhere in tail-TCM (not ramsize-4) | Dump that region next test; widen scan further if needed. |
+| All identical to test.239 (DB1 is null) | Test.241: ring DB0 instead (H2D_MAILBOX_0=0x140) at t+2000ms, otherwise identical. Cheap discriminator. |
+| Wedge moves earlier | Investigate timing: try ringing DB1 at later dwell (t+5000ms, t+10000ms) — locate fw's expected window. |
+
+### Safety notes
+
+- H2D_MAILBOX_1 write is a single iowrite32 to BAR0+0x144. Same op
+  upstream uses in production. If fw raises a D2H IRQ in response,
+  no IRQ handler is registered yet — the line stays at default and
+  the host doesn't take an interrupt. Worst case is fw sees a
+  doorbell, panics on out-of-sequence handshake, and wedges earlier
+  → still informative.
+- Wide-poll is read-only MMIO (15 dwords per dwell). Test.239
+  already proved single-dword tail-TCM reads don't shift the wedge.
+
+### Hardware state (current, 07:4x BST boot 0 post-SMC-reset)
+
+- `sudo lspci -vvv -s 03:00.0`: Control `Mem- BusMaster-` (driver
+  not loaded yet — normal pre-insmod state); Status MAbort-, fast.
+  CommClk- (normal for this Apple board pre-driver, NOT the dirty
+  pattern; CLAUDE.md dirty-state marker is `MAbort+ AND CommClk-`
+  together). LnkSta Speed 2.5GT/s Width x1.
+- No modules loaded.
+- Boot 0 started 2026-04-23 07:41:38 BST.
+
+### Build status — REBUILT CLEAN
+
+`brcmfmac.ko` rebuilt 2026-04-23 ~07:55 BST via `make -C
+/lib/modules/$(uname -r)/build M=...brcmfmac modules`. `strings`
+and `modinfo` confirm both new params + new test.240 breadcrumbs
+(ring + readback + wide-poll lines for all 23 dwell tags). Only
+pre-existing unused-variable warnings — no regressions.
+
+### Expected artifacts
+
+- `phase5/logs/test.240.run.txt` — PRE harness + insmod output
+- `phase5/logs/test.240.journalctl.full.txt` — full boot -1 journal
+- `phase5/logs/test.240.journalctl.txt` — filtered subset
+
+### Pre-test checklist (CLAUDE.md)
+
+1. Build status: REBUILT CLEAN above.
+2. PCIe state: clean per `sudo lspci` above.
+3. Hypothesis: stated above.
+4. Plan: in this block; commit + push + sync before insmod.
+5. Filesystem sync on commit.
+
+---
