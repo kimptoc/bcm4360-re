@@ -1,5 +1,195 @@
 ---
 
+## T252 PRE/POST pair (2026-04-23 — migrated from RESUME_NOTES at POST-TEST.255)
+
+> Migrated from RESUME_NOTES.md when POST-TEST.255 landed (policy: ~3 tests
+> in live notes). Contains PRE-TEST.252 (BSS data probe at saved-state
+> region's repeated TCM offsets) and POST-TEST.252 (three structs decoded:
+> 0x93610 wl_info-class, 0x92440 si_info-class, 0x91CC4 subordinate).
+
+
+
+## PRE-TEST.252 (2026-04-23 17:0x BST, boot 0 after test.251 crash + SMC reset) — **BSS data probe at the saved-state-region's repeated TCM offsets.** Single t+60s probe reads 16 u32s at each of 0x93610, 0x92440, 0x91CC4 — the three runtime-data addresses fw appears to be tracking at hang time (5×, 3×, 3× repetition in T251's saved-state region).
+
+### Hypothesis
+
+The saved-state region at TCM[0x9CE98..0x9CF34] holds repeated references to three TCM data addresses (above the code segment, so not in the blob — runtime BSS/heap):
+
+| Addr | Repetition | Hypothesis class |
+|---|---|---|
+| 0x00093610 | 5× | Active task/object descriptor — most-likely "current pointer" or scheduler head |
+| 0x00092440 | 3× | Secondary pointer in same structure family |
+| 0x00091CC4 | 3× | Third pointer in same structure family |
+
+Plus 0x000934C0 appears once (also in T248's 0x9CFE0). Together these form a ~0x18C0-byte cluster of related runtime structures.
+
+**Disambiguator probes** answer one of:
+- (a) Task control blocks → expect to see a small fixed-layout struct with magic numbers, a state field, a stack pointer, and a function pointer.
+- (b) PHY hardware struct shadows → expect register-like values (channel, frequency, gain settings, calibration data).
+- (c) Mutex / semaphore / event flag → expect a small struct with a counter, an owner-id, a queue head.
+- (d) Sandbox/garbage → expect zeros or random.
+
+If (a) fits, the function-pointer fields will be Thumb-mode addresses pointing into fw code — disassembly target. If (b) fits, we have hard evidence fw is stuck talking to the radio. If (c) fits, the queue-head can be walked.
+
+### Design
+
+**Single probe at t+60000ms** (T251 console_ext is OFF — already captured):
+
+| Dwell | Added probe | u32 reads | Rationale |
+|---|---|---|---|
+| t+60000ms | `TCM[0x93600..0x9363c]` (16 u32 = 64 B) | 16 | 5×-repeat target — primary, most likely active descriptor |
+| t+60000ms | `TCM[0x92430..0x9246c]` (16 u32 = 64 B) | 16 | 3×-repeat target — secondary |
+| t+60000ms | `TCM[0x91cb0..0x91cec]` (16 u32 = 64 B) | 16 | 3×-repeat target — tertiary |
+| every dwell (23 points) | `TCM[0x9d000]` (1 u32) | 23 total | Continued frozen-counter poll. n=4 replication of test.89. |
+
+Total: 71 reads (vs T251's 99). Saves ~28 reads.
+
+**Log format (3 pr_emerg lines at t+60s):**
+```
+test.252: t+60000ms TCM[0x93600..0x9363c] = 16 hex values (5x-repeat target)
+test.252: t+60000ms TCM[0x92430..0x9246c] = 16 hex values (3x-repeat target)
+test.252: t+60000ms TCM[0x91cb0..0x91cec] = 16 hex values (3x-repeat target)
+```
+Each line ~190 chars. Well under LOG_LINE_MAX 1024.
+
+**Runtime config**: `bcm4360_test252_phy_data=1`. Drops T249/T250/T251 console probes (already captured).
+
+### Next-step matrix
+
+| Observation | Implication | T253 direction |
+|---|---|---|
+| 0x93610 area has Thumb-mode function pointers (LSB=1) and small int fields | Looks like a TCB / object with virtual dispatch. Disassemble the fn-ptrs in blob to identify what fw is waiting on. | Decode the fn-ptrs locally, no T253 needed if conclusive. |
+| 0x93610 area has register-like values (channel/freq/gain) | PHY hardware shadow. Fw stuck mid-radio-init. | Probe PHY core registers via PCIe BAR2 alias; correlate with channel-init timing. |
+| 0x93610 area has mutex/semaphore pattern (counter, owner, queue-head) | Fw stuck waiting for a mutex / event. | Walk the queue; identify waiting tasks. |
+| 0x93610..0x91CB0 areas all zeros | BSS not initialized / fw never reached this code path | Pivot: re-decode the saved-state region under a different model (call stack vs context table). |
+| 0x93610 areas all distinct, no overlap | Three independent objects (not same struct family) | Each becomes its own decode target. |
+| Counter 0x9d000 = 0x43b1 across all 23 dwells (n=4 replication) | Test.89 single-write confirmed at n=4. Reframe to "saved-state field" stands. | No further action on this axis. |
+
+### Safety
+
+- All BAR2 reads, no register side effects.
+- Total added reads: 48 at t+60s + 23 per-dwell = 71 reads. Comfortable margin under T251.
+- SMC reset expected after wedge (n=6 streak T247..T252 expected).
+
+### Code change outline
+
+1. New module param `bcm4360_test252_phy_data` near T251's.
+2. New macro `BCM4360_T252_DATA_PROBE(stage_tag)` reading 3 × 16 u32 → 3 pr_emerg lines.
+3. Extend T239 ctr gate: `if (bcm4360_test249_console_dump || bcm4360_test250_console_gap || bcm4360_test251_console_ext || bcm4360_test252_phy_data)`.
+4. Invocation: right after `BCM4360_T251_RING_EXT("t+60000ms")` (pcie.c).
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 \
+    bcm4360_test248_wide_tcm_scan=1 \
+    bcm4360_test252_phy_data=1
+sleep 240
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+Note: T249/T250/T251 params NOT set (already captured those windows).
+
+### Expected artifacts
+
+- `phase5/logs/test.252.run.txt`
+- `phase5/logs/test.252.journalctl.txt`
+
+### Pre-test checklist (complete — READY TO FIRE)
+
+1. **Build status**: **REBUILT + VERIFIED.** md5sum `0014a0f872848f4e3621d629d9a08b2a` on `brcmfmac.ko`. `modinfo` shows new param `bcm4360_test252_phy_data`. `strings` confirms all 3 T252 format lines (16 u32 each at 0x93600/0x92430/0x91cb0). Only pre-existing unused-variable warnings.
+2. **PCIe state**: `Mem+ BusMaster+`, MAbort-, CommClk+, UESta clean, CESta AdvNonFatalErr+ (sticky). Re-verified 16:51 BST.
+3. **Hypothesis**: stated above (BSS data at saved-state region's repeated TCM offsets identifies what fw is tracking at hang).
+4. **Plan**: this block + code change to be committed and pushed before insmod.
+5. **Host state**: boot 0 started 16:50 BST, stable. No brcm modules loaded.
+
+---
+
+## POST-TEST.252 (2026-04-23 17:1x BST — boot -1 after test.252 crash + SMC reset)
+
+Boot -1 timeline: boot start 16:50:08 → insmod 17:16:16 → t+60s probe 17:17:37 (T252 + T247/238/239/240/248/249) → t+90s probe 17:18:08 (T248 + T249 ctr final) → wedge ≤1s after → last journal entry 17:18:08. Full journal at `phase5/logs/test.252.journalctl.txt` (1509 lines). All 3 T252 probe regions captured successfully.
+
+### What test.252 landed (facts)
+
+**TCM[0x93600..0x9363C] — 16 u32 (5×-repeat target, 0x93610-centered):**
+```
+0x93600: 00000000 00000000 00000010 00000000   [+0..+12 zeros]
+0x93610: 00000000 00058ef0 00000000 00000000   [+16: 0x58EF0 at offset +4]
+0x93620: 000000b0 00000000 00000000 00000000   [+32: 0xB0 at offset +0]
+0x93630: 00000000 00000000 00000000 00000000   [+48..+60: zeros]
+```
+
+**TCM[0x92430..0x9246C] — 16 u32 (3×-repeat secondary, 0x92440-centered) — RICHEST:**
+```
+0x92430: 00000000 00000000 00000374 00000000   [+8: 0x374 = 884]
+0x92440: 0009238c 00093610 00093628 18001000   [4 pointers: TCM,TCM,TCM,CC-core-base]
+0x92450: 00091cc4 00091c04 000934c0 00000000   [3 TCM ptrs + 0; 0x934C0 = T248 match]
+0x92460: 00091e54 00091e84 00091e54 00091e84   [TWO adjacent list_head pairs]
+```
+
+**TCM[0x91CB0..0x91CEC] — 16 u32 (3×-repeat tertiary, 0x91CC4-centered):**
+```
+0x91CB0: 00000000 00000000 00000000 00000188   [+12: 0x188 = 392]
+0x91CC0: 00000000 00092440 00091c04 00093610   [back-refs: secondary, TCM, primary]
+0x91CD0: 00000000 000934c0 00000000 00000000   [0x934C0 match again]
+0x91CE0: 00000000 00000000 00000000 00000000   [zeros]
+```
+
+**Counter 0x9D000 = 0x000043B1 for all 22 dwells** this run (n=4 replication of test.89).
+
+### What test.252 settled (facts)
+
+- **0x58EF0 is NOT a function pointer — it's the ASCII string `"wl\0\0"`** (blob[0x58EF0] = 0x77 0x6C 0x00 0x00). This is the interface-name prefix used in `"wl%d:"` fmt strings. Reframes 0x93610: this slot holds a **pointer to the interface name string**. 0x93610 is likely a **wl_info / WL driver context structure** — the top-level 802.11 driver state. 0xB0 (176) at 0x93620 is a small field (flags/size/index).
+- **0x92440 is a runtime-populated silicon-backplane descriptor (si_info-class).** Contains `0x18001000` = ChipCommon core base register — and critically, the blob has **ZERO verbatim `18 00 10 00` literals** anywhere. That means fw constructs this value at runtime (MOVW/MOVT pair) and caches it here. Consistent with `si_attach()` semantics (enumerate SB cores, cache base addresses). Field inventory:
+  - `0x92438 = 0x374` (908 dec) — likely a size/count field
+  - `0x92440..0x9244F`: 4 pointers (TCM data ptrs + CC core base) — likely `ccores[0]`/`pub`/similar
+  - `0x92450..0x9245F`: 3 pointers + 0 — likely pointers to neighboring descriptor structs
+  - `0x92460..0x9246F`: `{0x91E54, 0x91E84}` pattern × 2 — **two adjacent embedded `list_head` nodes** (prev/next to same peer pair). These are empty or sparsely populated lists.
+- **0x91CC4 region is a subordinate struct with back-references to both primary (0x93610) and secondary (0x92440).** Same 0x934C0 value appears again. Three structs form an inter-linked family.
+- **0x934C0 is referenced in all three structs** (0x92458, 0x91CD4) **AND** in T248's 0x9CFE0 **AND** in T251's saved-state 0x9CEA0. Strong signal that 0x934C0 is a **central shared object** (chipcommon public struct pointer, or a scheduler/event root). Not yet probed.
+- **No Thumb-mode function pointers** (all LSBs are 0 or point to string/data). Reading (a) "TCB with fn-ptrs" from the PRE-TEST.252 matrix is NOT supported. Reading (b) "PHY register shadow" is NOT supported either (no register-like values such as channel/gain). Reading (c) "mutex/semaphore" is partially supported by the two `list_head`-style pairs but there's no counter or owner-id pattern.
+- **Best fit: these are silicon-backplane/driver-descriptor structs — not PHY state.** 0x18001000 = ChipCommon core base. The structs are linked into a wl/si core descriptor graph. Hang is likely in a *waiter* that references these structs (via LR 0x68320 → wlc_bmac_attach → wlc_phy_attach), not in the structs themselves being "wrong."
+- **Ring-end bound tightened (test.89 counter reframe holds).** Counter value 0x43B1 at 0x9D000 and 0x9CF2C confirmed stable across n=4 replications — not a tick counter; a saved-register/token.
+- **Wedge ≤1s after t+90s probe burst** (n=6 streak T247..T252). Probe costs are flat, not cumulative.
+- **SMC reset required.**
+
+### Where the hang is — careful reading post-T252
+
+Combined with T251 blob analysis (the "saved-state region" contains PCs 0x68320 and 0x68D2E, located in/near wlc_bmac_attach and wlc_attach respectively; the chiprev banner — printed after wlc_phy_attach returns — was never observed):
+
+1. **wlc_attach entered** (PC 0x68D2E in its literal-pool region).
+2. **wlc_bmac_attach entered** (PC 0x68320 in its literal-pool region).
+3. si_info struct at 0x92440 populated with CC core base 0x18001000 → `si_attach()` completed before hang.
+4. Chiprev banner never fires → fw has NOT progressed past wlc_bmac_attach's post-wlc_phy_attach printf.
+5. **Unverified, not a conclusion**: "inside wlc_phy_attach" is the tightest reading, but T251 saved PCs don't form a clean caller→callee chain and the saved-state region may be a context save / TCB rather than a stack. Conservative claim: hang is **somewhere in the wlc_attach → wlc_bmac_attach call tree, before the chiprev banner fires**.
+
+### Next-test direction (T253 — candidates for advisor review)
+
+Pure local blob analysis can probably still reach:
+1. **Disassemble wlc_phy_attach (call site at ~blob[0x6831C..], BL target ~blob[0x1415C])** to identify PHY register polling loops. Find tight `ldr/tst/beq` patterns and which register/mask they target.
+2. **Chase 0x934C0** — probe TCM[0x934C0..0x93500] to identify the central shared struct.
+3. **Examine code around 0x58EF0 / 0x93610 init** — strings region context might reveal what driver-object 0x93610 holds (wl_info field offsets).
+4. **Pivot to hardware**: read AC_PHY core registers via BAR0 window (dangerous — PHY access can wedge if core not out of reset).
+
+Advisor call before committing to T253 design.
+
+---
+
+### Hardware state (current, 2026-04-23 17:28+ BST, boot 0 after test.252 crash **with SMC reset**)
+
+`sudo lspci -s 03:00.0`: `Mem+ BusMaster+`, MAbort-, CommClk+, LnkSta 2.5GT/s x1, UESta all zero, CESta AdvNonFatalErr+ (pre-existing sticky). No brcm modules loaded. Boot 0 started 17:28:11 BST. Host healthy.
+
+---
+
+
+---
+
 ## POST-TEST.251 + T249/T250 content (2026-04-23 — migrated from RESUME_NOTES at POST-TEST.253)
 
 > The following block was migrated from RESUME_NOTES.md when POST-TEST.253 landed.

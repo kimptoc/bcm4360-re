@@ -1,0 +1,55 @@
+=== test.255 PRE (2026-04-23T19:46:54+01:00) ===
+
+=== lspci PRE (sudo) ===
+	Control: I/O- Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+		Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=2 PME-
+		DevSta:	CorrErr+ NonFatalErr- FatalErr- UnsupReq+ AuxPwr+ TransPend-
+		LnkCtl:	ASPM L0s L1 Enabled; RCB 64 bytes, LnkDisable- CommClk+
+		LnkSta:	Speed 2.5GT/s, Width x1
+		DevCtl2: Completion Timeout: 50us to 50ms, TimeoutDis-
+		LnkCtl2: Target Link Speed: 2.5GT/s, EnterCompliance- SpeedDis-
+		LnkSta2: Current De-emphasis Level: -3.5dB, EqualizationComplete- EqualizationPhase1-
+		UESta:	DLP- SDES- TLP- FCP- CmpltTO- CmpltAbrt- UnxCmplt- RxOF- MalfTLP-
+		CESta:	RxErr- BadTLP- BadDLLP- Rollover- Timeout- AdvNonFatalErr+ CorrIntErr- HeaderOF-
+		Status:	InProgress-
+			Status:	NegoPending- InProgress-
+
+=== modules PRE ===
+Module                  Size  Used by
+ccm                    20480  6
+af_packet              65536  6
+btusb                  81920  0
+btrtl                  36864  1 btusb
+btintel                69632  1 btusb
+btbcm                  24576  1 btusb
+btmtk                  36864  1 btusb
+bluetooth            1097728  6 btrtl,btmtk,btintel,btbcm,btusb
+ecdh_generic           16384  1 bluetooth
+
+=== modprobe cfg80211 ===
+ok
+
+=== modprobe brcmutil ===
+ok
+brcmutil               16384  0
+
+=== md5 ===
+9e70d0aa1ff335bd7cf0e037557ce06b  /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko
+
+=== insmod brcmfmac (T236/238/239/240/247/248/255 — T249/250/251/252/253 OFF) 2026-04-23T19:50:19+01:00 ===
+insmod backgrounded PID=253802 at 2026-04-23T19:50:19+01:00
+
+=== POST-TEST ($(date -Iseconds)) ===
+Boot -1 timeline: boot 18:11:33 -> insmod 19:50:19 -> t+100ms probe 19:50:20 (all) -> t+60s probe 19:51:41 -> t+90s probe 19:52:11 -> wedge at 19:52:11 -> reboot -> boot 0 19:53:42.
+
+Wedge observed 0-1s after t+90s T248 probe. n=8 streak T247..T255.
+
+=== T255 probe results (from boot -1 journal) ===
+t+100ms: sched[0x6296C,0x629A4,0x6299C,0x629B4]=00062a98 0009627c 00096f2c 00000000 tick[0x58C98]=000000a0
+t+60000ms: TCM[0x93550..0x9358c] = 04000000 000000ac 00000000 00093610 00058ef0 00003151 000934c0 00000000 00093540 00000418 00000000 00000000 00003901 000934c0 00000000 00000000
+t+90000ms: sched[0x6296C,0x629A4,0x6299C,0x629B4]=00062a98 0009627c 00096f2c 00000000 tick[0x58C98]=000000a0
+
+Sleep-flag 0x629B4 = 0 at BOTH dwells -> scheduler never reached WFI idle.
+Sched-state drift between t+100ms and t+90s: NONE (all 5 u32 identical).
+Tick-scale = 0xA0 (runtime-updated from blob default 0x50); NOT corrupted.
