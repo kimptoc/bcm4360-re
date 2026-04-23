@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 09:2x, MAJOR REINTERPRETATION of tests 240/241/242) — all three probes wrote to the wrong on-chip register because `select_core(PCIE2)` was missing. DB1-null, MBM-fail pre-FORCEHT, and MBM-fail post-set_active are all **invalid evidence**; re-test under correct core-selection.
+## Current state (2026-04-23 09:4x, POST-TEST.243 — wedge moved EARLIER, before dwell ladder; none of T243's probe lines landed) — test.243 with `writeverify_v2=1` captured only 49 BCM4360 breadcrumbs vs test.242's 408. Journal tail cut at "ASPM disabled" (09:36:37.77). None of the test.243 V2 probe's own pr_emerg lines (BAR0_WINDOW before/after, MBM round-trip, BAR2 TCM round-trip) fired to disk. The last breadcrumb that landed is ~7s before set_active in the test.242 timing. Given journald's 15–20s tail-loss budget, the wedge fell somewhere in the window from "root-port LnkCtl dance" through the first dwell ladder iteration — i.e. **earlier than every prior test in this boot series**. Leading hypothesis: the test.243 probe itself, on its first firing at t+100ms, wedges the host before pr_emerg can flush — which would mean `brcmf_pcie_select_core(PCIE2)` (or the MBM write under correct selection) post-set_active is itself a wedge trigger. Alternative: wedge has moved earlier for unrelated reasons (boot-state variance; SMC reset + reboot residue). Need a diagnostic that doesn't depend on surviving to post-set_active to fire.
 
 ### Post-test source review — silent defect found in tests 240/241/242
 
@@ -76,6 +76,36 @@ handing back to the ladder.
 `lspci -s 03:00.0` shows `Mem+ BusMaster+`, MAbort-, CommClk+,
 DEVSEL=fast. No brcm modules loaded. Boot 0 started
 2026-04-23 09:15:26 BST.
+
+---
+
+## Prior outcome (test.243 — host wedged before any T243 breadcrumb landed; journal truncated at "ASPM disabled" 09:36:37.77; 49 lines vs test.242's 408; wedge window moved earlier in the probe path)
+
+**Test.243 outcome:** With `force_seed=1 ultra_dwells=1 poll_sharedram=1 wide_poll=1 writeverify_v2=1`, boot -1 ran from 09:15:26 to 09:36:37 BST. Insmod at 09:36:18.596. Journal tail last line at 09:36:37.771506: `BCM4360 test.158: ASPM disabled; LnkCtl before=0x0143 after=0x0140 ASPM-bits-after=0x0`. NO subsequent breadcrumbs landed — specifically, none of these expected lines:
+
+- root-port LnkCtl dance (test.188)
+- pre-download CR4 clk_ctl_st (test.218)
+- `brcmf_pcie_download_fw_nvram` entry (test.163)
+- FORCEHT write (test.219)
+- `brcmf_chip_set_active returned TRUE` (test.238)
+- Any dwell-ladder line (test.238 t+Xms)
+- Any test.243 V2 line (BAR0_WINDOW before/after, MBM, BAR2 TCM)
+
+By the same second in test.242's run, the probe was already in the dwell ladder at ≥t+500ms post-set_active. So test.243's wedge happened 1.5–2 minutes earlier in wall-clock terms than test.242's.
+
+User SMC-reset + rebooted; current boot 0 started 09:43:30 BST.
+
+**What test.243 proves and does not prove:**
+
+- **Does not prove** that the test.243 V2 probe is innocent. The probe fires at t+100ms dwell. If the first `brcmf_pcie_select_core(PCIE2)` or the subsequent MBM write under correct core selection causes an instantaneous wedge, the `pr_emerg` buffer for the BAR0_WINDOW line would never be flushed — consistent with what we see.
+- **Does not prove** that the probe wedged the system either. The wedge could have happened earlier for unrelated reasons (boot variance, SMC-reset residue, downstream effects of the extra module-param registration — unlikely but not excluded).
+- **Does rule out** that test.243's probe landed any diagnostic data. The MBM-under-correct-selection question is still unanswered.
+
+**What to do about it:** move the MBM / BAR2 diagnostic to a point we KNOW landed in every prior run. A natural candidate is **pre-FORCEHT** (same stage as test.241 but with correct `select_core(PCIE2)`), which all of tests 240/241/242/243 reached per journal. Write-verify at that stage, log the result, then step forward from there. Full plan in PRE-TEST.244.
+
+### Hardware state (current, boot 0, 09:4x BST post-SMC-reset from test.243 wedge)
+
+`lspci -s 03:00.0` shows `Mem+ BusMaster+`, MAbort-, CommClk+, DEVSEL=fast. Uptime ~5 min. No brcm modules loaded. No pstore available (watchdog frozen, as before).
 
 ---
 

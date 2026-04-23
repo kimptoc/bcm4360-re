@@ -1,0 +1,52 @@
+Apr 23 09:15:26.538145 nixos kernel: ata1.00: LPM support broken, forcing max_power
+Apr 23 09:15:26.538212 nixos kernel: ata1.00: LPM support broken, forcing max_power
+Apr 23 09:36:18.624351 nixos kernel: brcmfmac: loading out-of-tree module taints kernel.
+Apr 23 09:36:18.632352 nixos kernel: brcmfmac: BCM4360 test.188: module_init entry — extended post-release TCM sampling
+Apr 23 09:36:18.632539 nixos kernel: brcmfmac: BCM4360 test.156: before brcmf_core_init()
+Apr 23 09:36:18.632672 nixos kernel: brcmfmac: BCM4360 test.155: brcmf_core_init() entry
+Apr 23 09:36:18.633467 nixos kernel: brcmfmac: BCM4360 test.155: before brcmf_sdio_register()
+Apr 23 09:36:18.633652 nixos kernel: brcmfmac: BCM4360 test.155: after brcmf_sdio_register() err=0
+Apr 23 09:36:18.683065 nixos kernel: brcmfmac: BCM4360 test.155: post-SDIO sync (before PCI)
+Apr 23 09:36:19.242938 nixos kernel: brcmfmac: BCM4360 test.155: before brcmf_pcie_register()
+Apr 23 09:36:19.259991 nixos kernel: brcmfmac: BCM4360 test.188: brcmf_pcie_register() entry
+Apr 23 09:36:19.802376 nixos kernel: brcmfmac: BCM4360 test.188: before pci_register_driver
+Apr 23 09:36:20.387875 nixos kernel: brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=00000000ff730f2e)
+Apr 23 09:36:20.977137 nixos kernel: brcmfmac: BCM4360 test.158: probe entry flush done — proceeding
+Apr 23 09:36:21.538669 nixos kernel: brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+Apr 23 09:36:21.569762 nixos kernel: brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+Apr 23 09:36:22.130883 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+Apr 23 09:36:22.720171 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+Apr 23 09:36:23.288910 nixos kernel: brcmfmac: BCM4360 test.158: before brcmf_chip_attach
+Apr 23 09:36:23.904227 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcc58c1e00000
+Apr 23 09:36:24.528643 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+Apr 23 09:36:24.529274 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+Apr 23 09:36:25.121693 nixos kernel: brcmfmac: BCM4360 test.218: core[1 ] id=0x800:rev43  base=0x18000000 wrap=0x18100000
+Apr 23 09:36:25.745398 nixos kernel: brcmfmac: BCM4360 test.218: core[2 ] id=0x812:rev42  base=0x18001000 wrap=0x18101000
+Apr 23 09:36:26.364558 nixos kernel: brcmfmac: BCM4360 test.218: core[3 ] id=0x83e:rev2   base=0x18002000 wrap=0x18102000
+Apr 23 09:36:26.965585 nixos kernel: brcmfmac: BCM4360 test.218: core[4 ] id=0x83c:rev1   base=0x18003000 wrap=0x18103000
+Apr 23 09:36:27.585457 nixos kernel: brcmfmac: BCM4360 test.218: core[5 ] id=0x81a:rev17  base=0x18004000 wrap=0x18104000
+Apr 23 09:36:28.216967 nixos kernel: brcmfmac: BCM4360 test.218: core[6 ] id=0x135:rev0   base=0x00000000 wrap=0x18108000
+Apr 23 09:36:28.808190 nixos kernel: brcmfmac: BCM4360 test.218: host-side enumerated 6 cores total
+Apr 23 09:36:28.885612 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+Apr 23 09:36:28.906191 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+Apr 23 09:36:28.935033 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
+Apr 23 09:36:29.518370 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.145: halting ARM CR4 after second SBR (buscore_reset)
+Apr 23 09:36:29.579945 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.145: ARM CR4 halt done — skipping PCIE2 mailbox clear; returning 0
+Apr 23 09:36:30.231721 nixos kernel: brcmfmac: BCM4360 test.188: post-145 ARM CR4 IOCTL=0x00000021 IOSTATUS=0x00000000 RESET_CTL=0x00000000 CPUHALT=YES
+Apr 23 09:36:30.850549 nixos kernel: brcmfmac: BCM4360 test.121: post-reset passive skipped; using fixed RAM info next
+Apr 23 09:36:30.851437 nixos kernel: brcmfmac: BCM4360 test.125: after reset, before get_raminfo
+Apr 23 09:36:30.852407 nixos kernel: brcmfmac: BCM4360 test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0
+Apr 23 09:36:31.477427 nixos kernel: brcmfmac: BCM4360 test.125: get_raminfo returning 0
+Apr 23 09:36:32.118480 nixos kernel: brcmfmac: BCM4360 test.193: chip=0x4360 ccrev=43 pmurev=17 pmucaps=0x10a22b11
+Apr 23 09:36:32.722186 nixos kernel: brcmfmac: BCM4360 test.193: PMU WARs applied — chipcontrol#1 0x00000210->0x00000a10 pllcontrol#6=0x080004e2 #0xf=0x0000000e
+Apr 23 09:36:33.342207 nixos kernel: brcmfmac: BCM4360 test.224: max_res_mask 0x0000013f -> 0x000007ff (wrote 0x000007ff)
+Apr 23 09:36:33.987349 nixos kernel: brcmfmac: BCM4360 test.224: min_res_mask 0x0000013b -> 0x000007ff (wrote 0x000007ff)
+Apr 23 09:36:34.579112 nixos kernel: brcmfmac: BCM4360 test.224: post-settle pmustatus=0x0000002e res_state=0x000007ff (expect 0x2e / 0x7ff)
+Apr 23 09:36:34.579251 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.119: brcmf_chip_attach returned successfully
+Apr 23 09:36:34.579768 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.158: ARM CR4 core->base=0x18002000 (no MMIO issued)
+Apr 23 09:36:34.608463 nixos kernel: brcmfmac: BCM4360 test.158: about to pci_clear_master (config-space write)
+Apr 23 09:36:35.221092 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.158: BusMaster cleared after chip_attach
+Apr 23 09:36:35.881144 nixos kernel: brcmfmac: BCM4360 test.158: about to read LnkCtl before ASPM disable
+Apr 23 09:36:36.512095 nixos kernel: brcmfmac: BCM4360 test.158: LnkCtl read before=0x0143 — disabling ASPM
+Apr 23 09:36:37.141384 nixos kernel: brcmfmac: BCM4360 test.158: pci_disable_link_state returned — reading LnkCtl
+Apr 23 09:36:37.771506 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.158: ASPM disabled; LnkCtl before=0x0143 after=0x0140 ASPM-bits-after=0x0
