@@ -1,0 +1,31 @@
+=== test.238 PRE (2026-04-23 00:50:19 BST) ===
+=== sysctls arming ===
+ 1
+ 1
+ 1
+ 30
+
+=== lspci PRE ===
+	Control: I/O- Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+
+=== BAR0 timing PRE ===
+dd: error reading '/sys/bus/pci/devices/0000:03:00.0/resource0': Input/output error
+0+0 records in
+0+0 records out
+0 bytes copied, 6.3199e-05 s, 0.0 kB/s
+  exit=0 elapsed=9ms
+
+=== modules PRE ===
+Module                  Size  Used by
+ccm                    20480  6
+af_packet              65536  6
+
+=== modprobe brcmutil + cfg80211 (deps) ===
+
+=== insmod (force_seed=1, ultra_dwells=1) ===
+2026-04-23 00:50:19.847 BST
+2026-04-23 00:50:19.851 BST
+insmod backgrounded PID=22734
+
+=== sleeping 240s for ultra-extended ladder + probe return ===

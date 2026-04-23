@@ -1,3 +1,53 @@
+## POST-TEST.235 (2026-04-22 23:53 BST, boot 0) — cheap-tier zero of [0x9FE00..0x9FF1C) does NOT prevent wedge
+
+Summary: 71/71 dwords non-zero pre-zero (SRAM-PUF-style random data);
+0/71 non-zero post-zero (zero loop works); SKIPPING set_active per
+`bcm4360_test235_skip_set_active=1`; Clean BM-clear / -ENODEV / rmmod,
+host alive. Combined with test.234 wedge → cheap-tier failed for this
+region. Code-reading then identified the random_seed write as the
+next candidate (see test.236).
+
+---
+
+
+## PRE-TEST.235 (2026-04-23 00:xx BST, post-SMC-reset boot from test.234 wedge) — observable run of test.234's zero+verify, set_active SKIPPED (test.230 baseline + module param)
+
+### Hypothesis
+
+Test.234 wedged in the journald-blackout window — none of its
+breadcrumbs landed. The minimum next step is to run the exact same
+zero+verify code without calling set_active (test.230 baseline).
+Then all journald logs will land: pre-zero scan reveals what 71
+dwords in [0x9FE00..0x9FF1C) actually contain on a fresh boot;
+verify pass count confirms zero writes landed; combined with
+test.234's wedge, by elimination the wedge was in the set_active
+path even with the region zeroed.
+
+### Code change
+
+Added `bcm4360_test235_skip_set_active` module param and an if/else
+in the test.234 block — when set, emit `SKIPPING` line + 1000 ms
+dwell + dwell-done line, else run original test.234 path.
+
+### Expected artifacts
+
+- `phase5/logs/test.235.run.txt`
+- `phase5/logs/test.235.journalctl.full.txt`
+- `phase5/logs/test.235.journalctl.txt`
+
+### Hardware state (post-SMC-reset boot 0, started 2026-04-22 23:41:20 BST)
+
+Mem+ BusMaster+, MAbort-, CommClk+, LnkSta 2.5GT/s x1, clean.
+No modules loaded; BAR0 timing fast-UR (22 ms) at boot start.
+
+### Build status — REBUILT CLEAN
+
+`brcmfmac.ko` rebuilt 2026-04-22 ~23:50 BST. `strings` confirmed
+new module param + 2 test.235 breadcrumbs.
+
+---
+
+
 ## PRE-TEST.234 (2026-04-23 00:xx BST, post-SMC-reset boot from test.233 Run 3) — zero TCM[0x9FE00..0x9FF1C] before `brcmf_chip_set_active`; cheapest-tier shared-memory-struct probe
 
 ### Hypothesis

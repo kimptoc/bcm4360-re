@@ -5,79 +5,99 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 00:36, after test.237 — extended dwell ladder landed ≥25 s post-set_active; wedge moment narrowed to a [t+25 s, ≈ t+40 s] window)
+## Current state (2026-04-23 00:55, after test.238 — ultra-extended ladder landed 22/23 breadcrumbs (t+100ms..t+90s); wedge window tightened to [t+90s, t+120s])
 
-**Latest outcome (test.237):** With Apple random_seed present AND
-an extended dwell ladder out to t+30s, **13 dwell breadcrumbs
-landed** covering t+100ms..t+25s. Missing: `t+30000ms dwell` and
-all post-dwell lines (dwell-done, BM-clear, release, -ENODEV).
-Host wedged, SMC reset required (user performed it; current
-boot 0 started 00:35:43 BST, clean Mem+ BusMaster+ MAbort-).
+**Latest outcome (test.238):** With Apple random_seed present AND
+the ultra-extended dwell ladder out to t+120s, **22 of 23 dwell
+breadcrumbs landed** covering t+100ms..t+90000ms. Missing only
+`t+120000ms dwell` and everything downstream (dwell-done,
+BM-clear, release, -ENODEV). Host wedged, SMC reset performed
+(user); current boot 0 started 00:54:07 BST, clean `Mem+
+BusMaster+ MAbort-`, no modules loaded.
 
-Full landed ladder (timestamps ~00:32:22 set_active):
+Landed ladder timestamps (boot -1, set_active at 00:50:46):
 
 ```
-test.237: calling brcmf_chip_set_active resetintr=0xb80ef000 (extended-dwell ladder)
+test.238: calling brcmf_chip_set_active resetintr=0xb80ef000 (ultra-extended ladder t+120s)
 test.65  activate: rstvec=0xb80ef000 to TCM[0]; CMD=0x0006
-test.237: brcmf_chip_set_active returned TRUE
-test.237: t+100ms / t+300ms / t+500ms / t+700ms / t+1000ms
-test.237: t+1500ms / t+2000ms / t+3000ms / t+5000ms
-test.237: t+10000ms (00:32:31 BST)
-test.237: t+15000ms (00:32:36 BST)
-test.237: t+20000ms (00:32:42 BST)
-test.237: t+25000ms (00:32:47 BST — last line of boot -1)
+test.238: brcmf_chip_set_active returned TRUE
+test.238: t+100ms / t+300ms / t+500ms / t+700ms / t+1000ms (batched @ 00:50:46)
+test.238: t+1500ms / t+2000ms / t+3000ms / t+5000ms (batched @ 00:50:46)
+test.238: t+10000ms (00:50:50) — live flush resumes
+test.238: t+15000ms (00:50:55)
+test.238: t+20000ms (00:51:00)
+test.238: t+25000ms (00:51:05)
+test.238: t+26000ms (00:51:06)       ← 1 s fine-grain window opens
+test.238: t+27000ms (00:51:07)
+test.238: t+28000ms (00:51:08)
+test.238: t+29000ms (00:51:09)
+test.238: t+30000ms (00:51:10)
+test.238: t+35000ms (00:51:15)
+test.238: t+45000ms (00:51:25)
+test.238: t+60000ms (00:51:41)
+test.238: t+90000ms (00:52:11 — last test.238 line of boot -1)
+<then only wlp0s20u2 lines through 00:52:24 — journal ends>
 ```
 
-Msleep dwells require the driver thread to schedule at each
-interval, so fw was demonstrably *not* frozen during the first
-25 s post-set_active — every breadcrumb above t+5s is
-individually flushed with live timestamps (not batched like the
-pre-set_active block at 00:32:27). This is a **~36× improvement**
-in fw-runtime vs. test.236 (≥0.7 s landed there).
+Expected `t+120000ms dwell` would have logged at 00:52:46; journal
+ended 00:52:24 — ~22 s before that line was due.
 
-**Wedge-moment bounds (honest read):**
-- **Lower bound:** t+25s — the breadcrumb landed, so fw+driver
-  both executed past that point.
-- **Upper bound:** depends on journald tail-truncation budget,
-  which test.231/232/234 established as ~15-20 s. If the wedge
-  hit at real t+T*, the last landed breadcrumb is roughly at
-  `T* - tail_window`. With last breadcrumb at t+25 s, the wedge
-  could be anywhere in [t+25 s, t+40-45 s].
-- **Cannot distinguish** "wedge at ~t+25-27 s, tail-truncation ≈ 0"
-  from "wedge at ~t+40-45 s, full 15-20 s truncation". Both fit
-  the evidence; test.237 narrowed this to a clear but still broad
-  window.
+**Wedge-moment bounds (much tighter now):**
+- **Lower bound:** t+90 s — breadcrumb landed live with a
+  precise timestamp, proving fw+driver both ran to that point.
+- **Upper bound:** Applying the ~15–20 s journald tail-truncation
+  budget to the 00:52:24 cut ⇒ wedge at real-time ≤ 00:52:44,
+  i.e. ≤ t+118 s.
+- **Window:** wedge ∈ [t+90 s, t+120 s].
+- Fine-grain [t+25..t+30] window **all landed** (1 s steps) ⇒
+  no fw-timeout near t+30 s. Model A from PRE-TEST.238 is
+  **refuted**; Model B (late wedge) holds.
+
+**Rewrites test.237 interpretation:** test.237's missing
+`t+30000ms dwell` breadcrumb was NOT the wedge moment — every
+intermediate breadcrumb (t+30 s, t+35 s, t+45 s, t+60 s, t+90 s)
+lands cleanly in test.238. Test.237's journal cut at t+25 s
+reflected a longer tail-truncation / rmmod-phase cut, not the
+actual wedge. The true wedge moment in test.237 was likely
+similar to test.238's (≥ t+90 s), with its shorter ladder just
+not having breadcrumbs past t+30 s to land.
 
 **What this tells us about the wedge cause:**
-- **Not** an instantaneous set_active failure: fw CPU + bus
-  survive for tens of seconds, so it's not AXI fault / immediate
-  mailbox handshake starvation.
-- **Consistent with** fw eventually trying to DMA-read or
-  dereference an uninitialised shared-memory structure (ringinfo,
-  console, H2D/D2H mailboxes, scratch_buf) that a running fw
-  typically accesses periodically (e.g., every ~25-30 s watchdog
-  tick, or a one-shot init timer).
-- **Also consistent with** fw firing an internal watchdog /
-  heartbeat after N seconds of no host-side response to its
-  D2H interrupts (since we've ignored IRQ configuration entirely).
+- Fw+bus are **demonstrably healthy for ≥90 s** post-set_active
+  on every wedged run with seed present.
+- Timeout / trigger is at **~100-120 s**, very suspicious for:
+  - Fw internal watchdog at a multi-of-N periods (~30 s × 3–4 or
+    ~60 s × 2, both hitting that window).
+  - One-shot fw init timer that completes at ~100 s and then
+    tries to DMA-read or dereference a host-provided structure
+    that we haven't set up (pcie_shared / ringinfo / console /
+    mailbox / dma_scratch_buf).
+  - Fw periodic-heartbeat that expects host doorbell ring-back
+    within N intervals; after ~3–4 intervals without response,
+    bus-wide trap.
 
 **Implications for next work:**
-- Seed is necessary but clearly insufficient — confirmed with
-  high resolution now.
-- Whatever fw is waiting for, the deadline is tens of seconds,
-  not sub-second. This is favorable: gives us running-fw time
-  to introduce shared-memory structures before the wedge.
-- Strong candidate for test.238: implement a minimal
-  `pcie_shared` struct in TCM before set_active (following
-  upstream brcmfmac's `brcmf_pcie_init_share` pattern) and see
-  whether fw wedges later or not at all.
-- Cheap alternative for test.238a: extend the dwell ladder
-  further (t+45, 60, 90 s) to tighten the upper bound before
-  committing to shared-struct work. One more cycle + SMC reset.
+- Seed extends fw runtime by **≥2 orders of magnitude** relative
+  to test.234 baseline (seed-less probe wedged pre-fw-download).
+  But it does NOT prevent the late wedge.
+- Further dwell-extension is diminishing-returns — we already
+  have a tight window. The bottleneck is NOT knowing what fw
+  expected during those 90 s.
+- **Primary next target (test.239):** implement a minimal
+  `pcie_shared` struct in TCM before `brcmf_chip_set_active`,
+  following upstream brcmfmac's `brcmf_pcie_init_share` pattern
+  (ringinfo pointer, console pointer, H2D/D2H mailbox addrs,
+  dma_scratch_buf). If wedge shifts later or disappears, we've
+  found the next missing piece.
+- Alternate cheap discriminator (test.239a): add another ~5-10 s
+  of fine-grain ladder in [t+90..t+120] (5 steps at 5 s each) to
+  pin the wedge moment to ±5 s rather than the ±15 s tail-trunc
+  window. Cost: one wedge cycle + SMC reset. Useful only if
+  advisor thinks tight timing is decisive.
 
-**Hardware state (current, 00:36 BST boot 0):** `lspci -s 03:00.0`
+**Hardware state (current, 00:55 BST boot 0):** `lspci -s 03:00.0`
 shows Mem+ BusMaster+ MAbort-, DEVSEL=fast. No modules loaded.
-SMC reset performed between test.237 wedge and current boot.
+SMC reset performed between test.238 wedge and current boot.
 
 ---
 
@@ -282,7 +302,9 @@ probes `#if 0`'d, host still wedged. Narrowed the trigger to
 | TCM ring-buffer logger viable across wedge recovery | 233 | ruled out — TCM magic survives within-boot SBR+insmod (Run 2) but wiped by SMC reset + reboot (Run 3) — every wedge-recovery in this investigation used SMC reset |
 | Wedge caused by fingerprint values in [0x9FE00..0x9FF1C) (cheap tier) | 234, 235 | ruled out — zeroing the region did not prevent test.234's wedge |
 | Fw-wedge independent of Apple random_seed footer presence | 236 | ruled out — writing `magic=0xfeedc0de` + 256-byte buffer at [0x9FE14..0x9FF1C) shifts the wedge noticeably later: fw reaches ≥t+700ms post-set_active, vs. test.234's pre-fw-download cutoff |
-| Wedge is instantaneous at/near set_active return (sub-second) | 237 | ruled out — with seed present and an extended msleep ladder, fw runs ≥25 s post-set_active; dwells at t+100..t+25000ms all landed live, driver thread schedulable throughout. Wedge moment pinned to [t+25 s, t+40-45 s] (tail-truncation window). |
+| Wedge is instantaneous at/near set_active return (sub-second) | 237 | ruled out — with seed present and an extended msleep ladder, fw runs ≥25 s post-set_active; dwells at t+100..t+25000ms all landed live, driver thread schedulable throughout. |
+| Wedge is a fw-timeout at ~t+30 s (Model A from PRE-TEST.238) | 238 | ruled out — fine-grain 1 s ladder through [t+25..t+30 s] all landed; dwells at t+35, 45, 60, 90 s all landed. Wedge is not near t+30 s. |
+| Wedge happens within ~t+40-45 s of set_active (Model B from PRE-TEST.238) | 238 | ruled out — `t+60 s dwell` and `t+90 s dwell` both landed live. True wedge window is [t+90 s, t+120 s]. |
 
 **Refined wedge model (post test.230):**
 The moment ARM CR4 starts executing firmware (rstvec written via
@@ -334,6 +356,99 @@ Logging for test.234 falls back to journald tail-truncation as
 before. Resolution ≥15-20 s is fine because the goal is shape-
 comparison (does the wedge still happen? at the same place?),
 not sub-second timing.
+
+---
+
+
+## POST-TEST.238 (2026-04-23 00:55 BST, boot -1 — wedged in [t+90 s, t+120 s] post-set_active; SMC reset required) — 22 of 23 breadcrumbs landed, fw runs ≥90 s under seed
+
+### Summary
+
+Test.238's ultra-extended ladder ran with `bcm4360_test236_force_seed=1`
+and `bcm4360_test238_ultra_dwells=1`. Probe executed fw download, NVRAM
+write, seed write, FORCEHT, `pci_set_master`, and `brcmf_chip_set_active`
+cleanly. `set_active` returned TRUE. The 23-step post-set_active ladder
+then landed **22 breadcrumbs** (t+100, 300, 500, 700, 1000, 1500,
+2000, 3000, 5000, 10000, 15000, 20000, 25000, 26000, 27000, 28000,
+29000, 30000, 35000, 45000, 60000, 90000 ms) before the journal cut
+at 00:52:24 BST. Missing only `t+120000ms dwell` (expected at
+00:52:46, ~22 s after the cut) and all post-dwell lines.
+
+Host wedged. User performed SMC reset; current boot 0 started
+00:54:07 BST clean.
+
+### Evidence (boot -1 tail, from `journalctl -b -1 -k`)
+
+```
+Apr 23 00:50:46 test.238: calling brcmf_chip_set_active resetintr=0xb80ef000 (ultra-extended ladder t+120s)
+Apr 23 00:50:46 test.65  activate: rstvec=0xb80ef000 to TCM[0]; CMD=0x0006
+Apr 23 00:50:46 test.238: brcmf_chip_set_active returned TRUE
+Apr 23 00:50:46 test.238: t+100 / 300 / 500 / 700 / 1000 / 1500 / 2000 / 3000 / 5000 ms  (batched)
+Apr 23 00:50:50 test.238: t+10000ms dwell
+Apr 23 00:50:55 test.238: t+15000ms dwell
+Apr 23 00:51:00 test.238: t+20000ms dwell
+Apr 23 00:51:05 test.238: t+25000ms dwell
+Apr 23 00:51:06 test.238: t+26000ms dwell
+Apr 23 00:51:07 test.238: t+27000ms dwell
+Apr 23 00:51:08 test.238: t+28000ms dwell
+Apr 23 00:51:09 test.238: t+29000ms dwell
+Apr 23 00:51:10 test.238: t+30000ms dwell
+Apr 23 00:51:15 test.238: t+35000ms dwell
+Apr 23 00:51:25 test.238: t+45000ms dwell
+Apr 23 00:51:41 test.238: t+60000ms dwell
+Apr 23 00:52:11 test.238: t+90000ms dwell         ← last test.238 line of boot -1
+<then only non-BCM4360 traffic (wlp0s20u2 wlan) through 00:52:24 — journal ends>
+```
+
+Live timestamps through t+90s prove the driver thread was
+schedulable and the kmsg flush path healthy for ≥90 s
+post-set_active. No Oops, no Call Trace, no watchdog fire, no
+softlockup backtrace in boot -1.
+
+### Key interpretations
+
+1. **Rewrites test.237:** the `t+25000ms dwell` line we had treated
+   as the wedge-adjacent breadcrumb was not the wedge moment at
+   all. Test.238 shows t+25 through t+90 s all land cleanly, so
+   test.237's shorter ladder simply didn't have breadcrumbs past
+   t+30 s to print. Test.237's journal cut was tail-truncation or
+   rmmod-phase artefact, not wedge timing.
+2. **Wedge window [t+90 s, t+120 s]:** directly bounded — t+90 s
+   landed live, t+120 s did not and would have logged at 00:52:46,
+   ~22 s past the 00:52:24 journal cut.
+3. **Fw has a late trigger** — the deadline is ~100–120 s, ~4–5×
+   longer than anything test.237 saw. Compatible with:
+   - Internal fw watchdog expiring after 3–4 periods of a 30 s tick.
+   - One-shot fw timer (~100 s) firing DMA-read of an
+     uninitialised shared-memory pointer (pcie_shared /
+     ringinfo / console / mailbox).
+   - Fw heartbeat expecting host ring-back after N intervals.
+
+### Observations worth keeping
+
+- **No softlockup panic** despite 3 long msleeps (30 s, 30 s, 30 s)
+  in the ladder; `softlockup_panic=1` + `softlockup_all_cpu_backtrace=1`
+  didn't fire, which confirms the driver thread was yielding and
+  the *host* CPUs weren't stalled during the 90 s run. Wedge must
+  hit somewhere between 00:52:11 and 00:52:24, and kills the bus
+  fast enough that host journald can't flush any wedge-witness
+  lines.
+- `BAR0 timing PRE` showed `dd: Input/output error` — but `lspci`
+  PRE showed `Mem+ BusMaster+ MAbort-`. Likely the BAR0 raw dd was
+  tripping on an earlier boot-0 condition that didn't prevent the
+  probe from running (insmod proceeded to completion).
+- The batched-at-00:50:46 cluster (t+100 … t+5000 ms) vs the live
+  per-second flush from t+10 s onwards matches prior journald
+  flush dynamics; not wedge-relevant.
+
+### Artifacts
+
+- `phase5/logs/test.238.run.txt` — PRE capture + insmod + "sleeping 240s"
+  (truncated because host wedged during sleep)
+- `phase5/logs/test.238.journalctl.full.txt` (1438 lines) — full
+  boot -1 journal
+- `phase5/logs/test.238.journalctl.txt` (378 lines) — filtered
+  BCM4360/brcmfmac/watchdog subset
 
 ---
 
@@ -851,138 +966,6 @@ fast. No modules loaded, uptime ~2 min. Ready for test.237.
 
 Run B journal is **in `journalctl -b -1`** (boot -1 of current live
 session). Tail visible above.
-
----
-
-
-## POST-TEST.235 (2026-04-22 23:53 BST, boot 0) — cheap-tier zero of [0x9FE00..0x9FF1C) does NOT prevent wedge
-
-Summary moved into "Current state" header above. Highlights:
-- 71/71 dwords non-zero pre-zero (SRAM-PUF-style random data)
-- 0/71 non-zero post-zero (zero loop works)
-- SKIPPING set_active per `bcm4360_test235_skip_set_active=1`
-- Clean BM-clear / -ENODEV / rmmod, host alive
-
-Combined with test.234 wedge → cheap-tier failed for THIS region.
-Code-reading then identified the random_seed write as the next
-candidate (see PRE-TEST.236 above).
-
----
-
-
-## PRE-TEST.235 (2026-04-23 00:xx BST, post-SMC-reset boot from test.234 wedge) — observable run of test.234's zero+verify, set_active SKIPPED (test.230 baseline + module param)
-
-### Hypothesis
-
-Test.234 wedged in the journald-blackout window — none of its
-breadcrumbs landed. We cannot tell whether the zero loop (a) ran
-to completion, (b) wrote zeros that took, or (c) is itself the
-wedge cause. Cutoff comparison shows test.234 cut at the same
-post-chip_attach line as test.231 (one line later); test.232 cut
-much later (after set_active+dwells). So tail-loss budget varies
-and doesn't pin where the wedge happened in any of them.
-
-The minimum next step is to **run the exact same zero+verify code
-without calling set_active**. That is the test.230 baseline (no
-wedge), so all journald logs WILL land. Outcomes:
-
-- Pre-zero scan output reveals what 71 dwords in [0x9FE00..0x9FF1C)
-  actually contain on a fresh-boot — first observation of this
-  region (test.233 only sampled 0x90000/0x90004).
-- Verify pass count confirms zero writes landed (or didn't).
-- Combined with test.234's wedge: by elimination, the wedge in
-  test.234 was in the set_active path (the only difference between
-  this safe run and test.234), even with the suspect region zeroed.
-- That collapses the cheap tier of the staged plan: zeroing
-  [0x9FE00..0x9FF1C] does not stop the wedge.
-
-Then the next decision is whether to (a) widen the zero range
-(test.236, e.g. 0x70000..0x9FF1C ~195 KB) before declaring cheap
-tier dead, or (b) jump straight to medium tier (sentinel pointers
-into TCM). Defer that until this run's data is in.
-
-### Code change
-
-Add one module parameter and one early-exit in the test.234 block:
-
-```c
-static int bcm4360_test235_skip_set_active;
-module_param(bcm4360_test235_skip_set_active, int, 0644);
-MODULE_PARM_DESC(bcm4360_test235_skip_set_active, "BCM4360 test.235: skip brcmf_chip_set_active after zero+verify (1=skip, 0=normal test.234 path)");
-```
-
-After the existing test.234 zero+verify block (line ~2569), before
-the `pr_emerg("BCM4360 test.234: calling brcmf_chip_set_active...")`
-line (~2571), insert:
-
-```c
-if (bcm4360_test235_skip_set_active) {
-    pr_emerg("BCM4360 test.235: SKIPPING brcmf_chip_set_active (zero+verify-only run; test.230 baseline)\n");
-    msleep(1000);
-    pr_emerg("BCM4360 test.235: 1000 ms dwell done (no fw activation); proceeding to BM-clear + release\n");
-} else {
-    /* existing test.234 code path: pr_emerg "calling..." through dwells */
-}
-```
-
-Wrap lines 2571-2587 in the `else` branch. All existing test.234
-breadcrumbs preserved for any future Run B.
-
-### Run sequence
-
-```bash
-# Single run, this boot only:
-sudo insmod brcmutil.ko
-sudo insmod brcmfmac.ko bcm4360_test235_skip_set_active=1
-# (or via the test harness with module-args support)
-sleep 5
-sudo rmmod brcmfmac_wcc brcmfmac brcmutil  # clean rmmod (test.230 baseline)
-```
-
-NMI watchdog/panic sysctls armed defensively even though no wedge
-expected (test.230 baseline ran cleanly across multiple tests).
-
-### Decision tree
-
-| Pre-zero scan summary | Verify summary | Interpretation | Next |
-|---|---|---|---|
-| N>0 / 71 non-zero | 0/71 non-zero (after zero loop) | Zero loop works; region had real fingerprint data; test.234 wedged with zeros in TCM ⇒ cheap tier failed | Decide: widen region (test.236) OR jump to medium-tier sentinel pointers |
-| 0/71 non-zero | 0/71 non-zero | Region was already zero on this boot — nothing to zero, test.234 was identical to a "do nothing" probe | Run a different region (still cheap), or move to medium tier |
-| Verify >0 non-zero | (any) | TCM writes to that range don't take — surprising; investigate write/read offsets, possibly a region brcmf hardware-blocks | Investigate before any further test.234-style run |
-| Wedge (unexpected) | n/a | Zero loop itself wedges? Highly unlikely (test.225 wrote 442 KB cleanly nearby); investigate | Read journal tail; consider write granularity bug |
-
-### Expected artifacts
-
-- `phase5/logs/test.235.run.txt` — PRE sysctls + lspci + BAR0 + pstore + strings + harness output
-- `phase5/logs/test.235.journalctl.full.txt` — boot 0 journal
-- `phase5/logs/test.235.journalctl.txt` — filtered subset
-
-### Hardware state (post-SMC-reset boot 0, started 2026-04-22 23:41:20 BST)
-
-- `lspci -vvv -s 03:00.0`: Control `Mem+ BusMaster+`, MAbort-,
-  CommClk+, LnkSta 2.5GT/s x1 — clean post-SMC-reset idiom.
-- No modules loaded. pstore directory present but empty (perm-denied
-  to non-root listing; previously confirmed empty).
-- BAR0 timing fast-UR (22ms) at boot start.
-
-### Build status — REBUILT CLEAN
-
-`brcmfmac.ko` rebuilt 2026-04-22 ~23:50 BST. `strings` confirms
-`bcm4360_test235_skip_set_active` module param + 2 test.235
-breadcrumbs present (SKIPPING line and dwell-done line). Pre-
-existing unused-variable warnings only — no regressions.
-
-### Pre-test checklist (CLAUDE.md)
-
-1. Build status: **PENDING** — will run `make -C phase5/work` before insmod.
-2. PCIe state: clean per above.
-3. Hypothesis: above.
-4. Plan: this block.
-5. Filesystem sync on commit.
-
----
-
-
 
 ---
 
