@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 20:5x BST, POST-TEST.256 — **pciedngl_isr identified as node[0] scheduler callback; (A') WFI-idle FAVORED but not confirmed**. Host stable, boot 0 up since 20:48:20 BST. T256 fired twice: first run (20:32:38) wedged BEFORE fw was released — zero probe data. Second run (20:43:05, build `cc6e9304e7fbf287b4e68facd036dd47` with added sched_walk_early) fired both probes successfully, survived through t+120000ms dwell (!), wedged during cleanup at 20:45:27. PCIe auto-recovered clean after both reboots. Key findings: (1) **Callback node[0] = pciedngl_isr**: fn-ptr 0x1C99 → Thumb target 0x1C98. Blob-refed strings: `"pciedngl_isr called\n"` at 0x4069D, `"pciedngldev"` at 0x58CC4 (the arg). Flag=0x8 is dispatch-mask bit 3. Invoked only via scheduler `blx r3` at 0x117A — no direct BL callers. This IS the pcie dongle ISR registered as scheduler callback. (2) **Current-task struct at 0x96F2C**: first u32 is 0 — scheduler's `cbz r3, #0x11AA` branch falsifies the "active task dispatch" path. Sparse numeric state fields at offsets +0x14/+0x20/+0x28/+0x2C/+0x34 (values 0x10, 0xB05, 1, 0x10, 1), no fn-ptrs. Consistent with "no active task" state. (3) **Callback state IDENTICAL at t+100ms and t+60000ms** — BUT per advisor, this is NOT evidence of fw stopping: node[0]'s registration fields (next/fn/arg/flag) wouldn't change even if the ISR ran 1000 times. Drift on these fields is not a discriminator. (4) **"Fw survived 120s dwell ladder" is ambiguous**: TCM reads work via BAR2 regardless of fw CPU state, so not evidence of fw execution. Hang candidates STILL open: (A) bus-stall, (A') WFI-idle waiting for IRQ, also possible: ISR arg looks wrong (literal string addr, not struct) — ISR might be broken. T257 direction: host-side IRQ-delivery check — does our driver wire MSI / write MailboxInt / does /proc/interrupts show activity? No new fw probe needed.)
+## Current state (2026-04-23 21:0x BST, POST-TEST.257 — **(A') WFI-idle CONFIRMED: our test harness bypasses MSI/IRQ setup; fw registered pciedngl_isr then sleeps waiting for IRQs host never sends.** Host stable, boot 0 up since 20:48:20 BST. T257 was local-only audit, no hardware test. Key findings: (1) **`brcmf_pcie_request_irq` (pcie.c:1937)** which calls `pci_enable_msi` + `request_threaded_irq` is NOT invoked on our test path — test.130 guard log never appears in T256 boot-1 journal. (2) **`brcmf_pcie_intr_enable` (pcie.c:1883)** which unmasks IRQs via MAILBOXMASK=0xFF0300 is NOT called. MAILBOXMASK stays 0. (3) **`brcmf_pcie_hostready` (pcie.c:1890)** which writes 1 to H2D_MAILBOX_1 is NOT called. (4) **Our test path exits `brcmf_pcie_download_fw_nvram` after the test.238 120s dwell ladder**, bypassing init_ringbuffers, init_scratchbuffers, request_irq, intr_enable, and hostready — the entire second half of PCIe setup. (5) **Causal chain confirmed**: fw boots → registers callbacks → scheduler walks list → `tst r5, flag` never matches (r5 from `bl 0x9936` never has bits set because no host IRQ wires) → all callbacks skipped → scheduler tail-calls idle-loop at 0x11D0 → WFI at 0x1C1E → sleeps forever. TCM reads continue working (BAR2 bypasses fw CPU). (6) **HOST wedge is SEPARATE issue** — driven by rmmod cleanup path or AER escalation, not fw state. Wedge timing varies (1s after t+90s in T247..T253/T255; during pre-release in T256-1; during cleanup in T256-2). T258 direction: add MSI-setup option to the ultra-dwells path (new param `bcm4360_test258_enable_msi=1` that triggers request_irq + intr_enable + hostready after dwell ladder). If fw's scheduler state DRIFTS after that, (A') causation is fully demonstrated.)
 
 ## PRE-TEST.255 (2026-04-23 19:xx BST, boot 0 after test.253 crash + SMC reset) — **RTE scheduler state probe + drift test + 0x9355C decode.** Primary: four BSS fields (callback list, current task, sleep-flag, context-ptr) at t+100ms AND t+90s — drift + discrimination between (A) bus-stall and (A') WFI-idle. Secondary: 0x58C98 tick-scale, 0x93550..0x9358C struct family.
 
@@ -350,5 +350,58 @@ Advisor-suggested: the IRQ-delivery question is answerable from the host side wi
 4. **Cross-check with upstream brcmfmac**: upstream driver's PCIe init sequence shows what MSI / MailboxInt config is normally needed. Our minimal driver may skip that.
 
 Advisor call before committing to T257 design. All T257 work is local reading — no hardware test needed at this stage.
+
+---
+
+## POST-TEST.257 (2026-04-23 21:0x BST — local host-side audit, no hardware test)
+
+T257 was a pure local audit per advisor guidance. No module load, no crash. Deliverable: this block + `phase5/analysis/t257_audit.md` (to be extracted from this section into a standalone doc later if useful).
+
+### What T257 settled (facts)
+
+**Our test harness bypasses the entire normal IRQ/MSI setup.** Evidence:
+
+1. **`brcmf_pcie_request_irq` (pcie.c:1937) calls `pci_enable_msi` + `request_threaded_irq`** — NOT CALLED in our test path. Its guard log `test.130: before brcmf_pcie_request_irq` never appears in T256 boot-1 journal.
+2. **`brcmf_pcie_intr_enable` (pcie.c:1883) unmasks IRQs by writing `int_d2h_db | int_fn0 = 0x00FF0300` to MAILBOXMASK** — NOT CALLED in our path. MAILBOXMASK stays 0 (the intr_disable state).
+3. **`brcmf_pcie_hostready` (pcie.c:1890) signals host-ready by writing 1 to H2D_MAILBOX_1** — NOT CALLED.
+4. **Where our path ends**: the T238 ultra-dwells branch is at pcie.c:3427, inside `brcmf_pcie_download_fw_nvram` (starts pcie.c:2662). After the 120s dwell ladder it exits the if-else chain at pcie.c:3668 with a `t+120000ms dwell done` log, then returns from `download_fw_nvram`.
+5. **The log sequence in T256 boot-1 confirms the bypass**: `test.130: after brcmf_chip_get_raminfo` (line 5888-ish) → `test.130: after brcmf_pcie_adjust_ramsize` → **no further test.130 logs** (init_ringbuffers, init_scratchbuffers, request_irq would each log but none appear). Then `test.163: before brcmf_pcie_download_fw_nvram` fires, we go INTO download_fw_nvram, take the test.238 branch, and the function returns without the rest of pcie_setup running.
+
+### What T257 settled for the hang mechanism
+
+**(A') WFI-idle is now DEFINITIVE, not just favored.** Causal chain:
+
+1. Fw download completes, ARM core released via `brcmf_chip_set_active`.
+2. Fw boots, prints RTE banner, runs its init including scheduler setup.
+3. Fw registers `pciedngl_isr` (and possibly others) as scheduler callbacks, expecting host-driven IRQs.
+4. Fw scheduler's main loop at 0x115C walks callback list. For each node, `tst r5, flag`. r5 is the return of `bl 0x9936` — an interrupt-status / event mask. **With no host-side IRQ delivery wired (no MSI, no MAILBOXMASK set), r5 never has any bit set**. No flag matches. All callbacks skipped.
+5. Scheduler falls through to sleep-path at pcie fn 0x1182+, writes 0 to sleep-flag, calls barrier 0x1038, re-reads, and eventually tail-calls into the idle-loop at 0x11D0.
+6. Idle-loop at 0x11D0 executes `bl 0x11CC` → `b.w 0x1C0C` → `b.w 0x1C1E` → **WFI**. CPU halts waiting for interrupt.
+7. **Host never generates one.** MSI not enabled, no IRQ line registered, MAILBOXMASK = 0. Host's `brcmf_pcie_hostready` never fires to signal "host ready."
+8. Fw sleeps indefinitely in WFI. TCM reads work (BAR2 accesses are memory-controller-level, don't need fw CPU awake).
+
+### Separately: what causes the HOST wedge?
+
+Fw-side is not the host-side wedge cause. The host wedge pattern varies:
+- T247..T253, T255: wedge ~1s after t+90s probe burst (n=7 pattern)
+- T256-1: wedge BEFORE fw release (no probes captured)
+- T256-2: wedge ONLY during cleanup after t+120s dwell
+
+The host wedge is likely in one of:
+- rmmod cleanup touching a PCIe register after fw went idle
+- AER escalation from a stale posted write
+- Driver release path (pci_clear_master, ARM CR4 halt writes to a clock-gated core)
+
+This is a SEPARATE issue from the fw WFI hang.
+
+### Next-test direction (T258 — local code work + careful hardware test)
+
+Two independent lines:
+
+1. **Add IRQ-setup trigger option** (local code): enable `brcmf_pcie_request_irq` + `brcmf_pcie_intr_enable` + `brcmf_pcie_hostready` in a new test path gated by a module param (e.g., `bcm4360_test258_enable_msi=1`). Fire it AFTER the dwell ladder's t+120s probe. Observation: if fw's scheduler state drifts after enabling IRQ delivery, (A') is confirmed as NOT just "favored" but "causal." If drift still absent, there's a more subtle issue (MSI target address wrong, etc.).
+
+2. **Host-wedge diagnosis** (orthogonal): add verbose dmesg / AER captures around rmmod path to see which register access triggers the host hang. Lower priority since the fw investigation is converging.
+
+Advisor call recommended before committing to T258 code.
 
 ---
