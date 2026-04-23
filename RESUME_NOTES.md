@@ -446,6 +446,71 @@ not sub-second timing.
 ---
 
 
+## PRE-TEST.244 (2026-04-23 09:5x BST, boot 0 post-SMC-reset from test.243) — **null-run discriminator, no rebuild.** Rerun the existing test.243 binary with `writeverify_v2=0` and all other params identical. If wedge returns to `[t+90s, t+120s]`, T243 V2 probe is confirmed as the wedge cause (hypothesis (a)); if wedge stays early, something drifted (hypothesis (b)) and we need a different investigation before any pre-FORCEHT reroute.
+
+### Hypothesis
+
+Test.243's journal cut at "ASPM disabled" (09:36:37.77) with zero T243 breadcrumbs landed. Two plausible explanations:
+
+- **(a)** T243 V2 probe fires at t+100ms dwell; `brcmf_pcie_select_core(PCIE2)` → MBM write under correct selection triggers a wedge faster than `pr_emerg` can flush. Result: ~15–20s of tail truncation swallows set_active, t+100ms dwell, and all T243 lines together.
+- **(b)** Wedge moved earlier for unrelated reasons — boot variance, SMC-reset residue, or a compile artifact outside the macro itself. T243 probe never fired.
+
+The cheapest way to split (a) from (b) is to run the **same binary** with `writeverify_v2=0` (T243 probe gated off). If wedge comes at [t+90s, t+120s] like test.240/241/242, (a) is confirmed and we can design test.245 around "post-set_active PCIE2-register writes are a wedge trigger" with proper safety. If wedge comes early again, (b) is confirmed and we investigate further.
+
+### Plan
+
+1. **Do not rebuild.** The module (commit 22a8dcb) already has the T243 V2 param with default 0. The `BCM4360_T243_WRITEVERIFY` macro is only expanded at t+100ms and t+2000ms dwell invocation sites, and both are gated on `if (bcm4360_test243_writeverify_v2)`. With the param at 0, the macro body does not execute and the probe path is functionally identical to test.240's (which landed 22/23 dwells through t+90s).
+2. **Use the exact param set as test.240** (as the shape-match baseline): `force_seed=1 ultra_dwells=1 poll_sharedram=1 wide_poll=1` — no write-verify, no DB1 ring, no ring doorbell, no T242 writeverify. Everything else default (0).
+3. **Expected per hypothesis:**
+
+| Outcome | Interpretation | Next step |
+|---|---|---|
+| Journal reaches t+60000ms or later dwell (≥t+60s post-set_active); wedge in [t+90s, t+120s] | (a) confirmed — T243 probe is the wedge cause. Post-set-active PCIE2 write (MBM or select_core) is hazardous. | Design test.245: move MBM / BAR2 diagnostic to **pre-FORCEHT** (test.241's stage, known to land every run) under `select_core(PCIE2)`. Safer because ARM isn't running, and upstream does select_core(PCIE2) there routinely. |
+| Journal cuts before set_active or early in dwell (≤t+5000ms) | (b) — something drifted. Probe was never the culprit; need a separate investigation. | Re-verify binary (md5 modinfo, strings for T243 lines still present, param list unchanged); check dmesg for early-boot signals; consider rmmod + re-insmod on same boot to test for boot-state residue. |
+| Journal lands through t+10..60s but cuts before t+90s | Intermediate — wedge window shifted. Not classic (a) or (b). | Capture everything and decide from the data. |
+
+### Run sequence
+
+```bash
+sudo insmod phase5/work/drivers/.../brcmutil.ko
+sudo insmod phase5/work/drivers/.../brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1
+sleep 240
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+Note: `writeverify_v2` is omitted, relying on its `static int ... = 0` default.
+
+### Hardware state (current, 09:5x BST boot 0 post-SMC-reset from test.243)
+
+- `lspci -s 03:00.0`: `I/O- Mem- BusMaster-` (steady state with no driver), MAbort-, DEVSEL=fast — clean; no dirty-state residue (no MAbort+).
+- No brcm modules loaded.
+- Boot 0 started 2026-04-23 09:43:30 BST.
+
+### Build status — NO REBUILD NEEDED
+
+This is a null-run of the existing commit 22a8dcb binary. The T243 param defaults to 0 when omitted at insmod. No source change.
+
+### Expected artifacts
+
+- `phase5/logs/test.244.run.txt`
+- `phase5/logs/test.244.journalctl.full.txt`
+- `phase5/logs/test.244.journalctl.txt`
+
+### Pre-test checklist (CLAUDE.md)
+
+1. Build status: NO REBUILD (same binary as test.243).
+2. PCIe state: verified clean above.
+3. Hypothesis: stated above — (a) vs (b) null-run discriminator.
+4. Plan: this block; commit + push + sync before insmod.
+5. Filesystem sync on commit.
+
+---
+
+
 ## PRE-TEST.243 (2026-04-23 09:2x BST, boot 0 post-SMC-reset from test.242) — re-run MBM write-verify **under explicit `select_core(PCIE2)`** at the same two dwell points, add BAR0_WINDOW config-space logging, switch to invert-and-restore sentinel, add BAR2-TCM round-trip at a dead offset
 
 ### Hypothesis
