@@ -213,7 +213,7 @@ macaddr=00:00:00:00:00:00
 
 1. **Firmware does validate NVRAM before shared-struct allocation.** No evidence contradicts this, but firmware reaches t+90–120s before hanging, suggesting validation succeeded (or was skipped).
 
-2. **Firmware does not read Apple OTP directly.** brcmfmac driver injects NVRAM via TCM; firmware firmware expected to use it. No firmware code observed attempting OTP reads in test data.
+2. **Firmware does not read Apple OTP directly.** brcmfmac driver injects NVRAM via TCM; firmware expected to use it. No firmware code observed attempting OTP reads in test data.
 
 3. **boardtype/boardrev whitelist exists.** Unknown if firmware rejects unknown board IDs or applies default fallback. Current placeholder does not cause immediate crash.
 
