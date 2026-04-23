@@ -741,6 +741,15 @@ static int bcm4360_test264_noloop;
 module_param(bcm4360_test264_noloop, int, 0644);
 MODULE_PARM_DESC(bcm4360_test264_noloop, "BCM4360 test.264: loop-less scaffold — MSI + request_irq + single msleep(2000) + cleanup with markers. No MMIO reads inside the sleep. Isolates whether the trigger is duration-of-MSI-bound, cleanup-path, or loop-content. (1=enable, 0=off)");
 
+/* BCM4360 test.265: shorter-sleep variant of T264. Identical in every
+ * way EXCEPT msleep(500) instead of msleep(2000). Single-variable change
+ * to decouple duration-proportional (crash <500ms) vs fixed-timer post-
+ * scaffold-entry (crash ~2s, well after msleep exits — FIRST EXECUTION
+ * of the cleanup path) vs msleep-exit-transition (crash at 500ms exactly). */
+static int bcm4360_test265_short_noloop;
+module_param(bcm4360_test265_short_noloop, int, 0644);
+MODULE_PARM_DESC(bcm4360_test265_short_noloop, "BCM4360 test.265: short-sleep variant of T264 — same scaffold but msleep(500) instead of msleep(2000). Decouples duration-proportional vs fixed-timer. (1=enable, 0=off)");
+
 /* BCM4360 test.256 scheduler-walk helper. 2 pr_emerg lines, 16 u32 each.
  * gate_flag arg lets caller pick between sched_walk (t+60s) and
  * sched_walk_early (t+100ms). */
@@ -772,7 +781,7 @@ MODULE_PARM_DESC(bcm4360_test264_noloop, "BCM4360 test.264: loop-less scaffold �
 	if (bcm4360_test258_enable_irq || bcm4360_test259_safe_enable_irq || \
 	    bcm4360_test260_mask_only || bcm4360_test260_doorbell_only || \
 	    bcm4360_test262_msi_poll_only || bcm4360_test263_short || \
-	    bcm4360_test264_noloop) { \
+	    bcm4360_test264_noloop || bcm4360_test265_short_noloop) { \
 		u32 _d258bp = brcmf_pcie_read_ram32(devinfo, 0x9CC5C); \
 		u32 _d258r[16]; \
 		int _n258; \
@@ -3588,7 +3597,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					    bcm4360_test260_doorbell_only || \
 					    bcm4360_test262_msi_poll_only || \
 					    bcm4360_test263_short || \
-					    bcm4360_test264_noloop) { \
+					    bcm4360_test264_noloop || \
+					    bcm4360_test265_short_noloop) { \
 						u32 _ctr249 = brcmf_pcie_read_ram32(devinfo, \
 							0x9d000); \
 						pr_emerg("BCM4360 test.249: t+" ms_tag \
@@ -3920,6 +3930,38 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						pr_emerg("BCM4360 test.264 noloop: calling pci_disable_msi\n");
 						pci_disable_msi(_pdev264);
 						pr_emerg("BCM4360 test.264 noloop: pci_disable_msi returned\n");
+					}
+				}
+				if (bcm4360_test265_short_noloop) {
+					struct pci_dev *_pdev265 = devinfo->pdev;
+					int _prev_irq265 = _pdev265->irq;
+					int _msi_ret265, _req_ret265;
+					atomic_set(&bcm4360_t259_irq_count, 0);
+					atomic_set(&bcm4360_t259_last_mailboxint, 0);
+					_msi_ret265 = pci_enable_msi(_pdev265);
+					pr_emerg("BCM4360 test.265 short_noloop: pci_enable_msi=%d prev_irq=%d new_irq=%d\n",
+						 _msi_ret265, _prev_irq265, _pdev265->irq);
+					_req_ret265 = request_irq(_pdev265->irq,
+								  bcm4360_t259_safe_handler,
+								  IRQF_SHARED, "t265_short", devinfo);
+					pr_emerg("BCM4360 test.265 short_noloop: request_irq ret=%d\n", _req_ret265);
+					if (_req_ret265 == 0) {
+						pr_emerg("BCM4360 test.265 short_noloop: entering msleep(500) — no loop, no MMIO\n");
+						msleep(500);
+						pr_emerg("BCM4360 test.265 short_noloop: msleep done; irq_count=%d last_mailboxint=0x%08x\n",
+							 atomic_read(&bcm4360_t259_irq_count),
+							 atomic_read(&bcm4360_t259_last_mailboxint));
+						pr_emerg("BCM4360 test.265 short_noloop: calling free_irq\n");
+						free_irq(_pdev265->irq, devinfo);
+						pr_emerg("BCM4360 test.265 short_noloop: free_irq returned\n");
+					} else {
+						pr_emerg("BCM4360 test.265 short_noloop: request_irq FAILED (%d), skipping msleep\n",
+							 _req_ret265);
+					}
+					if (_msi_ret265 == 0) {
+						pr_emerg("BCM4360 test.265 short_noloop: calling pci_disable_msi\n");
+						pci_disable_msi(_pdev265);
+						pr_emerg("BCM4360 test.265 short_noloop: pci_disable_msi returned\n");
 					}
 				}
 #undef BCM4360_T239_POLL
