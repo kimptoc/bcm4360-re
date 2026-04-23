@@ -1,0 +1,37 @@
+=== test.248 PRE (2026-04-23T13:45:35+01:00) ===
+
+=== lspci PRE (sudo) ===
+	Control: I/O- Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+		Flags: PMEClk- DSI- D1+ D2+ AuxCurrent=0mA PME(D0+,D1+,D2+,D3hot+,D3cold+)
+		Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=2 PME-
+		LnkCtl:	ASPM L0s L1 Enabled; RCB 64 bytes, LnkDisable- CommClk+
+		LnkSta:	Speed 2.5GT/s, Width x1
+		LnkCtl2: Target Link Speed: 2.5GT/s, EnterCompliance- SpeedDis-
+		LnkSta2: Current De-emphasis Level: -3.5dB, EqualizationComplete- EqualizationPhase1-
+		UESta:	DLP- SDES- TLP- FCP- CmpltTO- CmpltAbrt- UnxCmplt- RxOF- MalfTLP-
+		CESta:	RxErr- BadTLP- BadDLLP- Rollover- Timeout- AdvNonFatalErr+ CorrIntErr- HeaderOF-
+		Status:	InProgress-
+			Status:	NegoPending- InProgress-
+
+=== modules PRE ===
+Module                  Size  Used by
+ccm                    20480  6
+af_packet              65536  6
+btusb                  81920  0
+btrtl                  36864  1 btusb
+
+=== modprobe cfg80211 ===
+ok
+
+=== modprobe brcmutil ===
+ok
+brcmutil               16384  0
+
+=== md5 ===
+6f87f1ff91f0cc300e5fa7e13f03e80b  /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko
+
+=== insmod brcmfmac (T236/238/239/240/247/248) 2026-04-23T13:45:35+01:00 ===
+insmod backgrounded PID=152202
+
+=== sleeping 240s for ladder + probe return ===
