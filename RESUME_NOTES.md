@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 16:5x BST, POST-TEST.251 — **forward-write ring + last-line-before-hang + saved-state region all captured**. T251 t+60s probe landed at 15:55:04, last journal entry at 15:55:33 (t+90s probe burst → wedge ≤1s after, n=5 streak T247..T251). Three findings: (1) **last text line printed by fw before hang**: `"...(r) on BCM4360 r3 @ 40.0/160.0/160.0MHz\n"` at 0x9CE30..0x9CE58 — likely wlc_attach init banner showing chip rev + radio config. After "\n\0" at 0x9CE58, ring ends at STAK canary fill — **ring upper bound ≈ 0x9CE5A**. (2) **Backward-from-buf_ptr region 0x9CC94..0x9CCAC** contains a binary log record continuation (header `0x40010 / fmt=0x629C0 / 0x9af80 / 0xa / 0x185d`) — same record format as T250's wl_probe/dngl_probe records → **forward-write ring confirmed**. (3) **Saved-state region 0x9CE98..0x9CF34** (after STAK canary): 30+ u32s with repeated TCM offsets (0x93610 ×5, 0x92440 ×3, 0x91cc4 ×3) and odd-LSB fw addresses (0x12c69, 0x68321, 0x68d2f, 0x5271 — all **Thumb-mode PCs**). 0x9CEA0=0x000934C0 matches T248's 0x9CFE0 trap-region value. **0x9CF2C=0x000043B1 matches frozen "counter" at 0x9d000** → 0x43B1 may not be a counter but a saved register/token. Boot 0 started 16:50:08 BST, PCIe clean.)
+## Current state (2026-04-23 17:2x BST, POST-TEST.252 — **three saved-state-referenced structs captured and decoded**. T252 fired at 17:17:37 (t+60s, all 3 probes captured); wedge ≤1s after t+90s T248 probe at 17:18:08 (n=6 streak T247..T252). Boot 0 started 17:28:11 BST, PCIe clean, no brcm loaded. Key findings: (1) **0x58EF0 (in 0x93610 struct) is the ASCII string `"wl"`**, NOT a function pointer — 0x93610 is likely a wl_info / WL driver-context structure. (2) **0x92440 is a runtime-populated silicon-backplane descriptor (si_info)** containing ChipCommon core base 0x18001000 (zero blob refs → fw-cached at runtime). Two adjacent embedded list_head pairs at 0x92460. (3) **0x91CC4 is a subordinate struct with back-refs to 0x92440 AND 0x93610** — three structs form an inter-linked family. (4) **0x934C0 is a central shared object** — referenced in all three structs AND in T248's 0x9CFE0 AND in T251's saved-state 0x9CEA0. Combined with T251 blob analysis (LR 0x68320 in wlc_bmac_attach; LR 0x68D2E in wlc_attach; chiprev banner never fires): **hang is inside wlc_phy_attach** — si_attach completed, wlc_bmac_attach entered, PHY attach entered but never returned.)
 
 ### What test.250 landed (facts)
 
@@ -122,71 +122,6 @@ Single-focus probe to fill the 240-byte gap and close out the buf_ptr-first-deco
 POST decode strategy: hex-dump with byte-swap-to-char column; verify console_info struct layout by triangulating buf_ptr/bufsize/write_idx against what's in the dumped bytes.
 
 **Fallback if gap dump is blank**: the log buffer is small or wrapped. Widen the net one more time, or pivot to decoding 0x9CFE0 trap region and/or fn 0x1FC2 disassembly path (test.94).
-
-Proceed to PRE-TEST.250 design.
-
-### What test.248 landed (facts)
-
-Two journal lines captured pre-crash (full journal at `phase5/logs/test.248.journalctl.txt`):
-
-```
-Apr 23 13:45:56.923 test.248: pre-FORCEHT TCM[16 off] =
-  0x9c000=f79d6dd9 0x9cc5c=d5f2d856 0x9cdb0=b77ddbaa 0x9cfe0=4a426302 0x9d000=4d917b4a
-  0x9d0a4=555c2631 0x9f0cc=870ca015 0x9fffc=ffc70038
-  0x90000=84270be1 0x94000=464c65ec 0x98000=15f3b94d 0x9a000=bc3125a9
-  0x9b000=85177bed 0x9e000=5790b619 0x9f000=7bf1b8b4 0x9fe00=14086122
-
-Apr 23 13:47:26.936 test.248: t+90000ms TCM[16 off] =
-  0x9c000=5354414b 0x9cc5c=8009ccbe 0x9cdb0=77203030 0x9cfe0=000934c0 0x9d000=000043b1
-  0x9d0a4=555c2631 0x9f0cc=870ca015 0x9fffc=ffc70038
-  0x90000=84270be1 0x94000=464c65ec 0x98000=00000000 0x9a000=00000000
-  0x9b000=85177bed 0x9e000=5790b619 0x9f000=7bf1b8b4 0x9fe00=14086122
-```
-
-(Note: 0x9b000 **did** change in journal but not in diff summary above — re-read: pre=0x85177bed, post=0x00000000 → CHANGED. Correcting: 8 offsets changed, zeroed set is 0x98000/0x9a000/0x9b000. Original log: line has `0x9b000=00000000` at t+90000ms, `0x9b000=85177bed` at pre-FORCEHT. The two-line diff is authoritative.)
-
-### Diff table
-
-| Offset | pre-FORCEHT | t+90000ms | Δ | Notes |
-|---|---|---|---|---|
-| 0x9c000 | f79d6dd9 | **5354414b** | ✓ | fw wrote ASCII "STAK" — stack-top marker |
-| 0x9cc5c | d5f2d856 | **8009ccbe** | ✓ | console ring write-ptr — fw VA (0x80000000 region = ARM CR4 dcache/TCM alias) |
-| 0x9cdb0 | b77ddbaa | **77203030** | ✓ | bytes "30 30 20 77" = `"00 w"` — start of ASCII text (assert/trap header?) |
-| 0x9cfe0 | 4a426302 | **000934c0** | ✓ | looks like a small counter or pointer (0x934c0 = fw offset?) |
-| 0x9d000 | 4d917b4a | **000043b1** | ✓ | **Exact match to pre-T230's frozen-counter endpoint.** Same stall state. |
-| 0x9d0a4 | 555c2631 | 555c2631 | — | unchanged — likely fw-image bytes (data segment in 0x9D0A4) |
-| 0x9f0cc | 870ca015 | 870ca015 | — | unchanged — likely fw-image bytes |
-| 0x9fffc | ffc70038 | ffc70038 | — | NVRAM marker, redundant with T239 |
-| 0x90000 | 84270be1 | 84270be1 | — | unchanged — matches T245 baseline exactly (fingerprint or fw-image) |
-| 0x94000 | 464c65ec | 464c65ec | — | unchanged — fw image |
-| 0x98000 | 15f3b94d | **00000000** | ✓ | fw **zeroed** — BSS/heap init pattern |
-| 0x9a000 | bc3125a9 | **00000000** | ✓ | fw **zeroed** |
-| 0x9b000 | 85177bed | **00000000** | ✓ | fw **zeroed** |
-| 0x9e000 | 5790b619 | 5790b619 | — | unchanged — fw image |
-| 0x9f000 | 7bf1b8b4 | 7bf1b8b4 | — | unchanged — fw image |
-| 0x9fe00 | 14086122 | 14086122 | — | unchanged — random_seed region start (T236 seed) |
-
-### What test.248 settled (facts)
-
-- **(S2) refined, not universal.** T247's "fw touches none of our 80 observed bytes" is true *for those bytes* but fw **does** touch other TCM regions. Fw stall reading needs to be qualified: "fw stalls at a specific state, after doing substantial work."
-- **Fw reaches the same pre-T230 stall state.** `0x9d000=0x000043b1` is byte-identical to the pre-T230 observation of "counter evolved 0→0x58c8c(T+2ms)→0x43b1(T+12ms)→frozen." This is strong continuity: the fw crash/stall pattern is the same as pre-T230; our intervening investigation has not been changing *what* fw does, just what *we* see.
-- **Console subsystem is alive.** Write-pointer at 0x9cc5c is a valid fw-VA (0x8009ccbe — ARM Cortex-R dcache/TCM-alias window). The log content should live at that VA, which in our BAR2 TCM window maps to an offset we can probe.
-- **Stack, BSS, olmsg are all initialized.** "STAK" marker at 0x9c000, three zeroed BSS regions, olmsg addresses 0x9D0A4 and 0x9F0CC populated (even if those specific bytes are fw-image, the *surrounding* structure is presumably live).
-- **W2 fw-alive branch of the matrix is hit.** Per PRE-TEST.248 matrix: "Known-hot offsets changed (0x9cc5c / 0x9d000 / 0x9D0A4 / 0x9F0CC or trap addresses) → Phase 6 pivot becomes 'read the console' — capture console buffer, decode fw output."
-- **Wedge within ≤1s of the t+90s T248 probe burst.** T248 t+90000ms line at 13:47:26.936; boot's last journal entry at 13:47:26 (same second). Earlier phrasing "[90s, 120s] wedge bracket" was too generous — actual unchangedness is "within log resolution, wedge occurred ≤1s after the t+90s probe fired." Anticipated T249 probe-cost uplift (+160 reads at t+90s) may push into the wedge; split across two dwells if needed. **Note**: this ~90s host-side wedge is not fw execution progress — fw froze at T+12ms per test.89. The 90s is kernel driver load/timeout dynamics.
-- **SMC reset required** (n=2 post-T247 streak — consistent with T246/T247 pattern).
-
-### Next test direction (T249 — advisor-confirmed)
-
-**Pre-freeze log output lives in the console buffer, frozen-in-place since T+12ms.** T249 reads the region around 0x9CC5C and the 0x9CDB0 assert-text area to capture anything fw printed during its 0–12ms init window before the hang at fn 0x1FC2.
-
-1. **Single snapshot at t+90000ms** (no second snapshot — fw is frozen, read would be identical; probe cost better spent widening the window).
-2. **Primary read: `TCM[0x9CA00..0x9CCA0]` — 160 u32s = 640 bytes.** Covers console log buffer + struct area around write-idx at 0x9CC5C. Decode dwords at 0x9CC5C-8 and 0x9CC5C+4..8 first — standard Broadcom console_info layout is `{buf_ptr, bufsize, in_idx, out_idx}` contiguous. Translate (buf_ptr & 0xFFFFF) → TCM offset for T250 buffer-content read.
-3. **Secondary read: `TCM[0x9CDB0..0x9CE10]` — 24 u32s = 96 bytes.** Historic assert-text region per pcie.c annotations ("ASSERT in file hndarm.c line 397..."); T248's 0x9CDB0=0x77203030 = bytes "00 w" in LE already hints ASCII text.
-4. **Add 0x9d000 to per-dwell poll** — one u32/dwell, effectively free. Closes out "is the counter really frozen from first dwell?" directly in this run's data.
-5. POST decode: hex-dump with byte-swap-to-char column for the console/assert regions.
-
-**Fallback if both windows are null/garbage**: pivot to fn 0x1FC2 disassembly path from test.94 — that thread was active pre-T230 and has the most direct reach to the hang. Don't accept null twice in this direction before revisiting.
 
 Proceed to PRE-TEST.250 design.
 
@@ -464,8 +399,77 @@ Note: T249/T250/T251 params NOT set (already captured those windows).
 
 ---
 
-### Hardware state (current, 2026-04-23 16:50+ BST, boot 0 after test.251 crash **with SMC reset**)
+## POST-TEST.252 (2026-04-23 17:1x BST — boot -1 after test.252 crash + SMC reset)
 
-`sudo lspci -s 03:00.0`: `Mem+ BusMaster+`, MAbort-, DEVSEL=fast, LnkSta 2.5GT/s x1, UESta all zero, CESta AdvNonFatalErr+ (pre-existing sticky). No brcm modules loaded. Boot 0 started 16:50:08 BST. Host healthy.
+Boot -1 timeline: boot start 16:50:08 → insmod 17:16:16 → t+60s probe 17:17:37 (T252 + T247/238/239/240/248/249) → t+90s probe 17:18:08 (T248 + T249 ctr final) → wedge ≤1s after → last journal entry 17:18:08. Full journal at `phase5/logs/test.252.journalctl.txt` (1509 lines). All 3 T252 probe regions captured successfully.
+
+### What test.252 landed (facts)
+
+**TCM[0x93600..0x9363C] — 16 u32 (5×-repeat target, 0x93610-centered):**
+```
+0x93600: 00000000 00000000 00000010 00000000   [+0..+12 zeros]
+0x93610: 00000000 00058ef0 00000000 00000000   [+16: 0x58EF0 at offset +4]
+0x93620: 000000b0 00000000 00000000 00000000   [+32: 0xB0 at offset +0]
+0x93630: 00000000 00000000 00000000 00000000   [+48..+60: zeros]
+```
+
+**TCM[0x92430..0x9246C] — 16 u32 (3×-repeat secondary, 0x92440-centered) — RICHEST:**
+```
+0x92430: 00000000 00000000 00000374 00000000   [+8: 0x374 = 884]
+0x92440: 0009238c 00093610 00093628 18001000   [4 pointers: TCM,TCM,TCM,CC-core-base]
+0x92450: 00091cc4 00091c04 000934c0 00000000   [3 TCM ptrs + 0; 0x934C0 = T248 match]
+0x92460: 00091e54 00091e84 00091e54 00091e84   [TWO adjacent list_head pairs]
+```
+
+**TCM[0x91CB0..0x91CEC] — 16 u32 (3×-repeat tertiary, 0x91CC4-centered):**
+```
+0x91CB0: 00000000 00000000 00000000 00000188   [+12: 0x188 = 392]
+0x91CC0: 00000000 00092440 00091c04 00093610   [back-refs: secondary, TCM, primary]
+0x91CD0: 00000000 000934c0 00000000 00000000   [0x934C0 match again]
+0x91CE0: 00000000 00000000 00000000 00000000   [zeros]
+```
+
+**Counter 0x9D000 = 0x000043B1 for all 22 dwells** this run (n=4 replication of test.89).
+
+### What test.252 settled (facts)
+
+- **0x58EF0 is NOT a function pointer — it's the ASCII string `"wl\0\0"`** (blob[0x58EF0] = 0x77 0x6C 0x00 0x00). This is the interface-name prefix used in `"wl%d:"` fmt strings. Reframes 0x93610: this slot holds a **pointer to the interface name string**. 0x93610 is likely a **wl_info / WL driver context structure** — the top-level 802.11 driver state. 0xB0 (176) at 0x93620 is a small field (flags/size/index).
+- **0x92440 is a runtime-populated silicon-backplane descriptor (si_info-class).** Contains `0x18001000` = ChipCommon core base register — and critically, the blob has **ZERO verbatim `18 00 10 00` literals** anywhere. That means fw constructs this value at runtime (MOVW/MOVT pair) and caches it here. Consistent with `si_attach()` semantics (enumerate SB cores, cache base addresses). Field inventory:
+  - `0x92438 = 0x374` (908 dec) — likely a size/count field
+  - `0x92440..0x9244F`: 4 pointers (TCM data ptrs + CC core base) — likely `ccores[0]`/`pub`/similar
+  - `0x92450..0x9245F`: 3 pointers + 0 — likely pointers to neighboring descriptor structs
+  - `0x92460..0x9246F`: `{0x91E54, 0x91E84}` pattern × 2 — **two adjacent embedded `list_head` nodes** (prev/next to same peer pair). These are empty or sparsely populated lists.
+- **0x91CC4 region is a subordinate struct with back-references to both primary (0x93610) and secondary (0x92440).** Same 0x934C0 value appears again. Three structs form an inter-linked family.
+- **0x934C0 is referenced in all three structs** (0x92458, 0x91CD4) **AND** in T248's 0x9CFE0 **AND** in T251's saved-state 0x9CEA0. Strong signal that 0x934C0 is a **central shared object** (chipcommon public struct pointer, or a scheduler/event root). Not yet probed.
+- **No Thumb-mode function pointers** (all LSBs are 0 or point to string/data). Reading (a) "TCB with fn-ptrs" from the PRE-TEST.252 matrix is NOT supported. Reading (b) "PHY register shadow" is NOT supported either (no register-like values such as channel/gain). Reading (c) "mutex/semaphore" is partially supported by the two `list_head`-style pairs but there's no counter or owner-id pattern.
+- **Best fit: these are silicon-backplane/driver-descriptor structs — not PHY state.** 0x18001000 = ChipCommon core base. The structs are linked into a wl/si core descriptor graph. Hang is likely in a *waiter* that references these structs (via LR 0x68320 → wlc_bmac_attach → wlc_phy_attach), not in the structs themselves being "wrong."
+- **Ring-end bound tightened (test.89 counter reframe holds).** Counter value 0x43B1 at 0x9D000 and 0x9CF2C confirmed stable across n=4 replications — not a tick counter; a saved-register/token.
+- **Wedge ≤1s after t+90s probe burst** (n=6 streak T247..T252). Probe costs are flat, not cumulative.
+- **SMC reset required.**
+
+### Where the hang is — narrower reading post-T252
+
+Combined with T251 blob analysis (LR stack: 0x68320 in wlc_bmac_attach; LR 0x68D2E in wlc_attach; chiprev banner never fires):
+
+1. **wlc_attach → wlc_bmac_attach → wlc_phy_attach** call chain entered.
+2. si_info struct at 0x92440 was populated (CC core base cached) — so `si_attach()` already returned.
+3. The "chiprev... phy_type %d phy_rev %d" banner (blob[0x4C534]) fires AFTER wlc_phy_attach returns — never observed → **wlc_phy_attach has not returned**.
+4. wlc_phy_attach spins up the PHY core (AC_PHY on BCM4360), which involves register pokes + delays. Most likely hang: **PHY register polling loop** waiting for a bit that never clears.
+
+### Next-test direction (T253 — candidates for advisor review)
+
+Pure local blob analysis can probably still reach:
+1. **Disassemble wlc_phy_attach (call site at ~blob[0x6831C..], BL target ~blob[0x1415C])** to identify PHY register polling loops. Find tight `ldr/tst/beq` patterns and which register/mask they target.
+2. **Chase 0x934C0** — probe TCM[0x934C0..0x93500] to identify the central shared struct.
+3. **Examine code around 0x58EF0 / 0x93610 init** — strings region context might reveal what driver-object 0x93610 holds (wl_info field offsets).
+4. **Pivot to hardware**: read AC_PHY core registers via BAR0 window (dangerous — PHY access can wedge if core not out of reset).
+
+Advisor call before committing to T253 design.
+
+---
+
+### Hardware state (current, 2026-04-23 17:28+ BST, boot 0 after test.252 crash **with SMC reset**)
+
+`sudo lspci -s 03:00.0`: `Mem+ BusMaster+`, MAbort-, CommClk+, LnkSta 2.5GT/s x1, UESta all zero, CESta AdvNonFatalErr+ (pre-existing sticky). No brcm modules loaded. Boot 0 started 17:28:11 BST. Host healthy.
 
 ---

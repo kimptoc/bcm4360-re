@@ -1,5 +1,75 @@
 ---
 
+## POST-TEST.248 (2026-04-23 13:47 BST — migrated from RESUME_NOTES)
+
+### What test.248 landed (facts)
+
+Two journal lines captured pre-crash (full journal at `phase5/logs/test.248.journalctl.txt`):
+
+```
+Apr 23 13:45:56.923 test.248: pre-FORCEHT TCM[16 off] =
+  0x9c000=f79d6dd9 0x9cc5c=d5f2d856 0x9cdb0=b77ddbaa 0x9cfe0=4a426302 0x9d000=4d917b4a
+  0x9d0a4=555c2631 0x9f0cc=870ca015 0x9fffc=ffc70038
+  0x90000=84270be1 0x94000=464c65ec 0x98000=15f3b94d 0x9a000=bc3125a9
+  0x9b000=85177bed 0x9e000=5790b619 0x9f000=7bf1b8b4 0x9fe00=14086122
+
+Apr 23 13:47:26.936 test.248: t+90000ms TCM[16 off] =
+  0x9c000=5354414b 0x9cc5c=8009ccbe 0x9cdb0=77203030 0x9cfe0=000934c0 0x9d000=000043b1
+  0x9d0a4=555c2631 0x9f0cc=870ca015 0x9fffc=ffc70038
+  0x90000=84270be1 0x94000=464c65ec 0x98000=00000000 0x9a000=00000000
+  0x9b000=85177bed 0x9e000=5790b619 0x9f000=7bf1b8b4 0x9fe00=14086122
+```
+
+(Note: 0x9b000 **did** change in journal but not in diff summary above — re-read: pre=0x85177bed, post=0x00000000 → CHANGED. Correcting: 8 offsets changed, zeroed set is 0x98000/0x9a000/0x9b000. Original log: line has `0x9b000=00000000` at t+90000ms, `0x9b000=85177bed` at pre-FORCEHT. The two-line diff is authoritative.)
+
+### Diff table
+
+| Offset | pre-FORCEHT | t+90000ms | Δ | Notes |
+|---|---|---|---|---|
+| 0x9c000 | f79d6dd9 | **5354414b** | ✓ | fw wrote ASCII "STAK" — stack-top marker |
+| 0x9cc5c | d5f2d856 | **8009ccbe** | ✓ | console ring write-ptr — fw VA (0x80000000 region = ARM CR4 dcache/TCM alias) |
+| 0x9cdb0 | b77ddbaa | **77203030** | ✓ | bytes "30 30 20 77" = `"00 w"` — start of ASCII text (assert/trap header?) |
+| 0x9cfe0 | 4a426302 | **000934c0** | ✓ | looks like a small counter or pointer (0x934c0 = fw offset?) |
+| 0x9d000 | 4d917b4a | **000043b1** | ✓ | **Exact match to pre-T230's frozen-counter endpoint.** Same stall state. |
+| 0x9d0a4 | 555c2631 | 555c2631 | — | unchanged — likely fw-image bytes (data segment in 0x9D0A4) |
+| 0x9f0cc | 870ca015 | 870ca015 | — | unchanged — likely fw-image bytes |
+| 0x9fffc | ffc70038 | ffc70038 | — | NVRAM marker, redundant with T239 |
+| 0x90000 | 84270be1 | 84270be1 | — | unchanged — matches T245 baseline exactly (fingerprint or fw-image) |
+| 0x94000 | 464c65ec | 464c65ec | — | unchanged — fw image |
+| 0x98000 | 15f3b94d | **00000000** | ✓ | fw **zeroed** — BSS/heap init pattern |
+| 0x9a000 | bc3125a9 | **00000000** | ✓ | fw **zeroed** |
+| 0x9b000 | 85177bed | **00000000** | ✓ | fw **zeroed** |
+| 0x9e000 | 5790b619 | 5790b619 | — | unchanged — fw image |
+| 0x9f000 | 7bf1b8b4 | 7bf1b8b4 | — | unchanged — fw image |
+| 0x9fe00 | 14086122 | 14086122 | — | unchanged — random_seed region start (T236 seed) |
+
+### What test.248 settled (facts)
+
+- **(S2) refined, not universal.** T247's "fw touches none of our 80 observed bytes" is true *for those bytes* but fw **does** touch other TCM regions. Fw stall reading needs to be qualified: "fw stalls at a specific state, after doing substantial work."
+- **Fw reaches the same pre-T230 stall state.** `0x9d000=0x000043b1` is byte-identical to the pre-T230 observation of "counter evolved 0→0x58c8c(T+2ms)→0x43b1(T+12ms)→frozen." This is strong continuity: the fw crash/stall pattern is the same as pre-T230; our intervening investigation has not been changing *what* fw does, just what *we* see.
+- **Console subsystem is alive.** Write-pointer at 0x9cc5c is a valid fw-VA (0x8009ccbe — ARM Cortex-R dcache/TCM-alias window). The log content should live at that VA, which in our BAR2 TCM window maps to an offset we can probe.
+- **Stack, BSS, olmsg are all initialized.** "STAK" marker at 0x9c000, three zeroed BSS regions, olmsg addresses 0x9D0A4 and 0x9F0CC populated (even if those specific bytes are fw-image, the *surrounding* structure is presumably live).
+- **W2 fw-alive branch of the matrix is hit.** Per PRE-TEST.248 matrix: "Known-hot offsets changed (0x9cc5c / 0x9d000 / 0x9D0A4 / 0x9F0CC or trap addresses) → Phase 6 pivot becomes 'read the console' — capture console buffer, decode fw output."
+- **Wedge within ≤1s of the t+90s T248 probe burst.** T248 t+90000ms line at 13:47:26.936; boot's last journal entry at 13:47:26 (same second). Earlier phrasing "[90s, 120s] wedge bracket" was too generous — actual unchangedness is "within log resolution, wedge occurred ≤1s after the t+90s probe fired." Anticipated T249 probe-cost uplift (+160 reads at t+90s) may push into the wedge; split across two dwells if needed. **Note**: this ~90s host-side wedge is not fw execution progress — fw froze at T+12ms per test.89. The 90s is kernel driver load/timeout dynamics.
+- **SMC reset required** (n=2 post-T247 streak — consistent with T246/T247 pattern).
+
+### Next test direction (T249 — advisor-confirmed)
+
+**Pre-freeze log output lives in the console buffer, frozen-in-place since T+12ms.** T249 reads the region around 0x9CC5C and the 0x9CDB0 assert-text area to capture anything fw printed during its 0–12ms init window before the hang at fn 0x1FC2.
+
+1. **Single snapshot at t+90000ms** (no second snapshot — fw is frozen, read would be identical; probe cost better spent widening the window).
+2. **Primary read: `TCM[0x9CA00..0x9CCA0]` — 160 u32s = 640 bytes.** Covers console log buffer + struct area around write-idx at 0x9CC5C. Decode dwords at 0x9CC5C-8 and 0x9CC5C+4..8 first — standard Broadcom console_info layout is `{buf_ptr, bufsize, in_idx, out_idx}` contiguous. Translate (buf_ptr & 0xFFFFF) → TCM offset for T250 buffer-content read.
+3. **Secondary read: `TCM[0x9CDB0..0x9CE10]` — 24 u32s = 96 bytes.** Historic assert-text region per pcie.c annotations ("ASSERT in file hndarm.c line 397..."); T248's 0x9CDB0=0x77203030 = bytes "00 w" in LE already hints ASCII text.
+4. **Add 0x9d000 to per-dwell poll** — one u32/dwell, effectively free. Closes out "is the counter really frozen from first dwell?" directly in this run's data.
+5. POST decode: hex-dump with byte-swap-to-char column for the console/assert regions.
+
+**Fallback if both windows are null/garbage**: pivot to fn 0x1FC2 disassembly path from test.94 — that thread was active pre-T230 and has the most direct reach to the hang. Don't accept null twice in this direction before revisiting.
+
+Proceed to PRE-TEST.250 design.
+
+
+---
+
 ## PRE-TEST.250 (2026-04-23 15:3x BST, boot 0 after test.249 crash + SMC reset) — **console buf_ptr gap dump.** T249 captured log content fragments starting mid-phrase at 0x9CDB0; the 240-byte gap at 0x9CCB0..0x9CDB0 (exactly where buf_ptr VA 0x8009ccbe → TCM[0x9CCBE] lives) was never dumped. Single-focus probe fills it; STAK-canary window dropped.
 
 ### Hypothesis
