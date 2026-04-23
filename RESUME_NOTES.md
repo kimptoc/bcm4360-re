@@ -449,6 +449,20 @@ sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
 Budget 240 s per test.238 precedent. Sysctls nmi_watchdog=1,
 hardlockup_panic=1, softlockup_panic=1 armed as before.
 
+### Pre-committed test.240 decision tree (per advisor)
+
+Before running test.239, here's what each outcome branches to —
+pre-committed to avoid post-hoc "consistent with plan" bias:
+
+| Test.239 observation | Test.240 direction |
+|---|---|
+| sharedram_ptr stays 0xffc70038 through last landed dwell | Fw boots but never reaches shared-struct allocation. Test.240: add a host "HostRDY" doorbell ring (H2D_MAILBOX_0 or equivalent) during an early dwell to see if fw is blocked on host handshake. |
+| sharedram_ptr changes to a valid RAM address at t=T* | Fw completed shared-struct init at T*. Test.240: read the pcie_shared struct from that address, log its fields (ring_info_addr, console_addr, mailbox addrs) and share-magic. No fw change needed — pure observation, should be clean. |
+| sharedram_ptr changes to 0xffffffff | Bus error reading the slot (device disappeared from BAR2 window). Test.240: narrow when the bus-error condition starts by cross-referencing with last landed dwell; investigate PCIe config space post-test. |
+| sharedram_ptr changes to a non-RAM non-marker non-all-ones value | Fw wrote garbage. Test.240: inspect what it wrote — could be a bug in our test, a chip quirk, or a firmware internal that overwrites the slot for different reasons. Read nearby TCM to see if a struct was written. |
+| Wedge moves EARLIER than test.238 (< t+90s) | Polling destabilises the bus during fw run (advisor's H2). Test.240: reduce poll frequency (only at t+10, 30, 60, 90 s) to confirm the dose-response; if wedge moves with poll count, polling itself is the cause. |
+| Wedge moves LATER (> t+118 s) | Polling somehow buys fw time — the read MMIO may act as a heartbeat to fw. Test.240: deliberately add extra reads spaced through the ladder to see if wedge recedes further. |
+
 ### Safety — MMIO read during dwells
 
 `brcmf_pcie_read_ram32` uses BAR2 window access — pure read, no
