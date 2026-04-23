@@ -387,7 +387,7 @@ T254 was a local-analysis pass (no kernel module load, no crash). Deliverable: `
   - **(A') RTE scheduler WFI-stall** — fw's scheduler at 0x115C ran out of runnable callbacks, wrote the sleep-flag, fell through to `wfi` at 0x1C1E. If no IRQ fires (e.g., PCIe MSI not set up because host-fw protocol handshake is incomplete), fw sleeps indefinitely. **Now a first-class candidate** — indistinguishable from (A) on host-side observables (no code runs = no TCM drift).
   - **(B) Inter-thread wait** — an RTOS task blocked on a semaphore/queue. If scheduler is also in WFI, collapses to (A'). Otherwise observed stasis (no TCM drift at T247/T239/T240 across 22 dwells in T252 journal) argues against mixed case.
   - **(C) Tick-scale corruption** — TCM[0x58C98] (blob default 0x50) overwritten to an extreme value, making `target = units * scale` overflow and inner delay loop effectively unbounded. Cheap to falsify.
-- **Drift test already present in captured data**: T247/T239/T240 values are **IDENTICAL across all 22 dwells** within the T252 boot — fw has not written any of these regions between t+100ms and t+90s. Consistent with both (A) and (A'); inconsistent with any theory where fw is executing code.
+- **Drift test in captured data (weak)**: T247/T239/T240 values are IDENTICAL across all 22 dwells within the T252 boot (verified by sort -u). But these regions aren't touched by a running-scheduler-in-idle-loop either, so "no drift here" is consistent with both "CPU stopped" AND "CPU running idle-loop that doesn't touch these regions." This evidence does NOT discriminate (A) vs (A'); the T255 sleep-flag probe is the real discriminator.
 - **wlc_phy_attach's own body NOT under suspicion**: 213 insns, only 2 direct dispatch calls both to idx-0 (benign), no tight loops, all BL targets have bounded loops or no loops. Moves emphasis AWAY from the "inside wlc_phy_attach" reading.
 
 ### Next-test direction (T255 — candidates for advisor review)
@@ -407,5 +407,114 @@ Hardware probe, informed by T254 narrowing + WFI reachability:
 Proposed T255 payload: probes (1) + (2) + (3) at t+60s = 20 u32 total. Cheaper than T253 (32 u32). Discriminates (A) vs (A') vs (C).
 
 Advisor call before committing to T255 design.
+
+---
+
+## PRE-TEST.255 (2026-04-23 19:xx BST, boot 0 after test.253 crash + SMC reset) — **RTE scheduler state probe + drift test + 0x9355C decode.** Primary: four BSS fields (callback list, current task, sleep-flag, context-ptr) at t+100ms AND t+90s — drift + discrimination between (A) bus-stall and (A') WFI-idle. Secondary: 0x58C98 tick-scale, 0x93550..0x9358C struct family.
+
+### Hypothesis
+
+Three fw-hang hypotheses survived T254:
+- **(A)** CPU stalled on backplane access (LDR/STR to unclocked SB core backpressures ARM core).
+- **(A')** CPU in WFI inside RTE scheduler idle hook (0x115C → 0x11CC → 0x1C0C → 0x1C1E). Would have written the sleep-flag at BSS[0x629B4] before entering WFI.
+- **(C)** Tick-scale at TCM[0x58C98] corrupted, making `bl #0x1ADC` delay effectively unbounded.
+
+**Discriminator**: the scheduler-BSS four at 0x6296C/0x629A4/0x6299C/0x629B4 are **blob-zero** at boot (confirmed via blob read). Any non-zero at probe time proves fw's scheduler ran. The sleep-flag specifically (0x629B4) is written ONLY if the scheduler reaches the idle-path fall-through.
+
+### Decision matrix
+
+| BSS[0x629B4] (sleep-flag) | BSS[0x629A4] (cb-head) | BSS[0x6299C] (cur-task) | Reading |
+|---|---|---|---|
+| 0 @ t+100ms AND t+90s | 0 | 0 | Scheduler never entered main loop → (A) bus-stall very early, OR fw never booted past WFI-less init |
+| ≠0 at any dwell | any | any | **(A') confirmed** — scheduler reached sleep path at least once |
+| 0 @ both, others non-zero | non-zero | non-zero | Scheduler ran callbacks but never entered idle-path → fw stuck in a callback; (A) bus-stall within a callback |
+| Values DIFFER between t+100ms and t+90s | — | — | Scheduler ran between the two probes → NOT bus-stalled, likely (A') in-and-out |
+| TCM[0x58C98] != 0x50 | — | — | **(C) tick-scale corrupted** |
+
+### Design
+
+**Primary probes at t+100ms AND t+90s** (drift detection on scheduler state):
+
+| Dwell | Probe | u32 | Rationale |
+|---|---|---|---|
+| t+100ms | `TCM[0x6296C, 0x629A4, 0x6299C, 0x629B4]` (4 discrete u32) | 4 | Early scheduler-state snapshot |
+| t+100ms | `TCM[0x58C98]` (1 u32) | 1 | Tick-scale early check |
+| t+90s | `TCM[0x6296C, 0x629A4, 0x6299C, 0x629B4]` (4 discrete u32) | 4 | Late scheduler-state snapshot for drift comparison |
+| t+90s | `TCM[0x58C98]` (1 u32) | 1 | Tick-scale late check |
+| t+60s | `TCM[0x93550..0x9358C]` (16 u32) | 16 | Secondary: decode 0x9355C family (T253 follow-up) |
+| every dwell (23 pts) | `TCM[0x9d000]` (1 u32) | 23 | Continue frozen-ctr poll (n=6 replication) |
+
+Total: 10 + 16 + 23 = 49 reads. Cheaper than T253 (55 reads).
+
+**Runtime config**: `bcm4360_test255_sched_probe=1 bcm4360_test255_sched_late=1 bcm4360_test255_struct_decode=1`.
+
+**Log format**:
+```
+test.255: t+100ms sched[0x6296C,0x629A4,0x6299C,0x629B4]=... 0x58C98=...
+test.255: t+90000ms sched[0x6296C,0x629A4,0x6299C,0x629B4]=... 0x58C98=...
+test.255: t+60000ms struct[0x93550..0x9358C] = 16 hex values (0x9355C family)
+```
+
+### Next-step matrix
+
+| T255 Observation | Implication | T256 direction |
+|---|---|---|
+| sleep-flag 0x629B4 != 0 @ any dwell | **(A') WFI-stall confirmed** — scheduler reached idle. Focus shifts to "why no IRQ wakes fw" → PCIe MSI setup, host-fw handshake, intr mask state. | Probe PCIe MSI state; check host-side MSI enable; examine fw IRQ handlers. |
+| All 4 BSS fields drift between t+100ms and t+90s | Scheduler alive, cycling through work. Hang is in a callback or a polling site reached from dispatcher. | Decode callback list contents (walk 0x629A4 next-pointers). |
+| All 4 BSS fields zero at both dwells | Scheduler never ran → (A) bus-stall before scheduler start. Hang is in very-early-init. | Narrow to pre-scheduler init code; probe ChipCommon / backplane state. |
+| 0x58C98 != 0x50 | (C) factor present. Delay loops unbounded. | Check what overwrote it; trace WRITE sites in blob. |
+| 0x9355C family shows Thumb-PC pointers or magic | Opens new decode axis. | Chase those pointers in local disasm. |
+| Counter 0x9d000 = 0x43b1 across 23 dwells (n=6) | test.89 frozen-ctr holds. | No further action. |
+
+### Safety
+
+- All BAR2 reads, no register side effects.
+- Total added reads: 10 + 16 + 23 = 49. Cheaper than T253 (55).
+- SMC reset expected after wedge (n=8 streak T247..T255 expected).
+- BSS addresses 0x6296C/0x629A4/0x6299C/0x629B4 all within TCM (0..0xA0000) — safe BAR2 targets. Tick-scale 0x58C98 likewise safe.
+
+### Code change outline
+
+1. New module params: `bcm4360_test255_sched_probe`, `bcm4360_test255_sched_late`, `bcm4360_test255_struct_decode`.
+2. New macros in pcie.c:
+   - `BCM4360_T255_SCHED_PROBE(stage_tag)` — 5 u32 reads (4 BSS + 1 tick-scale) → 1 pr_emerg line. Fires at t+100ms (via `sched_probe` param) and t+90s (via `sched_late` param).
+   - `BCM4360_T255_STRUCT_DECODE(stage_tag)` — 16 u32 reads at 0x93550..0x9358C → 1 pr_emerg line. Fires once at t+60s.
+3. Extend T239 ctr gate: `if (... || bcm4360_test255_sched_probe || bcm4360_test255_sched_late || bcm4360_test255_struct_decode)`.
+4. Invocation: at t+100ms dwell call `BCM4360_T255_SCHED_PROBE("t+100ms")`; at t+60s call struct_decode; at t+90s call sched_probe late.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 \
+    bcm4360_test248_wide_tcm_scan=1 \
+    bcm4360_test255_sched_probe=1 \
+    bcm4360_test255_sched_late=1 \
+    bcm4360_test255_struct_decode=1
+sleep 240
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+Note: T249/T250/T251/T252/T253 params NOT set (already captured).
+
+### Expected artifacts
+
+- `phase5/logs/test.255.run.txt`
+- `phase5/logs/test.255.journalctl.txt`
+
+### Pre-test checklist
+
+1. **Build status**: NOT yet rebuilt — need to add T255 module params + macros + invocations, rebuild, verify modinfo shows new params, verify strings shows the 3 expected log lines.
+2. **PCIe state**: confirm clean (Mem+ BusMaster+ MAbort-) before insmod.
+3. **Hypothesis**: stated above — sleep-flag drift at 0x629B4 discriminates (A) vs (A'); tick-scale check discriminates (C).
+4. **Plan**: this block (committed before code change).
+5. **Host state**: boot 0 started 18:11:33 BST, stable, uptime healthy. No brcm modules loaded.
+
+Advisor-reviewed; T254 follow-through complete. Pending code change + build + test.
 
 ---
