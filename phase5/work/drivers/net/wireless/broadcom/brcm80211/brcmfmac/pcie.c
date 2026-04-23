@@ -140,6 +140,31 @@ static int bcm4360_test239_poll_sharedram;
 module_param(bcm4360_test239_poll_sharedram, int, 0644);
 MODULE_PARM_DESC(bcm4360_test239_poll_sharedram, "BCM4360 test.239: poll TCM[ramsize-4] sharedram pointer at every test.238 dwell breadcrumb (1=poll, 0=off)");
 
+/* BCM4360 test.240: ring upstream's "HostRDY" doorbell (write 1 to PCIE2
+ * H2D_MAILBOX_1, BAR0 + 0x144) at the t+2000ms dwell breadcrumb to test
+ * whether fw is blocked on a host-side handshake. Test.239 proved fw
+ * never overwrites TCM[ramsize-4] with sharedram_addr in ≥90s — far
+ * past upstream's BRCMF_PCIE_FW_UP_TIMEOUT (5s). One reading is fw is
+ * waiting on host doorbell ring before it advances to shared-struct
+ * setup. Single-write side effect: pure register store; if fw asserts
+ * a D2H IRQ in response, host has no MSI installed yet so it bit-buckets.
+ * Pair with poll_sharedram=1 + wide_poll=1 to observe any tail-TCM
+ * change post-ring. Default 0. */
+static int bcm4360_test240_ring_h2d_db1;
+module_param(bcm4360_test240_ring_h2d_db1, int, 0644);
+MODULE_PARM_DESC(bcm4360_test240_ring_h2d_db1, "BCM4360 test.240: ring H2D_MAILBOX_1 (BAR0+0x144=1) at t+2000ms dwell (1=ring, 0=off)");
+
+/* BCM4360 test.240: scan a wider tail-TCM window (16 dwords,
+ * ramsize-64..ramsize-4) at every test.239 poll point instead of just
+ * the single sharedram slot. Fw might write a status/heartbeat or even
+ * its shared-struct address at a non-standard offset; one extra
+ * MMIO read per dwell costs negligible vs the test.239 baseline that
+ * already proved fw doesn't watchdog on bus activity. Read-only MMIO,
+ * zero-side-effect. Pair with poll_sharedram=1. Default 0. */
+static int bcm4360_test240_wide_poll;
+module_param(bcm4360_test240_wide_poll, int, 0644);
+MODULE_PARM_DESC(bcm4360_test240_wide_poll, "BCM4360 test.240: scan tail-TCM [ramsize-64..ramsize-4] (15 dwords) at every dwell instead of single slot (1=wide, 0=narrow)");
+
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
  * stage=1: write IOCTL = FGC|CLK (coredisable in_reset_configure step)
@@ -2681,15 +2706,32 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				msleep(1000);
 				pr_emerg("BCM4360 test.235: 1000 ms dwell done (no fw activation); proceeding to BM-clear + release\n");
 			} else if (bcm4360_test238_ultra_dwells) {
-				/* test.239: poll helper — read TCM[ramsize-4] and log
-				 * if bcm4360_test239_poll_sharedram is set. Zero cost if
-				 * off. */
+				/* test.239 + test.240: poll helper. test.239 reads
+				 * TCM[ramsize-4]; test.240 wide_poll additionally
+				 * reads 15 dwords starting at ramsize-64 (so the
+				 * full tail-TCM window ramsize-64..ramsize-4 is
+				 * covered). Zero cost when both flags off. */
 #define BCM4360_T239_POLL(ms_tag) do { \
 					if (bcm4360_test239_poll_sharedram) { \
 						u32 _v = brcmf_pcie_read_ram32(devinfo, \
 							devinfo->ci->ramsize - 4); \
 						pr_emerg("BCM4360 test.239: t+" ms_tag " sharedram_ptr=0x%08x\n", \
 							 _v); \
+						if (bcm4360_test240_wide_poll) { \
+							u32 _w[15]; \
+							int _i; \
+							for (_i = 0; _i < 15; _i++) \
+								_w[_i] = brcmf_pcie_read_ram32(devinfo, \
+									devinfo->ci->ramsize - 64 + _i * 4); \
+							pr_emerg("BCM4360 test.240: t+" ms_tag \
+								 " tail-TCM[-64..-8] = " \
+								 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+								 "%08x %08x %08x %08x %08x %08x %08x\n", \
+								 _w[0], _w[1], _w[2], _w[3], \
+								 _w[4], _w[5], _w[6], _w[7], \
+								 _w[8], _w[9], _w[10], _w[11], \
+								 _w[12], _w[13], _w[14]); \
+						} \
 					} \
 				} while (0)
 
@@ -2720,6 +2762,17 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				BCM4360_T239_POLL("1500ms");
 				msleep(500);
 				pr_emerg("BCM4360 test.238: t+2000ms dwell\n");
+				if (bcm4360_test240_ring_h2d_db1) {
+					u32 _rb;
+					pr_emerg("BCM4360 test.240: ringing H2D_MAILBOX_1 (BAR0+0x%x)=1 at t+2000ms\n",
+						 BRCMF_PCIE_PCIE2REG_H2D_MAILBOX_1);
+					brcmf_pcie_write_reg32(devinfo,
+						BRCMF_PCIE_PCIE2REG_H2D_MAILBOX_1, 1);
+					_rb = brcmf_pcie_read_reg32(devinfo,
+						BRCMF_PCIE_PCIE2REG_H2D_MAILBOX_1);
+					pr_emerg("BCM4360 test.240: H2D_MAILBOX_1 ring done; readback=0x%08x\n",
+						 _rb);
+				}
 				BCM4360_T239_POLL("2000ms");
 				msleep(1000);
 				pr_emerg("BCM4360 test.238: t+3000ms dwell\n");
