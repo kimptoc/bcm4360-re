@@ -1,0 +1,36 @@
+=== test.256 PRE (2026-04-23T20:32:27+01:00) ===
+
+=== lspci PRE (sudo) ===
+	Control: I/O- Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+		Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=2 PME-
+		DevSta:	CorrErr+ NonFatalErr- FatalErr- UnsupReq+ AuxPwr+ TransPend-
+		LnkCtl:	ASPM L0s L1 Enabled; RCB 64 bytes, LnkDisable- CommClk+
+		LnkSta:	Speed 2.5GT/s, Width x1
+		DevCtl2: Completion Timeout: 50us to 50ms, TimeoutDis-
+		LnkCtl2: Target Link Speed: 2.5GT/s, EnterCompliance- SpeedDis-
+		LnkSta2: Current De-emphasis Level: -3.5dB, EqualizationComplete- EqualizationPhase1-
+		UESta:	DLP- SDES- TLP- FCP- CmpltTO- CmpltAbrt- UnxCmplt- RxOF- MalfTLP-
+		CESta:	RxErr- BadTLP- BadDLLP- Rollover- Timeout- AdvNonFatalErr+ CorrIntErr- HeaderOF-
+		Status:	InProgress-
+			Status:	NegoPending- InProgress-
+
+=== modprobe cfg80211 ===
+ok
+
+=== modprobe brcmutil ===
+ok
+brcmutil               16384  0
+
+=== md5 ===
+2b3edee76a132137c66ff3d539f29bc1  /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko
+
+=== insmod brcmfmac (T236/238/239/240/247/248/256 — T249/250/251/252/253/255 OFF) 2026-04-23T20:32:38+01:00 ===
+insmod backgrounded PID=4045 at 2026-04-23T20:32:38+01:00
+
+=== test.256 FIRST RUN FAILED — fw wedged before dwell ladder ===
+Boot -1: 20:31:08 -> 20:34:59. insmod at 20:32:38. Last log = "CC-clk_ctl_st=0x01030040 (pre-release snapshot)" at 20:34:59. No test.238 dwell entries, no T256 probe data. Machine auto-rebooted (clean PCIe now).
+
+=== test.256 RE-FIRE with sched_walk_early added ===
+Added bcm4360_test256_sched_walk_early param + t+100ms invocation for redundancy.
+New md5: cc6e9304e7fbf287b4e68facd036dd47
