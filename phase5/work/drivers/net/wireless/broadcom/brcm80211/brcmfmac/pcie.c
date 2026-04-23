@@ -475,6 +475,65 @@ MODULE_PARM_DESC(bcm4360_test250_console_gap, "BCM4360 test.250: dump 96 u32s at
 
 
 
+/* BCM4360 test.251: console ring-end + backward-read from buf_ptr.
+ * T250 captured log content 0x9CCB0..0x9CE30 (Chipc init, wl_probe,
+ * dngl_probe, RTE banner). Open questions: (1) where does the ring
+ * end past 0x9CE30? (2) is buf_ptr (0x9CCBE) a forward-write index
+ * (if so, bytes before 0x9CCBE are the newest writes)?
+ *
+ * Probe: 12 u32s at 0x9CC80..0x9CCAC (backward from buf_ptr, fills
+ * gap between T249 struct-area end at 0x9CC7C and T250 start at
+ * 0x9CCB0) + 64 u32s at 0x9CE30..0x9CF30 (forward continuation, may
+ * contain ring boundary or older content depending on direction).
+ * All BAR2 reads. */
+static int bcm4360_test251_console_ext;
+module_param(bcm4360_test251_console_ext, int, 0644);
+MODULE_PARM_DESC(bcm4360_test251_console_ext, "BCM4360 test.251: dump 12 u32 at 0x9CC80..0x9CCAC (backward from buf_ptr) + 64 u32 at 0x9CE30..0x9CF30 (forward past T250) at t+60s, closes ring-layout question; also per-dwell 0x9d000 poll (1=enable, 0=off)");
+
+/* BCM4360 test.251: ring-extension helper. 3 pr_emerg lines total.
+ * Line 1: 12 u32 at 0x9CC80..0x9CCAC (~180 char).
+ * Line 2: 32 u32 at 0x9CE30..0x9CEAC (~350 char).
+ * Line 3: 32 u32 at 0x9CEB0..0x9CF2C (~350 char).
+ * Zero cost when off. */
+#define BCM4360_T251_RING_EXT(stage_tag) do { \
+	if (bcm4360_test251_console_ext) { \
+		u32 _b251[12]; \
+		u32 _f251[64]; \
+		int _n251; \
+		for (_n251 = 0; _n251 < 12; _n251++) \
+			_b251[_n251] = brcmf_pcie_read_ram32(devinfo, \
+				0x9CC80 + _n251 * 4); \
+		for (_n251 = 0; _n251 < 64; _n251++) \
+			_f251[_n251] = brcmf_pcie_read_ram32(devinfo, \
+				0x9CE30 + _n251 * 4); \
+		pr_emerg("BCM4360 test.251: " stage_tag " TCM[0x9cc80..0x9ccac] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x\n", \
+			 _b251[0], _b251[1], _b251[2], _b251[3], _b251[4], _b251[5], _b251[6], _b251[7], \
+			 _b251[8], _b251[9], _b251[10], _b251[11]); \
+		pr_emerg("BCM4360 test.251: " stage_tag " TCM[0x9ce30..0x9ceac] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _f251[0], _f251[1], _f251[2], _f251[3], _f251[4], _f251[5], _f251[6], _f251[7], \
+			 _f251[8], _f251[9], _f251[10], _f251[11], _f251[12], _f251[13], _f251[14], _f251[15], \
+			 _f251[16], _f251[17], _f251[18], _f251[19], _f251[20], _f251[21], _f251[22], _f251[23], \
+			 _f251[24], _f251[25], _f251[26], _f251[27], _f251[28], _f251[29], _f251[30], _f251[31]); \
+		pr_emerg("BCM4360 test.251: " stage_tag " TCM[0x9ceb0..0x9cf2c] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _f251[32], _f251[33], _f251[34], _f251[35], _f251[36], _f251[37], _f251[38], _f251[39], \
+			 _f251[40], _f251[41], _f251[42], _f251[43], _f251[44], _f251[45], _f251[46], _f251[47], \
+			 _f251[48], _f251[49], _f251[50], _f251[51], _f251[52], _f251[53], _f251[54], _f251[55], \
+			 _f251[56], _f251[57], _f251[58], _f251[59], _f251[60], _f251[61], _f251[62], _f251[63]); \
+	} \
+} while (0)
+
+
+
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
  * stage=1: write IOCTL = FGC|CLK (coredisable in_reset_configure step)
@@ -3219,7 +3278,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							 _s247[16], _s247[17]); \
 					} \
 					if (bcm4360_test249_console_dump || \
-					    bcm4360_test250_console_gap) { \
+					    bcm4360_test250_console_gap || \
+					    bcm4360_test251_console_ext) { \
 						u32 _ctr249 = brcmf_pcie_read_ram32(devinfo, \
 							0x9d000); \
 						pr_emerg("BCM4360 test.249: t+" ms_tag \
@@ -3392,6 +3452,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				BCM4360_T239_POLL("60000ms");
 				BCM4360_T249_CONSOLE_WINDOW("t+60000ms");
 				BCM4360_T250_GAP_WINDOW("t+60000ms");
+				BCM4360_T251_RING_EXT("t+60000ms");
 				msleep(30000);
 				pr_emerg("BCM4360 test.238: t+90000ms dwell\n");
 				BCM4360_T239_POLL("90000ms");

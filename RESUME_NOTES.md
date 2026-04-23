@@ -192,6 +192,104 @@ Proceed to PRE-TEST.250 design.
 
 ---
 
+## PRE-TEST.251 (2026-04-23 15:5x BST, boot 0 after test.250 crash + SMC reset) — **console ring-end + backward-read from buf_ptr.** T250 captured log content 0x9CCB0..0x9CE30 but two questions remain: (1) where does the ring end past 0x9CE30? and (2) is buf_ptr a forward-write index (if so, content just-before 0x9CCBE is newest). T251 answers both in a single t+60s probe.
+
+### Hypothesis
+
+Advisor-sharpened reading of T250: timestamps "125888.XXX" × 100ns = 12.5888 ms — matches test.89 freeze at T+12ms exactly. All four timestamps cluster tight (125888.000..001..0000), consistent with a burst of log writes ending at freeze. This favors: fw ran ~12ms, flushed a batch of log records, froze. If buf_ptr at 0x9CCBE is the forward-write index, then content at 0x9CCBC and earlier is the most-recently-written text — newer than what we saw at 0x9CDB0..0x9CE30.
+
+**Observables at 0x9CC80..0x9CCAC (backward-read, 12 u32 / 48 B):**
+- If forward-write ring: this region holds the NEWEST log records — last lines fw printed before hang.
+- If backward-write ring: this region is older content or canary/zeros.
+- The gap between T249's struct-area end (0x9CC7C) and T250's gap-dump start (0x9CCB0) is exactly 48 bytes.
+
+**Observables at 0x9CE30..0x9CF30 (forward-past-T250, 64 u32 / 256 B):**
+- If forward-write ring: this region holds OLDER log records, possibly ring-start or a boundary/zeros.
+- If backward-write ring: this region holds newer content past dngl_probe.
+- 0x9CFE0 is the trap-struct region (T248 0x000934c0) — bounded above.
+
+**Ring-layout decision**: whichever region holds "dense structured records continuing the Chipc/wl_probe/dngl_probe/banner sequence" is the NEWER end. The other is OLDER end or off-ring.
+
+### Design
+
+**Single probe at t+60000ms** (drops T249 console window + T250 gap window — both already captured):
+
+| Dwell | Added probe | u32 reads | Rationale |
+|---|---|---|---|
+| t+60000ms | `TCM[0x9CC80..0x9CCAC]` (12 u32s = 48 B) | 12 | Backward-read from buf_ptr at 0x9CCBE — closes forward/backward ring-layout question. |
+| t+60000ms | `TCM[0x9CE30..0x9CF30]` (64 u32s = 256 B) | 64 | Forward-past-T250 continuation — finds ring-end boundary (expect zeros/canary past some address ≤ 0x9CFE0). |
+| every dwell (23 points) | `TCM[0x9d000]` (1 u32) | 23 total | Same per-dwell poll, now gated on T249 \|\| T250 \|\| T251. n=3 replication of test.89. |
+
+**Log format (3 pr_emerg lines at t+60s):**
+
+```
+test.251: t+60000ms TCM[0x9cc80..0x9ccac] = 12 hex values (backward-read from buf_ptr)
+test.251: t+60000ms TCM[0x9ce30..0x9ceac] = 32 hex values (forward continuation head)
+test.251: t+60000ms TCM[0x9ceb0..0x9cf2c] = 32 hex values (forward continuation tail)
+```
+
+Line-length budget: 32 × 9 + prefix ~60 = ~350 chars. Backward line is ~180 chars. Well under LOG_LINE_MAX 1024.
+
+**Runtime config**: `bcm4360_test249_console_dump=0 bcm4360_test250_console_gap=0 bcm4360_test251_console_ext=1`. Drops already-captured windows; keeps struct/widescan baselines.
+
+### Next-step matrix
+
+| Observation | Implication | T252 direction |
+|---|---|---|
+| 0x9CC80..0x9CCAC contains ASCII log records continuing Chipc/wl_probe/dngl_probe sequence | **Forward-write ring confirmed.** Backward-content is newest; LAST line fw printed sits here. | Decode last line → correlate with public fw 6.30.223 init sequence → identify hang point. |
+| 0x9CC80..0x9CCAC is zeros or canary; 0x9CE30..0x9CF30 has dense records | **Backward-write (or wrapped) ring.** Content at 0x9CE30+ is newer. Look for last-line there. | Decode 0x9CE30+ tail; correlate with fw init sequence. |
+| Both regions have dense records | Ring doesn't align to our hypothesized boundaries; probably a larger window. | Widen further: dump 0x9CC00..0x9D000 in a future probe. |
+| 0x9CE30..0x9CF30 has zeros/canary boundary | **Ring-end found** somewhere in this window. Exact boundary narrows ring size → total log capacity → how much we've captured. | Document ring boundary; reassess remaining questions. |
+| Counter 0x9d000 = 0x43b1 across all 23 dwells (n=3 replication) | Test.89 single-write confirmed at n=3. | No further action on this axis. |
+
+### Safety
+
+- All BAR2 reads, no register side effects.
+- Total added reads: 12 + 64 at t+60s + 23 per-dwell = 99 reads. Comparable to T250.
+- SMC reset expected to be required after wedge (n=5 streak T247..T251).
+
+### Code change outline
+
+1. New module param `bcm4360_test251_console_ext` near T250's.
+2. New macro `BCM4360_T251_RING_EXT(stage_tag)` reading:
+   - 12 u32s at 0x9CC80..0x9CCAC (1 pr_emerg line)
+   - 64 u32s at 0x9CE30..0x9CF30 (2 pr_emerg lines × 32 u32 each)
+3. Extend T239 ctr gate: `if (bcm4360_test249_console_dump || bcm4360_test250_console_gap || bcm4360_test251_console_ext)`.
+4. Invocation: right after `BCM4360_T250_GAP_WINDOW("t+60000ms")` (pcie.c:3394).
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 \
+    bcm4360_test248_wide_tcm_scan=1 \
+    bcm4360_test251_console_ext=1
+sleep 240
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+Note: `bcm4360_test249_console_dump` and `bcm4360_test250_console_gap` are NOT set.
+
+### Expected artifacts
+
+- `phase5/logs/test.251.run.txt`
+- `phase5/logs/test.251.journalctl.txt`
+
+### Pre-test checklist (complete — READY TO FIRE)
+
+1. **Build status**: **REBUILT + VERIFIED.** md5sum `2c8a4a36130b1f10a10e0314c16d2270` on `brcmfmac.ko`. `modinfo` shows new param `bcm4360_test251_console_ext`. `strings` confirms all 3 T251 format lines (12-u32 backward + 2 × 32-u32 forward). Only pre-existing unused-variable warnings (no new regressions).
+2. **PCIe state**: **clean.** `Mem+ BusMaster+`, MAbort-, DEVSEL=fast, LnkSta 2.5GT/s x1, UESta all zero, CESta AdvNonFatalErr+ (pre-existing sticky). Re-verified 15:49 BST.
+3. **Hypothesis**: stated — backward-read closes ring-layout question; forward-past-T250 finds ring boundary.
+4. **Plan**: this block + code change to be committed and pushed before insmod.
+5. **Host state**: boot 0 started 15:37:02 BST, uptime ~12 min at plan time, stable. No brcm modules loaded.
+
+---
+
 ### Hardware state (current, 2026-04-23 15:37+ BST, boot 0 after test.250 crash **with SMC reset**)
 
 `sudo lspci -s 03:00.0`: `Mem+ BusMaster+`, MAbort-, DEVSEL=fast, LnkSta 2.5GT/s x1, UESta all zero, CESta AdvNonFatalErr+ (pre-existing sticky). No brcm modules loaded. Boot 0 started 15:37:02 BST. Host healthy.
