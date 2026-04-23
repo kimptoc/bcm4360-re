@@ -418,6 +418,61 @@ MODULE_PARM_DESC(bcm4360_test249_console_dump, "BCM4360 test.249: console window
 	} \
 } while (0)
 
+/* BCM4360 test.250: console buffer-gap dump.
+ * T249 dumped 0x9CA00..0x9CCA0 (found all STAK canary) and
+ * 0x9CDB0..0x9CE10 (found ASCII log text starting mid-phrase).
+ * The 240-byte gap at 0x9CCB0..0x9CDB0 was never dumped — buf_ptr
+ * VA 0x8009ccbe (seen at 0x9CC5C) → TCM offset 0x9CCBE, i.e. the
+ * unread end-of-log sits exactly in that gap. T250 dumps 96 u32s
+ * (384 B) at 0x9CCB0..0x9CE30 in 3 pr_emerg lines of 32 u32s each,
+ * fired at t+60000ms (same envelope as T249's console window, with
+ * ~30s headroom before the wedge). Also extends the T249 per-dwell
+ * 0x9d000 counter poll so the frozen-counter streak evidence is
+ * retained when T249's STAK window is disabled. All BAR2 reads. */
+static int bcm4360_test250_console_gap;
+module_param(bcm4360_test250_console_gap, int, 0644);
+MODULE_PARM_DESC(bcm4360_test250_console_gap, "BCM4360 test.250: dump 96 u32s at 0x9CCB0..0x9CE30 at t+60s (buf_ptr gap; T249 found content mid-phrase at 0x9CDB0) + per-dwell 0x9d000 poll (1=enable, 0=off)");
+
+/* BCM4360 test.250: gap-window helper. Reads 96 u32s starting at
+ * 0x9CCB0 and emits 3 pr_emerg lines of 32 u32s each (line length
+ * ~350 chars — within kernel LOG_LINE_MAX). Zero cost when off. */
+#define BCM4360_T250_GAP_WINDOW(stage_tag) do { \
+	if (bcm4360_test250_console_gap) { \
+		u32 _g250[96]; \
+		int _n250; \
+		for (_n250 = 0; _n250 < 96; _n250++) \
+			_g250[_n250] = brcmf_pcie_read_ram32(devinfo, \
+				0x9CCB0 + _n250 * 4); \
+		pr_emerg("BCM4360 test.250: " stage_tag " TCM[0x9ccb0..0x9cd2c] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _g250[0], _g250[1], _g250[2], _g250[3], _g250[4], _g250[5], _g250[6], _g250[7], \
+			 _g250[8], _g250[9], _g250[10], _g250[11], _g250[12], _g250[13], _g250[14], _g250[15], \
+			 _g250[16], _g250[17], _g250[18], _g250[19], _g250[20], _g250[21], _g250[22], _g250[23], \
+			 _g250[24], _g250[25], _g250[26], _g250[27], _g250[28], _g250[29], _g250[30], _g250[31]); \
+		pr_emerg("BCM4360 test.250: " stage_tag " TCM[0x9cd30..0x9cdac] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _g250[32], _g250[33], _g250[34], _g250[35], _g250[36], _g250[37], _g250[38], _g250[39], \
+			 _g250[40], _g250[41], _g250[42], _g250[43], _g250[44], _g250[45], _g250[46], _g250[47], \
+			 _g250[48], _g250[49], _g250[50], _g250[51], _g250[52], _g250[53], _g250[54], _g250[55], \
+			 _g250[56], _g250[57], _g250[58], _g250[59], _g250[60], _g250[61], _g250[62], _g250[63]); \
+		pr_emerg("BCM4360 test.250: " stage_tag " TCM[0x9cdb0..0x9ce2c] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _g250[64], _g250[65], _g250[66], _g250[67], _g250[68], _g250[69], _g250[70], _g250[71], \
+			 _g250[72], _g250[73], _g250[74], _g250[75], _g250[76], _g250[77], _g250[78], _g250[79], \
+			 _g250[80], _g250[81], _g250[82], _g250[83], _g250[84], _g250[85], _g250[86], _g250[87], \
+			 _g250[88], _g250[89], _g250[90], _g250[91], _g250[92], _g250[93], _g250[94], _g250[95]); \
+	} \
+} while (0)
+
 
 
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
@@ -3163,7 +3218,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							 _s247[12], _s247[13], _s247[14], _s247[15], \
 							 _s247[16], _s247[17]); \
 					} \
-					if (bcm4360_test249_console_dump) { \
+					if (bcm4360_test249_console_dump || \
+					    bcm4360_test250_console_gap) { \
 						u32 _ctr249 = brcmf_pcie_read_ram32(devinfo, \
 							0x9d000); \
 						pr_emerg("BCM4360 test.249: t+" ms_tag \
@@ -3335,6 +3391,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				pr_emerg("BCM4360 test.238: t+60000ms dwell\n");
 				BCM4360_T239_POLL("60000ms");
 				BCM4360_T249_CONSOLE_WINDOW("t+60000ms");
+				BCM4360_T250_GAP_WINDOW("t+60000ms");
 				msleep(30000);
 				pr_emerg("BCM4360 test.238: t+90000ms dwell\n");
 				BCM4360_T239_POLL("90000ms");
