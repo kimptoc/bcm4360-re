@@ -721,6 +721,16 @@ static int bcm4360_test262_msi_poll_only;
 module_param(bcm4360_test262_msi_poll_only, int, 0644);
 MODULE_PARM_DESC(bcm4360_test262_msi_poll_only, "BCM4360 test.262: control variant — enable MSI + request_irq + run the same 50×{msleep(100); log MAILBOXINT + buf_ptr} timeline, but SKIP both MAILBOXMASK and H2D_MAILBOX_1 writes. Isolates whether the shared instrumentation scaffold alone wedges host. (1=enable, 0=off)");
 
+/* BCM4360 test.263: short-scaffold variant. Same as T262 (MSI +
+ * request_irq + poll loop, no register writes) but 10 iterations instead
+ * of 50. Cleanup path (timeline-done print + free_irq + pci_disable_msi)
+ * will execute under t+125s for the first time — lets us see whether
+ * cleanup itself is the crasher, or whether crash is time-anchored
+ * (fires at t+125s regardless of scaffold duration). */
+static int bcm4360_test263_short;
+module_param(bcm4360_test263_short, int, 0644);
+MODULE_PARM_DESC(bcm4360_test263_short, "BCM4360 test.263: short-scaffold variant — same as T262 but only 10 iterations (1s loop instead of 5s). Discriminates absolute-time crash (t+125s) vs scaffold-duration crash vs cleanup-path crash. (1=enable, 0=off)");
+
 /* BCM4360 test.256 scheduler-walk helper. 2 pr_emerg lines, 16 u32 each.
  * gate_flag arg lets caller pick between sched_walk (t+60s) and
  * sched_walk_early (t+100ms). */
@@ -751,7 +761,7 @@ MODULE_PARM_DESC(bcm4360_test262_msi_poll_only, "BCM4360 test.262: control varia
 #define BCM4360_T258_BUFPTR_PROBE(stage_tag) do { \
 	if (bcm4360_test258_enable_irq || bcm4360_test259_safe_enable_irq || \
 	    bcm4360_test260_mask_only || bcm4360_test260_doorbell_only || \
-	    bcm4360_test262_msi_poll_only) { \
+	    bcm4360_test262_msi_poll_only || bcm4360_test263_short) { \
 		u32 _d258bp = brcmf_pcie_read_ram32(devinfo, 0x9CC5C); \
 		u32 _d258r[16]; \
 		int _n258; \
@@ -3565,7 +3575,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					    bcm4360_test259_safe_enable_irq || \
 					    bcm4360_test260_mask_only || \
 					    bcm4360_test260_doorbell_only || \
-					    bcm4360_test262_msi_poll_only) { \
+					    bcm4360_test262_msi_poll_only || \
+					    bcm4360_test263_short) { \
 						u32 _ctr249 = brcmf_pcie_read_ram32(devinfo, \
 							0x9d000); \
 						pr_emerg("BCM4360 test.249: t+" ms_tag \
@@ -3801,27 +3812,29 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				}
 				if (bcm4360_test260_mask_only ||
 				    bcm4360_test260_doorbell_only ||
-				    bcm4360_test262_msi_poll_only) {
+				    bcm4360_test262_msi_poll_only ||
+				    bcm4360_test263_short) {
 					struct pci_dev *_pdev260 = devinfo->pdev;
 					int _prev_irq260 = _pdev260->irq;
 					int _msi_ret260, _req_ret260;
 					int _i260;
-					const char *_variant = bcm4360_test260_mask_only ?
-						"mask_only" :
-						(bcm4360_test260_doorbell_only ?
-						 "doorbell_only" : "msi_poll_only");
+					int _max_iter = bcm4360_test263_short ? 10 : 50;
+					const char *_tnum = bcm4360_test263_short ? "263" :
+						(bcm4360_test262_msi_poll_only ? "262" : "260");
+					const char *_variant = bcm4360_test263_short ? "short" :
+						(bcm4360_test260_mask_only ? "mask_only" :
+						 (bcm4360_test260_doorbell_only ?
+						  "doorbell_only" : "msi_poll_only"));
 					atomic_set(&bcm4360_t259_irq_count, 0);
 					atomic_set(&bcm4360_t259_last_mailboxint, 0);
 					_msi_ret260 = pci_enable_msi(_pdev260);
 					pr_emerg("BCM4360 test.%s %s: pci_enable_msi=%d prev_irq=%d new_irq=%d\n",
-						 bcm4360_test262_msi_poll_only ? "262" : "260",
-						 _variant, _msi_ret260, _prev_irq260, _pdev260->irq);
+						 _tnum, _variant, _msi_ret260, _prev_irq260, _pdev260->irq);
 					_req_ret260 = request_irq(_pdev260->irq,
 								  bcm4360_t259_safe_handler,
 								  IRQF_SHARED, "t260_safe", devinfo);
 					pr_emerg("BCM4360 test.%s %s: request_irq ret=%d\n",
-						 bcm4360_test262_msi_poll_only ? "262" : "260",
-						 _variant, _req_ret260);
+						 _tnum, _variant, _req_ret260);
 					if (_req_ret260 == 0) {
 						if (bcm4360_test260_mask_only) {
 							pr_emerg("BCM4360 test.260 mask_only: calling intr_enable (MAILBOXMASK write) — NO doorbell\n");
@@ -3831,35 +3844,39 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							pr_emerg("BCM4360 test.260 doorbell_only: calling hostready (H2D_MAILBOX_1 write) — NO mask\n");
 							brcmf_pcie_hostready(devinfo);
 							pr_emerg("BCM4360 test.260 doorbell_only: hostready done; starting 50×100ms timeline\n");
+						} else if (bcm4360_test263_short) {
+							pr_emerg("BCM4360 test.263 short: skipping intr_enable + hostready; starting 10×100ms timeline (1s loop)\n");
 						} else {
 							pr_emerg("BCM4360 test.262 msi_poll_only: skipping intr_enable + hostready; starting 50×100ms timeline\n");
 						}
-						for (_i260 = 0; _i260 < 50; _i260++) {
+						for (_i260 = 0; _i260 < _max_iter; _i260++) {
 							u32 _mbi = brcmf_pcie_read_reg32(devinfo, devinfo->reginfo->mailboxint);
 							u32 _bp = brcmf_pcie_read_ram32(devinfo, 0x9CC5C);
 							msleep(100);
 							pr_emerg("BCM4360 test.%s %s: t+%dms mailboxint=0x%08x buf_ptr=0x%08x irq_count=%d\n",
-								 bcm4360_test262_msi_poll_only ? "262" : "260",
-								 _variant,
+								 _tnum, _variant,
 								 120100 + _i260 * 100,
 								 _mbi, _bp,
 								 atomic_read(&bcm4360_t259_irq_count));
 						}
 						pr_emerg("BCM4360 test.%s %s: timeline done; final irq_count=%d last_mailboxint=0x%08x\n",
-							 bcm4360_test262_msi_poll_only ? "262" : "260",
-							 _variant,
+							 _tnum, _variant,
 							 atomic_read(&bcm4360_t259_irq_count),
 							 atomic_read(&bcm4360_t259_last_mailboxint));
 						if (bcm4360_test260_mask_only)
 							brcmf_pcie_intr_disable(devinfo);
+						pr_emerg("BCM4360 test.%s %s: calling free_irq\n", _tnum, _variant);
 						free_irq(_pdev260->irq, devinfo);
+						pr_emerg("BCM4360 test.%s %s: free_irq returned\n", _tnum, _variant);
 					} else {
 						pr_emerg("BCM4360 test.%s %s: request_irq FAILED (%d), skipping enable sequence\n",
-							 bcm4360_test262_msi_poll_only ? "262" : "260",
-							 _variant, _req_ret260);
+							 _tnum, _variant, _req_ret260);
 					}
-					if (_msi_ret260 == 0)
+					if (_msi_ret260 == 0) {
+						pr_emerg("BCM4360 test.%s %s: calling pci_disable_msi\n", _tnum, _variant);
 						pci_disable_msi(_pdev260);
+						pr_emerg("BCM4360 test.%s %s: pci_disable_msi returned\n", _tnum, _variant);
+					}
 				}
 #undef BCM4360_T239_POLL
 			} else if (bcm4360_test237_extended_dwells) {
