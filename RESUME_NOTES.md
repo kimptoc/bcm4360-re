@@ -43,15 +43,23 @@ Expected `t+120000ms dwell` would have logged at 00:52:46; journal
 ended 00:52:24 — ~22 s before that line was due.
 
 **Wedge-moment bounds (much tighter now):**
-- **Lower bound:** t+90 s — breadcrumb landed live with a
-  precise timestamp, proving fw+driver both ran to that point.
+- **Lower bound — from host-CPU evidence:** `wlp0s20u2` kernel
+  lines at 00:52:22–00:52:24 BST (t+96–98 s post-set_active)
+  prove at least one host CPU was scheduling non-brcmfmac wlan
+  work long after our last breadcrumb — i.e., **host was still
+  alive at ≥ t+98 s**. Wedge must be at ≥ t+98 s.
 - **Upper bound:** Applying the ~15–20 s journald tail-truncation
   budget to the 00:52:24 cut ⇒ wedge at real-time ≤ 00:52:44,
   i.e. ≤ t+118 s.
-- **Window:** wedge ∈ [t+90 s, t+120 s].
+- **Window:** wedge ∈ **[t+98 s, t+118 s]** (~20 s wide).
 - Fine-grain [t+25..t+30] window **all landed** (1 s steps) ⇒
   no fw-timeout near t+30 s. Model A from PRE-TEST.238 is
   **refuted**; Model B (late wedge) holds.
+- **Abrupt-wedge signature:** since host CPUs were still
+  scheduling wlan work 7+ s after our last dwell breadcrumb,
+  the wedge is NOT a slow resource exhaustion — it's a
+  bus-level event that kills journald's kmsg flush path fast
+  enough that the final 15–20 s of activity never persists.
 
 **Rewrites test.237 interpretation:** test.237's missing
 `t+30000ms dwell` breadcrumb was NOT the wedge moment — every
@@ -356,6 +364,128 @@ Logging for test.234 falls back to journald tail-truncation as
 before. Resolution ≥15-20 s is fine because the goal is shape-
 comparison (does the wedge still happen? at the same place?),
 not sub-second timing.
+
+---
+
+
+## PRE-TEST.239 (2026-04-23 00:5x BST, boot 0 post-SMC-reset from test.238) — poll TCM[ramsize-4] at every ladder breadcrumb to observe whether fw writes `sharedram_addr` before the wedge
+
+### Hypothesis
+
+Test.238 proved fw+driver run for ≥90 s post-set_active with the
+Apple random_seed present. The wedge window is [t+98 s, t+118 s].
+During those ~100 seconds, fw is executing *something* — but we
+have no visibility into what.
+
+**Upstream brcmfmac convention** (confirmed in pcie.c@3144-3158):
+- Host writes NVRAM → TCM[ramsize-4] = 0xffc70038 (NVRAM length
+  marker token).
+- Fw boots, parses NVRAM, inits PCIe2 internals, allocates its
+  `pcie_shared` struct in its own TCM/scratch, then
+  **overwrites TCM[ramsize-4] with the address of that struct**
+  (`sharedram_addr`).
+- Host detects the change (value ≠ 0xffc70038) and reads the
+  struct at that address to bootstrap ringinfo / console /
+  mailboxes.
+
+We have never observed this value *during* the dwell ladder. If
+fw is functional post-set_active, the sharedram_addr write should
+happen at some t* ∈ (0, wedge] — and knowing its timing plus
+the address fw hands us is highly diagnostic:
+
+| Observation at ramsize-4 during the ladder | Interpretation |
+|---|---|
+| Stays at 0xffc70038 through t+90 s | Fw is running (dwells landed) but **has not completed its shared-struct init** — possibly stuck at a pre-alloc step, or waiting on host signal. |
+| Changes to a valid RAM address at some t* | Fw completed shared-struct init at t*; we now know (a) fw boots correctly up to that step, (b) WHERE its pcie_shared struct lives → we can read ringinfo/console from that address on subsequent tests. |
+| Changes to 0xffffffff (all-ones) | Bus error on the readback, not a fw write — indicates device disappeared from PCIe bus at that point. |
+| Changes to a bogus value (e.g. 0x0, or address outside RAM) | Fw wrote something, but its internal state is inconsistent; likely this path diverges before sharedram alloc completes. |
+
+This is a **zero-intervention observation test** — we only READ
+TCM during dwells, no writes. No new hypothesis about fw expected
+behaviour; just instrumentation of an already-documented protocol.
+
+### Why polling, not sentinel-write (per prior advisor)
+
+Advisor proposed writing a sentinel (e.g. 0xdeadbeef) at ramsize-4
+before set_active to test whether fw reads from that slot. But the
+upstream flow is **fw WRITES there, not reads** — the NVRAM marker
+0xffc70038 already sits there (host writes it via NVRAM). Fw is
+documented to overwrite, not dereference, that slot on init. So
+polling is strictly more informative and costs nothing extra (just
+a single MMIO read per dwell line vs. a full pre-set_active write
+that fw will clobber anyway). Sentinel-write is strictly inferior
+here.
+
+### Code change
+
+1. New module param `bcm4360_test239_poll_sharedram` (default 0).
+2. In the test.238 ladder, after each `pr_emerg("... dwell\n")`,
+   if `test239_poll_sharedram` is set, perform:
+   ```c
+   u32 v = brcmf_pcie_read_ram32(devinfo, devinfo->ci->ramsize - 4);
+   pr_emerg("BCM4360 test.239: t+Xms sharedram_ptr=0x%08x\n", v);
+   ```
+   Emit one breadcrumb per ladder step (23 lines total alongside
+   the 23 dwell lines).
+3. Keep everything else identical — same ultra ladder, same seed,
+   same pre-set_active path.
+
+### Run sequence
+
+```bash
+# Build first
+make -C phase5/work
+
+# Then, this boot (after SMC-reset post-test.238):
+sudo insmod phase5/work/.../brcmutil.ko
+sudo insmod phase5/work/.../brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1
+sleep 240
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+Budget 240 s per test.238 precedent. Sysctls nmi_watchdog=1,
+hardlockup_panic=1, softlockup_panic=1 armed as before.
+
+### Safety — MMIO read during dwells
+
+`brcmf_pcie_read_ram32` uses BAR2 window access — pure read, no
+side effects. Test.188/test.226/test.218 already demonstrate
+repeated TCM reads inside the probe are safe. One extra read per
+dwell point is within the noise of existing activity.
+
+### Hardware state (current, 00:55 BST boot 0 post-SMC-reset)
+
+- `lspci -vvv -s 03:00.0`: Control Mem+ BusMaster+, MAbort-, fast.
+- **BAR0 timing PRE**: reads cleanly (dword `0x203a6464` via dd
+  against resource0). The I/O error recorded in test.238's PRE
+  was a one-off, not a persistent issue — current boot is clean.
+- No modules loaded.
+
+### Build status — REBUILT CLEAN
+
+Built 2026-04-23 ~00:57 BST via
+`make -C $KDIR M=phase5/work/drivers/.../brcmfmac modules`.
+`strings brcmfmac.ko | grep test.239` shows all 23 breadcrumbs
+(t+100ms..t+120000ms sharedram_ptr=%08x) plus the new module
+param `bcm4360_test239_poll_sharedram`. Pre-existing
+unused-variable warnings only — no regressions.
+
+### Expected artifacts
+
+- `phase5/logs/test.239.run.txt` — PRE harness + insmod output
+- `phase5/logs/test.239.journalctl.full.txt` — full boot -1 journal
+- `phase5/logs/test.239.journalctl.txt` — filtered subset
+
+### Pre-test checklist (CLAUDE.md)
+
+1. Build status: PENDING — make + strings verify before insmod.
+2. PCIe state: clean post-SMC-reset above.
+3. Hypothesis: stated above.
+4. Plan: in this block; commit+push+sync before insmod.
+5. Filesystem sync on commit.
 
 ---
 

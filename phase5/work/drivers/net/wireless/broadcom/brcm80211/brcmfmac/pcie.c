@@ -128,6 +128,18 @@ static int bcm4360_test238_ultra_dwells;
 module_param(bcm4360_test238_ultra_dwells, int, 0644);
 MODULE_PARM_DESC(bcm4360_test238_ultra_dwells, "BCM4360 test.238: ultra-extended dwell ladder to t+120s with 1s fine-grain through [t+25..t+30] window (1=ultra, 0=off)");
 
+/* BCM4360 test.239: while the test.238 ladder runs, poll TCM[ramsize-4]
+ * at each dwell point. Upstream brcmfmac convention: fw overwrites that
+ * slot with sharedram_addr (pcie_shared struct pointer) once its init
+ * completes. Before set_active, we leave the NVRAM length marker
+ * 0xffc70038 there. So polling diagnoses when (if ever) fw writes its
+ * shared-struct pointer during the 90s window test.238 proved fw is
+ * alive. Pair with force_seed=1 + ultra_dwells=1. Zero-side-effect
+ * (read-only MMIO). Default 0. */
+static int bcm4360_test239_poll_sharedram;
+module_param(bcm4360_test239_poll_sharedram, int, 0644);
+MODULE_PARM_DESC(bcm4360_test239_poll_sharedram, "BCM4360 test.239: poll TCM[ramsize-4] sharedram pointer at every test.238 dwell breadcrumb (1=poll, 0=off)");
+
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
  * stage=1: write IOCTL = FGC|CLK (coredisable in_reset_configure step)
@@ -2669,6 +2681,18 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				msleep(1000);
 				pr_emerg("BCM4360 test.235: 1000 ms dwell done (no fw activation); proceeding to BM-clear + release\n");
 			} else if (bcm4360_test238_ultra_dwells) {
+				/* test.239: poll helper — read TCM[ramsize-4] and log
+				 * if bcm4360_test239_poll_sharedram is set. Zero cost if
+				 * off. */
+#define BCM4360_T239_POLL(ms_tag) do { \
+					if (bcm4360_test239_poll_sharedram) { \
+						u32 _v = brcmf_pcie_read_ram32(devinfo, \
+							devinfo->ci->ramsize - 4); \
+						pr_emerg("BCM4360 test.239: t+" ms_tag " sharedram_ptr=0x%08x\n", \
+							 _v); \
+					} \
+				} while (0)
+
 				pr_emerg("BCM4360 test.238: calling brcmf_chip_set_active resetintr=0x%08x (ultra-extended ladder t+120s)\n",
 					 resetintr);
 				mdelay(10);
@@ -2678,52 +2702,76 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned TRUE\n");
 				mdelay(100);
 				pr_emerg("BCM4360 test.238: t+100ms dwell\n");
+				BCM4360_T239_POLL("100ms");
 				mdelay(200);
 				pr_emerg("BCM4360 test.238: t+300ms dwell\n");
+				BCM4360_T239_POLL("300ms");
 				mdelay(200);
 				pr_emerg("BCM4360 test.238: t+500ms dwell\n");
+				BCM4360_T239_POLL("500ms");
 				mdelay(200);
 				pr_emerg("BCM4360 test.238: t+700ms dwell\n");
+				BCM4360_T239_POLL("700ms");
 				mdelay(300);
 				pr_emerg("BCM4360 test.238: t+1000ms dwell\n");
+				BCM4360_T239_POLL("1000ms");
 				msleep(500);
 				pr_emerg("BCM4360 test.238: t+1500ms dwell\n");
+				BCM4360_T239_POLL("1500ms");
 				msleep(500);
 				pr_emerg("BCM4360 test.238: t+2000ms dwell\n");
+				BCM4360_T239_POLL("2000ms");
 				msleep(1000);
 				pr_emerg("BCM4360 test.238: t+3000ms dwell\n");
+				BCM4360_T239_POLL("3000ms");
 				msleep(2000);
 				pr_emerg("BCM4360 test.238: t+5000ms dwell\n");
+				BCM4360_T239_POLL("5000ms");
 				msleep(5000);
 				pr_emerg("BCM4360 test.238: t+10000ms dwell\n");
+				BCM4360_T239_POLL("10000ms");
 				msleep(5000);
 				pr_emerg("BCM4360 test.238: t+15000ms dwell\n");
+				BCM4360_T239_POLL("15000ms");
 				msleep(5000);
 				pr_emerg("BCM4360 test.238: t+20000ms dwell\n");
+				BCM4360_T239_POLL("20000ms");
 				msleep(5000);
 				pr_emerg("BCM4360 test.238: t+25000ms dwell\n");
+				BCM4360_T239_POLL("25000ms");
 				/* Fine-grain through the suspect [t+25s, t+30s] window. */
 				msleep(1000);
 				pr_emerg("BCM4360 test.238: t+26000ms dwell\n");
+				BCM4360_T239_POLL("26000ms");
 				msleep(1000);
 				pr_emerg("BCM4360 test.238: t+27000ms dwell\n");
+				BCM4360_T239_POLL("27000ms");
 				msleep(1000);
 				pr_emerg("BCM4360 test.238: t+28000ms dwell\n");
+				BCM4360_T239_POLL("28000ms");
 				msleep(1000);
 				pr_emerg("BCM4360 test.238: t+29000ms dwell\n");
+				BCM4360_T239_POLL("29000ms");
 				msleep(1000);
 				pr_emerg("BCM4360 test.238: t+30000ms dwell\n");
+				BCM4360_T239_POLL("30000ms");
 				/* Extend past t+30s to distinguish fw-timeout from late-wedge. */
 				msleep(5000);
 				pr_emerg("BCM4360 test.238: t+35000ms dwell\n");
+				BCM4360_T239_POLL("35000ms");
 				msleep(10000);
 				pr_emerg("BCM4360 test.238: t+45000ms dwell\n");
+				BCM4360_T239_POLL("45000ms");
 				msleep(15000);
 				pr_emerg("BCM4360 test.238: t+60000ms dwell\n");
+				BCM4360_T239_POLL("60000ms");
 				msleep(30000);
 				pr_emerg("BCM4360 test.238: t+90000ms dwell\n");
+				BCM4360_T239_POLL("90000ms");
 				msleep(30000);
 				pr_emerg("BCM4360 test.238: t+120000ms dwell done (proceeding to BM-clear + release)\n");
+				BCM4360_T239_POLL("120000ms");
+#undef BCM4360_T239_POLL
 			} else if (bcm4360_test237_extended_dwells) {
 				pr_emerg("BCM4360 test.237: calling brcmf_chip_set_active resetintr=0x%08x (extended-dwell ladder)\n",
 					 resetintr);
