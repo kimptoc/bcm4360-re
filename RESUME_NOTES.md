@@ -111,6 +111,107 @@ Order: wide-scan first (T248); signature sweep deferred to T249 if T248 null. Ra
 
 ---
 
+## PRE-TEST.249 (2026-04-23 14:5x BST, boot 0 after test.248 crash + SMC reset) — **console-buffer + assert-text window dump.** Fw is frozen at T+12ms (test.89) but its console write-idx evolved (T248: 0x9cc5c d5f2d856 → 8009ccbe); if the console was flushed before the hang, its buffer contents hold fw log output from the 0–12ms pre-freeze window. Split probe load across two dwells to stay inside the wedge envelope.
+
+### Hypothesis
+
+T248 proved fw runs briefly, sets up stack + BSS + console, then freezes at the same state as pre-T230 (0x9d000=0x43b1). Fw printed *something* during init — firmware images of this class typically emit a boot banner, NVRAM parse summary, or assert message before halting. That text sits frozen in the console log buffer at a VA pointed to by a pointer near 0x9CC5C. Observables:
+
+- Dwords near 0x9CC5C likely follow Broadcom `console_info` layout: `{buf_ptr, bufsize, in_idx, out_idx}` contiguous. Need 8 dwords around the write-idx location to see this.
+- Prior assert-text region `0x9CDB0..0x9CE10` holds ASCII trap/panic messages in tests 213/216/217. T248 saw 0x9CDB0=0x77203030 = bytes "30 30 20 77" = `"00 w"` — strong hint an ASCII string starts there.
+- Counter at 0x9d000: advisor-requested added to per-dwell poll. If frozen from first dwell (t+100ms) at 0x43b1, test.89's single-write reading is directly reproduced in this run's data.
+
+### Design
+
+**Dwell split (avoids piling probe cost at t+90s, where T248 landed ≤1s before wedge):**
+
+| Dwell | Added probe | u32 reads | Rationale |
+|---|---|---|---|
+| t+60000ms | `TCM[0x9CA00..0x9CCA0]` (160 u32s = 640B) | 160 | Heavy read, window around console write-idx. Fw is frozen so content is identical at t+60s and t+90s; reading earlier keeps ≥30s headroom before the wedge. |
+| t+90000ms | `TCM[0x9CDB0..0x9CE10]` (24 u32s = 96B) | 24 | Light read, prior assert-text region. Keeps T248's existing t+90s probe cost roughly constant. |
+| every dwell (t+100ms..t+120000ms, 23 points) | `TCM[0x9d000]` (1 u32) | 23 total | Advisor-requested; closes out "is counter frozen from first dwell?" directly. Matches test.89's single-write reading if all 23 dwells return 0x43b1. |
+
+**Log format (machine-diffable, split into readable lines):**
+
+Per-dwell (extension of `BCM4360_T239_POLL` — no new tag):
+```
+test.249: t+XXXms ctr[0x9d000]=%08x
+```
+
+At t+60s (new macro `BCM4360_T249_CONSOLE_WINDOW`, 5 lines × 32 u32s = 160 dwords):
+```
+test.249: t+60000ms TCM[0x9ca00..0x9ca7c] = 32 hex values
+test.249: t+60000ms TCM[0x9ca80..0x9cafc] = 32 hex values
+test.249: t+60000ms TCM[0x9cb00..0x9cb7c] = 32 hex values
+test.249: t+60000ms TCM[0x9cb80..0x9cbfc] = 32 hex values
+test.249: t+60000ms TCM[0x9cc00..0x9cc7c] = 32 hex values  (contains 0x9cc5c write-idx)
+```
+
+At t+90s (new macro `BCM4360_T249_ASSERT_WINDOW`, 1 line × 24 u32s):
+```
+test.249: t+90000ms TCM[0x9cdb0..0x9ce0c] = 24 hex values
+```
+
+Line-length budget: 32 u32s × 9 chars = 288 chars + prefix ~60 chars = ~350 chars. Comfortably under kernel `LOG_LINE_MAX` (1024).
+
+### Next-step matrix
+
+| Observation | Implication | T250 direction |
+|---|---|---|
+| Console window 0x9CA00..0x9CCA0 contains ASCII text (readable words visible after byte-swap) | Console has fw boot/log output. Dwords preceding 0x9CC5C are the console_info struct. Extract `buf_ptr`, translate VA→TCM offset, read buffer content in T250. | Dump full console buffer at the derived TCM offset; decode. |
+| Window contains mostly zeros/fingerprint-like values, no ASCII | Console exists (write-idx is a valid VA) but buffer content is elsewhere. Search wider (0x9C000..0x9D000) for ASCII clusters. | Widen search or fall back to fn 0x1FC2 disassembly path. |
+| Assert window 0x9CDB0..0x9CE10 contains "ASSERT in file..." text | Fw hit an assert; the hang at fn 0x1FC2 is probably an assert-induced halt, not a hardware lockup. | Decode assert text → file/line → locate in fw disassembly → root cause. |
+| Counter 0x9d000 is 0x43b1 from t+100ms onward (all 23 dwells) | Test.89's single-write reading confirmed directly. Fw hard-freezes before T+100ms. | Closes out the frozen-counter hypothesis; directional signal already used. |
+| Counter 0x9d000 evolves through dwells | Fw is not frozen as assumed; need new interpretation. | Density around counter; probably bigger rewrite of current model. |
+
+### Safety
+
+- All BAR2 reads, no register side effects. Same class as T247/T248/T239 probes.
+- Total additional reads: 160 (t+60s) + 24 (t+90s) + 23 × 1 (per-dwell) = 207 reads on top of T247/T248 baseline.
+- t+60s currently has no T247/T248 probe other than the standard T239/T240/T247 polls. Adding 160 reads at t+60s is the largest uplift; t+60s has ~30s headroom before the wedge.
+- Continuity: T247 struct at 0x80000 + T248 wide-scan both kept on. Same binary gains T249 param additively.
+
+### Code change outline
+
+1. New module param `bcm4360_test249_console_dump` near T248's (pcie.c:268–270).
+2. New offset arrays (optional; can use explicit loops) — 160 u32s at `0x9CA00 + i*4` and 24 u32s at `0x9CDB0 + j*4`.
+3. New macros:
+   - `BCM4360_T249_CONSOLE_WINDOW(stage_tag)` — reads 160 u32s, emits 5 `pr_emerg` lines of 32 u32s each.
+   - `BCM4360_T249_ASSERT_WINDOW(stage_tag)` — reads 24 u32s, emits 1 `pr_emerg` line.
+4. Extend `BCM4360_T239_POLL` with a fourth conditional `if (bcm4360_test249_console_dump)` reading 0x9d000 as one line.
+5. Invocation: `BCM4360_T249_CONSOLE_WINDOW("t+60000ms")` right after `BCM4360_T239_POLL("60000ms")` (pcie.c:3229), gated on the param. `BCM4360_T249_ASSERT_WINDOW("t+90000ms")` right after `BCM4360_T248_WIDESCAN("t+90000ms")` (pcie.c:3233).
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 \
+    bcm4360_test248_wide_tcm_scan=1 \
+    bcm4360_test249_console_dump=1
+sleep 240
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+### Pre-test checklist (to fill after build)
+
+1. Build status: PENDING rebuild + verify via `modinfo` (param present) + `strings` (format lines present).
+2. PCIe state: `Mem+ BusMaster+`, MAbort-, CommClk+ verified above at 14:44.
+3. Hypothesis: stated — pre-freeze fw log output lives in 0x9CA00..0x9CCA0 console window or 0x9CDB0..0x9CE10 assert region.
+4. Plan: this block; commit + push + sync before any code edits (per CLAUDE.md).
+5. Host state: boot 0 started 14:41, uptime ~5 min, stable. No brcm modules loaded.
+
+### Expected artifacts
+
+- `phase5/logs/test.249.run.txt`
+- `phase5/logs/test.249.journalctl.txt`
+
+---
+
 ## PRE-TEST.248 (2026-04-23 12:2x BST, boot 0 after test.247 crash + SMC reset) — **wide-TCM scan. EXECUTED 2026-04-23 13:45; POST-TEST.248 summarized at top. Outcome: W2 fw-alive variant. Both snapshots landed pre-crash; diff shows 8 of 16 offsets changed including all known-hot fw-runtime markers.**
 
 ### Hypothesis
