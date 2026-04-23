@@ -1,6 +1,6 @@
-# Current crash recovery snapshot - 2026-04-23 POST test.260 / PRE test.261
+# Current crash recovery snapshot - 2026-04-23 POST test.261 / PRE test.262
 
-The machine restarted after the `test.260` run and SMC has been reset.
+The machine restarted after the `test.261` run and SMC has been reset.
 Recovered current PCIe state on the new boot is clean:
 
 ```text
@@ -8,37 +8,40 @@ Recovered current PCIe state on the new boot is clean:
 03:00.0 BCM4360 present, BAR0=b0600000, BAR2=b0400000, Mem+, BusMaster+
 ```
 
-`test.260` was the split-enable **mask-only** discriminator already committed in
-`1580e3e` (`PRE-TEST.260 code: split-enable + timeline probe`). The redirected
-run log stayed empty, but the prior-boot kernel journal was recoverable and has
-been saved to `phase5/logs/test.260.journalctl.txt`.
+`test.261` was the split-enable **doorbell-only** discriminator using the
+already-landed `bcm4360_test260_doorbell_only=1` path from `1580e3e`
+(`PRE-TEST.260 code: split-enable + timeline probe`). The redirected run log
+stayed empty, but the prior-boot kernel journal was recoverable and has been
+saved to `phase5/logs/test.261.journalctl.txt`.
 
-Recovered `test.260` result:
+Recovered `test.261` result:
 
 ```text
-BCM4360 test.260 mask_only: pci_enable_msi=0 prev_irq=18 new_irq=79
-BCM4360 test.260 mask_only: request_irq ret=0
-BCM4360 test.260 mask_only: calling intr_enable (MAILBOXMASK write) — NO doorbell
-BCM4360 test.260 mask_only: intr_enable done; starting 50×100ms timeline
-BCM4360 test.260 mask_only: t+120100ms ... mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+BCM4360 test.260 doorbell_only: pci_enable_msi=0 prev_irq=18 new_irq=79
+BCM4360 test.260 doorbell_only: request_irq ret=0
+BCM4360 test.260 doorbell_only: calling hostready (H2D_MAILBOX_1 write) — NO mask
+BCM4360 test.260 doorbell_only: hostready done; starting 50×100ms timeline
+BCM4360 test.260 doorbell_only: t+120100ms ... mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
 ...
-BCM4360 test.260 mask_only: t+124900ms ... mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+BCM4360 test.260 doorbell_only: t+124900ms ... mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
 ```
 
 Interpretation:
 
-- `MAILBOXMASK=0xFF0300` alone is benign for the full emitted 4.9s timeline.
+- `H2D_MAILBOX_1=1` alone is benign for the full emitted 4.9s timeline.
 - Firmware did **not** wake: `MAILBOXINT` remained `0`, `buf_ptr` stayed
   `0x8009CCBE`, `irq_count` stayed `0`.
-- The most likely remaining trigger from `test.259` is the
-  `brcmf_pcie_hostready()` / `H2D_MAILBOX_1` doorbell write, not the mask write.
-- A weaker fallback possibility is a late cleanup/teardown effect after the
-  timeline, because the final `timeline done` line never printed.
+- This matches `test.260` mask-only exactly: both split-write variants survive
+  through `t+124900ms` and then die before the missing `t+125000ms`/summary.
+- The surviving common suspect is now the shared scaffold itself:
+  `pci_enable_msi` + `request_irq` + the 50×100ms poll/sleep loop.
+  Cleanup is less likely because the crash happens before the summary line that
+  precedes teardown.
 
-Recommended next step is `test.261` in practice: use the already-landed
-`bcm4360_test260_doorbell_only=1` path as the next run, with the same MSI +
-safe-handler envelope but **without** the `MAILBOXMASK` write. Commit and push
-the notes update before any new `insmod`.
+Recommended next step is a new control run, `test.262` in practice: add a
+T260-family path that keeps `pci_enable_msi` + `request_irq` + the timeline
+loop, but performs **no** `MAILBOXMASK` write and **no** `hostready` write.
+Commit and push the notes update before any new code or `insmod`.
 
 ---
 
