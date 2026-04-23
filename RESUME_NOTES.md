@@ -405,3 +405,82 @@ Two independent lines:
 Advisor call recommended before committing to T258 code.
 
 ---
+
+## PRE-TEST.258 (2026-04-23 21:xx BST, boot 0 — **IRQ-enable drift test**. Write MAILBOXMASK + H2D_MAILBOX_1 after the t+120s dwell. If fw's console buf_ptr advances in the 5s after, (A') causation fully demonstrated. Variant B (safe) — skip request_irq to avoid handle_mb_data corrupting TCM[0] reset vector.)
+
+### Hypothesis
+
+(A') WFI-idle is now confirmed: fw sleeps at 0x1C1E because host's test harness bypasses the normal IRQ-delivery setup (POST-TEST.257). **If we write MAILBOXMASK=0xFF0300 and then write H2D_MAILBOX_1=1, the fw-side doorbell should wake the CPU from WFI and make its scheduler run.** Fw's `bl 0x9936` would then see a non-zero pending-mask, node[0].flag=0x8 might match, pciedngl_isr fires and prints "pciedngl_isr called\n" into the console ring.
+
+**Observable drift**: console buf_ptr at TCM[0x9CC5C] advances if ANY printf runs. This is unambiguous — the ring is fw-only-writer, host-read-only.
+
+**Safety variant B**: skip `brcmf_pcie_request_irq` (which would register `brcmf_pcie_isr_thread` — that handler's `brcmf_pcie_handle_mb_data` reads `shared.dtoh_mb_data_addr` which is uninitialized in our test path, reads TCM[addr=0]=fw reset vector 0xb80ef000, then WRITES 0 TO TCM[0], corrupting the reset vector). Only do MAILBOXMASK + hostready writes — no host-side handler registration.
+
+### Design
+
+| Dwell | Action | Purpose |
+|---|---|---|
+| t+120000ms | existing probes + **read buf_ptr TCM[0x9CC5C]** | baseline (pre-enable) |
+| t+120000ms +immediate | Call `brcmf_pcie_intr_enable(devinfo)` → writes MAILBOXMASK = 0xFF0300 | unmask IRQs on host side |
+| +immediate | Call `brcmf_pcie_hostready(devinfo)` → writes H2D_MAILBOX_1 = 1 | fw-doorbell signal |
+| +5000ms wait | `msleep(5000)` | let fw wake, process, print |
+| t+125000ms | **Re-read buf_ptr TCM[0x9CC5C]** + 64B ring content ending at buf_ptr | observe drift |
+
+**Probes added**: 2 × 1 u32 buf_ptr reads + 1 × 16 u32 ring content. Total 18 u32 — cheapest probe since T248.
+
+**Module param**: `bcm4360_test258_enable_irq=1`. Gates both the register writes AND the new probe.
+
+### Next-step matrix
+
+| Observation | Implication | T259 direction |
+|---|---|---|
+| buf_ptr @ t+125s == buf_ptr @ t+120s AND ring content unchanged | Fw did NOT wake. Doorbell didn't reach CPU, OR CPU woke but found no work (flag mismatch). **(A') narrow reading weakened.** | Probe fw-side MailboxInt register (BAR0+0x48 PCIE2). See if fw's intr-pending bit is actually set. |
+| buf_ptr @ t+125s > buf_ptr @ t+120s | **Fw ran code after doorbell.** (A') causation confirmed. Decode ring content to see what fw did. | Read decoded log; if "pciedngl_isr called\n" appears, node[0] dispatch path is live. Plan T259 to let fw progress further by supplying the shared-struct fields ISR needs. |
+| Host wedges during write to MAILBOXMASK or H2D_MAILBOX_1 | Writes themselves wedge the bus. Different failure mode. | Back off; investigate BAR0 register accessibility more carefully. |
+
+### Safety
+
+- **Variant B skips request_irq** — no shared-memory dereferences, no posted-IRQ handler registered. Host just does two register writes.
+- **Writes are to PCIE2 core at BAR0 window**: MAILBOXMASK=BAR0+0x4C, H2D_MAILBOX_1=BAR0+0x144. Both writes done in production brcmf_pcie_setup; they're the SAME writes that would happen in normal init.
+- All BAR2 TCM reads safe as always.
+- Wedge expected during cleanup (same pattern as T247..T256). Wedge is separate issue from fw state.
+
+### Code change outline
+
+1. New module param `bcm4360_test258_enable_irq`.
+2. New invocation right after `test.238: t+120000ms dwell done` log:
+   - `BCM4360_T258_BUFPTR_PROBE("t+120000ms")` — 1 u32 read
+   - `if (bcm4360_test258_enable_irq) { brcmf_pcie_intr_enable(devinfo); brcmf_pcie_hostready(devinfo); msleep(5000); BCM4360_T258_BUFPTR_PROBE("t+125000ms"); BCM4360_T258_RING_DUMP("t+125000ms"); }`
+3. Extend T239 ctr gate to include T258.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 \
+    bcm4360_test248_wide_tcm_scan=1 \
+    bcm4360_test258_enable_irq=1
+sleep 300
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+### Expected artifacts
+- `phase5/logs/test.258.run.txt`
+- `phase5/logs/test.258.journalctl.txt`
+
+### Pre-test checklist (pending code+build)
+
+1. **Build status**: NOT yet built — need to add T258 param + macros + invocation.
+2. **PCIe state**: clean (Mem+ BusMaster+ MAbort- CommClk+).
+3. **Hypothesis**: stated — buf_ptr drift after mask+hostready = (A') causation confirmed.
+4. **Plan**: committed before code change.
+5. **Host state**: boot 0 started 20:48:20 BST, uptime ~18 min, no brcm loaded.
+
+Advisor-reviewed; variant B chosen for safety. Code + build + fire pending.
+
+---

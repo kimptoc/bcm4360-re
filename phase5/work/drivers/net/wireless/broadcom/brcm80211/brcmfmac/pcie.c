@@ -678,6 +678,16 @@ static int bcm4360_test256_sched_walk_early;
 module_param(bcm4360_test256_sched_walk_early, int, 0644);
 MODULE_PARM_DESC(bcm4360_test256_sched_walk_early, "BCM4360 test.256: also run sched_walk at t+100ms (redundancy if fw wedges before t+60s) (1=enable, 0=off)");
 
+/* BCM4360 test.258: IRQ-enable drift test. After t+120s dwell, writes
+ * MAILBOXMASK + H2D_MAILBOX_1 (via existing brcmf_pcie_intr_enable +
+ * brcmf_pcie_hostready helpers), waits 5s, re-reads console buf_ptr
+ * at TCM[0x9CC5C]. If buf_ptr advanced, fw woke from WFI and ran code
+ * — (A') causation confirmed. Variant B (safe): does NOT call
+ * request_irq to avoid handle_mb_data corrupting TCM[0]. */
+static int bcm4360_test258_enable_irq;
+module_param(bcm4360_test258_enable_irq, int, 0644);
+MODULE_PARM_DESC(bcm4360_test258_enable_irq, "BCM4360 test.258: after t+120s dwell, write MAILBOXMASK + H2D_MAILBOX_1 and sample console buf_ptr before+after 5s wait; detects fw wake-from-WFI (1=enable, 0=off)");
+
 /* BCM4360 test.256 scheduler-walk helper. 2 pr_emerg lines, 16 u32 each.
  * gate_flag arg lets caller pick between sched_walk (t+60s) and
  * sched_walk_early (t+100ms). */
@@ -699,6 +709,25 @@ MODULE_PARM_DESC(bcm4360_test256_sched_walk_early, "BCM4360 test.256: also run s
 			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
 			 _d256b[0], _d256b[1], _d256b[2], _d256b[3], _d256b[4], _d256b[5], _d256b[6], _d256b[7], \
 			 _d256b[8], _d256b[9], _d256b[10], _d256b[11], _d256b[12], _d256b[13], _d256b[14], _d256b[15]); \
+	} \
+} while (0)
+
+/* BCM4360 test.258 IRQ-enable drift probe helper. Reads console buf_ptr
+ * at TCM[0x9CC5C] + 16 u32 ring content at TCM[0x9CC20..0x9CC5C] (the
+ * 0x40 bytes ending at buf_ptr storage word). 1 pr_emerg line. */
+#define BCM4360_T258_BUFPTR_PROBE(stage_tag) do { \
+	if (bcm4360_test258_enable_irq) { \
+		u32 _d258bp = brcmf_pcie_read_ram32(devinfo, 0x9CC5C); \
+		u32 _d258r[16]; \
+		int _n258; \
+		for (_n258 = 0; _n258 < 16; _n258++) \
+			_d258r[_n258] = brcmf_pcie_read_ram32(devinfo, 0x9CC20 + _n258 * 4); \
+		pr_emerg("BCM4360 test.258: " stage_tag " buf_ptr[0x9CC5C]=%08x ring_tail[0x9CC20..0x9CC5C] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _d258bp, \
+			 _d258r[0], _d258r[1], _d258r[2], _d258r[3], _d258r[4], _d258r[5], _d258r[6], _d258r[7], \
+			 _d258r[8], _d258r[9], _d258r[10], _d258r[11], _d258r[12], _d258r[13], _d258r[14], _d258r[15]); \
 	} \
 } while (0)
 
@@ -3477,7 +3506,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					    bcm4360_test255_sched_late || \
 					    bcm4360_test255_struct_decode || \
 					    bcm4360_test256_sched_walk || \
-					    bcm4360_test256_sched_walk_early) { \
+					    bcm4360_test256_sched_walk_early || \
+					    bcm4360_test258_enable_irq) { \
 						u32 _ctr249 = brcmf_pcie_read_ram32(devinfo, \
 							0x9d000); \
 						pr_emerg("BCM4360 test.249: t+" ms_tag \
@@ -3666,6 +3696,17 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				msleep(30000);
 				pr_emerg("BCM4360 test.238: t+120000ms dwell done (proceeding to BM-clear + release)\n");
 				BCM4360_T239_POLL("120000ms");
+				BCM4360_T258_BUFPTR_PROBE("t+120000ms");
+				if (bcm4360_test258_enable_irq) {
+					pr_emerg("BCM4360 test.258: triggering intr_enable + hostready at t+120s\n");
+					brcmf_pcie_intr_enable(devinfo);
+					brcmf_pcie_hostready(devinfo);
+					pr_emerg("BCM4360 test.258: intr_enable + hostready done; sleeping 5s\n");
+					msleep(5000);
+					pr_emerg("BCM4360 test.238: t+125000ms post-enable dwell\n");
+					BCM4360_T239_POLL("125000ms");
+					BCM4360_T258_BUFPTR_PROBE("t+125000ms");
+				}
 #undef BCM4360_T239_POLL
 			} else if (bcm4360_test237_extended_dwells) {
 				pr_emerg("BCM4360 test.237: calling brcmf_chip_set_active resetintr=0x%08x (extended-dwell ladder)\n",
