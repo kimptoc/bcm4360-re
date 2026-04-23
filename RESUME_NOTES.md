@@ -5,77 +5,21 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 09:4x, POST-TEST.243 — wedge moved EARLIER, before dwell ladder; none of T243's probe lines landed) — test.243 with `writeverify_v2=1` captured only 49 BCM4360 breadcrumbs vs test.242's 408. Journal tail cut at "ASPM disabled" (09:36:37.77). None of the test.243 V2 probe's own pr_emerg lines (BAR0_WINDOW before/after, MBM round-trip, BAR2 TCM round-trip) fired to disk. The last breadcrumb that landed is ~7s before set_active in the test.242 timing. Given journald's 15–20s tail-loss budget, the wedge fell somewhere in the window from "root-port LnkCtl dance" through the first dwell ladder iteration — i.e. **earlier than every prior test in this boot series**. Leading hypothesis: the test.243 probe itself, on its first firing at t+100ms, wedges the host before pr_emerg can flush — which would mean `brcmf_pcie_select_core(PCIE2)` (or the MBM write under correct selection) post-set_active is itself a wedge trigger. Alternative: wedge has moved earlier for unrelated reasons (boot-state variance; SMC reset + reboot residue). Need a diagnostic that doesn't depend on surviving to post-set_active to fire.
+## Current state (2026-04-23 10:0x BST, POST-TEST.244 — hypothesis (a) **confirmed**: T243 post-set_active PCIE2 probe was the wedge cause. Same binary, writeverify_v2=0, wedge landed well post-set_active — and **for the first time ever the ladder reached t+120000ms AND the "dwell done (proceeding to BM-clear + release)" line** (09:58:31.27 BST). New wedge bracket for a clean probe path: [t+120s, t+150s] (n=1). Also novel: host recovered via a plain reboot — **no SMC reset required** — after wedge; current lspci is clean (Mem- BusMaster- DEVSEL=fast, MAbort-, AER UESta/CESta all zero). Both are n=1 observations to bank, not build models on.
 
-### Post-test source review — silent defect found in tests 240/241/242
+### What test.244 settled
 
-`brcmf_pcie_write_reg32(devinfo, OFFSET, val)` is a plain
-`iowrite32(val, devinfo->regs + OFFSET)`. `devinfo->regs` is the
-BAR0 mapping; the chip-side register targeted depends on the
-current `BRCMF_PCIE_BAR0_WINDOW` PCI-config-space value, which
-selects which on-chip core's first 4 KB is visible at the low
-part of BAR0. Changing that window is done by
-`brcmf_pcie_select_core(devinfo, CORE_ID)`.
+- **Hypothesis (a) confirmed.** Test.243 (writeverify_v2=1, same binary) wedged at "ASPM disabled" with zero T243 probe lines landing — i.e. before set_active even fired. Test.244 (writeverify_v2=0, same binary) reached t+120000ms "dwell done" before wedging. The only difference is the T243 probe firing at t+100ms/t+2000ms. So `brcmf_pcie_select_core(PCIE2)` + MBM round-trip + BAR2 TCM[0x90000] round-trip at post-set_active is a wedge trigger. Which of those three ops triggers it is not isolated by this pair — a follow-up decomposition test would be needed to split them.
+- **Wedge bracket reinterpretation.** Tests 238/239/240/241/242 last-landed at t+90000ms dwell ("[t+90s, t+120s]" bracket). But tests 240/242's probes hit CR4_wrap+0x144 and CR4_wrap+0x4C at t+100ms/t+2000ms (the silent-defect re-read above). Those perturbed CR4 wrapper state mid-ladder. Test.244's no-probe path reached ~30s further. Historic "[t+90s, t+120s]" bracket was probe-contaminated. Clean bracket is **[t+120s, t+150s]** for a no-perturbation probe path (n=1, needs replication).
+- **Wedge mechanism clue (speculative).** Test.244's last live line is "proceeding to BM-clear + release" — the *transition out* of the dwell ladder into teardown. The wedge may be tied to that transition (BM-clear sequence or msleep-then-return) rather than a pure fw-timer-timeout model. Not conclusive from n=1.
+- **No-SMC-reset recovery (n=1).** The host wedged but a plain reboot brought PCIe back clean. Every prior wedge in this investigation required SMC reset to clear MAbort+ / dirty state. Possible reading: the later, less-perturbed wedge is milder. Or boot variance. Do not over-interpret.
 
-**What select_core state was live when each test's write fired:**
+### Plan (PRE-TEST.245, details below)
 
-| Test | Write location in code | Last select_core before the write | BAR0 window pointing at | Register actually written |
-|---|---|---|---|---|
-| 240 (DB1 ring at t+2000ms) | dwell ladder, post-`brcmf_chip_set_active` | `brcmf_chip_cr4_set_active` → `brcmf_chip_resetcore(CR4)` uses CR4 wrapbase for its last MMIO | CR4 wrapbase = 0x18102000 | **CR4_wrap+0x144** (NOT H2D_MAILBOX_1) |
-| 241 (MBM round-trip pre-FORCEHT) | after BM-dance, pre-FORCEHT | `probe_d11_clkctlst` → `select_core(CHIPCOMMON)` at the end of the helper | CC base = 0x18000000 | **ChipCommon+0x4C** (likely gpio_out; matches 0x318 baseline = GPIO bits 3,4,8,9) |
-| 242 (MBM round-trip t+100ms / t+2000ms) | dwell ladder, post-set_active | same as test.240 (CR4 wrapbase) | CR4 wrapbase = 0x18102000 | **CR4_wrap+0x4C** (NOT MAILBOXMASK) |
+Per the PRE-TEST.244 decision matrix (a)-branch: move MBM + BAR2 TCM round-trip diagnostic to **pre-FORCEHT** (test.241's stage, known to land every run in this boot series), under explicit `select_core(PCIE2)`. ARM isn't running at that stage and upstream brcmfmac itself does `select_core(PCIE2)` there routinely (pcie.c:1030, 1053, 3226, 3580). Invert-and-restore sentinel, BAR0_WINDOW before/after logged, BAR2 TCM[0x90000] independent axis. This settles "do BAR0 writes under explicit `select_core(PCIE2)` land at pre-FORCEHT?" — which determines whether the doorbell branch re-opens cleanly. It does NOT answer "which of (select_core | MBM write | BAR2 round-trip) at post-set_active wedged test.243" — that's a separate decomposition test if we need it.
 
-**Upstream's own test.96 block** (pcie.c:3566-3644) that writes
-MBM=0x00FF0300 pre-ARM-release **explicitly**
-`brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2)` before the
-writes (line 3580). Our test.241/242/240 probes did not. That's
-the defect.
-
-**Retroactive re-reading of the three runs:**
-
-- **test.240:** "DB1 ring readback=0, no downstream effect" →
-  *untested*: we never actually wrote to H2D_MAILBOX_1. The
-  doorbell hypothesis is re-open (needs proper selection and
-  re-run).
-- **test.241:** "MBM baseline=0x318, writes don't latch
-  pre-FORCEHT" → *untested for MBM*: we read/wrote ChipCommon+0x4C
-  (gpio_out). The 0x318 baseline is a GPIO state, not an MBM state.
-  BAR0 write path question for PCIE2 registers remains unresolved.
-- **test.242:** "MBM baseline=0 at both t+100ms and t+2000ms,
-  writes don't latch post-set_active" → *untested for MBM*: we
-  read/wrote CR4_wrap+0x4C. Its 0x00 baseline is a CR4 wrapper
-  state. BAR0 write path question for PCIE2 registers still
-  unresolved.
-
-**What we DO have evidence for (from test.193 / test.224):** the
-plain `brcmf_pcie_write_reg32` path works for *at least one*
-on-chip core — ChipCommon: PMU WAR writes at chipcontrol#1
-(0x210→0xa10) and max_res_mask (0x13f→0x7ff) DID change the
-chip-side value, as observed in journald with before/after
-readbacks. Those runs had `select_core(CHIPCOMMON)` set first.
-So "BAR0-write-path broken" is inconsistent with direct
-evidence for at least the CC window.
-
-### Plan (PRE-TEST.243, details below)
-
-Re-run the MBM round-trip with an explicit
-`brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2)` before the
-round-trip at each of the two dwell points, log the
-`BRCMF_PCIE_BAR0_WINDOW` config-space value before AND after the
-select (to make the window state evidence not an assumption),
-use **invert-and-restore** (`~baseline`) sentinels (more robust
-than 0xDEADBEEF against reserved-bit clipping; also removes the
-"wrote 0 matches baseline 0 trivially" confound from test.242),
-and add a **BAR2 round-trip** at a dead TCM offset (one 4-byte
-slot at ~0x90000 — above fw, below NVRAM, unwritten by our code
-or fw per test.233) as an independent axis for "is ANY write
-landing post-set_active." Restore the prior BAR0_WINDOW before
-handing back to the ladder.
-
-**Hardware state (current, 09:1x BST boot 0 post-SMC-reset from test.242 wedge):**
-`lspci -s 03:00.0` shows `Mem+ BusMaster+`, MAbort-, CommClk+,
-DEVSEL=fast. No brcm modules loaded. Boot 0 started
-2026-04-23 09:15:26 BST.
+**Hardware state (current, 10:0x BST boot 0 after test.244 crash, no SMC reset):**
+`lspci -s 03:00.0` (sudo): `I/O- Mem- BusMaster-` (no driver), MAbort-, DEVSEL=fast, LnkSta Speed 2.5GT/s Width x1, AER `UESta`/`CESta` all zero. No brcm modules loaded. Boot 0 started 2026-04-23 10:00:09 BST.
 
 ---
 
@@ -397,7 +341,9 @@ probes `#if 0`'d, host still wedged. Narrowed the trigger to
 | Ringing H2D_MAILBOX_1 (upstream "HostRDY" offset, BAR0+0x144) at t+2000ms releases fw's pre-shared-alloc stall | 240 | **invalid — hypothesis never actually tested.** Post-test review of pcie.c found the probe wrote to BAR0+0x144 with BAR0_WINDOW still pointing at CR4 wrapbase (0x18102000; left there by `brcmf_chip_cr4_set_active` → `brcmf_chip_resetcore(CR4)`). Write hit CR4_wrap+0x144, not H2D_MAILBOX_1. DB1-null reading retracted; hypothesis re-opens for test.244 after test.243 confirms the BAR0-write path via correct core-selection. |
 | BAR0 write path via `brcmf_pcie_write_reg32` reaches chip at our **pre-FORCEHT** probe stage (using MAILBOXMASK round-trip) | 241 | **invalid — wrote to the wrong register.** Post-test review: probe fired with BAR0_WINDOW at ChipCommon (left there by `probe_d11_clkctlst` ending with `select_core(CHIPCOMMON)`). Write hit CC+0x4C (likely gpio_out — value 0x318 = GPIO bits 3,4,8,9). MBM was not tested. |
 | BAR0 write to MAILBOXMASK latches **post-set_active** (t+100ms or t+2000ms) | 242 | **invalid — wrote to the wrong register.** Post-test review: probe fired with BAR0_WINDOW at CR4 wrapbase (same defect as test.240). Write hit CR4_wrap+0x4C, not MBM. The "0x318→0x00 baseline flip across stages" was a GPIO-vs-CR4-wrapper comparison, not an MBM state-evolution signal. MBM latching under PCIE2 core-selection remains **untested**. |
-| `brcmf_pcie_write_reg32` BAR0 write path reaches chip when BAR0_WINDOW is explicitly `select_core`d first | 193, 224 | **confirmed (partial)** — test.193 PMU WAR chipcontrol#1 write 0x210→0xa10 and test.224 max_res_mask 0x13f→0x7ff both had visible before/after change in journald readbacks. Both used `WRITECC32` = `brcmf_pcie_write_reg32` under `select_core(CHIPCOMMON)`. So BAR0-write path works for CC under correct selection. Evidence for PCIE2-core writes still pending test.243. |
+| `brcmf_pcie_write_reg32` BAR0 write path reaches chip when BAR0_WINDOW is explicitly `select_core`d first | 193, 224 | **confirmed (partial)** — test.193 PMU WAR chipcontrol#1 write 0x210→0xa10 and test.224 max_res_mask 0x13f→0x7ff both had visible before/after change in journald readbacks. Both used `WRITECC32` = `brcmf_pcie_write_reg32` under `select_core(CHIPCOMMON)`. So BAR0-write path works for CC under correct selection. Evidence for PCIE2-core writes still pending test.245 (test.243 wedged before any T243 line could flush). |
+| T243 post-set_active probe (`select_core(PCIE2)` + MBM round-trip + BAR2 TCM round-trip at t+100ms/t+2000ms) is innocent of the early wedge in test.243 | 243, 244 | **ruled out — probe IS the wedge cause.** Null-run discriminator (test.244, same binary, `writeverify_v2=0`) reached t+120000ms "dwell done" cleanly; test.243 (`writeverify_v2=1`) wedged before set_active even fired. Hypothesis (a) confirmed. Which sub-op (select_core / MBM write / BAR2 round-trip) triggers the wedge is not isolated by this pair. |
+| Historic wedge bracket `[t+90s, t+120s]` reflects the "clean probe" wedge timing | 238–242, 244 | **qualified/narrowed.** Tests 238–242 last-landed at t+90000ms dwell, but tests 240/242's writeverify probes hit CR4_wrap+0x144 and CR4_wrap+0x4C at t+100ms/t+2000ms (silent defect above), perturbing CR4 state mid-ladder. Test.244's clean no-probe path reached t+120000ms AND the "dwell done" line (~30 s later than the historic bracket). Clean-probe wedge bracket = **[t+120s, t+150s]** (n=1; needs replication). Prior bracket was probe-contaminated. |
 
 **Refined wedge model (post test.230):**
 The moment ARM CR4 starts executing firmware (rstvec written via
@@ -446,7 +392,81 @@ not sub-second timing.
 ---
 
 
-## PRE-TEST.244 (2026-04-23 09:5x BST, boot 0 post-SMC-reset from test.243) — **null-run discriminator, no rebuild.** Rerun the existing test.243 binary with `writeverify_v2=0` and all other params identical. If wedge returns to `[t+90s, t+120s]`, T243 V2 probe is confirmed as the wedge cause (hypothesis (a)); if wedge stays early, something drifted (hypothesis (b)) and we need a different investigation before any pre-FORCEHT reroute.
+## PRE-TEST.245 (2026-04-23 10:1x BST, boot 0 after test.244 crash **without** SMC reset) — relocate T243's MBM + BAR2 round-trip probe to **pre-FORCEHT** stage under explicit `select_core(PCIE2)`. Answers "do BAR0 writes to PCIE2 registers latch when the window is correctly selected, at a stage known to land every run?" Does NOT isolate which sub-op of T243's post-set_active probe triggered the early wedge — that's a separate future decomposition test if we need it.
+
+### Hypothesis
+
+Test.244 proved T243's post-set_active probe (`select_core(PCIE2)` + MBM round-trip + BAR2 round-trip at t+100ms) wedges the host fast enough that none of its `pr_emerg` lines flush. Moving that same round-trip to **pre-FORCEHT** — after `pci_set_master`, before the FORCEHT write, before `brcmf_chip_set_active` — should be safer because:
+- ARM CR4 is not executing firmware (set_active hasn't fired). The post-set_active wedge mechanism doesn't apply.
+- Upstream brcmfmac calls `brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2)` at multiple points during probe (pcie.c:1030, 1053, 3226, 3580) including at this exact stage in its own MBMASK writer block. Not a novel operation.
+- Every test 240..244 landed the pre-FORCEHT stage cleanly (confirmed in journal).
+
+### Expected outcomes / next-step matrix
+
+| MBM result | BAR2 result | Interpretation | Test.246 direction |
+|---|---|---|---|
+| PASS | PASS | BAR0 writes to PCIE2 regs work under correct `select_core`. Doorbell branch re-opens cleanly. Tests 240/241/242's nulls were all the silent-defect. | Test.246: ring DB1 pre-FORCEHT with explicit `select_core(PCIE2)` wrapper; observe fw response. (Ringing DB1 post-set_active is now known-hazardous — skip that.) |
+| FAIL | PASS | Pre-FORCEHT BAR0 writes to PCIE2 regs specifically don't latch. BAR2 TCM writes work, so general MMIO path is alive. PCIE2 core may be held in reset or clock-gated at this stage. | Test.246: probe PCIE2 wrapper reset/clock state (IOCTL / clk_ctl_st for PCIE2) and compare to ChipCommon (where test.193/224 succeeded). |
+| PASS | FAIL | Very unlikely — BAR0 works, BAR2 TCM doesn't. Would contradict 442 KB fw-download BAR2 writes that verified 16/16 pre-FORCEHT. | Investigate BAR2 collapse; re-verify BAR2 base in config space. |
+| FAIL | FAIL | Both fail at pre-FORCEHT — contradicts test.193/224 CC writes which DID land at this stage. Unlikely; if it happens, the probe itself might be broken. | Add a CC-write-verify at the same stage as a belt-and-suspenders sanity check before reshaping the investigation. |
+
+### Code plan
+
+1. **New module param** `bcm4360_test245_writeverify_preforcehttp` (default 0).
+2. **New macro** `BCM4360_T245_WRITEVERIFY(stage_tag)` next to the existing `BCM4360_T243_WRITEVERIFY` — same logic (BAR0_WINDOW before/after, `select_core(PCIE2)`, MBM invert-and-restore, restore window, BAR2 TCM[0x90000] invert-and-restore) but with `test.245:` log prefix.
+3. **Invocation site:** right after the existing test.241 writeverify block (pcie.c:2681) and before the "past BusMaster dance" line (2682). I.e. after `pci_set_master` + BM-MMIO-guard, before FORCEHT. Gated on the new param.
+4. Leave all existing macros (`BCM4360_T241_WRITEVERIFY`, `BCM4360_T242_WRITEVERIFY`, `BCM4360_T243_WRITEVERIFY`) in place but gate them off via unset params for this run.
+
+### Safety
+
+- `select_core(PCIE2)` is routine at this stage — upstream does it (pcie.c:3580) for its own MBMASK writer. Not a new operation.
+- Invert-and-restore limits the live-disturbance window to ≤1 µs per register.
+- BAR2 TCM[0x90000] is a dead region (above fw end 0x6bf78, below NVRAM start 0x9ff1c; test.233 proved not touched by fw/host in normal flow). Immediate restore.
+- ≤10 MMIO ops total at pre-FORCEHT — within the noise of existing pre-FORCEHT load.
+
+### Run sequence
+
+```bash
+sudo insmod phase5/work/drivers/.../brcmutil.ko
+sudo insmod phase5/work/drivers/.../brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test245_writeverify_preforcehttp=1
+sleep 240
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+### Hardware state (current, 10:0x BST boot 0, **post-test.244 crash with NO SMC reset**)
+
+- `lspci -s 03:00.0` (sudo): `I/O- Mem- BusMaster-`, MAbort-, DEVSEL=fast; AER `UESta`/`CESta` all zero; LnkSta Speed 2.5GT/s Width x1. Clean.
+- Boot 0 started 2026-04-23 10:00:09 BST.
+- No brcm modules loaded.
+- **Note**: This is the first boot in this investigation where wedge recovery did NOT need SMC reset. If the pre-FORCEHT probe triggers another wedge, we may learn whether SMC reset becomes necessary as severity grows, or stays optional.
+
+### Build status — PENDING REBUILD
+
+New param + new macro + new invocation site in pcie.c. Rebuild via `make -C /home/kimptoc/bcm4360-re/phase5/work`. Verify via `modinfo` (param present) and `strings | grep 'test.245'` (format lines present) before insmod.
+
+### Expected artifacts
+
+- `phase5/logs/test.245.run.txt`
+- `phase5/logs/test.245.journalctl.full.txt`
+- `phase5/logs/test.245.journalctl.txt`
+
+### Pre-test checklist (CLAUDE.md)
+
+1. Build status: PENDING — `make` + `modinfo`/`strings` verify before insmod.
+2. PCIe state: verified clean above.
+3. Hypothesis: stated above — MBM writes latch pre-FORCEHT under correct select.
+4. Plan: this block; commit + push + sync before insmod.
+5. Filesystem sync on commit.
+
+---
+
+
+## PRE-TEST.244 (2026-04-23 09:5x BST, boot 0 post-SMC-reset from test.243) — **null-run discriminator, no rebuild.** Rerun the existing test.243 binary with `writeverify_v2=0` and all other params identical. **OUTCOME: hypothesis (a) confirmed — see current state block at top.** If wedge returns to `[t+90s, t+120s]`, T243 V2 probe is confirmed as the wedge cause (hypothesis (a)); if wedge stays early, something drifted (hypothesis (b)) and we need a different investigation before any pre-FORCEHT reroute.
 
 ### Hypothesis
 

@@ -213,6 +213,18 @@ static int bcm4360_test243_writeverify_v2;
 module_param(bcm4360_test243_writeverify_v2, int, 0644);
 MODULE_PARM_DESC(bcm4360_test243_writeverify_v2, "BCM4360 test.243: MBM round-trip under explicit select_core(PCIE2) + BAR2 TCM[0x90000] round-trip at t+100ms and t+2000ms dwells (1=verify, 0=off)");
 
+/* BCM4360 test.245: move T243's MBM + BAR2 round-trip probe from the
+ * dwell ladder (post-set_active) to the PRE-FORCEHT stage (after
+ * pci_set_master, before the FORCEHT write, before brcmf_chip_set_active).
+ * Test.244 proved the post-set_active T243 probe wedges the host before
+ * any pr_emerg line flushes. At pre-FORCEHT ARM is not running and
+ * upstream brcmfmac itself does select_core(PCIE2) at this stage
+ * (pcie.c:3580 in upstream). Same invert-and-restore sentinel and BAR2
+ * TCM[0x90000] independent axis. Default 0. */
+static int bcm4360_test245_writeverify_preforcehttp;
+module_param(bcm4360_test245_writeverify_preforcehttp, int, 0644);
+MODULE_PARM_DESC(bcm4360_test245_writeverify_preforcehttp, "BCM4360 test.245: MBM + BAR2 TCM[0x90000] round-trip under explicit select_core(PCIE2) at pre-FORCEHT stage (after pci_set_master, before FORCEHT+set_active) (1=verify, 0=off)");
+
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
  * stage=1: write IOCTL = FGC|CLK (coredisable in_reset_configure step)
@@ -2679,6 +2691,63 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					 after_sent == 0xDEADBEEF,
 					 baseline == 0, after_clear == 0);
 			}
+
+			/* BCM4360 test.245: pre-FORCEHT BAR0 write-verify under explicit
+			 * select_core(PCIE2). Same round-trip shape as T243 but at the
+			 * known-safe pre-FORCEHT stage. Answers "do BAR0 writes to PCIE2
+			 * registers latch when the window is correctly selected?" */
+			if (bcm4360_test245_writeverify_preforcehttp) {
+				const u32 _mbm = devinfo->reginfo->mailboxmask;
+				u32 _win_before = 0, _win_after = 0;
+				u32 _base, _after_sent, _after_restore;
+				int _sent_match, _restore_match;
+				u32 _t = 0x90000;
+				u32 _b2_base, _b2_sent, _b2_restore;
+				int _b2_sent_match, _b2_restore_match;
+
+				pci_read_config_dword(devinfo->pdev,
+					BRCMF_PCIE_BAR0_WINDOW, &_win_before);
+				brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
+				pci_read_config_dword(devinfo->pdev,
+					BRCMF_PCIE_BAR0_WINDOW, &_win_after);
+				pr_emerg("BCM4360 test.245: pre-FORCEHT BAR0_WINDOW before=0x%08x after=0x%08x (expect PCIE2 core base)\n",
+					 _win_before, _win_after);
+
+				_base = brcmf_pcie_read_reg32(devinfo, _mbm);
+				brcmf_pcie_write_reg32(devinfo, _mbm, ~_base);
+				_after_sent = brcmf_pcie_read_reg32(devinfo, _mbm);
+				brcmf_pcie_write_reg32(devinfo, _mbm, _base);
+				_after_restore = brcmf_pcie_read_reg32(devinfo, _mbm);
+				_sent_match = (_after_sent == ~_base);
+				_restore_match = (_after_restore == _base);
+				pr_emerg("BCM4360 test.245: pre-FORCEHT MBM (BAR0+0x%x @window=0x%08x) baseline=0x%08x sent=0x%08x (match=%d) restored=0x%08x (match=%d) RESULT %s\n",
+					 _mbm, _win_after, _base, _after_sent, _sent_match,
+					 _after_restore, _restore_match,
+					 (_sent_match && _restore_match) ? "PASS" : "FAIL");
+
+				/* Restore prior BAR0_WINDOW so FORCEHT block downstream is
+				 * unperturbed (FORCEHT does its own select_core(CHIPCOMMON)
+				 * immediately after this, so strictly not required, but
+				 * principle: don't leave global state changed). */
+				pci_write_config_dword(devinfo->pdev,
+					BRCMF_PCIE_BAR0_WINDOW, _win_before);
+
+				/* BAR2 TCM[0x90000] round-trip — independent axis.
+				 * BAR2 does not use BAR0_WINDOW, so this is a clean
+				 * "is ANY MMIO write landing at pre-FORCEHT" sanity. */
+				_b2_base = brcmf_pcie_read_ram32(devinfo, _t);
+				brcmf_pcie_write_ram32(devinfo, _t, ~_b2_base);
+				_b2_sent = brcmf_pcie_read_ram32(devinfo, _t);
+				brcmf_pcie_write_ram32(devinfo, _t, _b2_base);
+				_b2_restore = brcmf_pcie_read_ram32(devinfo, _t);
+				_b2_sent_match = (_b2_sent == ~_b2_base);
+				_b2_restore_match = (_b2_restore == _b2_base);
+				pr_emerg("BCM4360 test.245: pre-FORCEHT BAR2 TCM[0x%05x] baseline=0x%08x sent=0x%08x (match=%d) restored=0x%08x (match=%d) RESULT %s\n",
+					 _t, _b2_base, _b2_sent, _b2_sent_match,
+					 _b2_restore, _b2_restore_match,
+					 (_b2_sent_match && _b2_restore_match) ? "PASS" : "FAIL");
+			}
+
 			pr_emerg("BCM4360 test.226: past BusMaster dance — entering FORCEHT block\n");
 			msleep(5);
 

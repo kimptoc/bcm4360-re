@@ -1,0 +1,31 @@
+=== test.244 PRE (2026-04-23T09:56:08+01:00) ===
+=== sysctls arming ===
+4	4	1	7
+1
+0
+0
+10
+
+=== lspci PRE (sudo) ===
+	Control: I/O- Mem- BusMaster- SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+		Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=2 PME-
+		LnkCtl:	ASPM Disabled; RCB 64 bytes, LnkDisable- CommClk-
+		LnkSta:	Speed 2.5GT/s, Width x1
+		LnkCtl2: Target Link Speed: 2.5GT/s, EnterCompliance- SpeedDis-
+		LnkSta2: Current De-emphasis Level: -3.5dB, EqualizationComplete- EqualizationPhase1-
+		Status:	InProgress-
+			Status:	NegoPending- InProgress-
+
+=== modules PRE ===
+cfg80211             1413120  5 mt76,mt76x02_lib,mac80211,mt76x02_usb,mt76x2_common
+rfkill                 40960  3 bluetooth,cfg80211
+
+=== modprobe cfg80211 ===
+
+=== modprobe brcmutil (xz) ===
+
+=== insmod brcmfmac (force_seed=1 ultra_dwells=1 poll_sharedram=1 wide_poll=1) 09:56:08.913993642 BST ===
+insmod backgrounded PID=19829
+
+=== sleeping 240s for ultra-extended ladder + probe return ===
