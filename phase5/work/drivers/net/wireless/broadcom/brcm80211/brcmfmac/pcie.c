@@ -225,6 +225,25 @@ static int bcm4360_test245_writeverify_preforcehttp;
 module_param(bcm4360_test245_writeverify_preforcehttp, int, 0644);
 MODULE_PARM_DESC(bcm4360_test245_writeverify_preforcehttp, "BCM4360 test.245: MBM + BAR2 TCM[0x90000] round-trip under explicit select_core(PCIE2) at pre-FORCEHT stage (after pci_set_master, before FORCEHT+set_active) (1=verify, 0=off)");
 
+/* BCM4360 test.246: disambiguate test.245's MBM partial-latch. Test.245
+ * wrote 0xFFFFFFFF and got readback 0x00000300 — bits 8,9 latched (FN0_0,
+ * FN0_1) but documented-legal D2H_DB bits (16..23, 0x00FF0000) did not.
+ * Write upstream's exact production MBM value
+ *     int_d2h_db | int_fn0 = 0x00FF0000 | 0x00000300 = 0x00FF0300
+ * at the same pre-FORCEHT stage. Possible outcomes:
+ *   - readback = 0x00FF0300 → all documented legal bits writable at
+ *     pre-FORCEHT; test.245's 0x300 was simply reserved-bits clipping.
+ *   - readback = 0x00000300 → D2H_DB bits (16..23) are pre-FORCEHT-gated
+ *     (clock/reset domain, or write-gated until post-shared-init). FN0
+ *     bits writable but D2H_DB not.
+ *   - readback = 0 → our write didn't reach the chip at all, contradicting
+ *     test.245; would indicate probe-order-sensitive behavior we need
+ *     to investigate.
+ * Default 0. */
+static int bcm4360_test246_writeverify_legal;
+module_param(bcm4360_test246_writeverify_legal, int, 0644);
+MODULE_PARM_DESC(bcm4360_test246_writeverify_legal, "BCM4360 test.246: write upstream's production MBM value (int_d2h_db|int_fn0=0x00FF0300) at pre-FORCEHT to disambiguate test.245's partial-latch (1=verify, 0=off)");
+
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
  * stage=1: write IOCTL = FGC|CLK (coredisable in_reset_configure step)
@@ -2746,6 +2765,43 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					 _t, _b2_base, _b2_sent, _b2_sent_match,
 					 _b2_restore, _b2_restore_match,
 					 (_b2_sent_match && _b2_restore_match) ? "PASS" : "FAIL");
+			}
+
+			/* BCM4360 test.246: upstream-production MBM write-verify.
+			 * Writes int_d2h_db|int_fn0 (= 0x00FF0300 for 4360) and
+			 * logs readback — tells us whether the documented legal
+			 * bits all latch at pre-FORCEHT, vs. only FN0 bits. */
+			if (bcm4360_test246_writeverify_legal) {
+				const u32 _mbm2 = devinfo->reginfo->mailboxmask;
+				const u32 _legal = devinfo->reginfo->int_d2h_db |
+						   devinfo->reginfo->int_fn0;
+				u32 _t246_win_before = 0, _t246_win_after = 0;
+				u32 _t246_b, _t246_s, _t246_r;
+
+				pci_read_config_dword(devinfo->pdev,
+					BRCMF_PCIE_BAR0_WINDOW, &_t246_win_before);
+				brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
+				pci_read_config_dword(devinfo->pdev,
+					BRCMF_PCIE_BAR0_WINDOW, &_t246_win_after);
+				pr_emerg("BCM4360 test.246: pre-FORCEHT BAR0_WINDOW before=0x%08x after=0x%08x (expect PCIE2 base)\n",
+					 _t246_win_before, _t246_win_after);
+
+				_t246_b = brcmf_pcie_read_reg32(devinfo, _mbm2);
+				brcmf_pcie_write_reg32(devinfo, _mbm2, _legal);
+				_t246_s = brcmf_pcie_read_reg32(devinfo, _mbm2);
+				brcmf_pcie_write_reg32(devinfo, _mbm2, _t246_b);
+				_t246_r = brcmf_pcie_read_reg32(devinfo, _mbm2);
+				pr_emerg("BCM4360 test.246: pre-FORCEHT MBM legal-pattern baseline=0x%08x wrote=0x%08x readback=0x%08x (exact=%d d2h_db_latched=%d fn0_latched=%d) restored=0x%08x (restore_match=%d) RESULT %s\n",
+					 _t246_b, _legal, _t246_s,
+					 _t246_s == _legal,
+					 (_t246_s & 0x00FF0000) == (_legal & 0x00FF0000),
+					 (_t246_s & 0x00000300) == (_legal & 0x00000300),
+					 _t246_r, _t246_r == _t246_b,
+					 (_t246_s == _legal && _t246_r == _t246_b)
+						? "PASS" : "FAIL");
+
+				pci_write_config_dword(devinfo->pdev,
+					BRCMF_PCIE_BAR0_WINDOW, _t246_win_before);
 			}
 
 			pr_emerg("BCM4360 test.226: past BusMaster dance — entering FORCEHT block\n");

@@ -262,6 +262,89 @@ not sub-second timing.
 ---
 
 
+## PRE-TEST.246 (2026-04-23 10:3x BST, boot 0 after test.245 crash **without** SMC reset) — disambiguate test.245's MBM partial-latch by writing upstream's exact production MBM value (`int_d2h_db | int_fn0` = 0x00FF0300) at the same pre-FORCEHT stage. Single-focus probe, no BAR2 round-trip (already proven PASS), no post-set_active work (known-hazardous per test.244).
+
+### Hypothesis
+
+Test.245 wrote 0xFFFFFFFF to MBM at pre-FORCEHT; readback was 0x00000300 — bits 8,9 (FN0_0, FN0_1) latched, but the documented-legal D2H_DB bits 16..23 (0x00FF0000) did NOT. Two readings are both consistent with the data:
+
+- **(I) Reserved-bits-clipping.** BAR0 write landed as-issued; MBM reserved bits 10..15 and 24..31 read-as-zero; D2H_DB bits 16..23 must actually be `reserved` too despite the header naming them "legal." Writing upstream's exact production value (0x00FF0300) should latch byte-for-byte if this reading is right… unless bits 16..23 are genuinely non-writable, in which case readback=0x00000300 again.
+- **(II) Stage-gating of D2H_DB half of MBM.** BAR0 writes do reach the chip, but D2H_DB bits (16..23) are in a clock/reset domain that's write-gated at pre-FORCEHT (not yet clocked, or pre-shared-init behavior). FN0_0/FN0_1 bits (8,9) are in a different domain and accept writes. Readback=0x00000300 on an upstream-legal write would confirm this.
+- **(III) Write never reached chip, 0x300 was hw state.** Ambient state happens to be 0x300 and our 0xFFFFFFFF dropped. Readback on 0x00FF0300 → 0x00000300 would be ambiguous between (II) and (III). Readback = something else entirely (say 0x0) would favor (III).
+
+Test.246 writes exactly `int_d2h_db | int_fn0` = 0x00FF0300 and reports whether bits 8,9 and/or bits 16..23 latched, plus a full restore check.
+
+### Next-step matrix
+
+| Readback | Fn0 latched? | D2H_DB latched? | Interpretation | Test.247 direction |
+|---|---|---|---|---|
+| 0x00FF0300 | YES | YES | Upstream MBM writes work at pre-FORCEHT. Reading (I) correct; doorbell branch fully re-opened. | Pivot to shared-struct forward step (deferred from test.233). Build minimal `brcmf_pcie_init_share` equivalent in TCM before set_active. |
+| 0x00000300 | YES | NO | D2H_DB bits stage-gated. Reading (II) correct. Upstream's MBM write will fail at pre-FORCEHT; it belongs later (post-shared-init, matching upstream's placement). | Pivot to shared-struct; note MBM D2H enables only writable post-share-init. Doorbell ring (DB0/DB1) at post-set_active remains hazardous — stay in pre-set_active forward work. |
+| 0x00000000 | NO | NO | Write didn't reach chip; test.245's 0x300 was ambient. Contradicts test.245's restore-match. | Stop, re-examine. Something probe-order-sensitive. Compare to test.245 behavior; may need decomposition test. |
+| other | partial | partial | Unexpected bit layout. | Report and decide with advisor. |
+
+### Code change (committed before build)
+
+1. New param `bcm4360_test246_writeverify_legal` (default 0) declared next to test.245 param.
+2. New probe block right after the test.245 block at the same pre-FORCEHT location (after `pci_set_master` + BM-MMIO-guard, before FORCEHT write). Gated on the new param.
+3. Probe: `select_core(PCIE2)` (with BAR0_WINDOW before/after log), read baseline, write `int_d2h_db | int_fn0`, read-back, write baseline (restore), read-back, log exact/d2h_db_latched/fn0_latched/restore_match.
+4. No change to test.245 block — this is additive.
+
+### Safety
+
+- `select_core(PCIE2)` is routine at this stage (proven by test.245 — BAR0_WINDOW moved cleanly).
+- Write value is upstream's exact production value; if it damages state, upstream damages the same state at its corresponding call site.
+- BAR0_WINDOW saved/restored across the probe.
+- No post-set_active work. No BAR2 round-trip. No doorbell ring. This is the smallest possible additional perturbation on top of test.245's already-validated pre-FORCEHT probe — about 6 extra MMIO ops.
+
+### Awareness carryover from advisor
+
+- **30s bracket slip is evidence, not variance.** Test.244 (no probe) reached t+120000ms; test.245 (pre-FORCEHT probe) reached t+90000ms. Track test.246's ladder last-landed dwell: if earlier than t+90000ms, pre-FORCEHT probe load is cumulatively perturbing; if at or past t+90000ms, single-probe cost is roughly constant.
+- **Arc check.** Shared-memory-struct forward step has been deferred since test.233's pivot note. Test.246 is the **last single-probe diagnostic** — regardless of outcome, test.247 should start on shared-struct construction (or at minimum a planning document in PLAN.md). Advisor explicitly flagged "don't stay in probe-refinement mode without checking the arc."
+
+### Run sequence
+
+```bash
+sudo insmod phase5/work/drivers/.../brcmutil.ko
+sudo insmod phase5/work/drivers/.../brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test245_writeverify_preforcehttp=1 \
+    bcm4360_test246_writeverify_legal=1
+sleep 240
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+Note: running T245 AND T246 together keeps cost roughly constant (both at same stage, ~12 total MMIO ops) and lets us directly compare the readbacks without a binary-rebuild axis.
+
+### Hardware state (current, 10:3x BST boot 0, no SMC reset from test.245)
+
+- `lspci -s 03:00.0` (sudo): `I/O- Mem- BusMaster-`, MAbort-, DEVSEL=fast, LnkSta 2.5GT/s x1, AER UESta/CESta zero, Region 0/2 `[disabled]`. Clean.
+- No brcm modules loaded.
+- Boot 0 started ~10:23 BST; uptime ~10 min at test firing.
+
+### Build status — REBUILT
+
+Module built from updated pcie.c (param + probe block both present per `modinfo`/`strings` verify). Rebuild completed after PRE-TEST.246 plan was drafted; commit captures both plan and code.
+
+### Expected artifacts
+
+- `phase5/logs/test.246.run.txt`
+- `phase5/logs/test.246.journalctl.full.txt`
+- `phase5/logs/test.246.journalctl.txt`
+
+### Pre-test checklist (CLAUDE.md)
+
+1. Build status: REBUILT and verified via `modinfo` (param present) + `strings` (two test.246 format strings present).
+2. PCIe state: verified clean above.
+3. Hypothesis: stated above — (I)/(II)/(III) matrix.
+4. Plan: this block; commit + push + sync before insmod.
+5. Filesystem sync on commit.
+
+---
+
 ## PRE-TEST.245 (2026-04-23 10:1x BST, boot 0 after test.244 crash **without** SMC reset) — relocate T243's MBM + BAR2 round-trip probe to **pre-FORCEHT** stage under explicit `select_core(PCIE2)`. **OUTCOME: 3 T245 lines flushed pre-FORCEHT — BAR0_WINDOW moved to 0x18003000 on command, MBM partial latch (bits 8,9), BAR2 round-trip PASS. Ladder ran to t+90000ms then wedged; no SMC reset needed to recover. See Current State at top for full analysis. The matrix row "FAIL/PASS = writes don't latch" was wrong — BAR0 writes to PCIE2 regs DO land, MBM is a partially-writable mask register.**
 
 ### Hypothesis
