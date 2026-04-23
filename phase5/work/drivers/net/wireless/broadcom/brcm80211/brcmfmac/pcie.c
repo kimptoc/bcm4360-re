@@ -258,6 +258,67 @@ static int bcm4360_test247_preplace_shared;
 module_param(bcm4360_test247_preplace_shared, int, 0644);
 MODULE_PARM_DESC(bcm4360_test247_preplace_shared, "BCM4360 test.247: pre-place a 72-byte pcie_shared-shaped struct at TCM[0x80000] at pre-FORCEHT and poll it at every dwell (1=enable, 0=off)");
 
+/* BCM4360 test.248: wide-TCM scan across 16 u32 offsets, split 8
+ * known-hot (prior tests 66/81/89/94/96/213/216/217 saw fw write
+ * here) + 8 upper-TCM gap points. Two snapshots: at pre-FORCEHT
+ * (baseline) and at the t+90000ms dwell (pre-wedge). Diff per
+ * offset between snapshots = fw touched that region during the
+ * ≥90s post-set_active window. Default 0. See PRE-TEST.248 in
+ * RESUME_NOTES.md and phase6/test248_bcm_work.md. */
+static int bcm4360_test248_wide_tcm_scan;
+module_param(bcm4360_test248_wide_tcm_scan, int, 0644);
+MODULE_PARM_DESC(bcm4360_test248_wide_tcm_scan, "BCM4360 test.248: wide-TCM 16-offset scan at pre-FORCEHT and t+90000ms dwell (upper-TCM priority, known-hot addresses) (1=enable, 0=off)");
+
+/* Fixed offset list for T248 wide-TCM scan. Order preserved in the
+ * logged line so snapshots are column-aligned for diff. */
+static const u32 bcm4360_t248_offsets[16] = {
+	/* Known-hot (previously observed fw writes) */
+	0x9c000,  /* "STAK" marker (pcie.c:2292 comment) */
+	0x9cc5c,  /* console ring write pointer (virtual addr field) */
+	0x9cdb0,  /* prior trap ASCII address (test.213/216/217) */
+	0x9cfe0,  /* prior trap struct address */
+	0x9d000,  /* evolving counter pre-T230 (0→0x58c8c→0x43b1→frozen) */
+	0x9d0a4,  /* olmsg shared_info magic_start */
+	0x9f0cc,  /* olmsg fw_init_done */
+	0x9fffc,  /* ramsize-4 — redundant with T239 but unifies record */
+	/* Upper-TCM gap coverage */
+	0x90000,  /* BAR2 round-trip anchor (T245/T246) */
+	0x94000,
+	0x98000,  /* user-specified upper-TCM priority */
+	0x9a000,
+	0x9b000,
+	0x9e000,  /* between olmsg magic and fw_init_done */
+	0x9f000,
+	0x9fe00,  /* just below random_seed region start 0x9fe14 */
+};
+
+/* BCM4360 test.248: wide-TCM scan helper. Reads 16 u32s from
+ * bcm4360_t248_offsets[] and emits one machine-diffable pr_emerg
+ * line. stage_tag should be a compile-time string literal. Zero
+ * cost when param off. Defined at file scope so both the pre-
+ * FORCEHT and t+90000ms invocations (in brcmf_pcie_download_fw_nvram)
+ * see the same macro. */
+#define BCM4360_T248_WIDESCAN(stage_tag) do { \
+	if (bcm4360_test248_wide_tcm_scan) { \
+		u32 _w248[16]; \
+		int _k248; \
+		for (_k248 = 0; _k248 < 16; _k248++) \
+			_w248[_k248] = brcmf_pcie_read_ram32(devinfo, \
+				bcm4360_t248_offsets[_k248]); \
+		pr_emerg("BCM4360 test.248: " stage_tag " TCM[16 off] = " \
+			 "0x9c000=%08x 0x9cc5c=%08x 0x9cdb0=%08x 0x9cfe0=%08x " \
+			 "0x9d000=%08x 0x9d0a4=%08x 0x9f0cc=%08x 0x9fffc=%08x " \
+			 "0x90000=%08x 0x94000=%08x 0x98000=%08x 0x9a000=%08x " \
+			 "0x9b000=%08x 0x9e000=%08x 0x9f000=%08x 0x9fe00=%08x\n", \
+			 _w248[0], _w248[1], _w248[2], _w248[3], \
+			 _w248[4], _w248[5], _w248[6], _w248[7], \
+			 _w248[8], _w248[9], _w248[10], _w248[11], \
+			 _w248[12], _w248[13], _w248[14], _w248[15]); \
+	} \
+} while (0)
+
+
+
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
  * stage=1: write IOCTL = FGC|CLK (coredisable in_reset_configure step)
@@ -2848,6 +2909,12 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					 _t247_rb[15], _t247_rb[16], _t247_rb[17]);
 			}
 
+			/* BCM4360 test.248: baseline snapshot at pre-FORCEHT —
+			 * 16 u32 offsets across upper TCM. Paired with a pre-
+			 * wedge snapshot at the t+90000ms dwell; diff per
+			 * offset = fw touched that region. */
+			BCM4360_T248_WIDESCAN("pre-FORCEHT");
+
 			pr_emerg("BCM4360 test.226: past BusMaster dance — entering FORCEHT block\n");
 			msleep(5);
 
@@ -3163,6 +3230,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				msleep(30000);
 				pr_emerg("BCM4360 test.238: t+90000ms dwell\n");
 				BCM4360_T239_POLL("90000ms");
+				BCM4360_T248_WIDESCAN("t+90000ms");
 				msleep(30000);
 				pr_emerg("BCM4360 test.238: t+120000ms dwell done (proceeding to BM-clear + release)\n");
 				BCM4360_T239_POLL("120000ms");
