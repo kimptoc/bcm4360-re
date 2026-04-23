@@ -5,149 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 00:29 BST, POST-TEST.266 — **Trigger upper bound compressed to ≤50ms. T266 msleep(50) scaffold crashed inside the 50ms window — no "msleep done" marker. Consistent with T264/T265 pattern: 3 consecutive shrinks (2000→500→50) and every single one crashes inside its own intended msleep. Either near-instant fixed timer (<50ms) or duration-proportional. At this bound the proportional-vs-fixed distinction matters less — mechanism is "soon after request_irq". Next question: isolate WHAT in the scaffold is the trigger (pci_enable_msi vs request_irq vs just-being-MSI-bound). Host auto-rebooted 00:27 BST.**)
-
-## PRE-TEST.264 (2026-04-23 23:3x BST, boot 0 — **Loop-less scaffold: MSI + request_irq + single msleep(2000) + cleanup with markers. No MMIO reads. No loop.**)
-
-### Hypothesis
-
-POST-TEST.263 showed crash timing scales with loop duration. Two readings remain: (X) duration-anchor, (Y) final-iteration-specific. T264 discriminates by removing the loop entirely.
-
-### Design
-
-| Stage | Action | Pr_emerg markers |
-|---|---|---|
-| t+120000ms | same baseline T258 probe | (existing) |
-| +immediate | `pci_enable_msi` | "pci_enable_msi=... new_irq=..." |
-| +immediate | `request_irq` (same safe handler) | "request_irq ret=..." |
-| +immediate | pr_emerg "entering msleep(2000)" | marker |
-| msleep(2000) | single 2s sleep, NO reads, NO loop | — |
-| +immediate | pr_emerg "msleep done; irq_count=... last_mailboxint=..." | marker |
-| +immediate | pr_emerg "calling free_irq" | marker |
-| — | `free_irq(pdev->irq, devinfo)` | — |
-| +immediate | pr_emerg "free_irq returned" | marker |
-| +immediate | pr_emerg "calling pci_disable_msi" | marker |
-| — | `pci_disable_msi(pdev)` | — |
-| +immediate | pr_emerg "pci_disable_msi returned" | marker |
-
-### Next-step matrix (advisor-framed)
-
-| Observation | Reading | Next test |
-|---|---|---|
-| Crash before "msleep done" (~2s in) | **Duration-anchor confirmed**. Loop structure was irrelevant. Candidates (2)/(3) still live. | T265: test shorter msleep (e.g., 500ms) — does crash scale with msleep too? |
-| Crash between "msleep done" and "free_irq returned" | **Cleanup path is the crasher** (first-time visible). Probably in free_irq itself. | T265: try cleanup reordered, or skip cleanup. |
-| Crash between "free_irq returned" and "pci_disable_msi returned" | **pci_disable_msi is the crasher**. | T265: skip pci_disable_msi, leave MSI enabled. |
-| All 6 markers fire, module unloads cleanly | **Loop content (MMIO reads) necessary for trigger**. | T265: bisect — loop with just MAILBOXINT reads vs just buf_ptr reads. |
-
-### Safety
-
-- Even smaller envelope than T262/T263 — no loop, no reads.
-- Cleanup path markers will print in sequence, giving us position-of-crash visibility for the first time.
-- Same MSI+handler safety (consumes any stray IRQ).
-
-### Code change outline
-
-1. New module param `bcm4360_test264_noloop`.
-2. Extend T239 ctr gate + T258_BUFPTR_PROBE gate.
-3. Add new invocation block inside the ultra-dwells branch, separate from the T260/T262/T263 block (no shared scaffolding — simpler to read).
-
-### Run sequence
-
-```bash
-sudo modprobe cfg80211 && sudo modprobe brcmutil && \
-sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
-    bcm4360_test236_force_seed=1 \
-    bcm4360_test238_ultra_dwells=1 \
-    bcm4360_test239_poll_sharedram=1 \
-    bcm4360_test240_wide_poll=1 \
-    bcm4360_test247_preplace_shared=1 \
-    bcm4360_test248_wide_tcm_scan=1 \
-    bcm4360_test264_noloop=1
-sleep 300
-sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
-```
-
-T258/T259/T260/T262/T263 NOT set.
-
-### Expected artifacts
-
-- `phase5/logs/test.264.journalctl.txt`
-- `phase5/logs/test.264.run.txt`
-
-### Pre-test checklist (pending code+build)
-
-1. **Build status**: NOT yet rebuilt.
-2. **PCIe state**: verify clean before fire.
-3. **Hypothesis**: duration-anchor vs cleanup-path vs loop-content — 3 outcomes give clean discrimination.
-4. **Plan**: this block (committed before code).
-5. **Host state**: boot 0 up since 23:24 BST.
-
-Advisor-confirmed. Code + build + fire pending.
-
-### T264 first fire (2026-04-23 23:42 BST) — **NULL TEST, scaffold never ran**
-
-Crashed during test.188 pre-release TCM tail-snapshot, ~2 minutes BEFORE the dwell ladder or T264 scaffold would have started. Last event: `tail-TCM[0x9ffec]` at 23:44:44. No scaffold markers fired.
-
-**Anomalous pacing**: in T263 (success), all 16 tail-TCM cells read in the same second (23:18:37 — <1ms each). In T264 (crash), 12 cells spread across 6 seconds (23:44:38 → 23:44:44 — ~500ms each). **Single MMIO reads were ~500× slower than T263**. Either the PCIe link was already struggling with L1→L0 retrains/timeouts, or the chip's PCIE2 core was stuck waiting.
-
-Advisor read: this is a null test, not a failed test. Re-fire T264 unchanged. Two outcomes:
-- Crashes again at test.188 → reproducible new failure mode; investigate chip state
-- Reaches scaffold → first crash was one-off noise; scaffold gives real discrimination
-
-Re-firing pending.
-
-### T264 re-fire (2026-04-24 00:02 BST) — **scaffold DID fire; crashed during msleep(2000)**
-
-- 00:02:10: scaffold entry — `pci_enable_msi=0 prev_irq=18 new_irq=79`, `request_irq ret=0`
-- 00:02:10: `entering msleep(2000) — no loop, no MMIO`
-- [crash]
-- 00:03 auto-reboot (platform watchdog)
-
-**No "msleep done" marker.** Crash happened during the 2s sleep — no MMIO reads, no loop, no cleanup code executed.
-
-Also: test.188 tail-TCM pacing in the re-fire = all 16 cells in <1ms each (same as T263 baseline). The first-fire's 500ms/read was one-off noise.
-
-### POST-TEST.264 findings (consolidated)
-
-Advisor-framed matrix: which of the three outcomes fired?
-
-| Outcome | Observed? | Reading |
-|---|---|---|
-| Crash before "msleep done" (within the 2s sleep) | ✓ YES | **Duration-anchor with no loop. Loop structure + MMIO reads are NOT required for the trigger.** The MSI+request_irq idle state for ~2s is sufficient. |
-| Crash between "msleep done" and "free_irq returned" | — | N/A — "msleep done" never fired |
-| Crash between "free_irq returned" and "pci_disable_msi returned" | — | N/A |
-| Clean completion | — | N/A |
-
-### What test.264 settled
-
-- **Loop content (MMIO reads, pr_emerg, 100ms msleeps) is NOT required.** T264's single `msleep(2000)` with no reads triggered the same crash pattern.
-- **The trigger is proportional to "scaffold duration" even when there's no loop.** Intended duration 2s → crash within the 2s window.
-- **The cleanup path is STILL invisible.** None of `msleep done`, `calling free_irq`, `free_irq returned`, `calling pci_disable_msi`, `pci_disable_msi returned` fired. We still cannot discriminate "crash happens before cleanup would run" vs "cleanup runs and crashes".
-
-### What test.264 did NOT settle
-
-- Whether the crash is at a fixed time from scaffold start (e.g., always ~N seconds) OR proportional to intended duration (~duration). T260-T263 all had scaffold = intended_duration; T264 same. Still one-variable-coupled.
-- Whether MSI enable, request_irq registration, or just "time passing" is the necessary ingredient. T264 has all three.
-- Whether pr_emerg calls in the loop were contributing (e.g., printk overhead). T264 has none in its sleep window — still crashed, so pr_emerg is not required.
-
-### Surviving candidate mechanisms (after T264)
-
-1. ~~Loop-content necessary~~ — **FALSIFIED by T264**.
-2. **PCIe/ASPM L1→L0 retrain after idle period**: link goes to L1 when CPU sleeps in msleep, then when it tries to wake, chip-side is unresponsive, retrain fails, MCE. Duration-anchor through L1-entry timer.
-3. **Scaffold-duration bomb**: something about MSI+request_irq bound + wall-clock passing ~= intended duration triggers a fault. Still live, mechanism unknown.
-4. ~~Cumulative MMIO effect~~ — **FALSIFIED by T264** (no reads in the sleep window).
-5. **Cleanup path is crasher**: still live but currently has no positive evidence (we just never see its markers fire).
-6. **Platform/root-port watchdog on the bridge**: the Intel PCH root port might have a timeout on the BCM4360 endpoint; after some period with no DMA or MMIO traffic, it flags the device bad.
-
-### T265 direction (advisor call before committing)
-
-Three candidate variants, one-variable-each:
-
-- **T265a: msleep alone** (no MSI, no request_irq). If msleep(2000) alone crashes, time alone is enough. If it completes cleanly, MSI/request_irq matters.
-- **T265b: MSI only** (pci_enable_msi + msleep, no request_irq). If crashes, MSI enable is sufficient trigger. If clean, request_irq matters.
-- **T265c: short msleep** (msleep(500) with MSI + request_irq). Tests whether crash scales with msleep duration. If crash at 2s regardless, there's an absolute timer. If crash at 500ms, it's duration-proportional.
-
-Most-discriminating: probably T265a (isolates whether time alone or MSI-bound matters). Calling advisor before committing.
+## Current state (2026-04-24 00:29 BST, POST-TEST.266 → PRE-TEST.267 — **Trigger upper bound compressed to ≤50ms across T264/T265/T266. Next: T267a removes msleep entirely (scaffold = MSI + request_irq + immediate free_irq + pci_disable_msi). Existing cleanup markers give 5-position discrimination: last-marker-seen tells us exactly where in the sequence the crash fires. Clean completion would confirm msleep-duration is necessary — a headline finding. Host stable, boot 0 up since 00:27 BST.**)
 
 ---
 
@@ -365,3 +223,77 @@ Candidate tests to isolate the trigger component:
 Most discriminating single test: probably T267a (smallest envelope, fastest check, directly answers "is msleep necessary").
 
 Advisor call before committing to T267 design.
+
+---
+
+## PRE-TEST.267 (2026-04-24 00:3x BST, boot 0 — **No-msleep variant: MSI + request_irq + IMMEDIATE free_irq + pci_disable_msi. Existing cleanup markers give 5-position crash discrimination. Clean completion = msleep-duration is necessary (highest-value outcome).**)
+
+### Hypothesis
+
+T264/T265/T266 all crash inside intended msleep window; upper bound ≤50ms. Remaining question: is msleep's duration essential, or is the trigger fired by request_irq / MSI setup itself?
+
+T267a removes msleep entirely. The sequence becomes purely: request_irq → free_irq → pci_disable_msi. Each transition has an existing marker.
+
+### Design (no code size change — reuse T264 block pattern)
+
+```
+pci_enable_msi                          [marker A: pci_enable_msi=...]
+request_irq                             [marker B: request_irq ret=...]
+pr_emerg "skipping msleep; calling free_irq immediately"   [NEW marker]
+pr_emerg "calling free_irq"             [marker C]
+free_irq                                 —
+pr_emerg "free_irq returned"            [marker D]
+pr_emerg "calling pci_disable_msi"      [marker E]
+pci_disable_msi                          —
+pr_emerg "pci_disable_msi returned"     [marker F]
+```
+
+### Next-step matrix (advisor-framed)
+
+| Last marker seen | Reading |
+|---|---|
+| A, B only (no "skipping msleep" print) | Crash between request_irq and next pr_emerg. Very tight window — trigger is ~immediate upon request_irq return. |
+| B + "skipping msleep" + C | Crash in free_irq. |
+| C + D | Crash between free_irq and pci_disable_msi — unexpected. |
+| D + E | Crash in pci_disable_msi. |
+| D + E + F (all markers fire, module unloads) | **msleep duration is necessary for crash trigger.** Highest-value outcome. Time-in-MSI-bound-state matters. Re-fire once to confirm (n=2). |
+
+### Safety
+
+- Smallest scaffold yet — no sleep between request_irq and free_irq.
+- Cleanup path runs under every conceivable timer-firing-time <50ms.
+- Host crash still likely but uncertain. Re-fire required if all markers fire (first clean completion would be headline finding; n=1 insufficient).
+
+### Code change outline
+
+1. New param `bcm4360_test267_no_msleep`.
+2. Extend T239 ctr gate + T258 buf_ptr probe gate.
+3. Add scaffold block mirroring T264 but with msleep call REPLACED by a new "skipping msleep" pr_emerg marker.
+4. Build + verify modinfo + strings.
+
+### Run sequence
+
+```bash
+sudo insmod .../brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 bcm4360_test248_wide_tcm_scan=1 \
+    bcm4360_test267_no_msleep=1
+sleep 200
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+### Expected artifacts
+
+- `phase5/logs/test.267.journalctl.txt`
+- `phase5/logs/test.267.run.txt`
+
+### Pre-test checklist
+
+1. **Build**: NOT yet rebuilt.
+2. **PCIe state**: verify clean before fire.
+3. **Hypothesis**: stated — 5-position discrimination of crash location.
+4. **Plan**: this block (committed before code).
+5. **Host state**: boot 0 up since 00:27 BST.
+
+Advisor-confirmed. Code + build + fire pending.
