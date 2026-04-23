@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 14:4x BST, POST-TEST.248 — **W2 fw-alive variant confirmed.** Wide-scan diff pre-FORCEHT → t+90000ms: **8 of 16 offsets changed**, including every known-hot offset we can distinguish from fw-image bytes. Fw is running, setting up stack ("STAK" at 0x9c000), evolving its console write-pointer (0x9cc5c → 0x8009ccbe — a fw-VA pointer), zeroing BSS/heap regions (0x98000/0x9a000/0x9b000 all → 0x00000000), and the 0x9d000 counter reaches **0x000043b1 — exact match to pre-T230's "frozen at 0x43b1" observation.** Wedge still [90s, 120s], SMC reset required. Boot 0 started 14:41, uptime ~5 min. Matrix row (W2, fw-alive variant) fired: Phase 6 pivot "read the console" is the indicated direction — 0x9cc5c holds a real fw-VA write pointer, console buffer content should be decodable. Advisor call pending before T249 design.)
+## Current state (2026-04-23 14:4x BST, POST-TEST.248 — **W2 fw-alive-briefly confirmed; fw has been frozen at T+12ms throughout post-T230 investigation.** Wide-scan diff pre-FORCEHT → t+90000ms: 8 of 16 offsets changed. Fw ran briefly (stack "STAK" at 0x9c000, BSS zeroed 0x98000/0x9a000/0x9b000, console write-idx 0x9cc5c → 0x8009ccbe, counter 0x9d000 reached **0x000043b1 byte-identical to test.89's frozen-counter endpoint**). Per test.89, 0x9d000=0x43b1 is a *single-write static constant*, not a running counter — fw hard-freezes at T+12ms via fn 0x1FC2 (test.94). **The ~90s host-side wedge is mechanistically distinct from fw execution.** Console-buffer dump (T249) should yield 0–12ms pre-freeze log output. Boot 0 started 14:41, uptime ~5 min. Post-T230 investigation reconnects with test.89/94 findings. Advisor call complete; T249 design follows.)
 
 ### What test.248 landed (facts)
 
@@ -38,7 +38,7 @@ Apr 23 13:47:26.936 test.248: t+90000ms TCM[16 off] =
 | 0x9d000 | 4d917b4a | **000043b1** | ✓ | **Exact match to pre-T230's frozen-counter endpoint.** Same stall state. |
 | 0x9d0a4 | 555c2631 | 555c2631 | — | unchanged — likely fw-image bytes (data segment in 0x9D0A4) |
 | 0x9f0cc | 870ca015 | 870ca015 | — | unchanged — likely fw-image bytes |
-| 0x9fffc | 14086122 → ffc70038 | ffc70038 | — | NVRAM marker, redundant with T239 |
+| 0x9fffc | ffc70038 | ffc70038 | — | NVRAM marker, redundant with T239 |
 | 0x90000 | 84270be1 | 84270be1 | — | unchanged — matches T245 baseline exactly (fingerprint or fw-image) |
 | 0x94000 | 464c65ec | 464c65ec | — | unchanged — fw image |
 | 0x98000 | 15f3b94d | **00000000** | ✓ | fw **zeroed** — BSS/heap init pattern |
@@ -55,18 +55,22 @@ Apr 23 13:47:26.936 test.248: t+90000ms TCM[16 off] =
 - **Console subsystem is alive.** Write-pointer at 0x9cc5c is a valid fw-VA (0x8009ccbe — ARM Cortex-R dcache/TCM-alias window). The log content should live at that VA, which in our BAR2 TCM window maps to an offset we can probe.
 - **Stack, BSS, olmsg are all initialized.** "STAK" marker at 0x9c000, three zeroed BSS regions, olmsg addresses 0x9D0A4 and 0x9F0CC populated (even if those specific bytes are fw-image, the *surrounding* structure is presumably live).
 - **W2 fw-alive branch of the matrix is hit.** Per PRE-TEST.248 matrix: "Known-hot offsets changed (0x9cc5c / 0x9d000 / 0x9D0A4 / 0x9F0CC or trap addresses) → Phase 6 pivot becomes 'read the console' — capture console buffer, decode fw output."
-- **Wedge bracket unchanged.** t+90000ms T248 line landed at 13:47:26.936; boot's last entry 13:47:26 (same second). Wedge still [90s, 120s]. Probe-cost envelope unchanged (T248 adds 32 BAR2 reads on top of T247).
+- **Wedge within ≤1s of the t+90s T248 probe burst.** T248 t+90000ms line at 13:47:26.936; boot's last journal entry at 13:47:26 (same second). Earlier phrasing "[90s, 120s] wedge bracket" was too generous — actual unchangedness is "within log resolution, wedge occurred ≤1s after the t+90s probe fired." Anticipated T249 probe-cost uplift (+160 reads at t+90s) may push into the wedge; split across two dwells if needed. **Note**: this ~90s host-side wedge is not fw execution progress — fw froze at T+12ms per test.89. The 90s is kernel driver load/timeout dynamics.
 - **SMC reset required** (n=2 post-T247 streak — consistent with T246/T247 pattern).
 
-### Next test direction
+### Next test direction (T249 — advisor-confirmed)
 
-**T249: console-buffer capture.** 0x9cc5c is the write-pointer. Subsequent dwords (0x9cc60, 0x9cc64, 0x9cc68...) likely hold: buffer_addr (VA), bufsize, read-idx — standard Broadcom console-info struct layout. Plan pending advisor review:
+**Pre-freeze log output lives in the console buffer, frozen-in-place since T+12ms.** T249 reads the region around 0x9CC5C and the 0x9CDB0 assert-text area to capture anything fw printed during its 0–12ms init window before the hang at fn 0x1FC2.
 
-1. At t+90000ms dwell only (to stay under probe-cost budget), dump `TCM[0x9cc50..0x9cca0]` (80 bytes, 20 u32s) to reveal the console-info struct shape.
-2. Hex-decode known-changed offsets (0x9cdb0=ASCII?, 0x9cfe0=ptr/counter) with a 64-byte dump around each.
-3. Keep T247/T248 probes active for continuity.
+1. **Single snapshot at t+90000ms** (no second snapshot — fw is frozen, read would be identical; probe cost better spent widening the window).
+2. **Primary read: `TCM[0x9CA00..0x9CCA0]` — 160 u32s = 640 bytes.** Covers console log buffer + struct area around write-idx at 0x9CC5C. Decode dwords at 0x9CC5C-8 and 0x9CC5C+4..8 first — standard Broadcom console_info layout is `{buf_ptr, bufsize, in_idx, out_idx}` contiguous. Translate (buf_ptr & 0xFFFFF) → TCM offset for T250 buffer-content read.
+3. **Secondary read: `TCM[0x9CDB0..0x9CE10]` — 24 u32s = 96 bytes.** Historic assert-text region per pcie.c annotations ("ASSERT in file hndarm.c line 397..."); T248's 0x9CDB0=0x77203030 = bytes "00 w" in LE already hints ASCII text.
+4. **Add 0x9d000 to per-dwell poll** — one u32/dwell, effectively free. Closes out "is the counter really frozen from first dwell?" directly in this run's data.
+5. POST decode: hex-dump with byte-swap-to-char column for the console/assert regions.
 
-Advisor call next: validate "console-info struct layout" assumption; ask whether to densify around 0x9cc5c (my plan) or chase the 0x9d000=0x43b1 counter (which is the stall signal itself). Matrix says "read the console" but the stall counter may be more informative if the console is just a boot-echo log.
+**Fallback if both windows are null/garbage**: pivot to fn 0x1FC2 disassembly path from test.94 — that thread was active pre-T230 and has the most direct reach to the hang. Don't accept null twice in this direction before revisiting.
+
+Proceed to PRE-TEST.249 design.
 
 ---
 
