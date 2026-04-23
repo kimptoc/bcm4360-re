@@ -156,3 +156,74 @@
 Advisor call before committing to T263 design.
 
 ---
+
+## PRE-TEST.263 (2026-04-23 23:xx BST, boot 0 — **Scaffold-short variant: same MSI+request_irq+poll loop as T262 but with only 10 iterations (1s loop) instead of 50. Discriminates absolute-time crash (t+125s) vs scaffold-duration crash (t+scaffold+5s) vs cleanup-path crash (post-loop free_irq/pci_disable_msi).** Advisor-confirmed design: single variable changed (iteration count). All cleanup calls will now execute under t+125s for the first time across T260/T261/T262.)
+
+### Hypothesis
+
+T260/T261/T262 all crash at t+124900ms→t+125000ms regardless of which (or neither) register write is done. The crash is in the shared scaffold. Three surviving candidate mechanisms: (1) chip PMU watchdog at absolute t+125s, (2) PCIe/ASPM state after ~5s of MSI+poll, (3) scaffold-duration bomb.
+
+**Key blind spot** (per advisor): T260/T261/T262 never execute the post-loop summary print, `free_irq`, or `pci_disable_msi` — all three are past the crash point. T263-short moves those calls to ~t+121000ms, giving them their first real execution.
+
+### Next-step matrix
+
+| Crash timing | Reading |
+|---|---|
+| ~t+121000ms (during 10-iter loop) | scaffold-start triggers something ~1s in. New clock. Candidate (3)b: bounded duration bomb at ~1s, not 5s. |
+| ~t+121100–122000ms (just after loop, during `timeline done` print / `free_irq` / `pci_disable_msi`) | **Cleanup path is the crasher.** T260/T261/T262 never reached these — this would be a new, previously invisible failure mode. |
+| ~t+125000ms (4s after scaffold ends, rest of path is unchanged) | Absolute-time candidate (1) confirmed: chip-side watchdog fires at ~125s from chip-active, independent of host activity. |
+| Past t+125000ms into normal chip cleanup / rmmod | Scaffold's 5s duration in T260/T261/T262 was the trigger. Candidate (3) favored. |
+
+### Design
+
+Single new module param: `bcm4360_test263_short=1`. Behaves EXACTLY like T262 msi_poll_only but with 10 iterations instead of 50. Set by changing the loop bound and the variant label.
+
+**Scaffold**: same as T262 — pci_enable_msi + request_irq (same handler) + NO register writes + loop(10) + timeline-done print + free_irq + pci_disable_msi.
+
+**Log format**: `BCM4360 test.263 short: t+120100ms ... t+121000ms ...` (10 lines), then `timeline done`.
+
+### Safety
+
+- Same envelope as T262 plus shorter duration.
+- Cleanup now executes under t+125s — if cleanup itself crashes, we get a new data point BUT also a new failure mode to recover from. Platform watchdog pattern reliable for recovery.
+- One variable changed from T262 (iteration count). Everything else identical.
+
+### Code change outline
+
+1. New module param `bcm4360_test263_short`.
+2. Extend T239 ctr gate + T258_BUFPTR_PROBE gate + scaffold block gate.
+3. Inside scaffold block: `int _max_iter = bcm4360_test263_short ? 10 : 50;`, change loop bound, adjust variant label "short" and test-number string "263" when short.
+4. Build, verify modinfo + strings.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 \
+    bcm4360_test248_wide_tcm_scan=1 \
+    bcm4360_test263_short=1
+sleep 300
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+T258/T259/T260/T262 NOT set.
+
+### Expected artifacts
+
+- `phase5/logs/test.263.journalctl.txt`
+- `phase5/logs/test.263.run.txt`
+
+### Pre-test checklist (pending code+build)
+
+1. **Build status**: NOT yet rebuilt.
+2. **PCIe state**: verify clean before fire (Mem+ BusMaster+ MAbort- CommClk+).
+3. **Hypothesis**: stated — crash location splits cleanly across 4 readings.
+4. **Plan**: this block (committed before code).
+5. **Host state**: boot 0 up since 23:07 BST.
+
+Advisor-confirmed. Code + build + fire pending.
