@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 19:5x BST, POST-TEST.255 — **(A') WFI-stall FALSIFIED; hang is stuck inside a scheduler-dispatched callback, not in idle**. T255 fired at 19:50:19 (t+100ms + t+60s + t+90s probes all captured); wedge at 19:52:11 (~1s after t+90s T248 probe, n=8 streak T247..T255). Host recovered via auto-reboot (NOT SMC reset this time — reboot at 19:53:42, up since with uptime ~2 min at report time). PCIe post-wedge state DIRTY (Mem- BusMaster- CommClk- ASPM Disabled) — SMC reset required before next HW test. Key T255 findings: (1) **Sleep-flag TCM[0x629B4] = 0 at BOTH t+100ms and t+90s** → scheduler NEVER reached the WFI idle-path fall-through. (A') WFI-idle hypothesis FALSIFIED. (2) **Callback-list head 0x629A4 = 0x9627C AND current-task ptr 0x6299C = 0x96F2C** → scheduler ran, initialized state, has active callbacks + task. Context ptr 0x6296C = 0x62A98 (into code-region — likely a handler-table entry). (3) **Drift test: ALL 5 u32 IDENTICAL between t+100ms and t+90s** → scheduler froze between those two dwells. No task/callback progress. (4) **Tick-scale TCM[0x58C98] = 0xA0 (160)** — runtime-updated from blob default 0x50 (80). NOT corrupted; (C) falsified. All polling loops still bounded (worst case ~160ms at 0x1722C). (5) **0x9355C family decoded**: includes refs to 0x93610 (wl_info), 0x934C0 (central obj, 2×), 0x93540 (sibling), plus numeric fields 0x3151, 0x418, 0x3901. Remaining hang candidate: **(A) callback bus-stalled** — a scheduler-dispatched callback (plausibly the wlc_attach path referenced by saved LRs) is stuck at memory-subsystem level on an access to an unclocked/stuck SB core. Fw's scheduler state is consistent — it dispatched a callback that never returned.)
+## Current state (2026-04-23 20:0x BST, POST-TEST.255 — **(C) tick-scale corruption FALSIFIED; (A') WFI-stall NEITHER confirmed NOR falsified (sleep-flag probe non-discriminating, corrected per advisor); struct-graph extended.** T255 fired at 19:50:19 (all 3 probes captured); wedge at 19:52:11 (~1s after t+90s T248 probe, n=8 streak T247..T255). Host auto-rebooted (not SMC reset); PCIe post-wedge DIRTY (Mem- BusMaster- CommClk-) — SMC reset needed before next HW test. Real T255 findings (after advisor correction): (1) **Tick-scale TCM[0x58C98] = 0xA0 (160) at both dwells** — runtime-updated from blob default 0x50. NOT corrupted. **(C) FALSIFIED.** All PMCCNTR-backed polling loops remain bounded (worst case ~160ms at 0x1722C, double T254's 82ms estimate). (2) **Scheduler BSS state**: 0x6296C = 0x62A98, 0x629A4 = 0x9627C (callback-list head), 0x6299C = 0x96F2C (current-task), 0x629B4 = 0. These are non-blob-zero (except 0x629B4), proving fw boot reached the code that populates them. (3) **BSS drift test INCONCLUSIVE**: all 5 u32 identical between t+100ms and t+90s, but these fields are expected-static in normal operation (list head + current-task typically don't change). Zero drift is consistent with both "running-but-not-list-mutating" and "fully stopped". (4) **Sleep-flag TCM[0x629B4] = 0 — NON-DISCRIMINATING**: r4 always = 0 at the `strb r4, [r6]` at pcie fn 0x1192 (r4 is list-walk terminator), so scheduler always writes 0 to this byte. Reading 0 matches both "never reached sleep path" AND "reached sleep path". (A') NOT falsified by this probe. (5) **WFI IS reachable** (re-verified): 0x2408 (boot entry) → tail-call 0x11D0 (real idle-loop fn, push/BL prologue) → infinite `bl 0x11CC` loop → `b.w 0x1C0C` → `b.w 0x1C1E` (wfi). (6) **0x9355C struct family decoded**: refs to 0x93610 (wl_info), 0x934C0 (central obj, 2×), 0x93540 (sibling), + numeric fields 0x3151/0x418/0x3901. Remaining hang candidates: **(A) bus-stall on backplane access** (still most-consistent) OR **(A') WFI waiting for never-arriving IRQ** (not yet falsifiable with current probes).)
 
 
 ## PRE-TEST.253 (2026-04-23 17:5x BST, boot 0 after test.252 crash + SMC reset) — **central-shared-object probe + list_head validation**. Single t+60s probe reads 16 u32 at 0x934B8 (covers 0x934C0 and 8 pre-bytes for allocator-header check) + 16 u32 at 0x91E50 (list_head peers + context). Advisor-confirmed post-T253 local analysis.
@@ -374,10 +374,11 @@ tick[0x58C98] = 000000a0
 
 ### What test.255 settled (facts)
 
-- **(A') WFI-stall HYPOTHESIS FALSIFIED.** Sleep-flag TCM[0x629B4] is zero at both t+100ms and t+90s. Scheduler at 0x115C never reached the idle-path fall-through (which writes a non-zero value to [0x629B4] before calling `bl #0x1038` and potentially WFI). Fw is stopped at an EARLIER point in scheduler flow — during a callback dispatch, not in idle.
-- **Scheduler was initialized and RAN at least once before freeze.** BSS[0x629A4] = 0x9627C (non-zero callback-list head, vs. blob-zero). BSS[0x6299C] = 0x96F2C (non-zero current-task ptr). Both addresses point into runtime heap/BSS (0x96xxx range). Scheduler's boot-time init completed; at least one callback was registered.
-- **Scheduler froze between t+100ms and t+90s.** ALL 5 u32 (4 BSS + tick-scale) are byte-identical between the two dwells. In a running scheduler with callbacks firing, one would expect at least the callback-list head (0x629A4) to change as entries are added/removed, or current-task (0x6299C) to rotate. Zero drift over 90 seconds strongly implies scheduler is not advancing.
-- **Tick-scale was RUNTIME-UPDATED** (blob default 0x50 → observed 0xA0). Fw's early-init clock-detection ran and doubled the tick-scale. (C) tick-scale-corruption hypothesis FALSIFIED. All PMCCNTR-backed delay loops remain bounded, just 2× slower than the T254 estimate (worst-case poll at 0x1722C ≈ 160ms instead of 82ms).
+**Correction (2026-04-23 20:0x BST per advisor audit)**: initial POST-TEST.255 claimed (A') WFI-stall was falsified because sleep-flag = 0. This was WRONG. Re-audit of pcie fn 0x115C disasm at 0x1192 shows `strb r4, [r6]` where r4 is ALWAYS 0 at that program point (r4 is the list-walk terminator, always 0 after the `cmp r4, #0; bne` loop exit at 0x1180). The scheduler ALWAYS writes byte 0 to BSS[0x629B4] on each idle-path pass, so reading 0 at probe time is non-discriminating between "never reached" and "reached many times". (A') is NEITHER confirmed NOR falsified by this probe. WFI reachability re-verified: 0x2408 (boot entry; no BL callers — likely reset vector or exception-vector tail-calls it) tail-calls 0x11D0, a real idle-loop function with push/BL prologue and an infinite `bl 0x11CC; b 0x11DE` loop that reaches WFI at 0x1C1E via two thunks. (A') remains on the table.
+
+- **(C) tick-scale corruption FALSIFIED.** TCM[0x58C98] = 0xA0 at both dwells — runtime-updated from blob default 0x50 (fw's clock-init ran). Not the 0xFFFFFFFF-style corruption that would unbind polling loops. PMCCNTR-backed delays are 2× slower than T254 estimated (0x1722C worst-case ~160ms instead of 82ms) but still bounded.
+- **Scheduler BSS was populated before probe time.** BSS[0x6296C] = 0x62A98, BSS[0x629A4] = 0x9627C, BSS[0x6299C] = 0x96F2C (all non-blob-zero). Fw code that writes to these addresses executed at some point between boot and t+100ms.
+- **BSS drift test INCONCLUSIVE**, not proof of freeze. All 5 u32 identical between t+100ms and t+90s. These fields are expected to be static in normal operation (list head and current-task ptr don't change unless callbacks register/deregister or tasks switch). Zero drift is consistent with both "running but not mutating these fields" AND "fully stopped". Previous POST-TEST claim "scheduler froze" is stronger than the evidence supports — true drift detection needs probes on fields that change per-iteration.
 - **0x9355C is a second-tier driver descriptor** — a struct containing cross-references to the three already-identified family members:
   - `+0x0C = 0x93610` (wl_info)
   - `+0x18, +0x34 = 0x934C0` (central shared object — **referenced TWICE** from this struct)
@@ -386,30 +387,30 @@ tick[0x58C98] = 000000a0
   - Pre-header 0x93550 values `04 00 00 00 AC 00 00 00 00 00 00 00 TCM-ptr` hint at an allocator format: size=4 bytes in +0 (object-ID?) + size=0xAC = 172 bytes total (the struct body after header).
 - **Wedge timing consistent with prior streak.** ~0-1s after t+90s probe burst (n=8 streak T247..T255).
 
-### Where the hang is — reading after T255
-
-**Refined picture**:
+### Where the hang is — reading after T255 (uncertainty widened)
 
 1. Fw RTE boot runs, prints RTE banner, initializes clock (tick-scale 0x50→0xA0).
-2. Fw scheduler main loop at 0x115C starts, dispatches early callbacks.
-3. One of those callbacks enters the `wlc_attach → wlc_bmac_attach → wlc_phy_attach` call tree (saved LRs 0x68321 at wlc_bmac_attach, 0x68D2F at wlc_attach).
-4. Somewhere inside that callee chain, fw issues an LDR/STR to a memory-mapped backplane address (SB core at 0x18xxxxxx) that never completes. CPU is stalled at the bus level.
-5. All polling loops in the chain (0x1415C, 0x1722C, 0x14CAC, 0x1ADC inner) are PMCCNTR-bounded — NONE of them explain a multi-minute hang.
-6. Scheduler CANNOT rotate to another task because CPU is stalled on the memory transaction, not waiting on an interrupt.
+2. Fw scheduler main loop at 0x115C eventually gets entered (BSS fields populated — but we can't prove they were populated by THIS fn vs. by caller init).
+3. Fw reaches (α-model) `wlc_attach → wlc_bmac_attach → wlc_phy_attach` call tree per T251 saved LRs.
+4. Fw hangs somewhere past that point, either:
+   - **(A)** at bus level on an uncompleting LDR/STR to an SB core, OR
+   - **(A')** in the idle-loop WFI at 0x1C1E, waiting for an IRQ that never fires, OR
+   - **(B)** an inter-task wait we haven't mapped yet.
+5. (C) tick-scale corruption is ruled out.
 
-**Key remaining unknowns**:
-- **WHICH backplane address is stuck?** The polling loops all read `[core_base + offset]`. Core bases are runtime-cached in the si_info struct (0x92440, seen at T252: `0x18001000` = ChipCommon). Other likely targets: MAC core (0x18005000), PHY core (base TBD), SB wrapper registers.
-- **WHY is that backplane core stuck?** Core might be held in reset, unclocked, or mid-power-transition. We haven't established whether host-side driver correctly brought each core out of reset before fw started executing.
-- **Is the auto-reboot (vs. SMC reset) significant?** Prior tests required SMC reset — this one rebooted on its own. Possibly the driver release-path interrupted the wedge-stall faster this time, or the host's IOMMU/PCIe-AER hit a watchdog. Worth checking dmesg of the just-completed boot.
+**Both (A) and (A') still have host-observable equivalence** — no code runs either way. A probe that DOES discriminate needs a signal that changes per-scheduler-iteration (which we don't have a probe for yet).
 
 ### Next-test direction (T256 — candidates for advisor review)
 
-Hypothesis has narrowed substantially. Next probes should pin down WHICH backplane address is stuck:
+Focus on getting EVIDENCE, not more hypothesis re-framing:
 
-1. **Read the si_info core-base array at TCM[0x92460+0x20..+0x60]** — the 0x92440 struct contains cached CC base (0x18001000 at +0x0C). Adjacent fields likely hold MAC/PHY core bases. Knowing all cached bases tells us which cores fw thinks are addressable. Cheap: 16 u32.
-2. **Probe the scheduler's ACTIVE callback via 0x9627C** — the callback-list head. Walk the list to see which callback is currently "executing" (i.e., the head-of-list or the callback whose flag matches the current-task mode). This tells us WHICH function is hung. Cheap: 16-32 u32.
-3. **Check host-side PCIe AER + BAR0 accessibility** on this boot (pre-insmod) — may reveal why the auto-reboot happened instead of SMC reset.
-4. **DEFERRED: hardware BAR0 register read** of CC core registers (0x18001000+offset) to check whether the backplane is actually reachable from host. HIGHER RISK — same access fw is stuck on.
+1. **Walk the callback list at 0x9627C**: read 4-5 nodes, each {next, fn-ptr, arg, flag} = 4 u32 per node. If any node's fn-ptr is in wlc_attach/wlc_bmac_attach/wlc_phy_attach range (blob 0x68xxx), we have hard evidence those functions are registered as scheduler callbacks. 16-24 u32.
+2. **Dereference current-task ptr at 0x96F2C**: read ~16 u32 at TCM[0x96F2C..+0x40] to decode the task struct. Pcie fn 0x115C reads `r3 = *0x6299C; r3 = *r3; r3 = r3->[+4]` — the structure has at least 3 levels. Field layout could reveal what the current task IS (its entry function, state, mode).
+3. **Read si_info core-base array at TCM[0x92470..0x924B0]** — 0x92440 struct contains CC base at +0x0C (0x18001000). Adjacent offsets likely hold other cached SB core bases. Cheap: 16 u32.
+4. **Check host-side AER** (pre-insmod of T256): explains why T255 auto-rebooted vs. needing SMC reset.
+5. **DEFERRED**: hardware BAR0 reads of SB core status.
+
+T256 primary: probes (1) + (2) + (3) at t+60s = 48-56 u32 total. Comparable to T253 (55).
 
 Advisor call before committing to T256 design.
 
