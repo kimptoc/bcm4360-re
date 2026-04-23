@@ -5,7 +5,40 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 11:20 BST, POST-TEST.246 — pre-FORCEHT MBM legal-pattern probe (`int_d2h_db | int_fn0` = 0x00FF0300) landed; readback 0x00000300. Matrix row **(II) stage-gating of D2H_DB half of MBM** confirmed: FN0 bits 8,9 latch at pre-FORCEHT; D2H_DB bits 16..23 do not. Ladder ran to t+90000ms (same as T245) then wedged. SMC reset WAS required this time — breaks the two-in-a-row no-SMC-reset streak of T244/T245. Currently boot 0, uptime ~30 min, PCIe clean (Mem+ BM+, MAbort-).)
+## Current state (2026-04-23 12:1x BST, POST-TEST.247 — first shared-struct probe landed clean pre-FORCEHT. Struct at TCM[0x80000..0x80047] unchanged across all 23 dwells (t+100ms..t+90000ms); ramsize-4 unchanged at `0xffc70038`; tail-TCM unchanged. Wedge at [90s, 120s] — matches T245/T246 pre-FORCEHT-probe baseline. SMC reset required. Boot 0, uptime ~1 min. Matrix row 3 fired: (S1) minimal-signature falsified, (S2) fw-stalled-pre-allocate consistent. Direction pending advisor on whether to Phase-6-pivot or add cheap intermediate probes first.)
+
+### What test.247 landed (facts)
+
+```
+test.247: pre-FORCEHT pre-placed shared-struct at TCM[0x80000] (72 bytes, version=5 @offset 0, rest=0)
+test.247: pre-FORCEHT readback = 00000005 00000000 ...00000000   [18 u32s, write landed as intended]
+
+All 23 per-dwell polls (t+100ms..t+90000ms):
+  test.247: struct[0x80000..0x80047] = 00000005 00000000 ... 00000000   [UNCHANGED across all dwells]
+  test.239: sharedram_ptr=0xffc70038                                     [UNCHANGED across all dwells]
+  test.240: tail-TCM[-64..-8] = <NVRAM trailer text>                     [UNCHANGED across all dwells]
+
+Last journal line: Apr 23 11:48:18 t+90000ms dwell ladder entries.
+```
+
+### What test.247 settled (facts only — interpretation deferred to advisor)
+
+- **Fw runs ≥90s post-set_active but touches NONE of the observed TCM regions.** Three independent observation windows — struct region `[0x80000..0x80047]`, ramsize-4, ramsize-tail `[-64..-8]` — all report unchanged across 23 polls. This is a stronger statement than "(S1) falsified" alone.
+- **BAR2 write of a 72-byte struct into dead TCM lands cleanly at pre-FORCEHT.** Readback matches written bytes; consistent with T245/T246 BAR2 PASS.
+- **Probe cost stays constant.** T245 alone, T246 (T245+T246), T247 (T247 only, larger footprint) all reach t+90000ms. Pre-FORCEHT probe insertion costs ~30s of fw runtime regardless of probe size (within the range measured). n=3 now.
+- **SMC reset required this time.** T245 no-SMC-reset (n=1), T246 SMC required (n=1), T247 SMC required (n=1). Streak is no clearer.
+
+### Open question to resolve before PRE-TEST.248
+
+**Does "fw touches none of our observed regions" falsify (S1) as a class, or only "(S1) with minimal host-pre-placed signature"?** Observation windows cover ~80 bytes out of 640KB TCM. A wide-scan probe across ~8–16 offsets would cheaply distinguish "fw is stalled doing nothing" from "fw is writing somewhere we're not looking." That vs a Phase-6 pivot is the next decision. Advisor queued.
+
+### Hardware state (current, 2026-04-23 12:1x BST, boot 0 after test.247 crash **with SMC reset**)
+
+`lspci -s 03:00.0` (sudo): `Mem+ BusMaster+`, MAbort-, DEVSEL=fast, LnkSta 2.5GT/s x1. No brcm modules loaded. Boot 0 started 12:13:29 BST, uptime ~1 min at write time. Host healthy.
+
+---
+
+## Prior outcome (test.246 — pre-FORCEHT MBM legal-pattern probe landed; readback 0x00000300. Matrix row (II) stage-gating of D2H_DB half of MBM confirmed: FN0 bits 8,9 latch at pre-FORCEHT; D2H_DB bits 16..23 do not. Ladder ran to t+90000ms, SMC reset required.)
 
 ### What test.246 landed
 
