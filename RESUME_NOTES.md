@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 17:2x BST, POST-TEST.252 — **three saved-state-referenced structs captured and decoded**. T252 fired at 17:17:37 (t+60s, all 3 probes captured); wedge ≤1s after t+90s T248 probe at 17:18:08 (n=6 streak T247..T252). Boot 0 started 17:28:11 BST, PCIe clean, no brcm loaded. Key findings: (1) **0x58EF0 (in 0x93610 struct) is the ASCII string `"wl"`**, NOT a function pointer — 0x93610 is likely a wl_info / WL driver-context structure. (2) **0x92440 is a runtime-populated silicon-backplane descriptor (si_info)** containing ChipCommon core base 0x18001000 (zero blob refs → fw-cached at runtime). Two adjacent embedded list_head pairs at 0x92460. (3) **0x91CC4 is a subordinate struct with back-refs to 0x92440 AND 0x93610** — three structs form an inter-linked family. (4) **0x934C0 is a central shared object** — referenced in all three structs AND in T248's 0x9CFE0 AND in T251's saved-state 0x9CEA0. Combined with T251 blob analysis (LR 0x68320 in wlc_bmac_attach; LR 0x68D2E in wlc_attach; chiprev banner never fires): **hang is inside wlc_phy_attach** — si_attach completed, wlc_bmac_attach entered, PHY attach entered but never returned.)
+## Current state (2026-04-23 17:2x BST, POST-TEST.252 — **three saved-state-referenced structs captured and decoded**. T252 fired at 17:17:37 (t+60s, all 3 probes captured); wedge ≤1s after t+90s T248 probe at 17:18:08 (n=6 streak T247..T252). Boot 0 started 17:28:11 BST, PCIe clean, no brcm loaded. Key findings: (1) **0x58EF0 (in 0x93610 struct) is the ASCII string `"wl"`**, NOT a function pointer — 0x93610 is likely a wl_info / WL driver-context structure. (2) **0x92440 is a runtime-populated silicon-backplane descriptor (si_info)** containing ChipCommon core base 0x18001000 (zero blob refs → fw-cached at runtime). Two adjacent embedded list_head pairs at 0x92460. (3) **0x91CC4 is a subordinate struct with back-refs to 0x92440 AND 0x93610** — three structs form an inter-linked family. (4) **0x934C0 is a central shared object** — referenced in all three structs AND in T248's 0x9CFE0 AND in T251's saved-state 0x9CEA0. Combined with T251 blob analysis (LR 0x68320 in wlc_bmac_attach; LR 0x68D2E in wlc_attach; chiprev banner never fires): hang is **somewhere in the wlc_attach → wlc_bmac_attach call tree, before the chiprev banner fires**. Narrower "inside wlc_phy_attach" reading remains **unverified** — T251 saved PCs don't form a clean caller→callee chain. T252 didn't add stack evidence; it only decoded struct contents.)
 
 ### What test.250 landed (facts)
 
@@ -447,14 +447,15 @@ Boot -1 timeline: boot start 16:50:08 → insmod 17:16:16 → t+60s probe 17:17:
 - **Wedge ≤1s after t+90s probe burst** (n=6 streak T247..T252). Probe costs are flat, not cumulative.
 - **SMC reset required.**
 
-### Where the hang is — narrower reading post-T252
+### Where the hang is — careful reading post-T252
 
-Combined with T251 blob analysis (LR stack: 0x68320 in wlc_bmac_attach; LR 0x68D2E in wlc_attach; chiprev banner never fires):
+Combined with T251 blob analysis (the "saved-state region" contains PCs 0x68320 and 0x68D2E, located in/near wlc_bmac_attach and wlc_attach respectively; the chiprev banner — printed after wlc_phy_attach returns — was never observed):
 
-1. **wlc_attach → wlc_bmac_attach → wlc_phy_attach** call chain entered.
-2. si_info struct at 0x92440 was populated (CC core base cached) — so `si_attach()` already returned.
-3. The "chiprev... phy_type %d phy_rev %d" banner (blob[0x4C534]) fires AFTER wlc_phy_attach returns — never observed → **wlc_phy_attach has not returned**.
-4. wlc_phy_attach spins up the PHY core (AC_PHY on BCM4360), which involves register pokes + delays. Most likely hang: **PHY register polling loop** waiting for a bit that never clears.
+1. **wlc_attach entered** (PC 0x68D2E in its literal-pool region).
+2. **wlc_bmac_attach entered** (PC 0x68320 in its literal-pool region).
+3. si_info struct at 0x92440 populated with CC core base 0x18001000 → `si_attach()` completed before hang.
+4. Chiprev banner never fires → fw has NOT progressed past wlc_bmac_attach's post-wlc_phy_attach printf.
+5. **Unverified, not a conclusion**: "inside wlc_phy_attach" is the tightest reading, but T251 saved PCs don't form a clean caller→callee chain and the saved-state region may be a context save / TCB rather than a stack. Conservative claim: hang is **somewhere in the wlc_attach → wlc_bmac_attach call tree, before the chiprev banner fires**.
 
 ### Next-test direction (T253 — candidates for advisor review)
 
