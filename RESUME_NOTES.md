@@ -52,27 +52,63 @@ T247 null result covers only ~80 bytes (struct region + ramsize-4 + tail-TCM) ou
 - **(W2) Wide-scan shows changes at offset(s) ∉ {0x80000, ramsize-4, tail}**. Falsifies "fw stalled doing nothing." Fw is working; we've just been looking in the wrong place. Next: densify around the changing offset(s); decode what fw is writing.
 - **(W3) Wide-scan shows changes inside fw code region [0..0x6bf78]**. Would mean fw is self-modifying or writing to its own code segment — very unlikely. Flag and decompose.
 
-### Design (advisor-to-review before code)
+### Design (refined per `phase6/test248_bcm_work.md` A1 + pcie.c / HISTORY review)
 
-- **Struct continuity**: keep the existing `bcm4360_test247_preplace_shared` param and struct at 0x80000 version=5. No change to T247's block.
-- **Wide-scan offsets (16 u32 = 64 bytes total read per snapshot)**: chosen to span the address space with denser coverage in dead region, lighter in fw image:
-  - 0x00000 (fw vector table)
-  - 0x10000, 0x20000, 0x30000, 0x40000, 0x50000, 0x60000 (inside fw image, 6 samples)
-  - 0x68000 (near fw end 0x6bf78)
-  - 0x70000, 0x78000, 0x84000, 0x88000, 0x8C000 (dead region spread)
-  - 0x90000 (T245/T246 BAR2 round-trip location — adjacent already-observed)
-  - 0x98000 (close to NVRAM start 0x9ff1c)
-- **Baseline snapshot** at pre-FORCEHT just before the T247 block fires (same stage, same probe cost tier).
-- **Pre-wedge snapshot** at the t+90000ms dwell (last dwell we reliably reach). Adding a per-dwell read at all 16 offsets across 23 dwells would be 368 reads total — still cheap BAR2 reads, but only two snapshots keep the ladder pattern identical to T247.
-- **Observable**: diff(pre-FORCEHT snapshot, t+90000ms snapshot) per offset.
+User guidance: prioritize upper TCM [0x90000..0xa0000), include 0x98000 and 0x9c000 at minimum, compact two-snapshot scan across that region, keep T247 struct continuity.
 
-### Next-step matrix
+Pcie.c (line 4128 `t66_scan`) and HISTORY (lines 4607, 5073) reveal a map of *previously observed* fw-written upper-TCM offsets from earlier tests (test.66/81/89/94/96 and test.213/216/217 trap-text decode). Using these directly is far more informative than uniform stride:
+
+**Known-hot offsets (fw writes here pre-T230):**
+- `0x9cc5c` — console ring write pointer (virtual addr field)
+- `0x9d000` — counter that evolved `0 → 0x58c8c (T+2ms) → 0x43b1 (T+12ms) → frozen`
+- `0x9D0A4` — "olmsg shared_info magic_start"
+- `0x9F0CC` — "olmsg fw_init_done"
+- `0x9c000` — "STAK" marker (pcie.c:2292 comment)
+
+**Known-hot offsets on fw assert/trap (test.213/216/217 evidence):**
+- `0x9cdb0..0x9ce10` — assert text ("ASSERT in file hndarm.c line 397 ... v=43, wd_msticks=32")
+- `0x9cfe0` — trap struct (r5 base, chip_info ptr, TCM top, trap PC)
+
+**Decision**: sample 16 u32 offsets — 8 known-hot + 8 upper-TCM gap coverage — at two snapshots (pre-FORCEHT baseline + t+90000ms pre-wedge). If ANY known-hot offset shows baseline != pre-wedge, fw is alive and writing. If all null, fw is genuinely quiescent in observed regions.
+
+**Final T248 offset list (16 u32):**
+
+Known-hot (8):
+- `0x9c000` (STAK marker — user-specified)
+- `0x9cc5c` (console ring write pointer)
+- `0x9cdb0` (prior trap ASCII address)
+- `0x9cfe0` (prior trap struct address)
+- `0x9d000` (prior evolving counter)
+- `0x9D0A4` (olmsg magic)
+- `0x9F0CC` (olmsg fw_init_done)
+- `0x9FFFC` (ramsize-4 — redundant with T239 but unifies the record)
+
+Upper-TCM gap coverage (8):
+- `0x90000` (BAR2 round-trip anchor, adjacent to T245/T246 observations)
+- `0x94000`
+- `0x98000` (user-specified)
+- `0x9A000`
+- `0x9B000`
+- `0x9E000` (between olmsg magic and fw_init_done)
+- `0x9F000`
+- `0x9FE00` (just below random_seed region start)
+
+**Continuity**: keep `bcm4360_test247_preplace_shared=1` and struct at 0x80000 version=5. No change to T247's block.
+**Cost**: 2 snapshots × 16 reads = 32 BAR2 reads total. ≪ T247's per-dwell polls.
+**Log format (machine-diffable)**: one `pr_emerg` line per snapshot, fixed-order hex values:
+```
+test.248: <stage> TCM[16 off] = 0x9c000=%08x 0x9cc5c=%08x 0x9cdb0=%08x 0x9cfe0=%08x 0x9d000=%08x 0x9d0a4=%08x 0x9f0cc=%08x 0x9fffc=%08x 0x90000=%08x 0x94000=%08x 0x98000=%08x 0x9a000=%08x 0x9b000=%08x 0x9e000=%08x 0x9f000=%08x 0x9fe00=%08x
+```
+Two `pr_emerg` lines total (stage="pre-FORCEHT" and stage="t+90000ms"), plus an existing T247 per-dwell poll already covers struct region and ramsize-4.
+
+### Next-step matrix (W1/W2/W3 per phase6/test248_bcm_work.md A6)
 
 | Wide-scan diff | Implication | Test.249 direction |
 |---|---|---|
-| All 16 offsets unchanged | (W1) — "fw stalled doing nothing" strengthened to near-certainty. Fw never writes anywhere we've observed across ~96 bytes spread over 640KB + struct region + ramsize-4 + tail-TCM. | T249: signature sweep (version=5/6/7 + alternate magic at struct [0]) to falsify (S1) as a class. If that also nulls, Phase 6 pivot is justified. |
-| Changes only at in-fw-image offsets (0x00000..0x60000) | (W3) — unusual; fw writing its own code segment. | Decompose: does it happen with `set_active` skipped? Was fw image corrupted in download? |
-| Changes at dead-region offsets (0x70000..0x98000) outside our old windows | (W2) — fw IS working, just not at the addresses we picked. | Densify around the changing offset(s); decode what's being written. |
+| All 16 offsets unchanged between pre-FORCEHT and t+90000ms (including known-hot 0x9cc5c, 0x9d000, 0x9D0A4, 0x9F0CC) | **(W1)** — "fw stalled doing nothing" strengthened to near-certainty. Fw never writes any of the previously-observed hot addresses. | T249: signature sweep (version=5/6/7 + alt magic at struct [0]) to falsify (S1) as a class. If that also nulls, Phase 6 PMU/PLL work is justified. |
+| One or more dead-region offsets (0x90000..0x9B000 or 0x9E000..0x9FE00) changed but known-hot offsets did not | **(W2, dead-region variant)** — fw IS working, just not at the post-T230 addresses we'd expect. | Densify around the changing offset(s) with a focused stride; decode what's being written. |
+| Known-hot offsets changed (0x9cc5c / 0x9d000 / 0x9D0A4 / 0x9F0CC or trap addresses) | **(W2, fw-alive variant)** — fw has progressed past the quiescence we inferred from T239/T247. Console pointer or olmsg state evolving = strong forward signal. | Phase 6 pivot becomes "read the console" — capture console buffer, decode fw output. |
+| NVRAM ramsize-4 or tail-TCM changed (contradicts T239/T240 with per-dwell polls) | **(W3, contradicts prior obs)** | Verify, then treat as if W2 fw-alive. |
 
 ### Safety
 
@@ -81,13 +117,14 @@ T247 null result covers only ~80 bytes (struct region + ramsize-4 + tail-TCM) ou
 - Reads from fw image offsets do not perturb fw execution (read-only).
 - SMC reset expected to be required after wedge (consistent with T247).
 
-### Code change outline
+### Code change outline (A2 from phase6/test248_bcm_work.md)
 
-1. **New module param** `bcm4360_test248_wide_tcm_scan` (default 0) near T247's param (pcie.c).
-2. **New macro** `BCM4360_T248_WIDESCAN(stage_tag)` — reads 16 u32s from fixed offset list; logs single `pr_emerg` line.
-3. **Two invocation sites**:
-   - Right after T247's pre-FORCEHT block (before FORCEHT).
-   - Right after the existing t+90000ms dwell poll (add a `if (bcm4360_test248_wide_tcm_scan)` conditional).
+1. **New module param** `bcm4360_test248_wide_tcm_scan` (default 0) near T247's param.
+2. **Static offset array** `bcm4360_t248_offsets[16]` with the 16 addresses above.
+3. **New macro** `BCM4360_T248_WIDESCAN(stage_tag)` — loops over the array, reads 16 u32s via `brcmf_pcie_read_ram32()`, emits one machine-diffable `pr_emerg` line.
+4. **Two invocation sites**:
+   - Pre-FORCEHT: right after T247's pre-place block, before FORCEHT write.
+   - Pre-wedge: inside the existing `BCM4360_T239_POLL` macro or adjacent, gated to fire only when `strcmp(stage,"t+90000ms")==0` — or simpler, add a third arm after the existing T239/T240/T247 arms that runs only at that dwell.
 
 ### Run sequence (after build+verify)
 
