@@ -1,3 +1,431 @@
+## POST-TEST.237 (2026-04-23 00:32 BST, boot -1 — wedged at ~t+25-45 s post-set_active, SMC reset required) — extended dwell ladder landed 13 breadcrumbs; fw runs for tens of seconds under seed
+
+### Summary
+
+With `bcm4360_test236_force_seed=1` and
+`bcm4360_test237_extended_dwells=1` together, the probe executed
+the full fw-download, NVRAM write, seed write, FORCEHT dance,
+pci_set_master, and `brcmf_chip_set_active` cleanly. `set_active`
+returned TRUE. The extended ladder then flushed 13 dwell
+breadcrumbs — t+100 / 300 / 500 / 700 / 1000 / 1500 / 2000 /
+3000 / 5000 / 10000 / 15000 / 20000 / 25000 ms — before the
+journal cut. Missing: `t+30000ms dwell`, dwell-done, BM-clear,
+release-core, -ENODEV, and everything downstream.
+
+Host wedged. User performed SMC reset; current boot 0 started
+00:35:43 BST clean.
+
+### Evidence (boot -1 tail, from `journalctl -b -1 -k`)
+
+```
+Apr 23 00:32:27 test.237: calling brcmf_chip_set_active resetintr=0xb80ef000 (extended-dwell ladder)
+Apr 23 00:32:27 test.65  activate: rstvec=0xb80ef000 to TCM[0]; CMD=0x0006
+Apr 23 00:32:27 test.237: brcmf_chip_set_active returned TRUE
+Apr 23 00:32:27 test.237: t+100ms dwell     (batched flush; set_active ~t=00:32:22)
+Apr 23 00:32:27 test.237: t+300ms dwell
+Apr 23 00:32:27 test.237: t+500ms dwell
+Apr 23 00:32:27 test.237: t+700ms dwell
+Apr 23 00:32:27 test.237: t+1000ms dwell
+Apr 23 00:32:27 test.237: t+1500ms dwell
+Apr 23 00:32:27 test.237: t+2000ms dwell
+Apr 23 00:32:27 test.237: t+3000ms dwell
+Apr 23 00:32:27 test.237: t+5000ms dwell
+Apr 23 00:32:31 test.237: t+10000ms dwell   (live flush)
+Apr 23 00:32:36 test.237: t+15000ms dwell   (live flush)
+Apr 23 00:32:42 test.237: t+20000ms dwell   (live flush)
+Apr 23 00:32:47 test.237: t+25000ms dwell   (last line of boot -1)
+<journal ends — host wedged>
+```
+
+The transition from batched-at-00:32:27 to individually flushed
+after ~t+5s is journald behavior — once the kernel buffer
+pressure passes, kmsg writes flush immediately. So the
+timestamps after t+10s are *real* driver-thread scheduling times.
+
+### Key interpretation
+
+**Falsified:** wedge is instantaneous or sub-second post-set_active.
+Previously-best lower bound was t+700ms (test.236 Run B).
+Test.237 extends that by a factor of ~36× — fw+driver both run
+for ≥25 seconds.
+
+**Bounded:** actual wedge moment ∈ [t+25 s, t+40-45 s]. The
+upper bound is the ~15-20 s journald tail-truncation window
+established in tests 231/232/234. Cannot tighten further from
+this run alone.
+
+**Implication for fw-wedge model:** whatever fw is waiting
+for / running in / periodically checking, the timeout is tens
+of seconds, not milliseconds. This is compatible with:
+- a periodic watchdog / heartbeat on fw's side that fires
+  after ~20-30 s of no valid host-side interaction
+- fw eventually dereferencing an uninitialised pointer in
+  an yet-unwritten shared-memory struct (ringinfo / console /
+  mailbox / scratch_buf)
+- fw attempting to DMA-read a host address we haven't supplied
+
+### Observations worth keeping
+
+- Pre-set-active snapshot (at 00:32:27) shows `TCM[0x90000] =
+  0x04270be1` — same SRAM-PUF pattern family as test.233 Runs 1/3
+  and test.236 Run B. Consistent post-reboot fingerprint.
+- BAR0 timing was fast-UR (22 ms) at PRE; no signs of bus
+  health issues before insmod.
+- 13 dwell breadcrumbs is more than any prior wedged run across
+  the entire investigation. Confirms the seed is doing something
+  material.
+
+### Artifacts
+
+- `phase5/logs/test.237.run.txt` — truncated at `=== sleeping
+  45s ===` (captured PRE sysctls, lspci, BAR0, modules, insmod
+  exit)
+- `phase5/logs/test.237.journalctl.full.txt` — 1419 lines, full
+  boot -1 journal
+- `phase5/logs/test.237.journalctl.txt` — 356 lines, filtered
+  `BCM4360|brcmfmac` subset
+
+---
+
+
+## PRE-TEST.237 (2026-04-23 00:2x BST, boot 0 post-SMC-reset from test.236 Run B) — extended dwell ladder to t+30s with Apple random_seed present; bracket the actual wedge moment
+
+### Hypothesis
+
+Test.236 Run B demonstrated that writing the Apple-style random_seed
+at TCM[0x9fe14..0x9ff1c) (magic 0xfeedc0de, length 0x100, 256-byte
+random buffer) lets fw execute for ≥700 ms past set_active return —
+a categorical shift from test.234, where zero post-set_active
+breadcrumbs landed. But the **actual wedge moment is unknown**: we
+only have a lower bound (t+700ms) and an untrusted upper bound from
+the ~15-20 s journald tail-truncation folk figure.
+
+**This test: extend the dwell ladder past t+10s to bracket the
+wedge moment directly.** The new ladder adds breadcrumbs at
+t=1.5s, 2s, 3s, 5s, 10s, 15s, 20s, 25s, 30s. Under ideal (no-wedge)
+conditions, all 13 breadcrumbs land and the probe proceeds to
+BM-clear + release + -ENODEV. Under a wedge at some t*, breadcrumbs
+land up to the one emitted just before t* (minus any tail-truncation
+window).
+
+### Discriminator outcomes
+
+| Last landed breadcrumb | Interpretation | Next |
+|---|---|---|
+| Full chain lands (t+30s done) + clean rmmod | Seed + extended wait BOTH stop the wedge — something in the 30 s window satisfies fw's expectation, or fw reaches a natural idle. Major positive. | Re-enable set_active + short dwells, confirm clean; then investigate what changed |
+| t+30s done lands, but BM-clear/rmmod hang | Fw still wedges, but only after our 30 s dwell returns → wedge triggered by BM-clear or a post-return action, not by fw spinning | Shift wedge isolation to BM-clear / release path |
+| Breadcrumb at t=[T1..T2] lands, next missing (e.g. t+15s lands, t+20s doesn't) | Wedge moment pinned to [T1, T2] window. Tail-truncation may hide ~T2 → T2+15s of additional breadcrumbs, but if T2 is >20s we can also hope for softlockup to fire on the driver thread mid-msleep. | Binary-search the window; decide whether to pivot to pcie_shared struct build |
+| Cuts at t+700ms (same as Run B) regardless of extended dwells | "journald-flush-variance" counter-hypothesis NOT falsified. Seed may not genuinely have bought fw time — the 4 extra breadcrumbs from Run B may have landed due to flush dynamics. | Re-test with force_seed=0 + extended dwells. If cuts at same place, seed bought no time. If cuts at `BusMaster cleared`, journald-variance is weak. |
+| Wedge earlier than t+700ms (e.g. cuts at `set_active returned TRUE`) | Run B was lucky; wedge timing is variable run-to-run | Need multiple runs; timing-based discrimination unreliable |
+
+### Code change
+
+1. New module param `bcm4360_test237_extended_dwells` (default 0).
+2. In `brcmf_pcie_download_fw_nvram`'s set_active block, new
+   `else if (bcm4360_test237_extended_dwells)` branch that replaces
+   the short mdelay chain with:
+   - mdelay chain for t+100..t+1000 (preserved for sub-second
+     accuracy + per-dwell resolution)
+   - msleep chain for t+1.5, 2, 3, 5, 10, 15, 20, 25, 30 s
+     (msleep yields — avoids our thread pinning CPU + accidentally
+     triggering softlockup without a fw wedge)
+3. Existing test.234/235/236 paths preserved via the if/else-if chain:
+   - skip_set_active=1 → test.235 path (no set_active)
+   - test237_extended_dwells=1 → extended ladder
+   - neither → test.234 short chain
+
+### Run sequence (one run, this boot)
+
+```bash
+sudo insmod phase5/work/.../brcmutil.ko
+sudo insmod phase5/work/.../brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test237_extended_dwells=1
+# Wait >35s for the 30s dwell ladder + BM-clear/rmmod
+sleep 45
+# (host may already be wedged; if so, SMC reset required)
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+The harness script supports module args. Armed sysctls as usual
+(nmi_watchdog=1, hardlockup_panic=1, softlockup_panic=1).
+
+### Softlockup interaction
+
+Kernel softlockup threshold is typically 20-22 s. With msleep
+dwells (driver thread yields), softlockup from our *own* thread
+is unlikely. But if the wedge stalls another CPU handling
+interrupts or journald-flushing for >22 s, softlockup may fire
+on THAT CPU → panic → pstore may capture a backtrace. This would
+be a bonus observable beyond the breadcrumbs themselves.
+
+### Build status — REBUILT CLEAN
+
+`brcmfmac.ko` rebuilt 2026-04-23 ~00:15 BST. `strings` confirms
+the new `bcm4360_test237_extended_dwells` module param + 13 new
+test.237 breadcrumbs (t+100..t+30000 ms + set_active call/TRUE/FALSE
+lines). Pre-existing unused-variable warnings unchanged — no
+regressions.
+
+### Hardware state (boot 0, post-SMC-reset)
+
+- Boot 0 started 2026-04-23 00:12:32 BST (post-SMC-reset reboot
+  after test.236 Run B wedge).
+- `lspci -vvv -s 03:00.0`: Control Mem+ BusMaster+, MAbort-, fast.
+  Clean post-boot idiom.
+- No modules loaded. Uptime ~few min.
+
+### Expected artifacts
+
+- `phase5/logs/test.237.run.txt` — PRE sysctls/lspci/BAR0 +
+  harness output + POST lspci
+- `phase5/logs/test.237.journalctl.full.txt` — boot 0 (or boot -1
+  if host wedged) full journal
+- `phase5/logs/test.237.journalctl.txt` — filtered subset
+
+### Pre-test checklist (CLAUDE.md)
+
+1. Build status: **REBUILT CLEAN** above.
+2. PCIe state: clean post-SMC-reset boot.
+3. Hypothesis stated above.
+4. Plan in this PRE block; will commit + push + sync before insmod.
+5. Filesystem sync on commit.
+
+---
+
+## PRE-TEST.236 (2026-04-23 00:0x BST, boot 0 same as test.235) — force the upstream Apple-style random_seed write before `brcmf_chip_set_active`
+
+### Hypothesis (NEW lead, found by code-reading after test.235)
+
+Code review of `brcmf_pcie_download_fw_nvram` revealed two facts that
+together make the random_seed write a strong candidate for the wedge
+trigger:
+
+1. **The live BCM4360 path returns `-ENODEV` at line 2887** (after fw
+   download + dwell + tier probes + BM-clear). The post-return code at
+   lines 2899-2959 — which contains the only `if (devinfo->otp.valid)`
+   block that does the random_seed write — is **dead code on our
+   path**. NVRAM is actually written earlier at lines ~2256-2287, and
+   no random_seed write exists in the live path.
+
+2. **Upstream gates the seed write on `devinfo->otp.valid`**, which
+   is FALSE on our path because OTP read is bypassed (test.124, line
+   ~5347-5355: `OTP read bypassed — OTP not needed`). Even if the
+   dead code WERE reached, the seed write would still be skipped.
+
+3. **The upstream comment is Apple-specific:** *"Some Apple chips/
+   firmwares expect a buffer of random data to be present before
+   NVRAM"*. BCM4360 in MacBookPro11,1 is an Apple board.
+
+   Layout (computed for our 228-byte NVRAM, ramsize=0xa0000):
+   - NVRAM: [0x9FF1C..0xA0000)  (228 B, ends at ramsize-0)
+   - Seed footer (8 B, magic 0xfeedc0de + length 0x100): [0x9FF14..0x9FF1C)
+   - Random bytes (256 B): [0x9FE14..0x9FF14)
+
+   This means our test.234 zero range [0x9FE00..0x9FF1C) overlaps
+   the *entire* seed area — fw, on every prior wedge run, has read
+   either uninitialised SRAM-PUF garbage there (test.234) or zeros
+   (would-be test.234-with-zeros via test.235 baseline). It has
+   never seen the magic 0xfeedc0de footer that signals "random
+   buffer present".
+
+If fw conditionally:
+- requires the seed (e.g. for crypto / WPA-key derivation),
+- panics or stalls when the magic is absent,
+- waits indefinitely on a DMA / mailbox handshake driven by seed,
+
+…then providing it should change the post-set_active behaviour (no
+wedge / wedge shifts later / different journald cutoff).
+
+### Code change
+
+1. New module param `bcm4360_test236_force_seed` (default 0).
+2. In `brcmf_pcie_download_fw_nvram`, immediately after the existing
+   live NVRAM write (post `post-NVRAM write done` log, before NVRAM
+   marker readback): **if `force_seed`**:
+   - Compute `footer_addr = address - sizeof(footer)` where `address
+     = ramsize - nvram_len = 0x9FF1C`.
+   - Write footer (length=0x100, magic=0xfeedc0de) via
+     `brcmf_pcie_copy_mem_todev` (BCM4360-safe iowrite32 helper).
+   - Write 256 random bytes at `footer_addr - 256` via the existing
+     `brcmf_pcie_provide_random_bytes` (also routes through the safe
+     copy helper).
+   - Verify the footer landed by reading length and magic words back.
+   - Log addresses, magic, lengths.
+3. Wrap the existing test.234 zero block in
+   `if (!bcm4360_test236_force_seed) { ... }` so it doesn't
+   overwrite the seed when force_seed=1.
+
+### Two-run protocol (per advisor; uses test.235's existing param)
+
+**Run A — verify seed write is BCM4360-safe (no wedge expected):**
+```bash
+sudo insmod brcmfmac.ko \
+     bcm4360_test235_skip_set_active=1 \
+     bcm4360_test236_force_seed=1
+sleep 5; sudo rmmod brcmfmac
+```
+Expected breadcrumbs:
+- `test.236: writing random_seed footer at TCM[0x9ff14] magic=0xfeedc0de len=0x100`
+- `test.236: writing random_seed buffer at TCM[0x9fe14] (256 bytes)`
+- `test.236: seed footer readback length=0x00000100 magic=0xfeedc0de`
+- existing test.235 SKIPPING + dwell-done lines
+
+**Run B — same boot, test if seed prevents wedge:**
+```bash
+sudo rmmod brcmfmac_wcc; sudo rmmod brcmfmac
+sudo insmod brcmfmac.ko \
+     bcm4360_test235_skip_set_active=0 \
+     bcm4360_test236_force_seed=1
+sleep 15  # wedge-window
+```
+Per test.233 Run 2, TCM persists across the within-boot rmmod/insmod +
+probe-start SBR, so the seed Run A wrote should still be in TCM when
+Run B's set_active fires. (Run B re-writes it anyway via the same
+code path, so this is belt-and-braces.)
+
+### Decision tree
+
+| Run A outcome | Run B outcome | Interpretation | Next |
+|---|---|---|---|
+| All breadcrumbs land, footer readback magic=0xfeedc0de | Wedge stops or breadcrumbs land further than test.231/234 | **Random_seed was the missing piece.** Major finding. | Restore conditional seed write properly (don't depend on otp.valid for BCM4360); progress to next blocker |
+| All breadcrumbs land, footer readback magic=0xfeedc0de | Wedge identical to test.234 (cuts at "BusMaster cleared after chip_attach" or similar) | Seed not the missing piece (or not enough on its own). | Look at OTHER pieces in upstream pre-set_active path: shared-memory struct, ringinfo_addr, mailbox; or revisit OTP bypass |
+| All breadcrumbs land, but readback wrong magic (e.g. 0x00000000) | n/a | TCM write to that range failed / wrong addr math. | Fix address calc or write helper |
+| Wedge in Run A | n/a | Seed write itself wedges — surprising; copy_mem_todev should be safe | Investigate copy_mem_todev path or addr |
+
+### Expected artifacts
+
+- `phase5/logs/test.236.runA.run.txt` + journals (no wedge expected)
+- `phase5/logs/test.236.runB.run.txt` + journals (wedge possible)
+
+### Hardware state
+
+- Boot 0 (started 2026-04-22 23:41:20 BST), still alive after test.235.
+- `lspci -vvv -s 03:00.0`: Mem+ BusMaster-, MAbort-, fast-UR (post test.235 rmmod).
+- No modules loaded.
+
+### Build status — REBUILT CLEAN
+
+`brcmfmac.ko` rebuilt 2026-04-23 ~00:0x BST. `strings` confirms 3
+test.236 breadcrumbs + `bcm4360_test236_force_seed` module param.
+Existing test.235 param retained. Pre-existing unused-variable
+warnings unchanged.
+
+### Pre-test checklist (CLAUDE.md)
+
+1. Build status: REBUILT CLEAN above.
+2. PCIe state: clean post test.235.
+3. Hypothesis stated above.
+4. Plan in this PRE block; will commit + push before insmod.
+5. Filesystem sync on commit.
+
+---
+
+
+## POST-TEST.236 (2026-04-23 00:06 BST, boot -1 after SMC reset) — random_seed write SHIFTS the wedge later; fw reaches ≥t+700ms post-set_active
+
+### Summary moved into "Current state" header above. This block holds
+### the full evidence table, reasoning, and Run-B journald tail.
+
+### Run A (skip_set_active=1, force_seed=1) — seed-write mechanism verified clean
+
+Clean run, no wedge. Seed breadcrumbs in journal (00:05:52 BST):
+
+```
+test.236: writing random_seed footer at TCM[0x9ff14] magic=0xfeedc0de len=0x100
+test.236: writing random_seed buffer at TCM[0x9fe14] (256 bytes)
+test.236: seed footer readback length=0x00000100 magic=0xfeedc0de (expect 0x00000100 / 0xfeedc0de)
+```
+
+Readback matched expected values → TCM writes to [0x9fe14..0x9ff1c)
+via `brcmf_pcie_copy_mem_todev` are byte-accurate. Probe then hit the
+test.235 SKIPPING path, 1000 ms dwell, BM-clear, -ENODEV, clean rmmod
+(run.txt truncated at fw-download chunk 36/108 due to 5 s sleep
+expiring mid-download; journal has full flow through
+`post-NVRAM write done`). **Seed write is BCM4360-safe.**
+
+### Run B (skip_set_active=0, force_seed=1) — WEDGE, but ~15 s later than test.234
+
+Host wedged, SMC reset required to recover (user did this between
+Run B and this session). Run B journal (boot -1) did flush
+significantly further than test.234's boot:
+
+| Boot | Last breadcrumb landed | Position in probe |
+|---|---|---|
+| test.234 (boot -2 of this history) | `test.158: BusMaster cleared after chip_attach` | **before** fw download |
+| test.236 Run B (boot -1) | `test.234: t+700ms dwell` | **after** set_active returned TRUE, 700 ms in |
+
+That's a categorically different cutoff — test.234 didn't survive to
+print fw-download, NVRAM write, pre-release snapshot, set_active,
+or any dwell. Run B printed **all** of them plus four post-set_active
+dwell breadcrumbs.
+
+### Run B — full post-set_active tail (from `journalctl -b -1`)
+
+```
+Apr 23 00:07:18 test.236: writing random_seed footer at TCM[0x9ff14] magic=0xfeedc0de len=0x100
+Apr 23 00:07:18 test.236: writing random_seed buffer at TCM[0x9fe14] (256 bytes)
+Apr 23 00:07:18 test.236: seed footer readback length=0x00000100 magic=0xfeedc0de
+Apr 23 00:07:18 test.234: calling brcmf_chip_set_active resetintr=0xb80ef000 (after zero-upper-TCM)
+Apr 23 00:07:18 test.65  activate: rstvec=0xb80ef000 to TCM[0]; CMD=0x0006 (BusMaster preserved)
+Apr 23 00:07:18 test.234: brcmf_chip_set_active returned TRUE
+Apr 23 00:07:18 test.234: t+100ms dwell
+Apr 23 00:07:18 test.234: t+300ms dwell
+Apr 23 00:07:19 test.234: t+500ms dwell
+Apr 23 00:07:19 test.234: t+700ms dwell
+<journal ends — host wedged>
+```
+
+Missing from this tail: `t+1000ms dwell`, `dwell done`, any BM-clear,
+any -ENODEV. So fw ran ≥700 ms under the seed, and the wedge hit
+between t+700ms and t+1000ms — OR later, with tail-truncation (15-20 s)
+wiping only the final window. Either way, the wedge is **not** in
+the pre-set_active path that killed test.234's journal flush.
+
+### Interpretation — "seed was a missing piece, but not the only one"
+
+1. **Falsified:** "fw wedges because seed area contains SRAM garbage at
+   set_active time." With valid seed present, fw demonstrably runs
+   further (≥700 ms, breadcrumbs prove CPU+bus still healthy).
+2. **Not (yet) falsified:** "fw wedges because it subsequently reaches
+   another uninitialised shared-memory address (ringinfo / console /
+   shared struct)." Consistent with both the timing and the upstream
+   brcmfmac flow which sets up additional structures around the time
+   seed lands.
+3. **Known confound:** "wedge-moment unchanged, but more of the log
+   got flushed this time because the CPU froze slower." Weakened by
+   the fact that dwell breadcrumbs require the code path actually to
+   execute — if fw wedged at the same moment as test.234, the CPU
+   wouldn't have called the 300/500/700-ms msleep() chain at all.
+   Still worth discriminating cheaply before major work.
+
+### Pre-zero TCM snapshot under seed write (belt-and-braces check)
+
+Run B's pre-set-active TCM[0x90000] read was `0xa42709e1` — same
+SRAM-PUF pattern observed in test.233 Runs 1 & 3. So the chip's
+non-seed TCM area still contains its fingerprint pattern going
+into set_active, unchanged by our test.234/235 zero range.
+
+### Hardware state (now)
+
+Current boot: boot 0, started 2026-04-23 00:12:32 BST (post-SMC-reset
+reboot). `lspci -vvv -s 03:00.0` on 03:00.0: Mem+ BusMaster+, MAbort-,
+fast. No modules loaded, uptime ~2 min. Ready for test.237.
+
+### Artifacts
+
+- `phase5/logs/test.236.runA.run.txt` (153 lines — truncated by
+  script-sleep, fine; journal has full flow)
+- `phase5/logs/test.236.runA.journalctl.txt` (filtered)
+- `phase5/logs/test.236.runA.journalctl.full.txt` (1852 lines)
+- `phase5/logs/test.236.runB.run.txt` (20 lines — insmod + sleep, then
+  wedged before any post-test capture)
+
+Run B journal is **in `journalctl -b -1`** (boot -1 of current live
+session). Tail visible above.
+
+---
+
 ## POST-TEST.235 (2026-04-22 23:53 BST, boot 0) — cheap-tier zero of [0x9FE00..0x9FF1C) does NOT prevent wedge
 
 Summary: 71/71 dwords non-zero pre-zero (SRAM-PUF-style random data);

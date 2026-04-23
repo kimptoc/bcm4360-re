@@ -1,0 +1,24 @@
+=== test.239 PRE (2026-04-23 01:10:22 BST) ===
+=== sysctls arming ===
+1
+1
+1
+30
+
+=== lspci PRE ===
+	Control: I/O- Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+
+=== BAR0 read PRE ===
+
+=== modules PRE ===
+(none loaded)
+
+=== modprobe cfg80211 (dep) ===
+
+=== insmod brcmutil ===
+
+=== insmod brcmfmac (force_seed=1 ultra_dwells=1 poll_sharedram=1) 01:10:23.110783539 BST ===
+insmod backgrounded PID=25083
+
+=== sleeping 240s for ultra-extended ladder + probe return ===
