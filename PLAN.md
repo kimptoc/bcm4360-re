@@ -107,47 +107,62 @@ the wedge timeline changes.** Results:
 | Fw's wedge bracket shifts (earlier or later) | Our struct influences fw execution timing; iterate to find which field matters. |
 | No change at all (ramsize-4 unchanged, struct unchanged, same [t+120s, t+150s] bracket) | Pre-placed struct does nothing. (S1) weakened; pivot to (S2)-style investigation: Phase-6 `wl`-trace study, IMEM inspection at 0xef000, or NVRAM-parameter comparison against Apple's macOS config. |
 
-**Design sketch (PRE-TEST.247 first draft — to be reviewed with advisor):**
+**Design (PRE-TEST.247 — advisor-reviewed 2026-04-23):**
 
-- **Struct layout.** Copy upstream's `brcmf_pcie_shared_info`-consumed
-  layout: a u32 flags word at offset 0 (version byte in low 8 bits,
-  feature flags in the rest); u16 max_rxbufpost at offset 34; u32
-  rx_dataoffset at 36; u32 htod/dtoh_mb_data_addr at 40/44; u32
-  ring_info_addr at 48; u32 console struct pointer at 20. Upstream's
-  `BRCMF_PCIE_MIN_SHARED_VERSION`/`MAX` define the acceptable range —
-  fill `flags = MIN_SHARED_VERSION` and zero the rest.
-- **TCM placement.** Put the struct inside the "dead region"
+- **Struct layout.** Fill to offset ≥ 68 (ringupd_addr) — upstream reads
+  offsets 0/20/34/36/40/44/48/52/56/64/68. A tiny flag-only struct
+  leaves uninitialised neighbours fw might read; a ~72-byte block with
+  zeros in unused fields gives fw "version ok + nothing configured yet"
+  which is a valid pre-init state. Set offset 0 to
+  `BRCMF_PCIE_MIN_SHARED_VERSION` = 5 (low byte); all other words zero.
+  No DMA fields populated (no scratch, no ring info, no mb data addrs)
+  — if fw dereferences any of them unconditionally, we'll see the
+  resulting null deref (a new data point).
+- **TCM placement.** Struct base at 0x80000 inside the "dead region"
   `[0x6C000..0x9FE00]` (above fw code end 0x6bf78, below random_seed
   region 0x9FE00). T233 proved this region is untouched by fw and host
   in normal flow; T245/T246 proved BAR2 writes land there under
-  invert-and-restore. Candidate: base at 0x80000 (well above fw, word-
-  aligned).
-- **Pointer placement.** Overwrite ramsize-4 (currently NVRAM marker
-  0xffc70038) with the struct's TCM address (e.g. 0x80000) right before
-  `brcmf_chip_set_active`, via BAR2 write.
-- **Gating.** New module param `bcm4360_test247_preplace_shared=1` so we
-  can A/B the same binary with and without.
-- **Safety.** The struct write is just TCM memory (not registers) —
-  same write class as NVRAM and random_seed; no register-side effect.
-  Overwriting ramsize-4 replaces a 4-byte NVRAM footer with a 4-byte
-  TCM address — NVRAM parser runs before our write is read.
+  invert-and-restore.
+- **ramsize-4 is NOT overwritten (NVRAM trailer load-bearing).** Our own
+  pcie.c test.64 note (line 3527) documents that 0xffc70038 is the
+  NVRAM length/magic token the firmware's NVRAM parser reads; T63
+  zeroed it and broke NVRAM discovery. Fw then *overwrites* ramsize-4
+  with its own sharedram_addr on upstream-compatible firmware paths.
+  Overwriting ramsize-4 before fw runs would confound NVRAM breakage
+  with struct-read behaviour — unusable as a discriminator.
+- **Two observables on the same run (cheap instrumentation):**
+  1. Did fw write ramsize-4 (i.e. `value != 0xffc70038`)? — existing
+     `poll_sharedram=1` path continues to observe this at every dwell.
+     If YES, we're on S2 (fw follows upstream; struct-allocate step
+     eventually reached); go read the fw-written address and feed
+     `init_share_ram_info`.
+  2. Did fw read and/or write our pre-placed struct at 0x80000? —
+     new struct-region poll (8 u32s at [0x80000..0x80020]) at every
+     dwell, comparing against baseline we wrote. If any word changes,
+     (S1) evidence: fw touched our struct. If nothing changes, (S1)
+     weakened: pivot to Phase-6 `wl` trace and/or IMEM inspection.
+- **Gating.** New module param `bcm4360_test247_preplace_shared=1`.
+- **Safety.** Struct is pure TCM memory write into a region proven
+  unused. No register side-effect. NVRAM trailer at ramsize-4
+  unchanged. BAR0 window state unperturbed (only BAR2 writes).
+  Observables are read-only polls added to the existing
+  `poll_sharedram`/`wide_poll` ladder.
 
-**Open questions for advisor before code:**
-1. Is the struct-layout sketch above sufficient, or do we need the full
-   post-init layout (including console/scratch/ringupd pointers
-   expected at offsets 20/56/68)? A minimal-version-flag struct may
-   trigger fw to allocate its OWN struct rather than trust ours.
-2. Which interpretation of the upstream-vs-BCM4360 divergence is more
-   likely: (a) BCM4360 fw ignores ramsize-4 on entry and always
-   allocates its own; (b) BCM4360 fw reads ramsize-4 on entry as a
-   host-provided pointer; (c) BCM4360 fw reads ramsize-4 only if it
-   contains a valid address (non-0xffc70038).
-3. Should PRE-TEST.247 also keep `poll_sharedram=1 wide_poll=1`
-   instrumentation to track ramsize-4 evolution during ladder? Yes by
-   default — compare against our placed value vs. 0xffc70038 vs. any
-   fw-written value.
-4. What wedge-behavior differences vs T244's clean-probe t+120000ms
-   bracket would count as "materially different" — ±10 s or more?
+**Phase 6 `wl`-trace status (pre-T247 check):** no pre-set_active
+TCM-write evidence in `phase5/logs/wl-trace/` — directory contains
+function_graph ftrace of `pci_enable_device()` scope only (112 lines)
+plus config-space dumps, no register-level trace. So (S1) has no
+concrete anchor; T247 is a discriminator test, not a forward step
+blueprint yet. If (S1) yields evidence, T248+ iterates on struct
+fields; if (S1) is falsified, Phase-6 trace work or IMEM probing
+becomes higher priority.
+
+**What counts as "fw activity":**
+- Any fw-originated TCM write (ramsize-4, struct slot, wide-poll
+  region) is the primary signal — present or absent is definitive
+  on a single run.
+- Wedge-bracket timing changes are secondary. n=1 variance between
+  tests makes ±20 s uninformative; don't over-interpret.
 
 ### Previous "next-step ladder" (per T188) — status update
 - **B. `wl` reset sequence study** — ongoing in Phase 6, parallel track;
