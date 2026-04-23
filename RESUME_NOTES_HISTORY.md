@@ -1,3 +1,168 @@
+
+## POST-TEST.242 (migrated from RESUME_NOTES) — was "Prior outcome (test.242 — write-verify at "MAILBOXMASK" FAILed at BOTH t+100ms and t+2000ms post-set_active; see reinterpretation above — probe wrote to CR4_wrap+0x4C, not MBM)
+
+**Latest outcome (test.242):** With `force_seed=1`,
+`ultra_dwells=1`, `poll_sharedram=1`, `wide_poll=1`,
+`writeverify_postactive=1`, the probe deferred write-verify into
+the dwell ladder and logged the MBM round-trip at the FIRST two
+ladder breadcrumbs (post-set_active, same stage where test.240
+rang DB1). Result:
+
+```
+test.242: t+100ms MAILBOXMASK (BAR0+0x4c) baseline=0x00000000 sent=0x00000000 (match=0) cleared=0x00000000 (match=1) RESULT FAIL
+test.242: t+2000ms MAILBOXMASK (BAR0+0x4c) baseline=0x00000000 sent=0x00000000 (match=0) cleared=0x00000000 (match=1) RESULT FAIL
+```
+
+Set_active returned TRUE at 09:00:17 BST. Ladder then landed
+**22 of 23 dwells** (t+100ms..t+90000ms, identical pattern to
+tests 238/239/240/241). sharedram_ptr = `0xffc70038` at every
+poll; wide-TCM[-64..-8] held NVRAM text at every poll. Journal
+ends 09:01:49 BST at t+90000ms; t+120000ms never landed. Wedge
+bracket still [t+90s, t+120s]. Host wedged; SMC reset
+performed; current boot 0 started 09:15:26 BST.
+
+**Critical discriminator result — FAIL/FAIL row of the PRE-TEST.242 matrix:**
+The matrix pre-committed this outcome to
+*"BAR0 write path is broken post-set_active too. test.240 DB1
+never reached chip; (c) confirmed. Stop all doorbell attempts.
+Investigate core-select window / aperture; compare to upstream's
+pre-set_active MBMASK writer block."* That pivot is now on the
+table for test.243 — detailed framing in PRE-TEST.243.
+
+**But watch the caveats** (surface before deciding on test.243):
+
+- **"cleared match=1" is trivially true at both points.** We wrote
+  `0` and read `0`, which matches whether or not our write landed
+  (baseline was already 0). The only informative comparison is
+  the `sent` readback vs `0xDEADBEEF`, which FAILed at both stages.
+- **Baseline changed 0x318 → 0x00** between pre-FORCEHT (test.241)
+  and post-set_active (test.242). Something (FORCEHT, chip_set_active,
+  fw start, CR4 rstvec, or a combination) cleared MBM's bits. So
+  MBM's *read* side responds to stage changes — it's not a dead
+  slot — but its *write* side didn't take writes from us at either
+  stage we tested.
+- **MAILBOXMASK may be specifically write-gated at our probe points.**
+  Upstream brcmfmac only *writes* MBM via `brcmf_pcie_intr_enable`
+  at pcie.c:1339, which fires post-fw-up and post-shared-init — far
+  later than both our stages. So MAILBOXMASK writes may legitimately
+  be silently dropped until a specific enable-condition is met
+  (interrupt-capability handshake? ring-base programmed? share-magic
+  seen?). If that's true, **the FAIL/FAIL result does NOT rule out
+  the general BAR0 write path** — it only rules out writes to
+  MAILBOXMASK at these two specific stages.
+- **No other BAR0 register has been tested for write-verify.** The
+  MBM-only evidence is not a comprehensive "BAR0 write path" test.
+
+**Implication for test.243:** before wholesale abandoning doorbells,
+test.243 should broaden the write-verify to register(s) we *know*
+upstream brcmfmac writes **at or before** our probe stages — e.g.
+`PCIe2_IntMask` (MAILBOXINT, `devinfo->reginfo->mailboxint` at
+BAR0+0x48) which upstream reads/writes during probe setup, or the
+ring-base registers that `brcmf_pcie_init_share` programs. If those
+*also* FAIL the round-trip, the BAR0-write-path theory strengthens.
+If they PASS, MBM is simply stage-gated and doorbells re-open as a
+valid branch. Details in PRE-TEST.243.
+
+---
+
+## POST-TEST.241 (migrated from RESUME_NOTES) — was "Prior outcome (test.241 — write-verify at MAILBOXMASK pre-FORCEHT FAILED; read path works, sentinel writes did not latch; test confounded with stage, not conclusive about (c))
+
+**Test.241 outcome:** With `force_seed=1`,
+`ultra_dwells=1`, `poll_sharedram=1`, `wide_poll=1`,
+`writeverify=1`, the probe logged the MAILBOXMASK round-trip right
+after `pci_set_master` (post-BM-on, pre-FORCEHT, pre-set_active).
+Result:
+
+```
+test.241: write-verify target MAILBOXMASK offset=0x4c (BAR0)
+test.241: MAILBOXMASK baseline=0x00000318 (expect 0x00000000)
+test.241: after write=0xDEADBEEF readback=0x00000318 (expect 0xDEADBEEF)
+test.241: after write=0x00000000 readback=0x00000318 (expect 0x00000000)
+test.241: RESULT FAIL (sentinel-match=0 baseline-zero=0 clear-zero=0)
+```
+
+The probe then continued through FORCEHT, set_active (returned
+TRUE at 08:30:09 BST), and landed **the same 22 dwells as
+test.239/240** (t+100ms..t+90000ms). All 22 sharedram_ptr polls
+held `0xffc70038`; all 22 wide-TCM[-64..-8] samples held the same
+NVRAM text. Wedge bracket unchanged [t+90s, t+120s]. Host wedged;
+SMC reset; current boot 0 started 08:33:44 BST, PCIe clean
+(`Mem+ BusMaster+`, MAbort-, CommClk+).
+
+**What test.241 proves and does not prove:**
+
+- **Proves:** at our probe stage immediately after `pci_set_master`
+  and before FORCEHT/set_active, writing 0xDEADBEEF (and later 0)
+  to `devinfo->reginfo->mailboxmask` (BAR0+0x4c) does NOT change
+  the readback value. The readback (0x00000318) is deterministic
+  and non-trivial — reads reach a real register, writes don't
+  latch there at this stage.
+- **Does not prove** that BAR0 writes are broken generally, because:
+  - **Stage mismatch with test.240's DB1 write.** Test.240 rang DB1
+    at **t+2000ms post-set_active**, i.e. AFTER FORCEHT clocks
+    forced and CR4 rstvec set. Test.241 wrote MAILBOXMASK **before**
+    any of that. Upstream's own MAILBOXMASK writes
+    (`brcmf_pcie_intr_enable`, pcie.c:1339) happen post-shared-init,
+    much later than our probe point — so MAILBOXMASK may be in a
+    clock/reset domain that's only writable post-set_active.
+  - **Our PRE-TEST.241 assumption was wrong.** The plan said
+    "MAILBOXMASK defaults to 0 and accepts arbitrary writes." The
+    baseline is 0x318 (bits 3,4,8,9), not 0. Unexplained — not
+    from any of our current code paths; possible hardware power-
+    on default or residual from an earlier boot, but we haven't
+    identified the origin.
+  - **Dead-code note.** pcie.c:3524+ contains a "test.96" block
+    that is supposed to write MAILBOXMASK=0x00FF0300 pre-ARM-release
+    and log a readback. That block is inside `brcmf_pcie_download_fw_nvram`
+    but downstream of an early-return / different path — zero
+    test.96 MBMASK lines appear in this or any recent run's
+    journal, so we have no prior evidence either way for whether
+    BAR0 writes to MAILBOXMASK ever land.
+
+**Disposition of the three test.240 readings:**
+
+1. **(a) doorbell self-clears / fw saw it and ignored** — still
+   plausible.
+2. **(b) offset not RAM-backed pre-shared-init** — still plausible.
+3. **(c) our BAR0 write did not reach the chip** — *not* cleanly
+   confirmed by test.241 because of stage mismatch. Strength of
+   (c) is NOT settled; test.241's FAIL is consistent with "MAILBOXMASK
+   is gated against writes at our pre-FORCEHT stage" which says
+   nothing about H2D_MAILBOX_1 writes at post-set_active stage.
+
+**Next step (test.242 — direct discriminator):** repeat write-verify
+at the **same stage DB1 was rung in test.240**, post-set_active,
+during the ultra-dwell ladder (e.g. at t+100ms and again at
+t+2000ms). Same register (MAILBOXMASK) to keep one axis fixed. If
+the writes latch post-set_active, stage-gating is confirmed and
+the DB1 null in test.240 is best explained by (a)/(b). If the
+writes still fail post-set_active, (c) is a real problem in our
+BAR0-write path and we must investigate core-select / aperture /
+window state before any more doorbell attempts. Full plan in
+PRE-TEST.242 (next).
+
+**Hardware state (current, 08:5x BST boot 0):** `lspci -s 03:00.0`
+shows `Mem+ BusMaster+`, MAbort-, CommClk+, DEVSEL=fast. No brcm
+modules loaded. SMC reset performed between test.241 wedge and
+current boot.
+
+---
+
+## POST-TEST.240 (migrated from RESUME_NOTES) — was "Prior outcome (test.240 — DB1 ring at t+2000ms had zero observable effect; readback=0x00000000; BAR0-write-path itself unverified)
+
+Test.240 ran with `force_seed=1 ultra_dwells=1 poll_sharedram=1
+ring_h2d_db1=1 wide_poll=1`. Probe was clean through fw download,
+NVRAM, seed, FORCEHT, `pci_set_master`, `brcmf_chip_set_active`
+(returned TRUE at 08:02:46 BST). At the t+2000ms dwell, the
+driver wrote `1` to `devinfo->reginfo->h2d_mailbox_1` (BAR0+0x144)
+via `brcmf_pcie_write_reg32`; readback immediately after was
+`0x00000000`. The ladder then landed 22 of 23 dwells
+(t+100ms..t+90000ms) matching test.238/239 exactly; sharedram_ptr
+and wide-TCM[-64..-8] unchanged throughout. Wedge same bracket
+[t+90s, t+120s]. See **POST-TEST.240** block below for full
+evidence.
+
+---
 ## POST-TEST.238 (2026-04-23 00:55 BST, boot -1 — wedged in [t+90 s, t+120 s] post-set_active; SMC reset required) — 22 of 23 breadcrumbs landed, fw runs ≥90 s under seed
 
 ### Summary
