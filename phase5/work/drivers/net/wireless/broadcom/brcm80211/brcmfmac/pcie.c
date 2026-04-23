@@ -663,6 +663,39 @@ MODULE_PARM_DESC(bcm4360_test255_struct_decode, "BCM4360 test.255: read TCM[0x93
 	} \
 } while (0)
 
+/* BCM4360 test.256: scheduler callback-list walk + current-task struct deref.
+ * Walks first 4 nodes at BSS[0x9627C] (T255-observed list head). Each node is
+ * 16 bytes: {next=+0, fn-ptr=+4, arg=+8, flag=+0xC} per pcie fn 0x115C disasm.
+ * If any fn-ptr falls in wlc_attach family (blob 0x68xxx-0x6Axxx), we have
+ * hard evidence those are registered as scheduler callbacks -> reinforces (A)
+ * bus-stall inside callback hypothesis. Also dereferences current-task ptr at
+ * BSS[0x96F2C] to decode task struct. */
+static int bcm4360_test256_sched_walk;
+module_param(bcm4360_test256_sched_walk, int, 0644);
+MODULE_PARM_DESC(bcm4360_test256_sched_walk, "BCM4360 test.256: walk scheduler callback list at TCM[0x9627C..0x962BC] + current-task struct at TCM[0x96F2C..0x96F6C] at t+60s (1=enable, 0=off)");
+
+/* BCM4360 test.256 scheduler-walk helper. 2 pr_emerg lines, 16 u32 each. */
+#define BCM4360_T256_SCHED_WALK(stage_tag) do { \
+	if (bcm4360_test256_sched_walk) { \
+		u32 _d256a[16], _d256b[16]; \
+		int _n256; \
+		for (_n256 = 0; _n256 < 16; _n256++) { \
+			_d256a[_n256] = brcmf_pcie_read_ram32(devinfo, 0x9627C + _n256 * 4); \
+			_d256b[_n256] = brcmf_pcie_read_ram32(devinfo, 0x96F2C + _n256 * 4); \
+		} \
+		pr_emerg("BCM4360 test.256: " stage_tag " TCM[0x9627c..0x962bc] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _d256a[0], _d256a[1], _d256a[2], _d256a[3], _d256a[4], _d256a[5], _d256a[6], _d256a[7], \
+			 _d256a[8], _d256a[9], _d256a[10], _d256a[11], _d256a[12], _d256a[13], _d256a[14], _d256a[15]); \
+		pr_emerg("BCM4360 test.256: " stage_tag " TCM[0x96f2c..0x96f6c] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _d256b[0], _d256b[1], _d256b[2], _d256b[3], _d256b[4], _d256b[5], _d256b[6], _d256b[7], \
+			 _d256b[8], _d256b[9], _d256b[10], _d256b[11], _d256b[12], _d256b[13], _d256b[14], _d256b[15]); \
+	} \
+} while (0)
+
 
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
@@ -3414,7 +3447,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					    bcm4360_test253_shared_obj || \
 					    bcm4360_test255_sched_probe || \
 					    bcm4360_test255_sched_late || \
-					    bcm4360_test255_struct_decode) { \
+					    bcm4360_test255_struct_decode || \
+					    bcm4360_test256_sched_walk) { \
 						u32 _ctr249 = brcmf_pcie_read_ram32(devinfo, \
 							0x9d000); \
 						pr_emerg("BCM4360 test.249: t+" ms_tag \
@@ -3592,6 +3626,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				BCM4360_T252_DATA_PROBE("t+60000ms");
 				BCM4360_T253_SHARED_PROBE("t+60000ms");
 				BCM4360_T255_STRUCT_DECODE("t+60000ms");
+				BCM4360_T256_SCHED_WALK("t+60000ms");
 				msleep(30000);
 				pr_emerg("BCM4360 test.238: t+90000ms dwell\n");
 				BCM4360_T239_POLL("90000ms");

@@ -400,18 +400,114 @@ tick[0x58C98] = 000000a0
 
 **Both (A) and (A') still have host-observable equivalence** — no code runs either way. A probe that DOES discriminate needs a signal that changes per-scheduler-iteration (which we don't have a probe for yet).
 
-### Next-test direction (T256 — candidates for advisor review)
+### Next-test direction (T256 — advisor-confirmed + pre-checks done)
 
-Focus on getting EVIDENCE, not more hypothesis re-framing:
+Pre-T256 local checks (advisor-requested):
 
-1. **Walk the callback list at 0x9627C**: read 4-5 nodes, each {next, fn-ptr, arg, flag} = 4 u32 per node. If any node's fn-ptr is in wlc_attach/wlc_bmac_attach/wlc_phy_attach range (blob 0x68xxx), we have hard evidence those functions are registered as scheduler callbacks. 16-24 u32.
-2. **Dereference current-task ptr at 0x96F2C**: read ~16 u32 at TCM[0x96F2C..+0x40] to decode the task struct. Pcie fn 0x115C reads `r3 = *0x6299C; r3 = *r3; r3 = r3->[+4]` — the structure has at least 3 levels. Field layout could reveal what the current task IS (its entry function, state, mode).
-3. **Read si_info core-base array at TCM[0x92470..0x924B0]** — 0x92440 struct contains CC base at +0x0C (0x18001000). Adjacent offsets likely hold other cached SB core bases. Cheap: 16 u32.
-4. **Check host-side AER** (pre-insmod of T256): explains why T255 auto-rebooted vs. needing SMC reset.
-5. **DEFERRED**: hardware BAR0 reads of SB core status.
+- **0x62A98 (BSS[0x6296C] observed value) appears 2× in blob** at 0x66FC0 and 0x67348 — it's a .data init, reading it at probe time proves nothing about execution. Only the runtime-populated 0x9627C and 0x96F2C support "fw scheduler setup code ran."
+- **0x9936 is a pure reader** (3 insns: `ldr r3,[r0+0x358]; ldr r0,[r3+0x100]; bx lr`). No BSS writes → can't use as drift detector.
+- **Auto-reboot mechanism**: no panic/Oops/BUG/AER/watchdog messages in boot -1 journal. Silent wedge at 19:52:11 → machine rebooted at 19:53:42 (~1m31s later). Most consistent with platform watchdog / BMC hard reset. Benign at kernel level.
 
-T256 primary: probes (1) + (2) + (3) at t+60s = 48-56 u32 total. Comparable to T253 (55).
+T256 design (refined):
 
-Advisor call before committing to T256 design.
+| Dwell | Probe | u32 | Rationale |
+|---|---|---|---|
+| t+60000ms | `TCM[0x9627C..0x962BC]` (16 u32, 4 × 16-byte callback nodes) | 16 | Walk first 4 nodes of the scheduler callback list. Each node {next=+0, fn-ptr=+4, arg=+8, flag=+0xC} per pcie fn 0x115C disasm. If any fn-ptr points into wlc_attach / wlc_bmac_attach / wlc_phy_attach (blob 0x68xxx-0x6axxx), hard evidence those are registered callbacks. node[3]→next indicates whether list extends past our window. |
+| t+60000ms | `TCM[0x96F2C..0x96F6C]` (16 u32, current-task struct) | 16 | Pcie fn 0x115C: `r3 = *0x6299C; r3 = *r3; r3 = r3->[+4]`. Multi-level struct. Base dump decodes first 64 bytes. Identifies what task type + state. |
+| every dwell (23 pts) | `TCM[0x9d000]` (1 u32) | 23 | Continued frozen-ctr poll (n=7 replication). |
+
+Total: 32 + 23 = 55 reads at t+60s burst. Same cost as T253.
+
+Dropping: si_info core-base continuation (deferred to T257 if T256 results point that way).
+
+Advisor-confirmed; proceeding to code change.
+
+---
+
+## PRE-TEST.256 (2026-04-23 20:xx BST, boot 0 after test.255 auto-reboot; need SMC reset first) — **Scheduler callback list walk + current-task struct dereference.** Single t+60s probe, 32 u32. Target: identify registered callback functions (look for wlc_attach family in fn-ptrs) and current-task struct layout.
+
+### Hypothesis
+
+Two live candidates post-T255:
+- **(A)** CPU bus-stalled on backplane access during a scheduler-dispatched callback.
+- **(A')** CPU WFI'd in idle loop (0x11D0), waiting for never-arriving IRQ.
+
+**Discriminator**: the callback-list head at BSS[0x629A4] = 0x9627C was runtime-populated (not blob-init). Walking nodes starting at 0x9627C reveals REGISTERED callbacks. If any node's fn-ptr falls in wlc_attach / wlc_bmac_attach / wlc_phy_attach blob range, strong evidence for (A) — confirms those functions are scheduler callbacks and consistent with saved LRs from T251 being "stuck in one of them."
+
+Current-task struct at 0x96F2C is dereferenced twice by scheduler (3 levels). Reading 16 u32 at 0x96F2C captures the base + first dereferenced struct. Entry-point fn-ptr within this struct (likely at +4 after first deref) identifies the task.
+
+### Design
+
+| Dwell | Probe | u32 | Purpose |
+|---|---|---|---|
+| t+60000ms | `TCM[0x9627C..0x962BC]` | 16 | 4 callback nodes × {next, fn, arg, flag} |
+| t+60000ms | `TCM[0x96F2C..0x96F6C]` | 16 | Current-task struct base (16 u32) |
+| every dwell (23) | `TCM[0x9d000]` | 23 | Per-dwell frozen-ctr poll |
+
+Log format (2 pr_emerg lines at t+60s):
+```
+test.256: t+60000ms TCM[0x9627c..0x962bc] = 16 hex values (callback list nodes 0..3)
+test.256: t+60000ms TCM[0x96f2c..0x96f6c] = 16 hex values (current-task struct)
+```
+
+Runtime: `bcm4360_test256_sched_walk=1`. Drops T255 probes (already captured).
+
+### Next-step matrix
+
+| Observation | Implication | T257 direction |
+|---|---|---|
+| Any callback fn-ptr in 0x68xxx..0x6Axxx (wlc_attach family) | Hard evidence wlc functions are scheduler callbacks. Cross-ref with T251 LRs. Hang is (A) bus-stall in this callback. | Probe SB core-base cache in si_info + potentially sample register via BAR0. |
+| All callback fn-ptrs in 0x1xxx..0x3xxx (early-boot only) | wlc_attach wasn't reached via this list. Either (A') idle reached, or wlc_attach runs outside scheduler. | Pivot: disassemble the entry-points of observed fn-ptrs to learn what scheduler dispatches. |
+| node[3]→next points into 0x9xxxx (TCM BSS/heap) | List extends past window. More nodes to probe. | T257 reads node[4..N]. |
+| node[3]→next = 0 | List ended within our window. | No further action on list length. |
+| Current-task struct (+0 field) points into 0x9xxxx | Valid pointer chain. Follow it in T257 if more detail needed. | — |
+| Current-task struct (+4 field after first deref) is a Thumb fn-ptr (0x68xxx+1, 0x6Axxx+1) | Task entry point identified. | Disassemble; confirm which fn fw is "currently in" per scheduler state. |
+| Counter 0x9d000 = 0x43b1 across 23 dwells (n=7) | test.89 holds. | No further action. |
+
+### Safety
+
+- All BAR2 reads, no register side effects.
+- Total: 32 + 23 = 55 reads. Same as T253.
+- Wedge expected (n=9 streak T247..T256). Post-T255 auto-reboot behavior suggests platform watchdog may fire again.
+
+### Code change outline
+
+1. New module param `bcm4360_test256_sched_walk` near T255's.
+2. New macro `BCM4360_T256_SCHED_WALK(stage_tag)` reading 2 × 16 u32 → 2 pr_emerg lines.
+3. Extend T239 ctr gate: `if (...T255 || bcm4360_test256_sched_walk)`.
+4. Invocation: right after `BCM4360_T255_STRUCT_DECODE("t+60000ms")` in pcie.c.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 \
+    bcm4360_test248_wide_tcm_scan=1 \
+    bcm4360_test256_sched_walk=1
+sleep 240
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+Note: T249/T250/T251/T252/T253/T255 params NOT set.
+
+### Expected artifacts
+
+- `phase5/logs/test.256.run.txt`
+- `phase5/logs/test.256.journalctl.txt`
+
+### Pre-test checklist (partial — READY pending SMC reset)
+
+1. **Build status**: **REBUILT + VERIFIED.** md5sum `2b3edee76a132137c66ff3d539f29bc1`. `modinfo` shows new param `bcm4360_test256_sched_walk`. `strings` confirms both T256 format lines (16 u32 at 0x9627c + 16 u32 at 0x96f2c). Only pre-existing unused-variable warnings.
+2. **PCIe state**: currently DIRTY (Mem- BusMaster-, CommClk- post-T255 auto-reboot). **SMC reset required before insmod** — user action needed.
+3. **Hypothesis**: callback-list fn-ptr addresses discriminate (A) vs (A'). If any fn-ptr is in wlc_attach family (0x68xxx-0x6Axxx), hard evidence for (A).
+4. **Plan + code**: committed before test fire.
+5. **Host state**: boot 0 started 19:53:42 BST. No brcm loaded.
+
+Advisor-reviewed. Pending SMC reset + test fire.
 
 ---
