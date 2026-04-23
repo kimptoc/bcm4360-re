@@ -5,102 +5,9 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 23:26 BST, POST-TEST.263 — **Absolute-time chip-watchdog hypothesis FALSIFIED. T263-short (10-iter scaffold, 1s loop) crashed after 9 prints at t+120900ms — SAME N-1 / N pattern as T260/T261/T262 (49/50), but at wall-clock t+121000ms instead of t+125000ms. Crash timing SCALES with loop duration, not fixed time. Two equally-consistent readings: (a) crash fires at scaffold-elapsed-time ~= loop duration (duration-anchor), or (b) crash fires at the final loop iteration specifically. Neither privileged by current evidence. Advisor-framed T264 plan: drop the loop entirely, just MSI + request_irq + single msleep(2000) + cleanup — discriminates loop-structure vs duration-of-MSI-bound. Host auto-rebooted 23:24 BST, up 2 min.**)
+## Current state (2026-04-23 23:3x BST, PRE-TEST.264 — **Loop-less scaffold. MSI + request_irq + single msleep(2000) + cleanup. No MMIO reads, no loop structure. Discriminates duration-anchor (crash at ~2s into msleep) vs cleanup-path (crash during free_irq/pci_disable_msi) vs loop-content (clean completion → MMIO reads needed for trigger).** Host stable, boot 0 up since 23:24 BST.)
 
 ---
-
-## POST-TEST.260 (2026-04-23 22:08 BST run, recovered after reboot via `journalctl -b -1` — **Mask-only variant stayed benign through the emitted timeline; no firmware movement, no IRQs, no mailbox bits.**)
-
-### Timeline
-
-- `22:08:55`:
-  - `pci_enable_msi=0 prev_irq=18 new_irq=79`
-  - `request_irq ret=0`
-  - `calling intr_enable (MAILBOXMASK write) — NO doorbell`
-  - `intr_enable done; starting 50×100ms timeline`
-- `22:08:55` through `22:09:00`:
-  - emitted samples from `t+120100ms` through `t+124900ms`
-  - every emitted sample was `mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0`
-- No `timeline done` summary line was emitted.
-- Userspace redirect file `phase5/logs/test.260.run.txt` is empty, but kernel messages were recovered into `phase5/logs/test.260.journalctl.txt`.
-
-### What test.260 settled
-
-| Observation | Reading |
-|---|---|
-| `MAILBOXMASK` write completed, MSI vector allocated, handler installed, and 49 emitted samples remained stable | `MAILBOXMASK=0xFF0300` alone is not the immediate trigger from T259. |
-| `MAILBOXINT` stayed `0` throughout | Firmware never asserted mailbox-pending bits during the observed window. MSI delivery is irrelevant here because nothing fired. |
-| `buf_ptr` stayed `0x8009CCBE` throughout | Firmware console ring did not advance. `(A')` still holds: firmware appears stuck/asleep until explicitly doorbelled. |
-| Host still died before the final summary/cleanup print | The remaining likely trigger is the `hostready` doorbell from T259, not the mask write. A weaker alternative is late cleanup/teardown immediately after the loop, but T259's wedge happened after `hostready`, so the doorbell is still the main suspect. |
-
-### Recommended next discriminator: PRE-TEST.261
-
-**Goal:** isolate the `H2D_MAILBOX_1` write directly now that `MAILBOXMASK` has been cleared.
-
-| Stage | Action | Purpose |
-|---|---|---|
-| t+120000ms | same baseline probes as T260 | Preserve comparability |
-| +immediate | `pci_enable_msi` + `request_irq` | Keep the same safe host-side instrumentation envelope |
-| +immediate | `brcmf_pcie_hostready(devinfo)` only | Directly test whether doorbell alone triggers wake/wedge |
-| 50× iteration | same `msleep(100)` timeline logging `MAILBOXINT`, `buf_ptr`, `irq_count` | Observe whether doorbell causes mailbox traffic, ring drift, IRQs, or immediate death |
-| post-loop | log final counters | Distinguish clean completion vs late wedge |
-| cleanup | `free_irq` + `pci_disable_msi` | No mask disable needed because mask write is skipped |
-
-### PRE-TEST.261 checklist
-
-1. **Code state**: already in tree at `HEAD` (`1580e3e`, pushed) via `bcm4360_test260_doorbell_only=1`; no new code needed unless we decide to add even tighter post-loop markers.
-2. **Artifact hygiene**: preserve `phase5/logs/test.260.journalctl.txt` as the recovered ground truth for T260.
-3. **PCIe state**: re-check immediately before firing. Current post-reset snapshot is clean (`00:1c.2` secondary/subordinate `03/03`, `<MAbort-`; `03:00.0` present with BAR0/BAR2).
-4. **Git discipline**: commit/push notes before any next `insmod`.
-5. **Run choice**: first fire should be `bcm4360_test260_doorbell_only=1` with `T258/T259/T260_mask_only` unset.
-
----
-
-## POST-TEST.261 (2026-04-23 22:39 BST run, recovered after reboot via `journalctl -b -1` — **Doorbell-only variant matched T260 mask-only exactly through the emitted timeline; still no firmware movement, no IRQs, no mailbox bits.**)
-
-### Timeline
-
-- `22:39:41`:
-  - `pci_enable_msi=0 prev_irq=18 new_irq=79`
-  - `request_irq ret=0`
-  - `calling hostready (H2D_MAILBOX_1 write) — NO mask`
-  - `hostready done; starting 50×100ms timeline`
-- `22:39:41` through `22:39:46`:
-  - emitted samples from `t+120100ms` through `t+124900ms`
-  - every emitted sample was `mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0`
-- No `t+125000ms` line and no `timeline done` summary line were emitted.
-- Userspace redirect file `phase5/logs/test.261.run.txt` is empty; recovered kernel messages are saved in `phase5/logs/test.261.journalctl.txt`.
-
-### What test.261 settled
-
-| Observation | Reading |
-|---|---|
-| Doorbell-only emitted the same 49 stable samples as mask-only | `H2D_MAILBOX_1=1` alone is not the immediate trigger either. |
-| `MAILBOXINT`, `buf_ptr`, and `irq_count` all remained flat | Firmware still did not wake, print, or raise any observable host interrupt. `(A')` remains intact. |
-| T260 and T261 both die at the same late point, before `t+125000ms` and before the summary print | The crash is tied to the **shared scaffold** rather than to either individual write. Most likely candidates: MSI/request_irq state itself, the repeated 100ms sleep+poll loop, or the final loop boundary around the missing 50th sample. Cleanup is less likely because execution never reaches the summary print that precedes cleanup. |
-
-### Recommended next discriminator: PRE-TEST.262
-
-**Goal:** remove *both* writes and test the common scaffold by itself.
-
-| Stage | Action | Purpose |
-|---|---|---|
-| t+120000ms | same baseline probes as T260/T261 | Preserve comparability |
-| +immediate | `pci_enable_msi` + `request_irq` | Keep the suspected common factor |
-| +immediate | **NO `intr_enable`, NO `hostready`** | Eliminate both register writes entirely |
-| 50× iteration | same `MAILBOXINT` + `buf_ptr` + `msleep(100)` + `pr_emerg` loop | Test whether the crash comes from the shared instrumentation scaffold alone |
-| post-loop | summary print | Determine whether execution can finally cross the 5.0s boundary cleanly |
-| cleanup | `free_irq` + `pci_disable_msi` | Minimal teardown |
-
-### PRE-TEST.262 checklist
-
-1. **Code state**: done. Added `bcm4360_test262_msi_poll_only=1` in `pcie.c`, rebuilt `brcmfmac.ko`, and verified the new param via `modinfo`.
-2. **Artifact hygiene**: preserve `phase5/logs/test.260.journalctl.txt` and `phase5/logs/test.261.journalctl.txt` as the paired evidence set.
-3. **Current reading**: because both split-write variants failed at the same late boundary, the next test should target the shared scaffold before revisiting any firmware-wake theory.
-4. **Git discipline**: commit/push the T262 code + pre-test notes before any new `insmod`.
-
----
-
 ## POST-TEST.262 (2026-04-23 23:05 BST run, recovered from boot -1 journal — **Scaffold-only crashes at SAME t+125s boundary; neither register write involved.**)
 
 ### Timeline (from `phase5/logs/test.262.journalctl.txt`)
@@ -302,3 +209,80 @@ No MMIO reads. No loop. Single 2s sleep.
 Ready to implement + fire.
 
 ---
+
+## PRE-TEST.264 (2026-04-23 23:3x BST, boot 0 — **Loop-less scaffold: MSI + request_irq + single msleep(2000) + cleanup with markers. No MMIO reads. No loop.**)
+
+### Hypothesis
+
+POST-TEST.263 showed crash timing scales with loop duration. Two readings remain: (X) duration-anchor, (Y) final-iteration-specific. T264 discriminates by removing the loop entirely.
+
+### Design
+
+| Stage | Action | Pr_emerg markers |
+|---|---|---|
+| t+120000ms | same baseline T258 probe | (existing) |
+| +immediate | `pci_enable_msi` | "pci_enable_msi=... new_irq=..." |
+| +immediate | `request_irq` (same safe handler) | "request_irq ret=..." |
+| +immediate | pr_emerg "entering msleep(2000)" | marker |
+| msleep(2000) | single 2s sleep, NO reads, NO loop | — |
+| +immediate | pr_emerg "msleep done; irq_count=... last_mailboxint=..." | marker |
+| +immediate | pr_emerg "calling free_irq" | marker |
+| — | `free_irq(pdev->irq, devinfo)` | — |
+| +immediate | pr_emerg "free_irq returned" | marker |
+| +immediate | pr_emerg "calling pci_disable_msi" | marker |
+| — | `pci_disable_msi(pdev)` | — |
+| +immediate | pr_emerg "pci_disable_msi returned" | marker |
+
+### Next-step matrix (advisor-framed)
+
+| Observation | Reading | Next test |
+|---|---|---|
+| Crash before "msleep done" (~2s in) | **Duration-anchor confirmed**. Loop structure was irrelevant. Candidates (2)/(3) still live. | T265: test shorter msleep (e.g., 500ms) — does crash scale with msleep too? |
+| Crash between "msleep done" and "free_irq returned" | **Cleanup path is the crasher** (first-time visible). Probably in free_irq itself. | T265: try cleanup reordered, or skip cleanup. |
+| Crash between "free_irq returned" and "pci_disable_msi returned" | **pci_disable_msi is the crasher**. | T265: skip pci_disable_msi, leave MSI enabled. |
+| All 6 markers fire, module unloads cleanly | **Loop content (MMIO reads) necessary for trigger**. | T265: bisect — loop with just MAILBOXINT reads vs just buf_ptr reads. |
+
+### Safety
+
+- Even smaller envelope than T262/T263 — no loop, no reads.
+- Cleanup path markers will print in sequence, giving us position-of-crash visibility for the first time.
+- Same MSI+handler safety (consumes any stray IRQ).
+
+### Code change outline
+
+1. New module param `bcm4360_test264_noloop`.
+2. Extend T239 ctr gate + T258_BUFPTR_PROBE gate.
+3. Add new invocation block inside the ultra-dwells branch, separate from the T260/T262/T263 block (no shared scaffolding — simpler to read).
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 \
+    bcm4360_test248_wide_tcm_scan=1 \
+    bcm4360_test264_noloop=1
+sleep 300
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+T258/T259/T260/T262/T263 NOT set.
+
+### Expected artifacts
+
+- `phase5/logs/test.264.journalctl.txt`
+- `phase5/logs/test.264.run.txt`
+
+### Pre-test checklist (pending code+build)
+
+1. **Build status**: NOT yet rebuilt.
+2. **PCIe state**: verify clean before fire.
+3. **Hypothesis**: duration-anchor vs cleanup-path vs loop-content — 3 outcomes give clean discrimination.
+4. **Plan**: this block (committed before code).
+5. **Host state**: boot 0 up since 23:24 BST.
+
+Advisor-confirmed. Code + build + fire pending.
