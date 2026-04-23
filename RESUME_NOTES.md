@@ -286,3 +286,15 @@ T258/T259/T260/T262/T263 NOT set.
 5. **Host state**: boot 0 up since 23:24 BST.
 
 Advisor-confirmed. Code + build + fire pending.
+
+### T264 first fire (2026-04-23 23:42 BST) — **NULL TEST, scaffold never ran**
+
+Crashed during test.188 pre-release TCM tail-snapshot, ~2 minutes BEFORE the dwell ladder or T264 scaffold would have started. Last event: `tail-TCM[0x9ffec]` at 23:44:44. No scaffold markers fired.
+
+**Anomalous pacing**: in T263 (success), all 16 tail-TCM cells read in the same second (23:18:37 — <1ms each). In T264 (crash), 12 cells spread across 6 seconds (23:44:38 → 23:44:44 — ~500ms each). **Single MMIO reads were ~500× slower than T263**. Either the PCIe link was already struggling with L1→L0 retrains/timeouts, or the chip's PCIE2 core was stuck waiting.
+
+Advisor read: this is a null test, not a failed test. Re-fire T264 unchanged. Two outcomes:
+- Crashes again at test.188 → reproducible new failure mode; investigate chip state
+- Reaches scaffold → first crash was one-off noise; scaffold gives real discrimination
+
+Re-firing pending.
