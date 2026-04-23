@@ -193,6 +193,26 @@ static int bcm4360_test242_writeverify_postactive;
 module_param(bcm4360_test242_writeverify_postactive, int, 0644);
 MODULE_PARM_DESC(bcm4360_test242_writeverify_postactive, "BCM4360 test.242: MAILBOXMASK sentinel round-trip at t+100ms and t+2000ms dwells (post-set_active) to discriminate stage-gating from broken write path (1=verify, 0=off)");
 
+/* BCM4360 test.243: re-run the MBM round-trip at t+100ms and t+2000ms
+ * with an EXPLICIT brcmf_pcie_select_core(PCIE2) before the write, to
+ * fix the silent BAR0_WINDOW defect in tests 240/241/242 (probes wrote
+ * to CR4_wrap or CC instead of PCIE2 because no core was selected).
+ * Also:
+ *   - log BRCMF_PCIE_BAR0_WINDOW config-space value before AND after
+ *     the select, to make window state evidence not assumption;
+ *   - use invert-and-restore (~baseline) sentinel so the result is
+ *     informative regardless of baseline value and robust to
+ *     reserved-bit clipping;
+ *   - restore the prior BAR0_WINDOW after the round-trip so
+ *     downstream ladder state is unperturbed;
+ *   - add a BAR2 TCM[0x90000] round-trip at the same dwell points
+ *     as an independent "is MMIO write landing post-set_active"
+ *     axis (BAR2 does not use BAR0_WINDOW, so it's decoupled).
+ * Default 0. */
+static int bcm4360_test243_writeverify_v2;
+module_param(bcm4360_test243_writeverify_v2, int, 0644);
+MODULE_PARM_DESC(bcm4360_test243_writeverify_v2, "BCM4360 test.243: MBM round-trip under explicit select_core(PCIE2) + BAR2 TCM[0x90000] round-trip at t+100ms and t+2000ms dwells (1=verify, 0=off)");
+
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
  * stage=1: write IOCTL = FGC|CLK (coredisable in_reset_configure step)
@@ -2818,6 +2838,56 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					} \
 				} while (0)
 
+/* BCM4360 test.243: MBM round-trip under explicit select_core(PCIE2)
+ * + BAR2 TCM[0x90000] round-trip. See param description above for
+ * full rationale. Uses invert-and-restore sentinel so PASS/FAIL is
+ * informative regardless of baseline value, and logs BAR0_WINDOW
+ * config-space value before and after the select so the window is
+ * evidence, not assumption. Restores the prior BAR0_WINDOW after
+ * the round-trip so downstream ladder state is unperturbed. */
+#define BCM4360_T243_WRITEVERIFY(ms_tag) do { \
+					if (bcm4360_test243_writeverify_v2) { \
+						const u32 _mbm = devinfo->reginfo->mailboxmask; \
+						u32 _win_before = 0, _win_after = 0; \
+						u32 _base, _after_sent, _after_restore; \
+						int _sent_match, _restore_match; \
+						u32 _t = 0x90000; \
+						u32 _b2_base, _b2_sent, _b2_restore; \
+						int _b2_sent_match, _b2_restore_match; \
+						pci_read_config_dword(devinfo->pdev, \
+							BRCMF_PCIE_BAR0_WINDOW, &_win_before); \
+						brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2); \
+						pci_read_config_dword(devinfo->pdev, \
+							BRCMF_PCIE_BAR0_WINDOW, &_win_after); \
+						pr_emerg("BCM4360 test.243: t+" ms_tag " BAR0_WINDOW before=0x%08x after=0x%08x (expect PCIE2 core base)\n", \
+							 _win_before, _win_after); \
+						_base = brcmf_pcie_read_reg32(devinfo, _mbm); \
+						brcmf_pcie_write_reg32(devinfo, _mbm, ~_base); \
+						_after_sent = brcmf_pcie_read_reg32(devinfo, _mbm); \
+						brcmf_pcie_write_reg32(devinfo, _mbm, _base); \
+						_after_restore = brcmf_pcie_read_reg32(devinfo, _mbm); \
+						_sent_match = (_after_sent == ~_base); \
+						_restore_match = (_after_restore == _base); \
+						pr_emerg("BCM4360 test.243: t+" ms_tag " MBM (BAR0+0x%x @window=0x%08x) baseline=0x%08x sent=0x%08x (match=%d) restored=0x%08x (match=%d) RESULT %s\n", \
+							 _mbm, _win_after, _base, _after_sent, _sent_match, _after_restore, _restore_match, \
+							 (_sent_match && _restore_match) ? "PASS" : "FAIL"); \
+						/* Restore prior BAR0_WINDOW so ladder downstream is unperturbed. */ \
+						pci_write_config_dword(devinfo->pdev, \
+							BRCMF_PCIE_BAR0_WINDOW, _win_before); \
+						/* BAR2 TCM[0x90000] round-trip — independent axis (BAR2 does not use BAR0_WINDOW). */ \
+						_b2_base = brcmf_pcie_read_ram32(devinfo, _t); \
+						brcmf_pcie_write_ram32(devinfo, _t, ~_b2_base); \
+						_b2_sent = brcmf_pcie_read_ram32(devinfo, _t); \
+						brcmf_pcie_write_ram32(devinfo, _t, _b2_base); \
+						_b2_restore = brcmf_pcie_read_ram32(devinfo, _t); \
+						_b2_sent_match = (_b2_sent == ~_b2_base); \
+						_b2_restore_match = (_b2_restore == _b2_base); \
+						pr_emerg("BCM4360 test.243: t+" ms_tag " BAR2 TCM[0x%05x] baseline=0x%08x sent=0x%08x (match=%d) restored=0x%08x (match=%d) RESULT %s\n", \
+							 _t, _b2_base, _b2_sent, _b2_sent_match, _b2_restore, _b2_restore_match, \
+							 (_b2_sent_match && _b2_restore_match) ? "PASS" : "FAIL"); \
+					} \
+				} while (0)
+
 				pr_emerg("BCM4360 test.238: calling brcmf_chip_set_active resetintr=0x%08x (ultra-extended ladder t+120s)\n",
 					 resetintr);
 				mdelay(10);
@@ -2828,6 +2898,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				mdelay(100);
 				pr_emerg("BCM4360 test.238: t+100ms dwell\n");
 				BCM4360_T242_WRITEVERIFY("100ms");
+				BCM4360_T243_WRITEVERIFY("100ms");
 				BCM4360_T239_POLL("100ms");
 				mdelay(200);
 				pr_emerg("BCM4360 test.238: t+300ms dwell\n");
@@ -2847,6 +2918,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				msleep(500);
 				pr_emerg("BCM4360 test.238: t+2000ms dwell\n");
 				BCM4360_T242_WRITEVERIFY("2000ms");
+				BCM4360_T243_WRITEVERIFY("2000ms");
 				if (bcm4360_test240_ring_h2d_db1) {
 					u32 _rb;
 					pr_emerg("BCM4360 test.240: ringing H2D_MAILBOX_1 (BAR0+0x%x)=1 at t+2000ms\n",

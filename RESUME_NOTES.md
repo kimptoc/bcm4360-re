@@ -559,10 +559,15 @@ sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
 - No brcm modules loaded.
 - Boot 0 started 2026-04-23 09:15:26 BST.
 
-### Build status — PENDING
+### Build status — REBUILT CLEAN
 
-Will rebuild after code edit and verify with `strings` +
-`modinfo`.
+`brcmfmac.ko` rebuilt 2026-04-23 ~09:3x BST via
+`make -C $KDIR M=phase5/work/drivers/.../brcmfmac modules`.
+Verified:
+- `modinfo` reports `parm: bcm4360_test243_writeverify_v2: ...`.
+- `strings` shows all six test.243 format lines (BAR0_WINDOW +
+  MBM + BAR2 TCM at both t+100ms and t+2000ms).
+Only pre-existing unused-variable warnings; no new regressions.
 
 ### Expected artifacts
 
