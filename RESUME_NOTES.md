@@ -341,19 +341,126 @@ Boot -1 timeline: insmod 15:53:40 → t+60s probe 15:55:04 (success) → t+90s p
 - **Last text line fw printed before hang identified**: the wlc_attach init banner with BCM4360 r3 silicon + 40.0/160.0/160.0MHz radio config. This is normal wireless-driver init progress — fw has done substantial chip/radio bring-up before hanging.
 - **Saved-state / trap-record region exists at 0x9CE98..0x9CF34+** (after stack canary, before T248's 0x9CFE0 marker). Multiple Thumb-mode fw PCs and repeated data-region TCM offsets suggest a structured record (call frame, task table, or trap dump). 0x934C0 also appears here, cross-referenced from T248.
 - **0x000043B1 reframe**: appears at both 0x9D000 (the "frozen counter") and 0x9CF2C (the saved-state region). Strongly suggests 0x43B1 is **not a counter** — it's a register save value or token written multiple times by fw (perhaps a task ID, a register snapshot, or a fixed sentinel). Test.89 "single-write" reading was correct in mechanism (one write, then frozen) but wrong in interpretation (it's saved state, not a tick counter).
-- **Ring size estimate**: from STAK-end (~0x9CC9F-ish — but we saw the ring runs from at least 0x9CC94 backwards — ring start unknown) to 0x9CE5A → minimum ring length ≈ 0x1C0 = 448 bytes. Could be larger (we haven't dumped before 0x9CC80).
+- **Ring upper bound (HYPOTHESIS, not settled)**: ~0x9CE5A based on text→STAK transition. The "\n\0" at 0x9CE58 followed by STAK canary fill is suggestive but not definitive — a sparsely-populated ring could extend further before STAK fill. Treat as working hypothesis; advisor flagged this.
+- **Ring size estimate**: from STAK-end (~0x9CC9F-ish — but we saw the ring runs from at least 0x9CC94 backwards — ring start unknown) to ~0x9CE5A → minimum ring length ≈ 0x1C0 = 448 bytes. Could be larger.
 - **SMC reset required** (n=5 streak T247..T251).
 - **Counter 0x9d000 = 0x43b1 across all 23 dwells (n=3 replication)** — test.89 single-write confirmed at n=3.
 
-### Next-test direction (T252 — pending advisor consultation)
+### Next-test direction (T252 — advisor-confirmed)
 
-Branches:
-1. **Decode saved-state region as a possible trap/exception record.** The Thumb-mode PCs (0x12C69, 0x68D2F, 0x68321, 0x5271) are the strongest direct hint at hang location. If fw kept a call stack snapshot, disassembling these PCs in the public 6.30.223 fw blob (clean-room: observe → document) could identify the hung function.
-2. **Read fw data at the repeated TCM offsets (0x93610, 0x92440, 0x91CC4)** — these may be active task descriptors or globals fw is waiting on.
-3. **Look at fmt-string at fw 0x629C0 and 0x62910** to identify the printf templates that produced the record headers (would tell us *which printf* was last fired before hang).
-4. **Walk the ring backwards further** (TCM[0x9C800..0x9CC80] = 256 u32) to find ring start + record sequence leading up to wlc_attach banner.
+**Local blob analysis already completed** (see `phase5/analysis/T251_blob_analysis.md`). Key findings:
 
-Advisor call before design.
+- Blob → TCM mapping verified (blob byte N = TCM offset N for N < 0x6BF78).
+- Last-printed fmt = wlc_attach RTE banner at blob[0x6BAE4], call site blob[0x6454C].
+- Next-fmt-fw-would-have-printed = WL controller banner at blob[0x6BB1D], call site blob[0x678BC] — **never seen** → fw stuck before wlc_attach returns.
+- Saved PCs verified by Thumb-2 BL preceding-byte signature (4 of 5 are real return addresses; 0x475B5 is a fmt-string pointer with tag bit, not a PC).
+- 0x68D2E falls in/near wlc_attach (literal pool nearby has 'wlc_attach', 'wlc_attach: failed with err %d').
+- 0x68320 falls in/near wlc_bmac_attach (literal pool nearby has 'wlc_bmac_attach', 'wlc_phy_attach failed', chiprev banner with phy_type/phy_rev args).
+- The chiprev banner is the LAST line wlc_bmac_attach prints (after wlc_phy_attach returns). Never seen → **hang is in wlc_attach → wlc_bmac_attach call tree, before chiprev banner fires**. Stack-frame ordering not confirmed (saved-state region may be a context save / TCB rather than a clean stack).
+
+**T252 probes the BSS data referenced by the saved-state region.** This is the only remaining axis local blob analysis can't reach.
+
+---
+
+## PRE-TEST.252 (2026-04-23 17:0x BST, boot 0 after test.251 crash + SMC reset) — **BSS data probe at the saved-state-region's repeated TCM offsets.** Single t+60s probe reads 16 u32s at each of 0x93610, 0x92440, 0x91CC4 — the three runtime-data addresses fw appears to be tracking at hang time (5×, 3×, 3× repetition in T251's saved-state region).
+
+### Hypothesis
+
+The saved-state region at TCM[0x9CE98..0x9CF34] holds repeated references to three TCM data addresses (above the code segment, so not in the blob — runtime BSS/heap):
+
+| Addr | Repetition | Hypothesis class |
+|---|---|---|
+| 0x00093610 | 5× | Active task/object descriptor — most-likely "current pointer" or scheduler head |
+| 0x00092440 | 3× | Secondary pointer in same structure family |
+| 0x00091CC4 | 3× | Third pointer in same structure family |
+
+Plus 0x000934C0 appears once (also in T248's 0x9CFE0). Together these form a ~0x18C0-byte cluster of related runtime structures.
+
+**Disambiguator probes** answer one of:
+- (a) Task control blocks → expect to see a small fixed-layout struct with magic numbers, a state field, a stack pointer, and a function pointer.
+- (b) PHY hardware struct shadows → expect register-like values (channel, frequency, gain settings, calibration data).
+- (c) Mutex / semaphore / event flag → expect a small struct with a counter, an owner-id, a queue head.
+- (d) Sandbox/garbage → expect zeros or random.
+
+If (a) fits, the function-pointer fields will be Thumb-mode addresses pointing into fw code — disassembly target. If (b) fits, we have hard evidence fw is stuck talking to the radio. If (c) fits, the queue-head can be walked.
+
+### Design
+
+**Single probe at t+60000ms** (T251 console_ext is OFF — already captured):
+
+| Dwell | Added probe | u32 reads | Rationale |
+|---|---|---|---|
+| t+60000ms | `TCM[0x93600..0x9363c]` (16 u32 = 64 B) | 16 | 5×-repeat target — primary, most likely active descriptor |
+| t+60000ms | `TCM[0x92430..0x9246c]` (16 u32 = 64 B) | 16 | 3×-repeat target — secondary |
+| t+60000ms | `TCM[0x91cb0..0x91cec]` (16 u32 = 64 B) | 16 | 3×-repeat target — tertiary |
+| every dwell (23 points) | `TCM[0x9d000]` (1 u32) | 23 total | Continued frozen-counter poll. n=4 replication of test.89. |
+
+Total: 71 reads (vs T251's 99). Saves ~28 reads.
+
+**Log format (3 pr_emerg lines at t+60s):**
+```
+test.252: t+60000ms TCM[0x93600..0x9363c] = 16 hex values (5x-repeat target)
+test.252: t+60000ms TCM[0x92430..0x9246c] = 16 hex values (3x-repeat target)
+test.252: t+60000ms TCM[0x91cb0..0x91cec] = 16 hex values (3x-repeat target)
+```
+Each line ~190 chars. Well under LOG_LINE_MAX 1024.
+
+**Runtime config**: `bcm4360_test252_phy_data=1`. Drops T249/T250/T251 console probes (already captured).
+
+### Next-step matrix
+
+| Observation | Implication | T253 direction |
+|---|---|---|
+| 0x93610 area has Thumb-mode function pointers (LSB=1) and small int fields | Looks like a TCB / object with virtual dispatch. Disassemble the fn-ptrs in blob to identify what fw is waiting on. | Decode the fn-ptrs locally, no T253 needed if conclusive. |
+| 0x93610 area has register-like values (channel/freq/gain) | PHY hardware shadow. Fw stuck mid-radio-init. | Probe PHY core registers via PCIe BAR2 alias; correlate with channel-init timing. |
+| 0x93610 area has mutex/semaphore pattern (counter, owner, queue-head) | Fw stuck waiting for a mutex / event. | Walk the queue; identify waiting tasks. |
+| 0x93610..0x91CB0 areas all zeros | BSS not initialized / fw never reached this code path | Pivot: re-decode the saved-state region under a different model (call stack vs context table). |
+| 0x93610 areas all distinct, no overlap | Three independent objects (not same struct family) | Each becomes its own decode target. |
+| Counter 0x9d000 = 0x43b1 across all 23 dwells (n=4 replication) | Test.89 single-write confirmed at n=4. Reframe to "saved-state field" stands. | No further action on this axis. |
+
+### Safety
+
+- All BAR2 reads, no register side effects.
+- Total added reads: 48 at t+60s + 23 per-dwell = 71 reads. Comfortable margin under T251.
+- SMC reset expected after wedge (n=6 streak T247..T252 expected).
+
+### Code change outline
+
+1. New module param `bcm4360_test252_phy_data` near T251's.
+2. New macro `BCM4360_T252_DATA_PROBE(stage_tag)` reading 3 × 16 u32 → 3 pr_emerg lines.
+3. Extend T239 ctr gate: `if (bcm4360_test249_console_dump || bcm4360_test250_console_gap || bcm4360_test251_console_ext || bcm4360_test252_phy_data)`.
+4. Invocation: right after `BCM4360_T251_RING_EXT("t+60000ms")` (pcie.c).
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 \
+    bcm4360_test248_wide_tcm_scan=1 \
+    bcm4360_test252_phy_data=1
+sleep 240
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+Note: T249/T250/T251 params NOT set (already captured those windows).
+
+### Expected artifacts
+
+- `phase5/logs/test.252.run.txt`
+- `phase5/logs/test.252.journalctl.txt`
+
+### Pre-test checklist (complete — READY TO FIRE)
+
+1. **Build status**: **REBUILT + VERIFIED.** md5sum `0014a0f872848f4e3621d629d9a08b2a` on `brcmfmac.ko`. `modinfo` shows new param `bcm4360_test252_phy_data`. `strings` confirms all 3 T252 format lines (16 u32 each at 0x93600/0x92430/0x91cb0). Only pre-existing unused-variable warnings.
+2. **PCIe state**: `Mem+ BusMaster+`, MAbort-, CommClk+, UESta clean, CESta AdvNonFatalErr+ (sticky). Re-verified 16:51 BST.
+3. **Hypothesis**: stated above (BSS data at saved-state region's repeated TCM offsets identifies what fw is tracking at hang).
+4. **Plan**: this block + code change to be committed and pushed before insmod.
+5. **Host state**: boot 0 started 16:50 BST, stable. No brcm modules loaded.
 
 ---
 

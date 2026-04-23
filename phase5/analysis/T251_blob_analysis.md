@@ -37,17 +37,33 @@ T251 captured these Thumb-mode (LSB=1) addresses in TCM[0x9CE98..0x9CF34]:
 | 0x00068321 | 0x68320 | **wlc_bmac_attach** | Literal pool 0x687B8..0x687D0 has 'wlc_bmac_attach', 'wlc_phy_shim_attach failed', 'wlc_phy_attach failed', 'chiprev...phy_type %d phy_rev %d' |
 | 0x00005271 | 0x5270 | Early utility | Pattern looks like string/byte processing (`ldrb [r3],#1`) |
 
-## Inferred call stack at hang time
+## Saved PC verification (Thumb-2 BL preceding bytes)
 
-```
-wlc_attach()                 frame at PC ~0x68D2E
-  wlc_bmac_attach()          frame at PC ~0x68320
-    wlc_phy_attach()         (no fmt string yet — fw never logged it)
-      [PHY/radio init code]  saved LRs at 0x12C69, 0x5271 (deeper utilities)
-        [register access]    test.94's "fn 0x1FC2 wait-loop" candidate
-```
+Confirmed each saved PC lies right after a Thumb-2 BL instruction (signature: first halfword high byte 0xF0..0xF7, second halfword high nibble C/D/F):
 
-The fmt `'wl%d: %s: chiprev %d corerev %d cccap 0x%x maccap 0x%x band %sG, phy_type %d phy_rev %d'` (blob[0x4C534]) is the LAST line wlc_bmac_attach prints — fires only AFTER wlc_phy_attach returns. **We never saw this line in any ring dump. wlc_phy_attach has not returned.**
+| Saved PC | Bytes at PC-4 | Decoded | BL target |
+|---|---|---|---|
+| 0x12C68 | `ed f7 5a fe` | Thumb-2 BL | 0x00091C (function start ~0x87C) |
+| 0x68D2E | `a9 f7 79 ff` | Thumb-2 BL | 0x012C20 (function entry) |
+| 0x68320 | `ab f7 1e ff` | Thumb-2 BL | 0x01415C (function entry) |
+| 0x5270  | `fb f7 b8 fa` | Thumb-2 BL | 0x0007E0 (function entry) |
+| 0x475B4 | `73 20 30 78` (ASCII "s 0x") | NOT a BL | confirmed = fmt-string ref with tag bit |
+
+All four code-region PCs are real return addresses from BL calls. 0x475B5 is confirmed as a fmt-string pointer (with Thumb tag), not a PC.
+
+## Hypothesised call relationships (NOT confirmed as a stack)
+
+The saved-state region is **not necessarily a clean stack snapshot**. Reasons to be cautious:
+- 5× repeats of 0x93610 don't fit a typical stack pattern (stacks rarely have one ptr 5×).
+- The PC ordering in memory (0x12C69, 0x68D2F, 0x68321, 0x5271 from low→high addr) doesn't match a clean caller→callee chain (0x68321/wlc_bmac_attach appearing OLDER than 0x68D2F/wlc_attach is backwards from expected nesting).
+- More likely: a task-context-save area, RTOS task descriptor table, or a heterogeneous trap/state record.
+
+What IS strongly supported:
+- **0x68D2E is in (or very near) wlc_attach** — its literal pool has `'wlc_attach'`, `'si_attach failed'`, `'wlc_attach: failed with err %d'`.
+- **0x68320 is in (or very near) wlc_bmac_attach** — its literal pool has `'wlc_bmac_attach'`, `'wlc_phy_shim_attach failed'`, `'wlc_phy_attach failed'`, `'chiprev...phy_type %d phy_rev %d'`.
+- The fmt `'wl%d: %s: chiprev %d corerev %d cccap 0x%x maccap 0x%x band %sG, phy_type %d phy_rev %d'` (blob[0x4C534]) is the LAST line wlc_bmac_attach prints — fires only AFTER wlc_phy_attach returns. We never saw it in any ring dump. **wlc_phy_attach has not returned, OR fw hung at an earlier point in wlc_bmac_attach (before the chiprev banner).**
+
+So the conservative claim: hang is somewhere inside the wlc_attach → wlc_bmac_attach call tree, BEFORE the wlc_bmac_attach chiprev banner fires. The literal narrowing to "inside wlc_phy_attach" requires assuming the saved PCs reflect the actual call stack, which is unverified.
 
 ## Confirmed fmt strings used in observed log
 

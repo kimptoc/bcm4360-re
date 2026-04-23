@@ -533,6 +533,46 @@ MODULE_PARM_DESC(bcm4360_test251_console_ext, "BCM4360 test.251: dump 12 u32 at 
 } while (0)
 
 
+/* BCM4360 debug: test.252 — BSS-data probe at saved-state region's repeated
+ * TCM offsets. T251 saved-state region (0x9CE98..0x9CF34) referenced three
+ * data addresses repeatedly: 0x93610 (5x), 0x92440 (3x), 0x91CC4 (3x). All
+ * lie above code segment (0x6BF78), so BSS/heap; not in fw blob. T252 reads
+ * 16 u32s at each of three windows centered on those addresses to identify
+ * what fw is tracking at hang time (task descriptor / PHY shadow / mutex).
+ * All BAR2 reads. */
+static int bcm4360_test252_phy_data;
+module_param(bcm4360_test252_phy_data, int, 0644);
+MODULE_PARM_DESC(bcm4360_test252_phy_data, "BCM4360 test.252: read 16 u32 each at TCM[0x93600..0x9363c], TCM[0x92430..0x9246c], TCM[0x91cb0..0x91cec] at t+60s; identifies the BSS data fw is tracking at hang time (1=enable, 0=off)");
+
+/* BCM4360 test.252: BSS-data probe helper. 3 pr_emerg lines, 16 u32 each.
+ * Each line ~190 char. Zero cost when off. */
+#define BCM4360_T252_DATA_PROBE(stage_tag) do { \
+	if (bcm4360_test252_phy_data) { \
+		u32 _d252_a[16], _d252_b[16], _d252_c[16]; \
+		int _n252; \
+		for (_n252 = 0; _n252 < 16; _n252++) { \
+			_d252_a[_n252] = brcmf_pcie_read_ram32(devinfo, 0x93600 + _n252 * 4); \
+			_d252_b[_n252] = brcmf_pcie_read_ram32(devinfo, 0x92430 + _n252 * 4); \
+			_d252_c[_n252] = brcmf_pcie_read_ram32(devinfo, 0x91cb0 + _n252 * 4); \
+		} \
+		pr_emerg("BCM4360 test.252: " stage_tag " TCM[0x93600..0x9363c] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _d252_a[0], _d252_a[1], _d252_a[2], _d252_a[3], _d252_a[4], _d252_a[5], _d252_a[6], _d252_a[7], \
+			 _d252_a[8], _d252_a[9], _d252_a[10], _d252_a[11], _d252_a[12], _d252_a[13], _d252_a[14], _d252_a[15]); \
+		pr_emerg("BCM4360 test.252: " stage_tag " TCM[0x92430..0x9246c] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _d252_b[0], _d252_b[1], _d252_b[2], _d252_b[3], _d252_b[4], _d252_b[5], _d252_b[6], _d252_b[7], \
+			 _d252_b[8], _d252_b[9], _d252_b[10], _d252_b[11], _d252_b[12], _d252_b[13], _d252_b[14], _d252_b[15]); \
+		pr_emerg("BCM4360 test.252: " stage_tag " TCM[0x91cb0..0x91cec] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _d252_c[0], _d252_c[1], _d252_c[2], _d252_c[3], _d252_c[4], _d252_c[5], _d252_c[6], _d252_c[7], \
+			 _d252_c[8], _d252_c[9], _d252_c[10], _d252_c[11], _d252_c[12], _d252_c[13], _d252_c[14], _d252_c[15]); \
+	} \
+} while (0)
+
 
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
@@ -3279,7 +3319,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					} \
 					if (bcm4360_test249_console_dump || \
 					    bcm4360_test250_console_gap || \
-					    bcm4360_test251_console_ext) { \
+					    bcm4360_test251_console_ext || \
+					    bcm4360_test252_phy_data) { \
 						u32 _ctr249 = brcmf_pcie_read_ram32(devinfo, \
 							0x9d000); \
 						pr_emerg("BCM4360 test.249: t+" ms_tag \
@@ -3453,6 +3494,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				BCM4360_T249_CONSOLE_WINDOW("t+60000ms");
 				BCM4360_T250_GAP_WINDOW("t+60000ms");
 				BCM4360_T251_RING_EXT("t+60000ms");
+				BCM4360_T252_DATA_PROBE("t+60000ms");
 				msleep(30000);
 				pr_emerg("BCM4360 test.238: t+90000ms dwell\n");
 				BCM4360_T239_POLL("90000ms");
