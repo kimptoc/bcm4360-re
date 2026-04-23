@@ -19,7 +19,157 @@ compare against the existing `brcmfmac` codebase.
 > documentation. Do not copy disassembly structure directly into driver code.
 > See README.md and CLAUDE.md for full guidelines (ref: issue #12).
 
-## Current Status (2026-04-21)
+## Current Status (2026-04-23, POST-TEST.246)
+
+**Active phase:** Phase 5.2 — firmware wedges within `[t+120s, t+150s]` of
+`brcmf_chip_set_active` (clean-probe bracket, per T244). Pivoting from
+"single-register write-verify probes" to **shared-memory-struct pre-allocation**
+as the next forward step. Full per-test detail lives in `RESUME_NOTES.md` +
+`RESUME_NOTES_HISTORY.md`; this block captures the arc.
+
+### What is proven working (as of T246)
+
+- Full probe path to `brcmf_chip_set_active` runs cleanly: fw download
+  (442 KB, 16/16 BAR2 verify), NVRAM write (228 B), Apple random_seed
+  footer, FORCEHT, `pci_set_master`, `brcmf_chip_set_active` returning
+  TRUE. CR4 CPUHALT transitions YES→NO; fw executes for ≥90 s
+  post-set_active.
+- `brcmf_pcie_select_core(PCIE2)` moves BAR0_WINDOW correctly
+  (0x18000000 → 0x18003000). BAR0 writes to PCIE2 core registers land
+  at pre-FORCEHT under explicit `select_core(PCIE2)` (T245/T246: FN0
+  bits of MBM latch cleanly; restore 0 → readback 0 round-trips).
+- BAR2 TCM writes are alive post-set_active (T245/T246 invert-and-restore
+  on TCM[0x90000] PASS).
+- fw reacts to the Apple random_seed footer at `[ramsize-0x1ec..ramsize-4]`:
+  writing a seed shifts the wedge significantly later (T236 — fw progresses
+  from "no observable signal" to "executes ≥90 s under extended ladder").
+
+### What is ruled out (T229–T246, cumulative)
+
+| Claim | Status | Key test(s) |
+|---|---|---|
+| Probe-path MMIO caused the wedge | ruled out | T229, T230 |
+| `brcmf_chip_set_active` is the SOLE wedge trigger | confirmed | T230 |
+| Fine-grain MMIO probes post-set_active shift timing | ruled out | T229 |
+| Plain DMA-completion-waiting | ruled out | T232 (BM=OFF still wedged) |
+| TCM ring-buffer logger viable across SMC reset | ruled out | T233 |
+| Wedge is near t+30 s / t+45 s / t+90 s | ruled out | T238 |
+| Fw writes `sharedram_addr` to TCM[ramsize-4] within 90 s | ruled out | T239 (22 polls all at NVRAM marker 0xffc70038) |
+| Fw writes any of last 60 TCM bytes within 90 s | ruled out | T240 (wide-poll unchanged) |
+| Post-set_active BAR0-PCIE2 writes safe | ruled out | T243/T244 (wedge-on-probe; confirmed by null-run) |
+| D2H_DB bits of MBM writable at pre-FORCEHT | ruled out | T246 (stage-gated; only FN0 bits latch) |
+
+### Current leading hypothesis
+
+Fw starts on ARM release and executes for ≥90 s, but never reaches (or
+completes) the step that populates TCM[ramsize-4] with the shared-struct
+pointer (T239 — 22 polls, all show NVRAM marker 0xffc70038 unchanged).
+The host→fw doorbell / MBM channel is ruled out as an early nudge:
+- D2H_DB MBM bits can only be driven post-shared-init (T246 stage-gated).
+- Post-set_active PCIE2 writes are a wedge hazard (T243/T244).
+
+**Upstream protocol (per `brcmf_pcie_init_share_ram_info` at pcie.c:2106):**
+fw allocates its own `pcie_shared` struct in TCM and writes that address
+to `ramsize-4` on its own timeline; host polls every 10 ms up to
+`BRCMF_PCIE_FW_UP_TIMEOUT` (5 s) for the slot to change. Only then does
+host *read* from the fw-allocated struct (signature/version at offset 0,
+ring pointers at offsets 40/44/48, console at 20, etc.). **Host never
+writes the struct itself in upstream.**
+
+So "fw blocked on shared-struct" is a symptom, not a cause. The real
+question is: what is fw doing during those ≥90 s before it reaches the
+allocate-and-publish step? Two testable sub-hypotheses:
+
+- **(S1) BCM4360 fw deviates from upstream** and expects the host to
+  pre-place a shared struct (or part of one) at a known TCM location
+  before ARM release. Apple's in-tree `wl` driver may perform such a
+  write that upstream brcmfmac does not.
+- **(S2) Fw follows upstream protocol** and is stalled upstream of the
+  struct-allocate step — e.g. waiting on a missing NVRAM parameter,
+  missing seed data, a PMU resource, or a specific register write.
+  Under S2 the shared-struct level is the wrong place to intervene.
+
+T236's random_seed footer was a concrete instance of "Apple-specific
+host write that upstream brcmfmac doesn't do and that firmware depends
+on." Same shape of question repeats at the shared-struct level.
+
+### Next direction: shared-struct probe (PRE-TEST.247 onward)
+
+The strongest discriminator between (S1) and (S2) is: **pre-place a
+plausibly-formed shared struct in TCM via BAR2 before set_active and
+write its address to ramsize-4; observe whether fw reads from it and/or
+the wedge timeline changes.** Results:
+
+| Observation | Interpretation |
+|---|---|
+| Fw overwrites ramsize-4 with its own address (normal upstream) | Our pre-placed struct was ignored; we're still following upstream protocol; (S2) intact. |
+| Fw overwrites one or more fields in our struct (e.g. ring base pointers appear) | (S1) confirmed — fw reads from a host-pre-placed struct at least for *some* fields. Iterate field-by-field. |
+| Fw's wedge bracket shifts (earlier or later) | Our struct influences fw execution timing; iterate to find which field matters. |
+| No change at all (ramsize-4 unchanged, struct unchanged, same [t+120s, t+150s] bracket) | Pre-placed struct does nothing. (S1) weakened; pivot to (S2)-style investigation: Phase-6 `wl`-trace study, IMEM inspection at 0xef000, or NVRAM-parameter comparison against Apple's macOS config. |
+
+**Design sketch (PRE-TEST.247 first draft — to be reviewed with advisor):**
+
+- **Struct layout.** Copy upstream's `brcmf_pcie_shared_info`-consumed
+  layout: a u32 flags word at offset 0 (version byte in low 8 bits,
+  feature flags in the rest); u16 max_rxbufpost at offset 34; u32
+  rx_dataoffset at 36; u32 htod/dtoh_mb_data_addr at 40/44; u32
+  ring_info_addr at 48; u32 console struct pointer at 20. Upstream's
+  `BRCMF_PCIE_MIN_SHARED_VERSION`/`MAX` define the acceptable range —
+  fill `flags = MIN_SHARED_VERSION` and zero the rest.
+- **TCM placement.** Put the struct inside the "dead region"
+  `[0x6C000..0x9FE00]` (above fw code end 0x6bf78, below random_seed
+  region 0x9FE00). T233 proved this region is untouched by fw and host
+  in normal flow; T245/T246 proved BAR2 writes land there under
+  invert-and-restore. Candidate: base at 0x80000 (well above fw, word-
+  aligned).
+- **Pointer placement.** Overwrite ramsize-4 (currently NVRAM marker
+  0xffc70038) with the struct's TCM address (e.g. 0x80000) right before
+  `brcmf_chip_set_active`, via BAR2 write.
+- **Gating.** New module param `bcm4360_test247_preplace_shared=1` so we
+  can A/B the same binary with and without.
+- **Safety.** The struct write is just TCM memory (not registers) —
+  same write class as NVRAM and random_seed; no register-side effect.
+  Overwriting ramsize-4 replaces a 4-byte NVRAM footer with a 4-byte
+  TCM address — NVRAM parser runs before our write is read.
+
+**Open questions for advisor before code:**
+1. Is the struct-layout sketch above sufficient, or do we need the full
+   post-init layout (including console/scratch/ringupd pointers
+   expected at offsets 20/56/68)? A minimal-version-flag struct may
+   trigger fw to allocate its OWN struct rather than trust ours.
+2. Which interpretation of the upstream-vs-BCM4360 divergence is more
+   likely: (a) BCM4360 fw ignores ramsize-4 on entry and always
+   allocates its own; (b) BCM4360 fw reads ramsize-4 on entry as a
+   host-provided pointer; (c) BCM4360 fw reads ramsize-4 only if it
+   contains a valid address (non-0xffc70038).
+3. Should PRE-TEST.247 also keep `poll_sharedram=1 wide_poll=1`
+   instrumentation to track ramsize-4 evolution during ladder? Yes by
+   default — compare against our placed value vs. 0xffc70038 vs. any
+   fw-written value.
+4. What wedge-behavior differences vs T244's clean-probe t+120000ms
+   bracket would count as "materially different" — ±10 s or more?
+
+### Previous "next-step ladder" (per T188) — status update
+- **B. `wl` reset sequence study** — ongoing in Phase 6, parallel track;
+  not blocking Phase 5.2.
+- **F. OpenWrt / Asahi / SDK-leak survey** — lower priority now that
+  shared-struct hypothesis is testable directly.
+- **C. IMEM inspection via BAR2 at 0xef000** — deferred; cheap side probe
+  if the shared-struct direction stalls.
+- **A** (ARM fault regs) and **D** (UART console) — deferred.
+
+### What's NOT proven yet in this regression-recovery tree
+- Firmware-originated TCM writes (fw has been silent in TCM-observable
+  space through ≥90s despite executing).
+- Shared-struct handshake / fw init completion.
+- Firmware reaching the old Phase-5.2 D11 PHY wait loop (T98
+  TCM[0x58f08]==0 finding); gated behind the shared-struct work.
+
+See also GitHub issues #9 (architecture) and #11 (direction review).
+
+---
+
+## Prior Status (2026-04-21) — historical snapshot before T189–T246 arc
 
 **Active phase:** Phase 5.2 — probe-path stability regression recovery after
 hard-crash sessions (tests 149–157).
@@ -319,18 +469,28 @@ Iterative debug-harness work driven by hypothesis → probe → log → commit.
 
 **Resolved:**
 - Host-crash-on-ARM-release root cause isolated (BAR2 wait-loop PCIe
-  completion timeout + BCMA resetcore register sequencing).
-- Firmware now reaches early init reliably.
+  completion timeout + BCMA resetcore register sequencing). Phase-5.2
+  probe path now runs cleanly through `brcmf_chip_set_active`.
+- Apple random_seed footer was the first observable forward step (T236);
+  fw reads the seed and progresses ≥90 s where without-seed runs stalled
+  earlier.
+- Single-register write-verify probes (T241–T246) settled: BAR0 writes
+  to PCIE2 core regs land under `select_core(PCIE2)` at pre-FORCEHT;
+  MBM D2H_DB bits are stage-gated and only become writable post-shared-init.
 
 **Open:**
-- Firmware counter freezes at T+200–400ms; test.98 pointer-chain probe shows
-  `TCM[0x58f08] == 0` (D11 object `field0x18` never set).
-- Interpretation: hang is in si_attach's D11 core bring-up, upstream of the
-  previously hypothesised PHY wait loop. fn 0x1624c is NOT the hang site.
-- Next: Path B — D11 core prerequisite checks (core reset/enable, clock
-  request, PMU resources, interrupt mask/routing). First probe (test.99):
-  D11 core BCMA state via chip.c bus ops. See `phase5_progress.md` for the
-  full probe order.
+- Fw executes for ≥90 s post-set_active without writing anything observable
+  in TCM, MBM, mailboxint, or any other MMIO slot we poll (T238–T246).
+- **Leading hypothesis:** fw is blocked on a shared-memory-struct
+  handshake. Upstream's `brcmf_pcie_init_share` pre-allocates a
+  `pcie_shared` struct and writes its TCM address to `ramsize-4` before
+  ARM release; our driver currently leaves `ramsize-4` at the NVRAM
+  marker 0xffc70038, which is not a valid shared-struct address. T239
+  polled that slot 22 times across ≥90 s — it never changed.
+- **Next:** PRE-TEST.247 — pre-allocate a minimum-viable shared struct
+  in TCM via BAR2, write its address to `ramsize-4` before
+  `brcmf_chip_set_active`. See Current Status above for the full design
+  framing.
 
 **Exit criterion for 5.2:** firmware reaches a state where it writes a valid
 shared-memory handshake structure (pcie_shared / BCDC control ring), or we
