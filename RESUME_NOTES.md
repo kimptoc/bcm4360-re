@@ -5,7 +5,94 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 21:49 BST, POST-TEST.259 — **T259 fired, got further than T258, but host still wedged. CRITICAL FINDING: MSI + handler registered, but `irq_count=0` after 5s sleep — NO IRQ was delivered to host despite MAILBOXMASK+hostready writes. Host wedged IMMEDIATELY after printing post-wait probe.** This REFUTES the T258 circumstantial reading that wedging was caused by an unhandled fw IRQ. The wedge happens regardless of IRQ handling. Most likely cause: a PCIe-bus-level side effect of MAILBOXMASK or H2D_MAILBOX_1 writes that takes ~5s to manifest (possibly fw ARM wakes, tries an unclocked backplane access, TAbort propagates through the chip's PCIe core back to host). (A') WFI-idle remains the fw hang mechanism per T257, but host-wedge mechanism needs re-analysis. Host auto-rebooted at 21:48.)
+## Current state (2026-04-23 22:0x BST, PRE-TEST.260 — **Split-enable + timeline probe. Run #1 (mask-only): write MAILBOXMASK=0xFF0300, NO doorbell, then 50×{msleep(100); read buf_ptr + MAILBOXINT}. Resolves T259's irq_count=0 ambiguity AND isolates whether MAILBOXMASK write alone wedges host. Run #2 (doorbell-only, pending #1 benign) will isolate H2D_MAILBOX_1 trigger.** Host stable, boot 0 up since 21:48 BST. PCIe clean.)
+
+---
+
+## PRE-TEST.260 (2026-04-23 22:0x BST, boot 0 — **Mask-only variant: MAILBOXMASK=0xFF0300 + MSI + handler + 50× timeline probe, NO hostready doorbell.** Resolves T259's irq_count=0 ambiguity by adding host-side MAILBOXINT read in each probe iteration. Isolates whether the register write alone causes the host wedge.)
+
+### Hypothesis
+
+T259 established: MSI + handler + MAILBOXMASK + H2D_MAILBOX_1 writes complete, 5s sleep completes, irq_count=0, host wedges immediately after post-wait probe. Five candidate host-wedge mechanisms remain (posted-write timeout, MSI mis-route, ASPM transition, fw DMA to unconfigured ring, fw backplane TAbort) — none privileged by evidence.
+
+**T260 run #1 (mask-only) discriminators**:
+
+| Observation | Reading |
+|---|---|
+| Mask-only wedges within 5s | Trigger is host-side or chipset-side — fw wake candidates (4, 5) eliminated. Next candidates: posted-write timeout, MSI vector routing, ASPM. |
+| Mask-only is BENIGN (all 50 probes complete) | MAILBOXMASK write is safe. Stable observation point. Fire run #2 (doorbell-only) to isolate doorbell trigger. |
+| MAILBOXINT sees non-zero bits set by fw during probe | Fw-side intr-pending bit is being set even without doorbell. Counter handler still returning IRQ_NONE means MSI delivery is broken. |
+| MAILBOXINT stays 0 across all 50 probes | Fw has not touched the intr-pending register. Consistent with fw still asleep in WFI. |
+| buf_ptr drifts during timeline | Fw is printing. (A') is dead — fw is running without wake. |
+| buf_ptr stays at 0x8009CCBE | Fw still asleep. (A') unchanged. |
+
+### Design
+
+| Stage | Action | Purpose |
+|---|---|---|
+| t+120000ms | `BCM4360_T258_BUFPTR_PROBE("t+120000ms")` | Baseline (unchanged from T258/T259) |
+| +immediate | `pci_enable_msi` + `request_irq` (safe handler from T259) | MSI routing + handler ready |
+| +immediate | `brcmf_pcie_intr_enable(devinfo)` → MAILBOXMASK=0xFF0300 | The write under test |
+| — | **SKIP brcmf_pcie_hostready** | No doorbell this run |
+| 50× iteration | `msleep(100); read MAILBOXINT + buf_ptr; log triplet` | 5s timeline, 100ms granularity |
+| post-loop | log final `irq_count` + `last_mailboxint` | Resolves T259 ambiguity (MAILBOXINT>0 at any point → fw set it; irq_count=0 with MAILBOXINT=0 → no IRQ to deliver) |
+| cleanup | `brcmf_pcie_intr_disable` → `free_irq` → `pci_disable_msi` | Clean shutdown |
+
+**Log format per iteration (50 lines)**:
+```
+test.260: t+1NNNNms mailboxint=0xXXXXXXXX buf_ptr=0xXXXXXXXX
+```
+
+Where NNNN is 120100, 120200, ... up to 125000.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 \
+    bcm4360_test248_wide_tcm_scan=1 \
+    bcm4360_test260_mask_only=1
+sleep 300
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+T258/T259 NOT set.
+
+### Safety
+
+- Same envelope as T259: MSI + handler + ACK-and-mask + clean free_irq/pci_disable_msi.
+- One less register write than T259 (no H2D_MAILBOX_1).
+- 50 × msleep(100) is still 5s total but partial data recovered if wedge happens mid-loop.
+- Wedge possible (n=11+ streak). SMC reset expected after. Host watchdog auto-reboot pattern confirmed from T255+ onwards.
+
+### Code change outline
+
+1. New module param `bcm4360_test260_mask_only`.
+2. New macro/block at invocation site — after T259's block in the ultra-dwells branch. Use same MSI/handler setup pattern from T259, but:
+   - Skip `brcmf_pcie_hostready(devinfo)`
+   - Replace `msleep(5000)` with a for-loop doing 50 × {msleep(100); 2 × register reads; pr_emerg}.
+3. Extend T239 ctr gate to include T260.
+4. Also add `bcm4360_test260_doorbell_only` param + block (but do NOT set at first fire — it's for run #2).
+
+### Expected artifacts
+
+- `phase5/logs/test.260.run.txt`
+- `phase5/logs/test.260.journalctl.txt`
+
+### Pre-test checklist (pending code+build)
+
+1. **Build status**: NOT yet rebuilt — T260 blocks + ctr-gate extension still to add.
+2. **PCIe state**: clean (Mem+ BusMaster+ MAbort- CommClk+ verified at 22:02 BST).
+3. **Hypothesis**: stated — mask-only wedge vs benign discriminates host-side vs fw-wake triggers.
+4. **Plan**: this block (committed before code).
+5. **Host state**: boot 0 up since 21:48 BST, 14+ min uptime, no brcm loaded.
+
+Advisor-confirmed design. Code + build + fire pending.
 
 ---
 
