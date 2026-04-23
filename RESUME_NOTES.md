@@ -5,7 +5,102 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 21:2x BST, POST-TEST.258 — **Enabling MAILBOXMASK+hostready triggered a NOVEL wedge, strongly consistent with (A') causation though not yet directly proven.** Host stable, boot 0 up since 21:21:01 BST. T258 fired at 21:11:39, wedged at 21:14:01. Key findings: (1) **Baseline buf_ptr at t+120s = 0x8009CCBE**, ring tail all STAK canary — fw asleep throughout dwell ladder (consistent with T257 reading). (2) **Both register writes succeeded**: intr_enable wrote MAILBOXMASK=0xFF0300, hostready wrote H2D_MAILBOX_1=1. Both returned without error. (3) **Wedge happened DURING the msleep(5000)** that followed the writes — before the t+125s post-enable probe could fire. (4) **Novel wedge mechanism**: prior T247..T256 wedges happened during rmmod cleanup or at specific probe-burst points. T258 wedged during an idle 5s wait, with NOTHING running except the kernel sleeping. **Only new variable: fw's IRQ delivery was enabled for the first time.** (5) Most consistent explanation: fw doorbell woke fw CPU from WFI → fw scheduler ran → state change raised INTx (no MSI enabled) → host had no handler registered → kernel-level deadlock from unhandled/spurious IRQ. This is CIRCUMSTANTIAL not DIRECT — post-probe didn't fire. T259 direction: register a no-op IRQ handler BEFORE enabling MAILBOXMASK so any fw-raised IRQ is consumed cleanly, allowing the post-probe to capture buf_ptr drift as direct evidence.)
+## Current state (2026-04-23 22:xx BST, PRE-TEST.259 — **Direct-evidence variant: register a safe IRQ handler + enable MSI BEFORE enabling MAILBOXMASK, so any fw-raised IRQ is consumed cleanly and the post-probe can capture buf_ptr drift.** Host stable, boot 0 up since 21:21:01 BST. T258 established circumstantially that enabling IRQ delivery is what wedges the host; T259 aims for direct evidence by handling the IRQ rather than leaving it dangling. Design: T259 uses variant (a) — a minimal IRQ handler that reads MAILBOXINT, ACKs it, masks further IRQs, and counts invocations. No shared-memory dereferences. If counter > 0 AND buf_ptr drifts in the 5s window → (A') causation fully demonstrated.)
+
+---
+
+## PRE-TEST.259 (2026-04-23 22:xx BST, boot 0 — **Safe IRQ handler + MSI enable + intr_enable + hostready + drift probe**. Direct-evidence variant addressing T258's "wedge during idle sleep" failure mode.)
+
+### Hypothesis
+
+POST-TEST.258 established (A') causation circumstantially: enabling MAILBOXMASK+hostready wedged the host during idle sleep, consistent with fw waking from WFI → raising an IRQ → no registered handler → kernel deadlock. T259 closes the evidence gap by registering a minimal handler first.
+
+**If handler counter > 0 and buf_ptr advances in the 5s post-enable window**, (A') is directly confirmed: fw woke, ran scheduler, dispatched ISR, printed to ring.
+
+**If handler counter == 0 and no wedge**, the T258 wedge mechanism was something other than unhandled IRQ (needs further investigation).
+
+**If still wedges despite handler**, fw-raised IRQ is not the wedge cause; bus-level side effect of MAILBOXMASK/H2D_MAILBOX_1 writes is the more likely explanation.
+
+### Design
+
+| Stage | Action | Purpose |
+|---|---|---|
+| t+120000ms | `BCM4360_T258_BUFPTR_PROBE("t+120000ms")` | Baseline buf_ptr (pre-enable), same as T258 |
+| +immediate | `pci_enable_msi(pdev)` | Allocate MSI vector (so new_irq is ours, not shared with other devices) |
+| +immediate | `request_irq(pdev->irq, bcm4360_t259_safe_handler, IRQF_SHARED, "t259_safe", devinfo)` | Register handler BEFORE enabling MAILBOXMASK |
+| +immediate | `brcmf_pcie_intr_enable(devinfo)` | Unmask fw-side IRQ output (MAILBOXMASK=0xFF0300) |
+| +immediate | `brcmf_pcie_hostready(devinfo)` | Doorbell fw (H2D_MAILBOX_1=1) |
+| +5000ms wait | `msleep(5000)` | Let fw wake, run, print |
+| t+125000ms | Read `bcm4360_t259_irq_count` + `bcm4360_t259_last_mailboxint`, then `BCM4360_T258_BUFPTR_PROBE("t+125000ms")` | Direct evidence: IRQ arrived + fw printed |
+| cleanup | `brcmf_pcie_intr_disable` → `free_irq` → `pci_disable_msi` | Clean shutdown before rmmod |
+
+**Safe handler behavior**:
+- Reads MAILBOXINT (returns IRQ_NONE if 0 — cooperates with shared IRQ)
+- ACKs by writing status back
+- Masks MAILBOXMASK=0 to prevent IRQ storm
+- Increments atomic counter
+- Returns IRQ_HANDLED
+
+**Module param**: `bcm4360_test259_safe_enable_irq=1`. Gates the entire enable block.
+
+### Next-step matrix
+
+| Observation | Implication | T260 direction |
+|---|---|---|
+| irq_count > 0 AND buf_ptr @ t+125s > buf_ptr @ t+120s | **(A') directly confirmed.** Fw woke, ran scheduler, ISR fired, ring advanced. Decode `last_mailboxint` to see which doorbell bits fw pulsed. | Decode ring content. Design T260 to let fw progress further (supply shared-struct fields ISR needs). |
+| irq_count > 0 AND buf_ptr unchanged | Fw woke the CPU (IRQ fired) but no console print. ISR may have run but not called a tracing path. | Read `last_mailboxint`, correlate with pciedngl_isr ACK bits. |
+| irq_count == 0 AND buf_ptr unchanged AND no wedge | Fw did not wake, but host survived. (A') still favored but IRQ delivery path to host is broken. | Investigate MSI target setup, MailboxInt register, intr-ctrl. |
+| Host wedges again (like T258) | Wedge not caused by unhandled IRQ. Something about the register writes themselves triggers the hang. | Split enable sequence: try MAILBOXMASK-only vs hostready-only variants. |
+| Counter 0x9d000 = 0x43b1 across 23 dwells | test.89 frozen-ctr still holds (n=8 replication). | No action. |
+
+### Safety
+
+- Handler never dereferences `devinfo->shared.*` (the T258 concern with brcmf_pcie_isr_thread's handle_mb_data → TCM[0] corruption).
+- Handler only touches `devinfo->reginfo->{mailboxint, mailboxmask}` — identical registers to brcmf_pcie_intr_disable (already well-tested in our codebase).
+- MSI enable uses stock kernel infrastructure (pci_enable_msi). IRQF_SHARED cooperates with any other driver on the line.
+- If request_irq fails, we bail out WITHOUT calling intr_enable/hostready. No wedge risk.
+- Cleanup path disables intr + frees IRQ + disables MSI before returning. No dangling state.
+- Wedge possibility: if the wedge is not IRQ-related, we still wedge. Platform watchdog expected to recover (n=3 streak now).
+
+### Code change outline
+
+1. **(done)** Module param `bcm4360_test259_safe_enable_irq` + atomic counters + `bcm4360_t259_safe_handler` already added at pcie.c:692-725.
+2. **(pending)** Add T259 invocation block in ultra-dwells branch right after the T258 block (pcie.c:3741-ish).
+3. **(pending)** Extend T239 ctr gate at pcie.c:3542 to include test259_safe_enable_irq.
+4. **(pending)** Build + verify modinfo + strings.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 \
+    bcm4360_test248_wide_tcm_scan=1 \
+    bcm4360_test259_safe_enable_irq=1
+sleep 300
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+Note: T258 NOT set (mutually exclusive — only one enable variant fires). Older test params (T249/T250/T251/T252/T253/T255/T256) NOT set.
+
+### Expected artifacts
+
+- `phase5/logs/test.259.run.txt`
+- `phase5/logs/test.259.journalctl.txt`
+
+### Pre-test checklist (pending code+build)
+
+1. **Build status**: NOT yet rebuilt — T259 invocation block + ctr-gate extension still to add.
+2. **PCIe state**: expected clean (Mem+ BusMaster+, MAbort-) — check before fire.
+3. **Hypothesis**: stated — `irq_count > 0 AND buf_ptr drift` = (A') directly confirmed; no wedge with handler = unhandled-IRQ was T258 wedge cause.
+4. **Plan**: this block (committed before code change).
+5. **Host state**: boot 0 started 21:21:01 BST, no brcm loaded.
+
+Advisor-reviewed design. Code + build + fire pending.
 
 ## PRE-TEST.255 (2026-04-23 19:xx BST, boot 0 after test.253 crash + SMC reset) — **RTE scheduler state probe + drift test + 0x9355C decode.** Primary: four BSS fields (callback list, current task, sleep-flag, context-ptr) at t+100ms AND t+90s — drift + discrimination between (A) bus-stall and (A') WFI-idle. Secondary: 0x58C98 tick-scale, 0x93550..0x9358C struct family.
 
