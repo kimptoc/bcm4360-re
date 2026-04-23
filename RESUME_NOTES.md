@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 22:55 BST, PRE-TEST.262 — **Common-scaffold control run needed. T261 proved `H2D_MAILBOX_1` doorbell-alone is also benign through the full emitted 4.9s timeline: 49 emitted samples, `MAILBOXINT=0`, `buf_ptr=0x8009CCBE`, `irq_count=0` throughout, matching T260 mask-only. Therefore neither write alone is the trigger. The surviving common factor behind the crash is now the shared T260 scaffold itself: `pci_enable_msi` + `request_irq` + 50×{read `MAILBOXINT`, read `buf_ptr`, `msleep(100)`, `pr_emerg`}, with the machine dying before the final `t+125000ms` / summary print. Current post-crash PCIe state after SMC reset is clean: root port `00:1c.2` on `03/03`, `<MAbort-`; endpoint `03:00.0` present with BAR0/BAR2 assigned. Boot 0 up since 22:53 BST.**)
+## Current state (2026-04-23 22:58 BST, PRE-TEST.262 — **Common-scaffold control run is now implemented and built. T261 proved `H2D_MAILBOX_1` doorbell-alone is also benign through the full emitted 4.9s timeline: 49 emitted samples, `MAILBOXINT=0`, `buf_ptr=0x8009CCBE`, `irq_count=0` throughout, matching T260 mask-only. Therefore neither write alone is the trigger. The surviving common factor behind the crash is now the shared T260 scaffold itself: `pci_enable_msi` + `request_irq` + 50×{read `MAILBOXINT`, read `buf_ptr`, `msleep(100)`, `pr_emerg`}, with the machine dying before the final `t+125000ms` / summary print. Current post-crash PCIe state after SMC reset is clean: root port `00:1c.2` on `03/03`, `<MAbort-`; endpoint `03:00.0` present with BAR0/BAR2 assigned. Boot 0 up since 22:53 BST.**)
 
 ---
 
@@ -94,10 +94,10 @@
 
 ### PRE-TEST.262 checklist
 
-1. **Code change needed**: add a third T260-family control param/block, e.g. `bcm4360_test262_msi_poll_only=1`, reusing the same T259 safe handler but skipping both writes.
+1. **Code state**: done. Added `bcm4360_test262_msi_poll_only=1` in `pcie.c`, rebuilt `brcmfmac.ko`, and verified the new param via `modinfo`.
 2. **Artifact hygiene**: preserve `phase5/logs/test.260.journalctl.txt` and `phase5/logs/test.261.journalctl.txt` as the paired evidence set.
 3. **Current reading**: because both split-write variants failed at the same late boundary, the next test should target the shared scaffold before revisiting any firmware-wake theory.
-4. **Git discipline**: commit/push the POST-T261 notes before any new code or `insmod`.
+4. **Git discipline**: commit/push the T262 code + pre-test notes before any new `insmod`.
 
 ---
 

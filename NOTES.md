@@ -43,6 +43,11 @@ T260-family path that keeps `pci_enable_msi` + `request_irq` + the timeline
 loop, but performs **no** `MAILBOXMASK` write and **no** `hostready` write.
 Commit and push the notes update before any new code or `insmod`.
 
+Update: the `test.262` control path is now implemented in
+`phase5/work/.../brcmfmac/pcie.c` as `bcm4360_test262_msi_poll_only=1`,
+rebuilt successfully, and verified via `modinfo`. The next action is to commit
+and push this pre-test state, re-check PCIe state, and fire the run.
+
 ---
 
 # Previous crash recovery snapshot - 2026-04-19 PRE test.147
