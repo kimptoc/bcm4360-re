@@ -353,3 +353,73 @@ Three candidate variants, one-variable-each:
 Most-discriminating: probably T265a (isolates whether time alone or MSI-bound matters). Calling advisor before committing.
 
 ---
+
+## PRE-TEST.265 (2026-04-24 00:0x BST, boot 0 — **Identical to T264 scaffold but with msleep(500) instead of msleep(2000).** Single-variable change that decouples "duration-proportional" from "fixed timer post-scaffold-entry".)
+
+### Hypothesis
+
+Across T260/T262/T263/T264, intended_duration = scaffold_duration = elapsed_time_at_crash. Three equally-consistent mechanisms remain:
+- **(a)** Duration-proportional: crash fires at `intended_duration` after scaffold entry
+- **(b)** Fixed timer at ~2s post-scaffold-entry (coincidentally ≥ all intended durations so far)
+- **(c)** Crash tied to msleep-exit transition specifically
+
+T265c changes msleep from 2000ms to 500ms. Three outcomes discriminate cleanly:
+
+| Outcome | Reading |
+|---|---|
+| Crash within ~500ms (before "msleep done" marker) | **(a) confirmed**: duration-proportional. Timer scales with intended sleep. |
+| Crash at ~2s (well after msleep returned, during cleanup) | **(b) confirmed**: fixed timer at ~2s post-scaffold-entry. **CLEANUP PATH BECOMES VISIBLE FOR THE FIRST TIME.** Highest-value outcome. |
+| Crash at exactly 500ms (msleep-exit wall-clock) | **(c) confirmed**: msleep-exit transition itself. Different mechanism. |
+| Clean completion past 2s | Scaffold-duration was load-bearing somehow. Unlikely but possible. |
+
+### Design
+
+Single new module param `bcm4360_test265_short_noloop`. EXACTLY identical to T264 scaffold (pci_enable_msi + request_irq + msleep + cleanup with markers) but msleep is 500ms instead of 2000ms.
+
+Critically: **NO probes, timer reads, or log markers inside the msleep window**. T264 established "no MMIO during sleep" property — preserve it.
+
+### Safety
+
+- Smallest envelope yet. No loop, no MMIO, no writes. MSI + handler + short sleep + cleanup.
+- Cleanup markers will fire if cleanup path runs (first-time visibility if outcome (b)).
+- Host crash still expected (n=15+ streak at this point). Platform watchdog reliable.
+
+### Code change outline
+
+1. New module param `bcm4360_test265_short_noloop`.
+2. Extend T239 ctr gate + T258 buf_ptr probe gate.
+3. Add new invocation block mirroring T264 but with msleep(500). Separate from T264 block to keep both accessible.
+4. Build + verify modinfo + strings.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 \
+    bcm4360_test248_wide_tcm_scan=1 \
+    bcm4360_test265_short_noloop=1
+sleep 300
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+T258-T264 NOT set.
+
+### Expected artifacts
+
+- `phase5/logs/test.265.journalctl.txt`
+- `phase5/logs/test.265.run.txt`
+
+### Pre-test checklist (pending code+build)
+
+1. **Build status**: NOT yet rebuilt.
+2. **PCIe state**: verify clean before fire.
+3. **Hypothesis**: msleep(500) discriminates duration-proportional vs fixed-timer vs msleep-exit-transition.
+4. **Plan**: this block (committed before code).
+5. **Host state**: boot 0 up since 00:03 BST.
+
+Advisor-confirmed. Code + build + fire pending. **Duration-anchor framing in POST-TEST.264 should be treated as hypothesis with circumstantial support — T265c is the test that will actually confirm or refute it.**
