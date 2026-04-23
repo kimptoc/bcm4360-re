@@ -1,0 +1,58 @@
+Apr 23 22:08:55 nixos kernel: brcmfmac: BCM4360 test.239: t+120000ms sharedram_ptr=0xffc70038
+Apr 23 22:08:55 nixos kernel: brcmfmac: BCM4360 test.240: t+120000ms tail-TCM[-64..-8] = 7600303d 69646e65 78303d64 34653431 76656400 303d6469 61333478 74780030 72666c61 343d7165 30303030 32616100 00373d67 67356161 0000373d
+Apr 23 22:08:55 nixos kernel: brcmfmac: BCM4360 test.247: t+120000ms struct[0x80000..0x80047] = 00000005 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+Apr 23 22:08:55 nixos kernel: brcmfmac: BCM4360 test.249: t+120000ms ctr[0x9d000]=0x000043b1
+Apr 23 22:08:55 nixos kernel: brcmfmac: BCM4360 test.258: t+120000ms buf_ptr[0x9CC5C]=8009ccbe ring_tail[0x9CC20..0x9CC5C] = 5354414b 5354414b 5354414b 5354414b 5354414b 5354414b 5354414b 5354414b 5354414b 5354414b 5354414b 5354414b 5354414b 5354414b 00303030 8009ccbe
+Apr 23 22:08:55 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: pci_enable_msi=0 prev_irq=18 new_irq=79
+Apr 23 22:08:55 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: request_irq ret=0
+Apr 23 22:08:55 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: calling intr_enable (MAILBOXMASK write) — NO doorbell
+Apr 23 22:08:55 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: intr_enable done; starting 50×100ms timeline
+Apr 23 22:08:55 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+120100ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:55 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+120200ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:55 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+120300ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:55 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+120400ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:56 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+120500ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:56 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+120600ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:56 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+120700ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:56 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+120800ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:56 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+120900ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:56 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+121000ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:56 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+121100ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:56 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+121200ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:56 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+121300ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:56 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+121400ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:57 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+121500ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:57 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+121600ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:57 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+121700ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:57 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+121800ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:57 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+121900ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:57 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+122000ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:57 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+122100ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:57 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+122200ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:57 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+122300ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:57 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+122400ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:58 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+122500ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:58 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+122600ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:58 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+122700ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:58 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+122800ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:58 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+122900ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:58 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+123000ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:58 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+123100ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:58 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+123200ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:58 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+123300ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:59 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+123400ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:59 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+123500ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:59 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+123600ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:59 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+123700ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:59 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+123800ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:59 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+123900ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:59 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+124000ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:59 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+124100ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:59 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+124200ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:08:59 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+124300ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:09:00 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+124400ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:09:00 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+124500ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:09:00 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+124600ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:09:00 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+124700ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:09:00 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+124800ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
+Apr 23 22:09:00 nixos kernel: brcmfmac: BCM4360 test.260 mask_only: t+124900ms mailboxint=0x00000000 buf_ptr=0x8009ccbe irq_count=0
