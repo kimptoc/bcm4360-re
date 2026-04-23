@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 00:13 BST, POST-TEST.265 — **Fixed-timer-at-2s FALSIFIED. T265's msleep(500) scaffold crashed inside the 500ms sleep window (no "msleep done" marker), same pattern as T264's msleep(2000). This rules out a fixed ~2s trigger (would have fired 1.5s AFTER T265's msleep ended, during cleanup — but we never saw "msleep done"). Does NOT yet confirm duration-proportional: a fixed timer <500ms would fire within both windows and look identical. T266 plan: msleep(50) to shrink the upper bound 10×. Host auto-rebooted 00:12 BST, up 1 min.**)
+## Current state (2026-04-24 00:29 BST, POST-TEST.266 — **Trigger upper bound compressed to ≤50ms. T266 msleep(50) scaffold crashed inside the 50ms window — no "msleep done" marker. Consistent with T264/T265 pattern: 3 consecutive shrinks (2000→500→50) and every single one crashes inside its own intended msleep. Either near-instant fixed timer (<50ms) or duration-proportional. At this bound the proportional-vs-fixed distinction matters less — mechanism is "soon after request_irq". Next question: isolate WHAT in the scaffold is the trigger (pci_enable_msi vs request_irq vs just-being-MSI-bound). Host auto-rebooted 00:27 BST.**)
 
 ## PRE-TEST.264 (2026-04-23 23:3x BST, boot 0 — **Loop-less scaffold: MSI + request_irq + single msleep(2000) + cleanup with markers. No MMIO reads. No loop.**)
 
@@ -318,4 +318,50 @@ Advisor-confirmed. Code + build + fire pending.
 
 **PCIe DIRTY after T265 auto-reboot**: `03:00.0 Control: Mem- BusMaster-`, BARs `[disabled]`, `LnkCtl: ASPM Disabled`, `CommClk-`. BCM4360 endpoint unresponsive. Platform watchdog reboot did not fully recover chip state.
 
-**SMC reset needed** before firing T266.
+**SMC reset needed** before firing T266. *SMC reset completed by user at 00:23 BST; boot 0 came up with device visible at config space. Firing T266.*
+
+---
+
+## POST-TEST.266 (2026-04-24 00:26 BST run — **msleep(50) also crashes inside its own sleep window. Upper bound now ≤50ms.**)
+
+### Timeline (from `phase5/logs/test.266.journalctl.txt`)
+
+- `00:26:14` dwell ladder reached t+120000ms normally (baseline buf_ptr=0x8009CCBE, same as prior runs)
+- `00:26:14` scaffold entry — `pci_enable_msi=0 prev_irq=18 new_irq=79`, `request_irq ret=0`
+- `00:26:14` `entering msleep(50) — no loop, no MMIO`
+- [crash inside 50ms window]
+- `00:27` platform watchdog reboot
+
+**No "msleep done" marker.** No free_irq, no pci_disable_msi. Silent lockup — no panic/MCE/AER.
+
+### What test.266 settled (factually)
+
+- Trigger fires somewhere in [0, 50ms] after scaffold entry (after `request_irq` returned).
+- Same pattern as T264 (2s) and T265 (500ms): crash always within the intended msleep window; "msleep done" never fires.
+- **Upper bound compressed 40× across three tests** (T264 2000ms → T265 500ms → T266 50ms).
+
+### What test.266 did NOT settle
+
+- Still coupled: duration-proportional trigger vs fixed-timer-<50ms. At this bound the distinction starts mattering less — any fixed timer under 50ms looks "nearly immediate".
+- Which of `pci_enable_msi`, `request_irq`, or "being MSI-bound" is the essential trigger component.
+- Whether crash fires during the msleep, or precisely at msleep-exit (<50ms granularity is insufficient here).
+
+### Surviving candidate mechanisms (after T266)
+
+1. ~~Fixed timer at ~2s~~ — FALSIFIED by T265.
+2. **Near-instant trigger within [0, 50ms] of request_irq returning.** Mechanism unknown — could be MSI routing, first IRQ arrival, ASPM state transition, or something else tied to the IRQ subscription.
+3. **Duration-proportional trigger** (crash at ~intended_duration). Still plausible but narrowing — at msleep(50) the delta from request_irq is only 50ms.
+4. **Msleep-exit-transition specific**: the moment the scheduler resumes the task after msleep completes, some state is fatal.
+5. **Cleanup path still invisible**: we've never seen cleanup markers fire, which is consistent with either "crash happens first" (candidates 2/3/4) or "cleanup fires the crash".
+
+### Next-test direction (T267 — advisor call before committing)
+
+Candidate tests to isolate the trigger component:
+
+- **T267a: no msleep at all.** Scaffold = pci_enable_msi + request_irq + IMMEDIATE free_irq + pci_disable_msi. If cleanup markers fire → trigger requires "being MSI-bound for some time". If crashes before any marker → trigger is immediate upon request_irq.
+- **T267b: pci_enable_msi only** (no request_irq). Enables MSI, small sleep, disables MSI. Tests whether MSI enablement alone triggers.
+- **T267c: request_irq on legacy INTx** (no pci_enable_msi). Tests whether request_irq alone (without MSI) triggers. Requires driver code restructuring.
+
+Most discriminating single test: probably T267a (smallest envelope, fastest check, directly answers "is msleep necessary").
+
+Advisor call before committing to T267 design.
