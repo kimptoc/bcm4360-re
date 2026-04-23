@@ -507,14 +507,14 @@ Note: T249/T250/T251/T252/T253 params NOT set (already captured).
 - `phase5/logs/test.255.run.txt`
 - `phase5/logs/test.255.journalctl.txt`
 
-### Pre-test checklist
+### Pre-test checklist (complete — READY TO FIRE)
 
-1. **Build status**: NOT yet rebuilt — need to add T255 module params + macros + invocations, rebuild, verify modinfo shows new params, verify strings shows the 3 expected log lines.
-2. **PCIe state**: confirm clean (Mem+ BusMaster+ MAbort-) before insmod.
+1. **Build status**: **REBUILT + VERIFIED.** md5sum `9e70d0aa1ff335bd7cf0e037557ce06b` on `brcmfmac.ko`. `modinfo` shows all 3 new params (`bcm4360_test255_sched_probe`, `bcm4360_test255_sched_late`, `bcm4360_test255_struct_decode`). `strings` confirms all 3 T255 format lines (t+100ms sched, t+60000ms struct-decode, t+90000ms sched-late). Only pre-existing unused-variable warnings (no new regressions).
+2. **PCIe state**: `Mem+ BusMaster+`, MAbort-, DEVSEL=fast. Clean.
 3. **Hypothesis**: stated above — sleep-flag drift at 0x629B4 discriminates (A) vs (A'); tick-scale check discriminates (C).
-4. **Plan**: this block (committed before code change).
-5. **Host state**: boot 0 started 18:11:33 BST, stable, uptime healthy. No brcm modules loaded.
+4. **Plan**: committed.
+5. **Host state**: boot 0 started 18:11:33 BST, stable, no brcm modules loaded.
 
-Advisor-reviewed; T254 follow-through complete. Pending code change + build + test.
+Advisor-reviewed; T254 follow-through complete. Ready to fire.
 
 ---

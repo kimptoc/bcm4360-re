@@ -613,6 +613,56 @@ MODULE_PARM_DESC(bcm4360_test253_shared_obj, "BCM4360 test.253: read TCM[0x934b8
 	} \
 } while (0)
 
+/* BCM4360 test.255: RTE scheduler state probe + tick-scale check.
+ * Discriminates (A) backplane bus-stall vs (A') CPU-in-WFI vs
+ * (C) tick-scale corruption. All 4 BSS addresses are blob-zero; any
+ * non-zero value at probe time proves fw's scheduler reached that code
+ * path. Tick-scale blob-default is 0x50; corrupted value would break
+ * all PMCCNTR-backed delay loops. Run at BOTH t+100ms and t+90s for
+ * drift test on scheduler's own state. */
+static int bcm4360_test255_sched_probe;
+module_param(bcm4360_test255_sched_probe, int, 0644);
+MODULE_PARM_DESC(bcm4360_test255_sched_probe, "BCM4360 test.255: read TCM[0x6296C, 0x629A4, 0x6299C, 0x629B4, 0x58C98] at t+100ms; decodes RTE scheduler state + tick-scale (1=enable, 0=off)");
+
+static int bcm4360_test255_sched_late;
+module_param(bcm4360_test255_sched_late, int, 0644);
+MODULE_PARM_DESC(bcm4360_test255_sched_late, "BCM4360 test.255: late RTE scheduler state probe at t+90000ms; drift-test partner to test255_sched_probe (1=enable, 0=off)");
+
+static int bcm4360_test255_struct_decode;
+module_param(bcm4360_test255_struct_decode, int, 0644);
+MODULE_PARM_DESC(bcm4360_test255_struct_decode, "BCM4360 test.255: read TCM[0x93550..0x9358C] at t+60s; decodes 0x9355C struct family (T253 follow-up) (1=enable, 0=off)");
+
+/* BCM4360 test.255 scheduler probe helper. 1 pr_emerg line, 5 u32 total.
+ * Gate flag is macro argument so one body serves early and late probes. */
+#define BCM4360_T255_SCHED_PROBE_COND(gate_flag, stage_tag) do { \
+	if (gate_flag) { \
+		u32 _d255s[5]; \
+		_d255s[0] = brcmf_pcie_read_ram32(devinfo, 0x6296C); \
+		_d255s[1] = brcmf_pcie_read_ram32(devinfo, 0x629A4); \
+		_d255s[2] = brcmf_pcie_read_ram32(devinfo, 0x6299C); \
+		_d255s[3] = brcmf_pcie_read_ram32(devinfo, 0x629B4); \
+		_d255s[4] = brcmf_pcie_read_ram32(devinfo, 0x58C98); \
+		pr_emerg("BCM4360 test.255: " stage_tag \
+			 " sched[0x6296C,0x629A4,0x6299C,0x629B4]=%08x %08x %08x %08x tick[0x58C98]=%08x\n", \
+			 _d255s[0], _d255s[1], _d255s[2], _d255s[3], _d255s[4]); \
+	} \
+} while (0)
+
+/* BCM4360 test.255 struct-decode helper. 1 pr_emerg line, 16 u32. */
+#define BCM4360_T255_STRUCT_DECODE(stage_tag) do { \
+	if (bcm4360_test255_struct_decode) { \
+		u32 _d255f[16]; \
+		int _n255; \
+		for (_n255 = 0; _n255 < 16; _n255++) \
+			_d255f[_n255] = brcmf_pcie_read_ram32(devinfo, 0x93550 + _n255 * 4); \
+		pr_emerg("BCM4360 test.255: " stage_tag " TCM[0x93550..0x9358c] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _d255f[0], _d255f[1], _d255f[2], _d255f[3], _d255f[4], _d255f[5], _d255f[6], _d255f[7], \
+			 _d255f[8], _d255f[9], _d255f[10], _d255f[11], _d255f[12], _d255f[13], _d255f[14], _d255f[15]); \
+	} \
+} while (0)
+
 
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
@@ -3361,7 +3411,10 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					    bcm4360_test250_console_gap || \
 					    bcm4360_test251_console_ext || \
 					    bcm4360_test252_phy_data || \
-					    bcm4360_test253_shared_obj) { \
+					    bcm4360_test253_shared_obj || \
+					    bcm4360_test255_sched_probe || \
+					    bcm4360_test255_sched_late || \
+					    bcm4360_test255_struct_decode) { \
 						u32 _ctr249 = brcmf_pcie_read_ram32(devinfo, \
 							0x9d000); \
 						pr_emerg("BCM4360 test.249: t+" ms_tag \
@@ -3457,6 +3510,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				BCM4360_T242_WRITEVERIFY("100ms");
 				BCM4360_T243_WRITEVERIFY("100ms");
 				BCM4360_T239_POLL("100ms");
+				BCM4360_T255_SCHED_PROBE_COND(bcm4360_test255_sched_probe, "t+100ms");
 				mdelay(200);
 				pr_emerg("BCM4360 test.238: t+300ms dwell\n");
 				BCM4360_T239_POLL("300ms");
@@ -3537,11 +3591,13 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				BCM4360_T251_RING_EXT("t+60000ms");
 				BCM4360_T252_DATA_PROBE("t+60000ms");
 				BCM4360_T253_SHARED_PROBE("t+60000ms");
+				BCM4360_T255_STRUCT_DECODE("t+60000ms");
 				msleep(30000);
 				pr_emerg("BCM4360 test.238: t+90000ms dwell\n");
 				BCM4360_T239_POLL("90000ms");
 				BCM4360_T248_WIDESCAN("t+90000ms");
 				BCM4360_T249_ASSERT_WINDOW("t+90000ms");
+				BCM4360_T255_SCHED_PROBE_COND(bcm4360_test255_sched_late, "t+90000ms");
 				msleep(30000);
 				pr_emerg("BCM4360 test.238: t+120000ms dwell done (proceeding to BM-clear + release)\n");
 				BCM4360_T239_POLL("120000ms");
