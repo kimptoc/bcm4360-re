@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 21:0x BST, POST-TEST.257 — **(A') WFI-idle CONFIRMED: our test harness bypasses MSI/IRQ setup; fw registered pciedngl_isr then sleeps waiting for IRQs host never sends.** Host stable, boot 0 up since 20:48:20 BST. T257 was local-only audit, no hardware test. Key findings: (1) **`brcmf_pcie_request_irq` (pcie.c:1937)** which calls `pci_enable_msi` + `request_threaded_irq` is NOT invoked on our test path — test.130 guard log never appears in T256 boot-1 journal. (2) **`brcmf_pcie_intr_enable` (pcie.c:1883)** which unmasks IRQs via MAILBOXMASK=0xFF0300 is NOT called. MAILBOXMASK stays 0. (3) **`brcmf_pcie_hostready` (pcie.c:1890)** which writes 1 to H2D_MAILBOX_1 is NOT called. (4) **Our test path exits `brcmf_pcie_download_fw_nvram` after the test.238 120s dwell ladder**, bypassing init_ringbuffers, init_scratchbuffers, request_irq, intr_enable, and hostready — the entire second half of PCIe setup. (5) **Causal chain confirmed**: fw boots → registers callbacks → scheduler walks list → `tst r5, flag` never matches (r5 from `bl 0x9936` never has bits set because no host IRQ wires) → all callbacks skipped → scheduler tail-calls idle-loop at 0x11D0 → WFI at 0x1C1E → sleeps forever. TCM reads continue working (BAR2 bypasses fw CPU). (6) **HOST wedge is SEPARATE issue** — driven by rmmod cleanup path or AER escalation, not fw state. Wedge timing varies (1s after t+90s in T247..T253/T255; during pre-release in T256-1; during cleanup in T256-2). T258 direction: add MSI-setup option to the ultra-dwells path (new param `bcm4360_test258_enable_msi=1` that triggers request_irq + intr_enable + hostready after dwell ladder). If fw's scheduler state DRIFTS after that, (A') causation is fully demonstrated.)
+## Current state (2026-04-23 21:2x BST, POST-TEST.258 — **Enabling MAILBOXMASK+hostready triggered a NOVEL wedge, strongly consistent with (A') causation though not yet directly proven.** Host stable, boot 0 up since 21:21:01 BST. T258 fired at 21:11:39, wedged at 21:14:01. Key findings: (1) **Baseline buf_ptr at t+120s = 0x8009CCBE**, ring tail all STAK canary — fw asleep throughout dwell ladder (consistent with T257 reading). (2) **Both register writes succeeded**: intr_enable wrote MAILBOXMASK=0xFF0300, hostready wrote H2D_MAILBOX_1=1. Both returned without error. (3) **Wedge happened DURING the msleep(5000)** that followed the writes — before the t+125s post-enable probe could fire. (4) **Novel wedge mechanism**: prior T247..T256 wedges happened during rmmod cleanup or at specific probe-burst points. T258 wedged during an idle 5s wait, with NOTHING running except the kernel sleeping. **Only new variable: fw's IRQ delivery was enabled for the first time.** (5) Most consistent explanation: fw doorbell woke fw CPU from WFI → fw scheduler ran → state change raised INTx (no MSI enabled) → host had no handler registered → kernel-level deadlock from unhandled/spurious IRQ. This is CIRCUMSTANTIAL not DIRECT — post-probe didn't fire. T259 direction: register a no-op IRQ handler BEFORE enabling MAILBOXMASK so any fw-raised IRQ is consumed cleanly, allowing the post-probe to capture buf_ptr drift as direct evidence.)
 
 ## PRE-TEST.255 (2026-04-23 19:xx BST, boot 0 after test.253 crash + SMC reset) — **RTE scheduler state probe + drift test + 0x9355C decode.** Primary: four BSS fields (callback list, current task, sleep-flag, context-ptr) at t+100ms AND t+90s — drift + discrimination between (A) bus-stall and (A') WFI-idle. Secondary: 0x58C98 tick-scale, 0x93550..0x9358C struct family.
 
@@ -482,5 +482,60 @@ sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
 5. **Host state**: boot 0 started 20:48:20 BST, uptime ~18 min, no brcm loaded.
 
 Advisor-reviewed; variant B chosen for safety. Code + build + fire pending.
+
+---
+
+## POST-TEST.258 (2026-04-23 21:1x BST — enable sequence completed, novel wedge during 5s post-enable sleep)
+
+### Timeline
+
+Boot -1: 20:48:20 → 21:14:01 (25m41s; insmod at 21:11:39, wedge at 21:14:01, 2m22s into probe sequence). Host auto-rebooted (platform watchdog pattern continues). PCIe recovered clean.
+
+### What test.258 landed (facts)
+
+**Baseline probe at t+120000ms (pre-enable):**
+```
+buf_ptr[0x9CC5C] = 0x8009CCBE
+ring_tail[0x9CC20..0x9CC5C] = 14 × 0x5354414B (STAK canary) + 0x00303031 ("100\0") + 0x8009CCBE (buf_ptr copy)
+```
+
+Nothing new in the ring tail — consistent with fw being asleep throughout the dwell ladder.
+
+**Enable sequence:**
+```
+test.258: triggering intr_enable + hostready at t+120s          [both log lines fired]
+test.258: intr_enable + hostready done; sleeping 5s             [both writes completed]
+```
+
+Both register writes (`brcmf_pcie_write_reg32` to MAILBOXMASK = 0xFF0300, and to H2D_MAILBOX_1 = 1) returned without error. msleep(5000) started.
+
+**Wedge during msleep:**
+- No `post-enable dwell` log
+- No t+125s buf_ptr probe
+- No kernel panic / Oops / AER / "unhandled IRQ" messages in boot -1 journal
+- Host silently froze; platform watchdog rebooted ~7 min later at 21:21:01
+
+### What test.258 settled (facts)
+
+- **The register writes themselves succeeded.** MAILBOXMASK unmask + H2D_MAILBOX_1 doorbell both completed. The wedge happened AFTER both writes, during the 5s wait.
+- **Novel wedge mechanism, triggered by the enable sequence.** T247..T253/T255 wedged ~1s after t+90s T248 probe (cleanup path). T256 wedged pre-fw-release (T256-1) or during post-dwell cleanup (T256-2). T258 wedged during a 5-second sleep with NO probe activity, NO cleanup path running — only the just-completed IRQ enable.
+- **Strong circumstantial evidence for (A') causation.** The only difference between T258 and prior runs is the IRQ-enable sequence. Prior runs survived this same time window without issue (T256-2 reached t+120s + some cleanup before wedging). T258's wedge during the idle 5s wait means *something triggered by enabling IRQs* caused the host hang. Most consistent with: fw doorbell woke fw CPU → fw scheduler ran → some state change raised an interrupt on PCIe INTx line → host had no registered handler (no request_irq was called in our path) → kernel-level deadlock from unhandled/spurious interrupt.
+- **Direct confirmation (buf_ptr drift) NOT captured** — post-probe never fired because wedge happened first. Wedge may have been within 0-100ms of fw waking.
+
+### What test.258 did NOT settle
+
+- Whether fw actually wrote new log entries to the ring after enable (couldn't capture post-probe).
+- Which register write specifically causes the wedge (MAILBOXMASK or H2D_MAILBOX_1). The current test fires both before probing.
+- Whether the wedge mechanism is "unhandled IRQ on INTx line" vs. something else. No kernel log evidence either way.
+
+### Next-test direction (T259 — safer enable variant)
+
+Two approaches to close the direct-evidence gap:
+
+1. **T259a (safest): register a no-op IRQ handler BEFORE enabling MAILBOXMASK.** Add a tiny `irqreturn_t t259_dummy_handler(int irq, void *arg) { return IRQ_HANDLED; }` registered via `request_irq(pdev->irq, t259_dummy_handler, IRQF_SHARED, "t259_dummy", devinfo);` prior to the MAILBOXMASK write. Consumes any IRQ that arrives without wedging. Should then allow the post-probe to fire and capture buf_ptr drift directly.
+
+2. **T259b (finer-grained): split the enable sequence into MAILBOXMASK-only and hostready-only variants.** Isolates which write triggers the wedge. Might inform whether fw reacts to mask or to doorbell.
+
+Advisor call before committing to T259.
 
 ---
