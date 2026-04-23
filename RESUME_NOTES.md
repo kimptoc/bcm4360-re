@@ -128,7 +128,92 @@ Apr 23 13:47:26.936 test.248: t+90000ms TCM[16 off] =
 
 **Fallback if both windows are null/garbage**: pivot to fn 0x1FC2 disassembly path from test.94 — that thread was active pre-T230 and has the most direct reach to the hang. Don't accept null twice in this direction before revisiting.
 
-Proceed to PRE-TEST.249 design.
+Proceed to PRE-TEST.250 design.
+
+---
+
+## PRE-TEST.250 (2026-04-23 15:3x BST, boot 0 after test.249 crash + SMC reset) — **console buf_ptr gap dump.** T249 captured log content fragments starting mid-phrase at 0x9CDB0; the 240-byte gap at 0x9CCB0..0x9CDB0 (exactly where buf_ptr VA 0x8009ccbe → TCM[0x9CCBE] lives) was never dumped. Single-focus probe fills it; STAK-canary window dropped.
+
+### Hypothesis
+
+Fw wrote log content into its ring buffer before freezing at T+12ms. T249 showed: `0x9CDB0..0x9CE0C` has ASCII "01 wl_probe called\n[?]cied ngl_probe called\n" + binary init values + ASCII "1258 88.0". Both text fragments start mid-word — the stems live in the 0x9CCB0..0x9CDB0 gap. T250 dumps that gap (plus ~80 bytes past T249's window end for continuity verification).
+
+**Observables:**
+- 0x9CCB0..0x9CCBC: pre-buffer context (8 bytes before buf_ptr TCM[0x9CCBE]). Possibly end of the struct area at 0x9CC7C + padding.
+- 0x9CCBE onwards: start of console ring buffer content. If fw printed a boot banner, version line, NVRAM parse output — it's here.
+- 0x9CD30..0x9CDAC: middle-of-log content (unclear whether wrapped or linear).
+- 0x9CDB0..0x9CE2C: re-dump of T249's assert-window region + 32 bytes extension. Consistency check between runs AND extends view to cover 32 bytes past 0x9CE0C.
+- Counter 0x9d000 per dwell: kept via the T239 extension — should be 0x43b1 for all 23 dwells (replicates T249 n=1).
+
+**Decode goal**: produce a contiguous text-readable dump of whatever the fw wrote to its console between T+0 and T+12ms. Expect to see: fw version / build tag / date, NVRAM parse summary, driver-interface probe lines ("wl_probe", "dngl_probe"), possibly an error line immediately before the hang.
+
+### Design
+
+**Single probe at t+60000ms** (no t+90s probe for T250):
+
+| Dwell | Added probe | u32 reads | Rationale |
+|---|---|---|---|
+| t+60000ms | `TCM[0x9CCB0..0x9CE30]` (96 u32s = 384 B) | 96 | Fills the unread gap and extends past T249's assert window by 32 bytes. 30s headroom before wedge per T249 timing. |
+| every dwell (23 points) | `TCM[0x9d000]` (1 u32) | 23 total | Same per-dwell poll as T249, now gated on T249 \|\| T250. Replicates frozen-counter streak. |
+
+**Log format (3 pr_emerg lines at t+60s):**
+
+```
+test.250: t+60000ms TCM[0x9ccb0..0x9cd2c] = 32 hex values (pre-buf + log head)
+test.250: t+60000ms TCM[0x9cd30..0x9cdac] = 32 hex values (log mid)
+test.250: t+60000ms TCM[0x9cdb0..0x9ce2c] = 32 hex values (T249 assert-window region + extension)
+```
+
+Each line ~350 chars (32 × 9 + prefix ~60) — comfortably under kernel LOG_LINE_MAX 1024.
+
+**Runtime config**: `bcm4360_test249_console_dump=0 bcm4360_test250_console_gap=1`. Drops T249's 160-u32 STAK window (zero info content) while keeping the per-dwell ctr poll.
+
+### Next-step matrix
+
+| Observation | Implication | T251 direction |
+|---|---|---|
+| Gap contains readable fw boot banner / version / NVRAM lines | Log buffer captured; decode and document the full startup log. Identify the LAST line fw printed — points at the hang location. | Decode fully; correlate last log line with fw code to find the hang point. |
+| Gap is mostly zeros | Buffer hasn't been written this deeply; either fw log buffer is elsewhere or very short. | Widen the search region (0x9D000+ or 0x9C000-) or fall back to fn 0x1FC2 disassembly. |
+| Gap contains more "STAK" canary or ASCII-but-garbled | Buf_ptr VA decoding is wrong; the 0x8009ccbe value points elsewhere. | Re-derive console base via upstream `brcmf_pcie_bus_console_init` semantics (shared_info ptr + 20). But shared_info ptr = 0xffc70038 was garbage pre-T230, so this may dead-end. |
+| Gap contains structured binary (addresses, dma handles) | Region isn't the log ring but something else — perhaps heap/stack layout tables. | Decode as struct fields rather than ASCII; compare with brcmf_pcie_shared_info layout. |
+| Counter 0x9d000 = 0x43b1 across all 23 dwells (replicated from T249) | Test.89 single-write reading confirmed at n=2. | No further action on this axis. |
+
+### Safety
+
+- All BAR2 reads, no register side effects.
+- Total added reads: 96 at t+60s + 23 per-dwell = 119 reads. Less than T249 (160+24+23=207). Well within probe envelope.
+- SMC reset expected to be required after wedge (consistent with T246–T249 streak).
+
+### Pre-test checklist
+
+1. **Build status**: **REBUILT + VERIFIED.** md5sum `7cb5d53c9f8785e86522996f63f4a6a7` on `brcmfmac.ko`. `modinfo` shows new param `bcm4360_test250_console_gap`. `strings` confirms all 3 format lines. Only pre-existing unused-variable warnings (no new regressions). Commit: `aac27a2`.
+2. **PCIe state**: **clean.** `Mem+ BusMaster+`, MAbort-, CommClk+, LnkSta 2.5GT/s x1. UESta all zero, CESta AdvNonFatalErr+ (pre-existing sticky, same as T248/T249). Re-verified 15:30 BST.
+3. **Hypothesis**: stated — 240-byte gap contains fw log content that starts T249's mid-phrase fragments ("wl_probe called", "ngl_probe called").
+4. **Plan**: this block + code change committed and pushed before insmod.
+5. **Host state**: boot 0 started 15:05:49 BST, uptime ~24 min at write time, stable. No brcm modules loaded.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 \
+    bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test239_poll_sharedram=1 \
+    bcm4360_test240_wide_poll=1 \
+    bcm4360_test247_preplace_shared=1 \
+    bcm4360_test248_wide_tcm_scan=1 \
+    bcm4360_test250_console_gap=1
+sleep 240
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+Note: `bcm4360_test249_console_dump` is NOT set (dropping STAK window).
+
+### Expected artifacts
+
+- `phase5/logs/test.250.run.txt`
+- `phase5/logs/test.250.journalctl.txt`
 
 ---
 
