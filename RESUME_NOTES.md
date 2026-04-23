@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-23 22:xx BST, PRE-TEST.259 — **Direct-evidence variant: register a safe IRQ handler + enable MSI BEFORE enabling MAILBOXMASK, so any fw-raised IRQ is consumed cleanly and the post-probe can capture buf_ptr drift.** Host stable, boot 0 up since 21:21:01 BST. T258 established circumstantially that enabling IRQ delivery is what wedges the host; T259 aims for direct evidence by handling the IRQ rather than leaving it dangling. Design: T259 uses variant (a) — a minimal IRQ handler that reads MAILBOXINT, ACKs it, masks further IRQs, and counts invocations. No shared-memory dereferences. If counter > 0 AND buf_ptr drifts in the 5s window → (A') causation fully demonstrated.)
+## Current state (2026-04-23 21:49 BST, POST-TEST.259 — **T259 fired, got further than T258, but host still wedged. CRITICAL FINDING: MSI + handler registered, but `irq_count=0` after 5s sleep — NO IRQ was delivered to host despite MAILBOXMASK+hostready writes. Host wedged IMMEDIATELY after printing post-wait probe.** This REFUTES the T258 circumstantial reading that wedging was caused by an unhandled fw IRQ. The wedge happens regardless of IRQ handling. Most likely cause: a PCIe-bus-level side effect of MAILBOXMASK or H2D_MAILBOX_1 writes that takes ~5s to manifest (possibly fw ARM wakes, tries an unclocked backplane access, TAbort propagates through the chip's PCIe core back to host). (A') WFI-idle remains the fw hang mechanism per T257, but host-wedge mechanism needs re-analysis. Host auto-rebooted at 21:48.)
 
 ---
 
@@ -101,6 +101,74 @@ Note: T258 NOT set (mutually exclusive — only one enable variant fires). Older
 5. **Host state**: boot 0 started 21:21:01 BST, no brcm loaded.
 
 Advisor-reviewed design. Code + build + fire pending.
+
+---
+
+## POST-TEST.259 (2026-04-23 21:4x BST — T259 fired; surpassed T258, captured irq_count+last_mailboxint, then wedged just after post-wait probe)
+
+### Timeline
+
+Boot -1: 21:21:01 → 21:48 (auto-reboot). Insmod 21:39:27, ultra-dwell ladder ran fully through t+120000ms, enable sequence + 5s sleep + post-wait probe all completed. Machine wedged immediately after the post-wait pr_emerg (before the t+125s dwell log could print).
+
+### What test.259 landed (facts)
+
+**Baseline at t+120000ms (pre-enable, same as T258):**
+```
+buf_ptr[0x9CC5C] = 0x8009CCBE
+ring_tail[0x9CC20..0x9CC5C] = 14 × STAK canary + "100\0" + buf_ptr copy
+```
+
+**Enable sequence:**
+```
+test.259: pci_enable_msi=0 prev_irq=18 new_irq=79
+test.259: request_irq ret=0
+test.259: triggering intr_enable + hostready at t+120s (handler registered)
+test.259: intr_enable + hostready done; sleeping 5s
+test.259: post-wait irq_count=0 last_mailboxint=0x00000000
+[WEDGE — no further lines]
+```
+
+All 5 setup/probe lines printed. MSI was successfully allocated (old IRQ 18 → new IRQ 79). Handler registered. Both register writes completed (identical to T258's success). 5-second sleep completed. Post-wait probe read atomic counters cleanly.
+
+### What test.259 settled (facts)
+
+- **No IRQ arrived in the 5s post-enable window.** `irq_count=0` AND `last_mailboxint=0x00000000` — handler never fired, OR fired and always saw MAILBOXINT=0 (returning IRQ_NONE with no atomic_inc). Shared-IRQ semantics + atomic nature of the counter make it very unlikely an IRQ was missed silently.
+- **T258's circumstantial "unhandled IRQ caused wedge" reading is REFUTED.** With MSI enabled + IRQF_SHARED handler registered, any fw-raised IRQ would have been consumed via MSI vector 79. irq_count=0 says no IRQ was delivered; host still wedged at the same ~5s mark as T258. Therefore the wedge mechanism is not "unhandled IRQ storm."
+- **Fw ARM core did not wake the host side via IRQ** — whether because it didn't wake at all, OR it woke but didn't set any bit in the MAILBOXINT register, OR its MSI target wasn't configured (MSI capability on the chip needs configuration fw-side that our driver doesn't do in this test path).
+- **The wedge happens in a very narrow window**: between pr_emerg #5 (post-wait, 21:41:53) and pr_emerg #6 (t+125000ms post-enable dwell, never printed). Code between them is trivial (string formatting + printk plumbing). The wedge cause is either delayed from an earlier operation (register write side-effect) or something non-local (fw-side ARM wake → PCIe-link disturbance).
+- **Most consistent explanation**: fw ARM woke from WFI (doorbell reached it), began running post-WFI code (possibly an init continuation), attempted an access to an unclocked backplane core (e.g., the WL subsystem, PHY, or CHIPCOMMON after ASPM L1 entered), the SB bus never responded, the ARM core stalled, and this stall propagated through the chip's PCIe core as a TAbort or master-abort. Host-side PCIe root complex saw the TAbort and generated an MCE / unrecoverable PCIe error, which froze the host silently (no kernel log output because the MCE was fatal).
+- **buf_ptr = 0x8009CCBE at t+120s (unchanged from start)** — ring didn't advance during the dwell ladder (same as T258), consistent with fw asleep in WFI.
+
+### What test.259 did NOT settle
+
+- Whether fw actually woke or not (no post-enable buf_ptr reading captured).
+- Which register write is the root trigger (MAILBOXMASK vs H2D_MAILBOX_1). Both fire, both complete, but one of them starts the chain that wedges the host ~5s later.
+- Whether the ~5s delay is a PCIe transaction timeout, a firmware timer, or ASPM-related (L1 → L0 transition).
+
+### Outstanding hypotheses
+
+- **(A')**: fw CPU is in WFI waiting for IRQ. REMAINS THE FW HANG MECHANISM (per T257 host-side audit — no MSI/MAILBOXMASK/hostready in our test path).
+- **New hypothesis (D)**: enabling MAILBOXMASK and/or pulsing H2D_MAILBOX_1 triggers a fw-side action (ARM wake or backplane access) that causes a bus-level chip-to-host PCIe fault after ~5s. This is the host-wedge mechanism, separate from the fw hang.
+
+### Next-test direction (T260 — probe to isolate root trigger)
+
+Two complementary investigations:
+
+1. **T260a: split-enable variant.** Three module-param variants:
+   - `bcm4360_test260_mask_only=1` — write MAILBOXMASK=0xFF0300, skip hostready. Does this alone wedge?
+   - `bcm4360_test260_doorbell_only=1` — skip MAILBOXMASK, write H2D_MAILBOX_1=1. Does this alone wedge?
+   - Combined with probes IMMEDIATELY after each write (no 5s sleep) to check register/TCM state before any wedge has time to develop.
+   
+2. **T260b: post-enable fast probe.** Instead of msleep(5000), do msleep(100) then immediately probe buf_ptr. If buf_ptr advanced in 100ms, fw woke fast. If it hasn't advanced in 100ms but host still wedges later, wedge is timer-based (likely fw-side) not event-based (IRQ storm).
+
+**Advisor call before committing to T260 design** — the "wedge without IRQ" finding significantly changes our model of the host/chip interaction and the design should incorporate that.
+
+### Safety for T260
+
+- Same safety envelope as T259 (MSI + handler + ACK-and-mask). Add "panic_on_oops" / "softdog" if possible to get a kernel log line when the wedge starts (if it's an MCE, softdog won't help; but a kernel trace might).
+- Consider enabling `pci=nommconf` or AER verbose logging to catch PCIe-level errors before the wedge silents them.
+
+---
 
 ## PRE-TEST.255 (2026-04-23 19:xx BST, boot 0 after test.253 crash + SMC reset) — **RTE scheduler state probe + drift test + 0x9355C decode.** Primary: four BSS fields (callback list, current task, sleep-flag, context-ptr) at t+100ms AND t+90s — drift + discrimination between (A) bus-stall and (A') WFI-idle. Secondary: 0x58C98 tick-scale, 0x93550..0x9358C struct family.
 
