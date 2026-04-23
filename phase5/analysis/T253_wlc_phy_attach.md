@@ -74,9 +74,12 @@ This is the BL target from the T251 saved-PC 0x68321. Disassembly confirms it's 
 
 Reading: this function polls an SB-core SBTMSTATELOW-like register waiting for a "reset-complete" or "clock-ready" bit (0x20000 = bit 17). Timeout falls through to an error path that calls `bl #0x11E8` (printf/assert) with arg `r1=0x1273`.
 
-If bit 17 of SB-core+0x1E0 never clears (or never sets — depending on which polarity the `bne`-out reads), this loop runs to ~20ms and then exits with an error log. **That error log (or the printf at 0x11E8) is NOT observed in the captured ring**, which argues against this specific loop being where the hang lives — if it timed out, we'd see the associated printf.
+If bit 17 of SB-core+0x1E0 never clears (or never sets — depending on which polarity the `bne`-out reads), this loop runs to ~20ms and then exits with an error log. That error log (or the printf at 0x11E8) is NOT observed in the captured ring. This rules out the **timed-out-and-logged** scenario only — it does NOT rule out either:
 
-Consequently, fn_1415C is NOT the hang location (it would have timed out and logged).
+- **currently-in-progress**: loop still iterating, r6 hasn't reached 9 yet. Unlikely at wall-clock scale (the ~20ms budget is far smaller than the host-side wedge window), but a broken `bl #0x1ADC` delay helper (e.g., waits on a clock tick that stopped) could stall each iteration indefinitely.
+- **never-reached**: control flow in wlc_bmac_attach never reached the `bl #0x1415C` at 0x6831C. The saved LR 0x68321 would then be stale/leftover, consistent with T251's "saved-state region may not be a clean stack" caveat.
+
+Consequently, fn_1415C is **lower-priority but not ruled out** as the hang location.
 
 ## 0x18001000 literal-ref check (advisor-requested verify of si_info reading)
 

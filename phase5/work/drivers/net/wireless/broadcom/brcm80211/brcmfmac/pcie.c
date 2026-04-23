@@ -574,6 +574,46 @@ MODULE_PARM_DESC(bcm4360_test252_phy_data, "BCM4360 test.252: read 16 u32 each a
 } while (0)
 
 
+/* BCM4360 debug: test.253 — central-shared-object + list_head peer probe.
+ * T251/T252 found 0x934C0 referenced across three T252 structs AND in T248's
+ * 0x9CFE0 AND in T251's saved-state 0x9CEA0. T252 decoded 0x92460..0x9246F as
+ * two adjacent list_head pairs with peers at 0x91E54 and 0x91E84. T253
+ * probes:
+ *   (a) TCM[0x934B8..0x934F4] = 16 u32 (8 pre-bytes + central object) —
+ *       catches allocator header if present, identifies object class
+ *       (TCB/wl/si/etc).
+ *   (b) TCM[0x91E50..0x91E8C] = 16 u32 — validates list_head pair (should
+ *       self-ref or point back to 0x92460/0x92468 if empty; to other peers
+ *       if list has members).
+ * All BAR2 reads. */
+static int bcm4360_test253_shared_obj;
+module_param(bcm4360_test253_shared_obj, int, 0644);
+MODULE_PARM_DESC(bcm4360_test253_shared_obj, "BCM4360 test.253: read TCM[0x934b8..0x934f4] + TCM[0x91e50..0x91e8c] at t+60s; decodes central shared object referenced across T251/T252 structs + validates list_head peer inference (1=enable, 0=off)");
+
+/* BCM4360 test.253: central-shared-object probe helper. 2 pr_emerg lines,
+ * 16 u32 each. Each line ~190 char. Zero cost when off. */
+#define BCM4360_T253_SHARED_PROBE(stage_tag) do { \
+	if (bcm4360_test253_shared_obj) { \
+		u32 _d253_a[16], _d253_b[16]; \
+		int _n253; \
+		for (_n253 = 0; _n253 < 16; _n253++) { \
+			_d253_a[_n253] = brcmf_pcie_read_ram32(devinfo, 0x934b8 + _n253 * 4); \
+			_d253_b[_n253] = brcmf_pcie_read_ram32(devinfo, 0x91e50 + _n253 * 4); \
+		} \
+		pr_emerg("BCM4360 test.253: " stage_tag " TCM[0x934b8..0x934f4] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _d253_a[0], _d253_a[1], _d253_a[2], _d253_a[3], _d253_a[4], _d253_a[5], _d253_a[6], _d253_a[7], \
+			 _d253_a[8], _d253_a[9], _d253_a[10], _d253_a[11], _d253_a[12], _d253_a[13], _d253_a[14], _d253_a[15]); \
+		pr_emerg("BCM4360 test.253: " stage_tag " TCM[0x91e50..0x91e8c] = " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x " \
+			 "%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 _d253_b[0], _d253_b[1], _d253_b[2], _d253_b[3], _d253_b[4], _d253_b[5], _d253_b[6], _d253_b[7], \
+			 _d253_b[8], _d253_b[9], _d253_b[10], _d253_b[11], _d253_b[12], _d253_b[13], _d253_b[14], _d253_b[15]); \
+	} \
+} while (0)
+
+
 /* BCM4360 debug: test.20 — staged reset to isolate crashing register write.
  * stage=0: read-only (dump ARM CR4 wrapper registers)
  * stage=1: write IOCTL = FGC|CLK (coredisable in_reset_configure step)
@@ -3320,7 +3360,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					if (bcm4360_test249_console_dump || \
 					    bcm4360_test250_console_gap || \
 					    bcm4360_test251_console_ext || \
-					    bcm4360_test252_phy_data) { \
+					    bcm4360_test252_phy_data || \
+					    bcm4360_test253_shared_obj) { \
 						u32 _ctr249 = brcmf_pcie_read_ram32(devinfo, \
 							0x9d000); \
 						pr_emerg("BCM4360 test.249: t+" ms_tag \
@@ -3495,6 +3536,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				BCM4360_T250_GAP_WINDOW("t+60000ms");
 				BCM4360_T251_RING_EXT("t+60000ms");
 				BCM4360_T252_DATA_PROBE("t+60000ms");
+				BCM4360_T253_SHARED_PROBE("t+60000ms");
 				msleep(30000);
 				pr_emerg("BCM4360 test.238: t+90000ms dwell\n");
 				BCM4360_T239_POLL("90000ms");
