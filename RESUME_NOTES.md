@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 08:10 BST, PRE-CODE-CHECK for T271 surfaced a BLOCKER — **Candidate A from the code audit is not a one-step add.** Pre-code grep + historical-log evidence: `devinfo->shared.ring_info_addr` is zero in our path because `brcmf_pcie_init_share_ram_info` is never called, because `sharedram_addr` at TCM[ramsize-4] is never populated by fw (T247 observed it stayed at 0xffc70038 NVRAM-trailer across all 23 dwells). **Tightens the hang reading**: si_attach completes (T252: 0x92440 populated) → fw enters WFI (T257 DEFINITIVE) → but sharedram publish never happens. The two milestones bracket the hang window tighter. Advisor directive: park T271 code work until fw-blob diss task (in-progress on another host) lands — "what wakes pciedngl_isr" and "what triggers shared-publish" are likely the same protocol question viewed from two sides. Waiting on fw-blob results.)
+## Current state (2026-04-24 08:40 BST, POST-FW-BLOB-DISS REFRAME — **fw-blob diss task landed (phase6/t269_pciedngl_isr.md) and dovetails with the T271 pre-code blocker into a coherent reframe.** The scaffold investigation line (T258–T269) was trying to drive a wake handshake whose fw-side precondition — fw completing `pcidongle_probe` → `hndrte_add_isr(pciedngl_isr, bit=3)` and then publishing `shared.flags |= HOSTRDY_DB1` (0x10000000) — was NEVER met. Upstream's `brcmf_pcie_hostready` explicitly gates on `HOSTRDY_DB1`; our scaffolds skipped that gate and wrote H2D_MAILBOX_1 into a fw state where `pciedev+0x18` was NULL, causing silent fw-side NULL-deref matching our wedge signature. **New bracketing**: fw reaches wlc_bmac_attach (T251/T252) → enters WFI (T257) → does NOT reach pcidongle_probe (T247: TCM[ramsize-4] unchanged 23/23 dwells). The hang is in the init chain between wlc_bmac_attach and pcidongle_probe. T271/Candidate-A-as-framed is moot. New productive thread: T272-FW, trace fw init chain between those two points. Zero hardware fires today since 08:01. Substrate window still open.)
 
 ---
 
@@ -854,3 +854,91 @@ Action: park T271 coding. Wait for fw-blob diss task to land. When results arriv
 No hardware fired. Cold-cycle window still ~open (boot 0 at 07:58 BST, ~15 min old). If we want to fire anything soon: Candidate B (remove `pci=noaer` from boot cmdline) or Candidate C (add `pci=noaspm`) are the viable single-variable next tests, but both require reboot config changes and possibly another cold cycle.
 
 No immediate fire needed. Waiting for fw-blob diss + user direction.
+
+---
+
+## POST-FW-BLOB-DISS REFRAME (2026-04-24 08:40 BST — **fw-blob diss task landed and dovetails with T271 pre-code blocker into a coherent reframe. No new hardware fires; pure documentation update.**)
+
+### What the fw-blob diss settled
+
+Full analysis: `phase6/t269_pciedngl_isr.md`. Key factual outcomes:
+
+1. **pciedngl_isr entry at blob 0x1C98** (Thumb). Confirmed via string cross-refs `"pciedngl_isr called\n"`, `"pciedngl_isr"`, `"pciedev_msg.c"`, `"pciedngl_isr exits"` at 0x40685/0x4069D/0x406B2/0x406E5/0x40733 — all referenced by this function's body.
+2. **Wake bit**: `pciedngl_isr` tests bit 0x100 of a software ISR_STATUS at `*(pciedev+0x18)+0x18)+0x20`. Value 0x100 matches `BRCMF_PCIE_MB_INT_FN0_0` in upstream brcmfmac (pcie.c:954). ACK via W1C (write-one-to-clear) of the same bit.
+3. **No fw-side host-facing register writes** on wake. All response via TCM ring writes that host polls. Doorbell W1C is the only MAILBOXINT mirror access.
+4. **No panic/reboot/host-watchdog string in blob**. Fw can sit in WFI indefinitely without self-destructing. The host wedge is NOT fw-initiated. All `"watchdog"` strings refer to periodic soft-timers (`wlc_phy_watchdog`, `wlc_bmac_watchdog`, `wlc_dngl_ol_bcn_watchdog`, etc.), not "host must respond" timers.
+5. **Bit allocation**: `hndrte_add_isr` at 0x63C24 allocates the scheduler callback node, dispatches a class-specific unmask via a 9-entry thunk vector at 0x99AC..0x99C8 (→ 0x27EC region). For pciedngl_isr the allocated bit is 3 (flag=0x8).
+6. **Upstream handshake protocol** (from reading our own `pcie.c` — not the blob):
+   - Fw publishes `shared.flags |= BRCMF_PCIE_SHARED_HOSTRDY_DB1` (0x10000000, pcie.c:1016) as part of its init.
+   - Host reads `shared.flags` (after `brcmf_pcie_init_share_ram_info` populates `devinfo->shared`).
+   - ONLY if HOSTRDY_DB1 observed, host calls `brcmf_pcie_hostready` (pcie.c:2044) which writes H2D_MAILBOX_1 = 1.
+   - Fw's already-unmasked FN0_0 bit fires → scheduler dispatches `pciedngl_isr` → handshake proceeds.
+
+### Why the scaffold investigation (T258–T269) was doomed
+
+Every scaffold (T258, T259, T260, T261, T262, T263) that wrote H2D_MAILBOX_1 did so **without observing HOSTRDY_DB1 first** — none of them even read `shared.flags`. Three possibilities:
+- Fw had unmasked FN0_0 but not populated `pciedev+0x18` sub-struct → ISR NULL-derefs on its first read → fw ARM crashes silently mid-ISR → bus stops responding → host MMIO wedges.
+- Fw had not yet unmasked FN0_0 → early doorbell lost (edge-sensitive) or latched (level-sensitive) — either way, harmless, but…
+- …The fact that T262/T263 (no doorbell at all) also wedged rules out "only the doorbell ring wedges" — the scaffold-line mere act of subscribing MSI + IRQ on BCM4360 is already producing a wedge.
+
+Net: even with perfect handshake, the scaffold line was hitting a secondary wedge mode. Given (4), it is not fw-initiated. Most likely it's host-side: ASPM-L1 exit timing, MSI-vector routing, or a kernel spinlock path that depends on a device state that doesn't exist because fw hasn't initialized it. Candidates B/C/E from the code audit address some of these.
+
+### Dovetail with T271 pre-code blocker
+
+The pre-code check surfaced: **sharedram_addr at TCM[ramsize-4] is never populated by fw** (T247 observed 0xffc70038 NVRAM trailer unchanged across all 23 dwells through t+120s). Per the fw-blob analysis section 5.2, sharedram publish happens as part of pcidongle_probe — which happens AFTER `hndrte_add_isr(pciedngl_isr, ...)` and BEFORE fw advertises HOSTRDY_DB1. Logical chain:
+
+```
+si_attach (T252: 0x92440)
+   → wlc attach (T251: saved-LR 0x68D2F)
+   → wlc_bmac_attach (T251: saved-LR 0x68321)
+   → ... gap we can't see ...
+   → pcidongle_probe
+     → hndrte_add_isr(pciedngl_isr) — allocates bit 3, unmasks FN0_0
+     → publishes sharedram_addr at ramsize-4
+     → publishes shared.flags |= HOSTRDY_DB1
+     → (now host would see flags and safely ring doorbell)
+```
+
+T247 evidence: TCM[ramsize-4] never changes → sharedram never published → **pcidongle_probe did not complete its publish phase** (or ran but never got that far).
+
+T257 evidence (WFI is DEFINITIVE): the scheduler reached a point where no callback's flag bit matched, so it went to idle loop → WFI.
+
+Combined: **fw is stuck in WFI somewhere BEFORE pcidongle_probe's sharedram-publish point**. The scheduler is waiting on a pending-events bit that never fires — a bit that something else should have set during init.
+
+### Updated hang bracket (tighter than session start)
+
+| Point | Evidence |
+|---|---|
+| RTE boot banner | T250 ring-dump (`"RTE (PCIE-CDC) 6.30.223 (TOB)"`) |
+| si_attach completes | T252 decode of 0x92440 (si_info-class struct with CC base 0x18001000 cached) |
+| wlc attach / bmac attach entered | T251 saved-LR 0x68D2F / 0x68321 near those function bodies (α branch, now supported but not proven) |
+| **fw enters WFI** | T257 DEFINITIVE (host harness bypasses MSI setup; no IRQ ever arrives) |
+| **pcidongle_probe publish NOT reached** | T247 × T269-FW dovetail (ramsize-4 unchanged; fw-blob says publish happens inside pcidongle_probe) |
+
+Hang region: between wlc_bmac_attach completion and pcidongle_probe's publish step. Inside that region, fw runs its scheduler, dispatches enough init callbacks to reach some waiting point, then the scheduler's pending-events word has no bit set → scheduler goes to WFI.
+
+### What this invalidates / moots / keeps
+
+| Item | Status |
+|---|---|
+| T271 / Candidate A (add init_ringbuffers before scaffold) | **MOOT** — pcidongle_probe-gated shared-publish was assumed and doesn't happen. |
+| Scaffold-line investigation (T258–T269 shape) | **BLOCKED** pending fw reaching pcidongle_probe. Not abandoned; paused. |
+| T270-BASELINE substrate reproducibility | **UNAFFECTED** — still holds. |
+| Code audit (phase6/t269_code_audit_results.md) | Mostly still useful; specific scaffold-fix candidates A–F are now: A moot; B/C/E still live for "why does the *scaffold act of MSI subscription* also wedge"; D/F deprioritized. |
+| fw-blob diss (phase6/t269_pciedngl_isr.md) | **Done.** No further work on pciedngl_isr needed until fw reaches it. |
+| Hardware substrate | Still clean-ish (~40 min into boot; drift may have started); no fires pending. |
+
+### New productive thread: T272-FW
+
+Trace the fw init chain between wlc_bmac_attach completion and pcidongle_probe entry. Goals:
+
+- Find wlc_attach's return point in the caller, and what function is called next.
+- Map the init sequence from there up to pcidongle_probe.
+- Identify any step in that sequence that:
+  - reads a HW register in a way that could block on unclocked-core access, or
+  - schedules an RTE callback + returns to scheduler (legitimate — but then something must set that callback's flag bit), or
+  - tail-calls into a dispatcher that's waiting on an event bit that requires a host action we haven't taken.
+
+Output: `phase6/t272_init_chain.md` describing the gap + specific init-step candidates.
+
+Advisor call if the gap is large or ambiguous. No new hardware fires until this analysis produces a concrete candidate.
