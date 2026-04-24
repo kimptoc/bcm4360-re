@@ -107,11 +107,15 @@ The class-value-to-bit mapping isn't a clean 1:1 table — it's done dynamically
 
 ## What this means for T279
 
+**Register-direction correction (advisor):** MAILBOXINT is the D2H (fw→host) mirror with W1C semantics — writing it from the host CLEARS fw-set bits, it does NOT trigger fw. The host-to-device trigger registers are **H2D_MAILBOX_0** and **H2D_MAILBOX_1**; writing a non-zero value to either causes fw's internal MAILBOXINT to latch the corresponding FN0_n bit.
+
 **Design directly follows**:
-1. **T279 can fire with a known-positive baseline: MAILBOXINT bit 0 (FN0_0)** → triggers pciedngl_isr per T274. This is the "positive control" advisor identified. If fw logs `"pciedngl_isr called"` or any string (known to exist at blob 0x40685 per T274), we've verified the console-observation path end-to-end.
-2. **After the positive control, sweep MAILBOXINT bits 1..7** one at a time with T278 console hooks between each. Whichever bit produces NEW log content AND the log mentions wlc / bmac / intrs = fn@0x1146C's bit.
-3. **Observability is strong**: fn@0x23374 and fn@0x113b4 both print to the console. A successful trigger WILL produce log output.
-4. **Safety**: prior scaffolds (T258-T269) wedged the host when writing mailbox bits without shared_info. T279 runs with shared_info + console + carefully-timed single-bit writes. A wedge is still possible (MSI subscription wedge from T264-T266 is orthogonal to T279 since we're NOT subscribing MSI) but the T278 console reads between writes give us per-bit diagnostic even if the final bit wedges.
+1. **Positive control: write `H2D_MAILBOX_0 = 1`** → causes fw's MAILBOXINT.FN0_0 (bit 0x100) to latch → fires fw's pciedngl_isr per T274. Known-positive path. If fw logs `"pciedngl_isr called"` (string at blob 0x40685), console-observation path is end-to-end verified.
+2. **Hypothesis: write `H2D_MAILBOX_1 = 1`** → upstream convention is "hostready" doorbell. Upstream gates this on `HOSTRDY_DB1` (which fw doesn't advertise per T274), but the write itself is safe to attempt. If it fires fn@0x1146C's bit, new log content mentioning `wl` / `bmac` / `intr` / `wl_rte.c` will appear (fn@0x113b4 has `printf/assert` at line 1477).
+3. **Advisor order: hypothesis first, positive control second.** Freshest chip state for the higher-value probe. Between probes: `msleep(100)` + T278 delta dump.
+4. **Observability**: fn@0x23374 and fn@0x113b4 both contain printf/assert. A successful trigger WILL produce console output.
+5. **Sanity check before first write**: read `MAILBOXMASK` register. If 0, fw has all mailbox ints masked — writes would be futile.
+6. **Safety**: no MSI, no request_irq (T264-T266 host wedge was MSI-subscription-only; orthogonal to mailbox writes). Prior scaffolds wedged because they lacked shared_info context; T279 runs after shared_info is written and acknowledged.
 
 ## Open questions (not blocking T279)
 

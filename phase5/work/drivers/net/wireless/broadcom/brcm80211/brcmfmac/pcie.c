@@ -848,6 +848,18 @@ MODULE_PARM_DESC(bcm4360_test278_console_periodic, "BCM4360 test.278: periodic c
 
 #define BCM4360_T278_CHUNK_BYTES	128	/* per pr_emerg line */
 #define BCM4360_T278_MAX_BYTES_PER_CALL	1024	/* printk safety cap */
+
+/* BCM4360 test.279: directed mailbox-probe with console observation.
+ * Writes H2D_MAILBOX_1 (hypothesis: fn@0x1146C's trigger) then
+ * H2D_MAILBOX_0 (known-positive control for pciedngl_isr per T274).
+ * Between each write: msleep(100) + T278 console delta dump.
+ * Also reads MAILBOXMASK first as sanity check (0 = all masked,
+ * writes would be futile). No MSI, no request_irq — orthogonal to
+ * the T264-T266 MSI-subscription wedge. Requires T276+T277+T278.
+ * Design: phase6/t281_fn1146c_trigger.md + advisor trace 2026-04-24. */
+static int bcm4360_test279_mbx_probe;
+module_param(bcm4360_test279_mbx_probe, int, 0644);
+MODULE_PARM_DESC(bcm4360_test279_mbx_probe, "BCM4360 test.279: post-T278-poll, read MAILBOXMASK, write H2D_MAILBOX_1=1 (hypothesis), msleep+console-dump, write H2D_MAILBOX_0=1 (positive control), msleep+console-dump. Requires T276+T277+T278. (1=enable, 0=off)");
 /* T278 helper body is defined after brcmf_pcie_read_ram32 (needs it)
  * and after struct brcmf_pciedev_info. See bcm4360_t278_dump_console_delta
  * later in this file. */
@@ -4135,6 +4147,65 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							&devinfo->t278_prev_write_idx);
 					} else if (bcm4360_test278_console_periodic) {
 						pr_emerg("BCM4360 test.278: requires bcm4360_test277_console_decode=1; skipping\n");
+					}
+
+					/* BCM4360 test.279: directed mailbox probe.
+					 * Advisor-approved order: hypothesis (H2D_MBX_1)
+					 * first, positive control (H2D_MBX_0) second.
+					 * Between each write: 100 ms dwell + T278 delta
+					 * dump (so new console content produced by fw's
+					 * ISR→dispatch→printf chain is logged). Requires
+					 * T276+T277+T278 for console observability. */
+					if (bcm4360_test279_mbx_probe &&
+					    bcm4360_test276_shared_info &&
+					    bcm4360_test277_console_decode &&
+					    bcm4360_test278_console_periodic) {
+						u32 mask_pre;
+
+						mask_pre = brcmf_pcie_read_reg32(devinfo,
+							BRCMF_PCIE_PCIE2REG_MAILBOXMASK);
+						pr_emerg("BCM4360 test.279: pre-probe MAILBOXMASK=0x%08x (0 = all fw ints masked)\n",
+							 mask_pre);
+
+						/* Probe 1: H2D_MAILBOX_1=1 (hypothesis: wakes fn@0x1146C) */
+						pr_emerg("BCM4360 test.279: writing H2D_MAILBOX_1=1 (hypothesis — fn@0x1146C trigger?)\n");
+						brcmf_pcie_write_reg32(devinfo,
+							BRCMF_PCIE_PCIE2REG_H2D_MAILBOX_1,
+							1);
+						msleep(100);
+						{
+							u32 mbxint_post = brcmf_pcie_read_reg32(devinfo,
+								BRCMF_PCIE_PCIE2REG_MAILBOXINT);
+							u32 t279_ptr = brcmf_pcie_read_ram32(devinfo,
+								t276_base + BCM4360_T276_SI_FW_STATUS);
+							pr_emerg("BCM4360 test.279: post-H2D_MBX_1 MAILBOXINT=0x%08x (D2H mirror, non-zero = fw signalled)\n",
+								 mbxint_post);
+							bcm4360_t278_dump_console_delta(devinfo,
+								"POST-H2D_MBX_1 (+100ms)",
+								t279_ptr,
+								&devinfo->t278_prev_write_idx);
+						}
+
+						/* Probe 2: H2D_MAILBOX_0=1 (positive control — pciedngl_isr) */
+						pr_emerg("BCM4360 test.279: writing H2D_MAILBOX_0=1 (positive control — pciedngl_isr)\n");
+						brcmf_pcie_write_reg32(devinfo,
+							BRCMF_PCIE_PCIE2REG_H2D_MAILBOX_0,
+							1);
+						msleep(100);
+						{
+							u32 mbxint_post = brcmf_pcie_read_reg32(devinfo,
+								BRCMF_PCIE_PCIE2REG_MAILBOXINT);
+							u32 t279_ptr = brcmf_pcie_read_ram32(devinfo,
+								t276_base + BCM4360_T276_SI_FW_STATUS);
+							pr_emerg("BCM4360 test.279: post-H2D_MBX_0 MAILBOXINT=0x%08x (D2H mirror, non-zero = fw signalled)\n",
+								 mbxint_post);
+							bcm4360_t278_dump_console_delta(devinfo,
+								"POST-H2D_MBX_0 (+100ms)",
+								t279_ptr,
+								&devinfo->t278_prev_write_idx);
+						}
+					} else if (bcm4360_test279_mbx_probe) {
+						pr_emerg("BCM4360 test.279: requires T276+T277+T278 all enabled; skipping\n");
 					}
 				}
 				if (bcm4360_test268_early_scaffold) {

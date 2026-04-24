@@ -5,7 +5,85 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 13:08 BST, POST-T278-FIRE — **RESULT: FULL FW LOG CAPTURED (587 B). Fw reached `wl_probe called` (wlc-probe entry = T273's `fn@0x67614`), printed chipc info, then WENT SILENT. All 4 ladder stages (t+500ms, t+5s, t+30s, t+90s) report `wr_idx=587 unchanged`.** T257's WFI reading PROMOTED: fw primary-source confirms "not looping, not asserting, quietly waiting". Watchdog tick = 32 ms from fw log (`wd_msticks=32`). Hang bracket refined: wl_probe's tail, after chipc dump, before any wlc_bmac/wlc_attach internal logging. Reconciles with T273's finding that `fn@0x1146C` is registered as a scheduler callback inside wl_probe — fw now known to complete wl_probe's registration phase and drop to WFI awaiting `fn@0x1146C`'s trigger. No assert, no trap, no timeout string. Late-ladder wedge persists [t+90s, t+120s] — orthogonal to T278 observation.)
+## Current state (2026-04-24 13:30 BST, POST-T281 + T279-CODE — **T281 static analysis resolved trigger-check pattern (fn@0x2309c reads pending-events word `[[ctx+0x10].[0x88]]+0x168`, ANDs with flag mask, W1C-clears on match); fn@0x23374 and fn@0x113b4 both contain printf/assert (strong console observability for T279). T279 directed mailbox-probe built and committed.** Advisor-corrected register direction (MAILBOXINT is D2H/W1C, not the trigger; H2D_MAILBOX_0/1 are the write targets). T279 writes H2D_MBX_1=1 (hypothesis: fn@0x1146C), 100 ms dwell, console delta dump; then H2D_MBX_0=1 (positive control: pciedngl_isr), 100 ms dwell, console delta dump. Also reads MAILBOXMASK as sanity check. No MSI, no request_irq. Requires T276+T277+T278. Build clean. Fire conditions: cold cycle for substrate cleanness.)
+
+---
+
+## PRE-TEST.279 (2026-04-24 13:30 BST — **Directed mailbox probe. H2D_MBX_1 hypothesis + H2D_MBX_0 positive control, console observation between. Single fire.**)
+
+### Hypothesis
+
+T278 confirmed fw enters silent WFI after wl_probe registers `fn@0x1146C` as a scheduler callback. T281 static analysis showed the callback dispatcher reads a HW-mapped pending-events word and fires fn@0x113b4 (which contains `printf` + `printf/assert`) when a matching bit is set.
+
+Two candidate writes:
+1. **H2D_MAILBOX_1=1** (BAR0 + 0x144): upstream's "hostready" signal. If this is fn@0x1146C's trigger, fw will log (from fn@0x113b4's printf chain) within ~100 ms.
+2. **H2D_MAILBOX_0=1** (BAR0 + 0x140): known-positive control — fw's MAILBOXINT.FN0_0 (bit 0x100) latches → fires pciedngl_isr per T274. Fw's pciedngl_isr logs `"pciedngl_isr called"` (string at blob 0x40685).
+
+### Outcome matrix
+
+| H2D_MBX_1 console delta | H2D_MBX_0 console delta | Reading |
+|---|---|---|
+| New log w/ `wl` / `bmac` / `intr` / `wl_rte.c` strings | any | **Home run.** fn@0x1146C's trigger = H2D_MBX_1. |
+| `"no new log"` | `"pciedngl_isr called"` or similar | Positive control confirmed; fn@0x1146C needs something else. T280 narrows (MAILBOXMASK bit enable? different H2D register?). |
+| `"no new log"` | `"no new log"` | Either observation path broken, MAILBOXMASK=0 keeps fw masked, OR fw doesn't latch on H2D at all. Decode from MAILBOXMASK pre-probe value + any post-MAILBOXINT change. |
+| New log on BOTH probes | — | Multi-bit response; both triggers valid. |
+| Host wedges on H2D_MBX_1 | — | MMIO-write wedge independent of MSI; new finding. Prior-probe console delta still captured if it fired before wedge. |
+| Host wedges on H2D_MBX_0 | — | Wedge is specific to pciedngl_isr path (MSI-orthogonal). |
+
+### Design
+
+Code landed (see previous commit). Runs in `brcmf_pcie_download_fw_nvram`'s post-set_active block, AFTER T276 2s poll + T277 struct decode + T278 initial full dump:
+
+1. Read `MAILBOXMASK` (sanity check — if 0, fw has everything masked).
+2. Write `H2D_MAILBOX_1 = 1`.
+3. `msleep(100)`.
+4. Read `MAILBOXINT` (D2H mirror — non-zero means fw signalled back).
+5. T278 delta console dump.
+6. Write `H2D_MAILBOX_0 = 1`.
+7. `msleep(100)`.
+8. Read `MAILBOXINT`.
+9. T278 delta console dump.
+
+No MSI, no request_irq — per T264-T266, host-side MSI subscription is the wedge trigger, not the write itself.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 bcm4360_test279_mbx_probe=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.279.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.279.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.279.journalctl.txt
+```
+
+### Safety
+
+- Same envelope as T276/T277/T278 + 2 mailbox writes + 200 ms added dwell.
+- No MSI subscription (orthogonal to T264-T266 wedge).
+- Platform watchdog expected to recover late-ladder wedge.
+- H2D writes without prior MSI setup HAVE NEVER been fired in Phase 5 — they could trigger a novel wedge mode, but the T258-T269 scaffolds wrote H2D without shared_info present; T279 has shared_info in place, matching Phase 4B's Test.28 conditions more closely.
+
+### Pre-test checklist
+
+1. **Build**: ✓ committed next push; modinfo shows `bcm4360_test279_mbx_probe`; 6 T279 strings visible.
+2. **PCIe state**: verify clean before fire.
+3. **Hypothesis**: this block.
+4. **Plan**: this block (committing before fire).
+5. **Host state**: boot 0 up since 13:04 BST (~30 min old; past T270's 20 min clean window).
+6. **Recommendation**: **cold cycle before fire** for cleanest substrate; the two mailbox writes are a new stress pattern.
+
+### Fire expectations
+
+- Insmod + chip_attach + fw download + FORCEHT + set_active: ~20 s
+- T276 2 s poll + T277 decode + T278 full dump + T279 probe sequence: ~3 s
+- T238 ladder to crash: ~90-120 s
+- Total: ~115-145 s before wedge
+
+T279's diagnostic value lands in the first 3 seconds after set_active. Even if the host wedges during or after the probes, the console delta dumps will already be in the journal.
 
 ---
 
