@@ -5,7 +5,102 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 16:05 BST, POST-T284-CODE — **T284 pre-set_active MBM enable probe built. Calls `brcmf_pcie_intr_enable` AFTER T276 shared_info write but BEFORE `brcmf_chip_set_active`. 8 MBM readback points across fw init: pre-write, post-write (pre-set_active), post-set_active (CRITICAL), post-T276-poll, post-T278-initial-dump, plus each T278 stage hook at t+500ms/t+5s/t+30s/t+90s. Advisor-approved direct test: T241 proved MBM writes WORK pre-set_active; T280 proved they silently fail post-set_active; T284 tests whether a pre-set mask PERSISTS through ARM release into fw runtime. Build clean.)
+## Current state (2026-04-24 16:27 BST, POST-T284-FIRE — **MAJOR MULTI-FINDING: (1) MBM has a NON-ZERO default `0x00000318` at pre-set_active — not 0 as I previously assumed. (2) Pre-set_active writes to MBM silently DROP too (not just post-set_active) — MBM 0x318 before AND after `brcmf_pcie_intr_enable`. (3) `brcmf_chip_set_active` transitions MBM from 0x318 → 0 (ARM release clears it). (4) Post-set_active writes stay silently dropped through entire ladder (t+90s). (5) 0x318 = 0x300 (FN0_0|FN0_1) | 0x018 (bits 3+4) — interesting bits 3 and 4 may match scheduler callback flags per T273/T274. Critical corrections to earlier framing: T241 was FAIL (not PASS as I claimed in T280/T284 plans) — has been showing MBM=0x318 baseline + write-drop since 2026-04-23. Reframe: MBM at BAR0+0x4C is write-locked on BCM4360 across all tested timings. The 0x318 default comes from somewhere we haven't identified; set_active actively clears it; fw doesn't restore. Next direction: T283 static disasm of fw's mask-setup path to find the REAL register / access method fw uses.)
+
+---
+
+## POST-TEST.284 (2026-04-24 16:16 BST fire, boot -1 — **Multi-finding result: MBM has non-zero default 0x318, pre-set_active writes also silently drop, set_active clears MBM to 0, write-locked at all tested timings. Reconciles with T241 (which was FAIL, not PASS as I'd misremembered). MBM at BAR0+0x4C is not writable on BCM4360 via the upstream-canonical helper.**)
+
+### Timeline (from `phase5/logs/test.284.journalctl.txt`, boot -1)
+
+- `16:16:36` insmod
+- `16:16:46` insmod returned
+- `16:17:59` chip_attach + fw download + FORCEHT complete (identical path to T278-T280)
+- `16:17:59` **T284 pre-write (pre-set_active): `MAILBOXMASK=0x00000318 MAILBOXINT=0x00000000`** ← NON-ZERO default!
+- `16:17:59` T284: "calling brcmf_pcie_intr_enable" marker
+- `16:17:59` T284: "brcmf_pcie_intr_enable returned" marker (no mid-call wedge)
+- `16:17:59` **T284 post-write (pre-set_active): `MAILBOXMASK=0x00000318`** ← unchanged; write of 0xFF0300 silently dropped
+- `16:17:59` `brcmf_chip_set_active returned TRUE`
+- `16:17:59` **T284 post-set_active: `MAILBOXMASK=0x00000000`** ← set_active cleared it
+- `16:17:59` T276 2s poll: identical (si[+0x010]=0x9af88)
+- `16:17:59` T284 post-T276-poll: `MAILBOXMASK=0x00000000 MAILBOXINT=0x00000000`
+- `16:17:59` T278 POST-POLL (full): 587 B (identical to T278)
+- `16:17:59` T284 post-T278-initial-dump: `MAILBOXMASK=0x00000000 MAILBOXINT=0x00000000`
+- `16:17:59` T279 H2D probes: identical null (no fw response, console unchanged)
+- `16:17:59 → 16:18:30` T238 ladder to t+90s with T284 stage readbacks:
+  - `t+500ms`: `MAILBOXMASK=0x00000000 MAILBOXINT=0x00000000`
+  - `t+5s`: `MAILBOXMASK=0x00000000 MAILBOXINT=0x00000000`
+  - `t+30s`: `MAILBOXMASK=0x00000000 MAILBOXINT=0x00000000`
+  - `t+90s`: `MAILBOXMASK=0x00000000 MAILBOXINT=0x00000000`
+- `16:26:06` boot 0 (cold-cycled by user)
+
+### Reconciliation with T241 (2026-04-23 fire)
+
+Grep of `phase5/logs/test.241.journalctl.txt` shows T241 observed:
+- MAILBOXMASK baseline = `0x00000318` (pre-set_active)
+- After write 0xDEADBEEF: readback 0x318 (write dropped)
+- After write 0 to restore: readback 0x318 (write dropped)
+- **RESULT: FAIL** (sentinel-match=0, baseline-zero=0, clear-zero=0)
+
+**My earlier writeups (T280, PRE-TEST.284) claimed "T241 proved MBM writes work pre-set_active". That's WRONG.** T241 was FAIL — writes have been silently dropping at BAR0+0x4C since 2026-04-23. Today's T284 rediscovers that finding plus adds the post-set_active time-series.
+
+Correcting the framing: MBM at BAR0+0x4C is **write-locked on BCM4360 across all tested timings** (pre-set_active T241/T284 FAIL; post-set_active T280 FAIL). 0x318 is a chip default (or set by some pre-attach code we haven't identified). `brcmf_chip_set_active` clears it to 0.
+
+### What T284 settled (factually)
+
+1. **MAILBOXMASK has a non-zero default `0x00000318` at pre-set_active** on a fresh BCM4360 boot. Not 0 as I'd repeatedly claimed.
+2. **0x318 decode**: `FN0_0 (0x100) | FN0_1 (0x200) | bits 3+4 (0x018)`. Bits 3/4 may correspond to T273/T274's scheduler-callback flags (pciedngl_isr got flag=0x8 = bit 3; fn@0x1146C candidate = bit 4 = 0x010).
+3. **Pre-set_active MBM writes silently fail** (T241 + T284). Register is write-locked even before ARM release.
+4. **`brcmf_chip_set_active` clears MBM to 0.** ARM-release side effect. Persistent across all subsequent readbacks (6 post-set_active reads through t+90s all show 0).
+5. **Post-set_active MBM writes also silently fail** (T280 + T284 confirm).
+6. **Write mechanism (`brcmf_pcie_write_reg32` → `iowrite32` at BAR0+0x4C) is not broken** — it wrote H2D registers fine in T279 (those saw the writes land even if fw didn't respond). MBM specifically is the locked register.
+7. **No T85/T96 markers in the T284 journal.** The pre-ARM-release MBM-write code at pcie.c:5411 DID NOT EXECUTE — it's in a code path the T238 early-exit bypasses. So our code never wrote MBM in this run; the 0x318 came from somewhere else (chip default, buscore_reset, or chip_attach internals).
+
+### Decoded bit-level significance
+
+- `0x318 = 0x008 | 0x010 | 0x100 | 0x200`
+- Bit 3 (0x008): T274 said pciedngl_isr's scheduler flag is 0x8. Suggestive match.
+- Bit 4 (0x010): fn@0x1146C candidate (next sequential bit). Suggestive match.
+- Bit 8 (0x100): `BRCMF_PCIE_MB_INT_FN0_0` — HW interrupt for pciedngl_isr.
+- Bit 9 (0x200): `BRCMF_PCIE_MB_INT_FN0_1` — HW interrupt for hostready/WLC.
+
+**If bits 3/4 in HW MAILBOXMASK mirror the software scheduler flags, the default 0x318 has EXACTLY the bits needed to wake BOTH pciedngl_isr and fn@0x1146C.** set_active clearing the mask to 0 is what blocks fw from waking. The 0x318 default looks like a chip-level "proper" wake configuration.
+
+### Critical next question
+
+**What does `brcmf_chip_set_active` do that clears MBM, and can we either prevent it or restore MBM after?**
+
+Static analysis angles:
+- Trace `brcmf_chip_set_active` → likely writes to ARM CR4 CPUHALT bit → possibly triggers a PCIe2 core reset side-effect that clears MAILBOXMASK.
+- Fw's own init code might write MBM back to 0x318 as part of hndrte_add_isr's per-class unmask thunk (T274 hypothesis). Our T284 readings show it doesn't — but maybe the fw's write target isn't BAR0+0x4C (which is the upstream-defined offset). Could be a backplane-side register.
+
+Hardware test angles (next after static, if needed):
+- T285: write MBM immediately post-set_active (but BEFORE T276 poll) to see if there's a brief window where writes land.
+- T286: write MBM via buscore-prep-addr path (different access mechanism).
+- T287: write a different register that might mirror into MBM (BAR0+0x24 INTMASK, chipcommon-side mailbox).
+
+### What T284 did NOT settle
+
+- **What writes 0x318 at boot.** Chip default vs pre-attach code. Need to grep pcie.c + chip.c for any pre-attach MBM writes.
+- **Whether there's a writable mirror of MBM** (different BAR0 offset, or backplane register).
+- **What specifically in `brcmf_chip_set_active` clears MBM.** Source disasm needed.
+
+### Next-test direction (advisor required before committing)
+
+Three candidates:
+- **T283 (static blob disasm)**: was deferred for T284. Now more valuable: find fw's MBM-writer (or evidence that fw uses a different register entirely). Goal: identify the REAL mask register, if different from BAR0+0x4C.
+- **T285 (very-early post-set_active write)**: insmod→set_active→IMMEDIATE MBM write before any further code runs. Tests whether clear-by-set_active is immediate or has a settle window.
+- **T286 (alternative write path)**: try writing MBM via buscore_prep_addr access or through a different PCIE2 core selection. If the register is backplane-gated, switching backplane window might enable the write.
+
+T283 is highest-info-per-cost (static, no substrate) and has a clear decision tree based on findings.
+
+### Post-test checklist
+
+- Journal captured: ✓ `phase5/logs/test.284.journalctl.txt` (1450 lines).
+- Run output captured: ✓ `phase5/logs/test.284.run.txt`.
+- Outcome matrix resolved: ✓ **row 3** ("Resets to 0 at some readback point" — specifically at post-set_active).
+- T241 reconciliation complete (corrected my earlier-framing error).
+- Ready to commit + push + sync.
 
 ---
 
