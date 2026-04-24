@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 09:30 BST, POST-T272-FW — **Init chain mapped; hang bracket tightened to 3 specific sub-calls inside wlc_bmac_attach's tail**. `wlc_phy_attach ← wlc_bmac_attach ← fn@0x68A68 ← fn@0x67614 ← (indirect dispatch)` — both wlc and pciedngldev are RTE-registered devices with fn-pointer tables (bases 0x58EFC and ~0x58C88). Probes called in static-linked registration order; if wlc hangs, pciedngldev never runs → sharedram never published → observed. T251 saved-LR 0x68321 places fw past the `bl #0x1415C` SB-reset-waiter (T253/T254 bounded). Next BL in the continuation is `bl #0x179C8` at 0x6832C (UNTRACED). Two other un-traced calls: `bl #0x67E1C` at 0x6836E (medium-priority) and `bl #0x67F2C` at 0x68ACA (low-priority). T273-FW: disassemble these three, look for HW polling loops with host-dependent conditions. No hardware fires today since 08:01; substrate window expected closed (boot 1h40m+).)
+## Current state (2026-04-24 10:10 BST, POST-T273-FW — **All 3 T272-framed sub-calls cleared as bounded/non-polling; full wlc_bmac_attach sub-tree scan confirms NO unbounded HW-polling loops at first level. Strong negative result supports the "scheduler-callback waiting for event that never fires" reading.** Advisor-flagged additional lead: wlc-probe itself (fn@0x67614) calls `hndrte_add_isr` at 0x67774 to register `fn@0x1146C` as a scheduler callback with r0=NULL ctx. fn@0x1146C is small (10 insns) and does NOT read HW registers — it awaits a flag bit set by the RTE class-dispatcher pending-events word. Frozen-scheduler-state evidence (T255) rules out periodic timer tick as the trigger source; strong circumstantial case that fn@0x1146C's flag is host-driven, matching the observed WFI-freeze. Remaining uncertainty: which specific register/event fires its bit (requires tracing the pending-events word writers + 9-thunk vector's WLC-class slot). No hardware fires today since 08:01. Full T273 writeup at phase6/t273_subcall_triage.md.)
 
 ---
 
@@ -1002,3 +1002,69 @@ If device-probe-iterator invokes `wlc` before `pciedngldev` (order in static lin
 - Exact hang address within the bracket — need T273-FW to disassemble the 3 sub-calls.
 - Which specific event / register / HW-state transition fw is waiting on — same answer.
 - Whether our scaffold investigation could ever produce a valid wake — still blocked by the shared-publish gap. That gap closes only if fw reaches pcidongle_probe, which requires the hang in wlc_bmac_attach's tail to be resolved first.
+
+---
+
+## POST-T273-FW (2026-04-24 10:10 BST — **All 3 T272 candidates cleared; full wlc_bmac_attach first-level scan confirms no unbounded HW-polling. Scheduler-callback lead identified: fn@0x1146C registered via hndrte_add_isr at 0x67774 inside wlc-probe.**)
+
+Full writeup: `phase6/t273_subcall_triage.md`. Scripts: `phase6/t273_*.py`.
+
+### What T273-FW settled
+
+1. **All 3 T272 candidates are non-polling**:
+   - `0x179C8` = `wlc_bmac_validate_chip_access` (96 insns, no backward branches; string xref confirms identity).
+   - `0x67E1C` = tiny field-reader (2 insns).
+   - `0x67F2C` = 10-insn dispatcher (tail-calls one of two targets).
+
+2. **Full wlc_bmac_attach body scan** (44 unique BL targets, 2140 bytes): every tight loop at first-level has a **fixed bounded iteration count**:
+   - `0x1415C` — SB-core reset waiter, 20ms via delay helper (T253/T254).
+   - `0x5198` — 6-iter MAC-address copy.
+   - `0x67F8C` — 6-iter txavail setup (string `&txavail`, `wlc_bmac.c`).
+   - `0x68D7C` — 30-iter init loop (string `wlc_macol_attach`).
+
+3. **Negative-result signal**: hang is NOT a simple tight HW-polling loop. Combined with T255 (frozen scheduler state) and T257 (WFI DEFINITIVE), the mechanism is "fw enters scheduler with no runnable callback → WFI waiting for an interrupt that never fires."
+
+4. **Advisor-flagged lead (followed)**: `fn@0x67614` (wlc-probe top) calls `hndrte_add_isr` at 0x67774, registering `fn@0x1146C` as a scheduler callback.
+   - Args observed: r3 = 0x1146D (fn-ptr); r0 = sb = 0 (NULL ctx); r1/r2/r7/r8 carry name/arg/class metadata.
+   - fn@0x1146C is 10 insns, NO HW register reads — purely dispatches to `bl #0x23374` (helper sets byte flag) → conditional `bl #0x113b4` (action).
+   - Appears as the last slot in the wlc device fn-table (0x58F38 = 0x1146D).
+   - Trigger flag bit allocated by hndrte_add_isr from the class-dispatch pool (per T269 analysis). Scheduler tests the pending-events word `*(ctx+0x358)+0x100` against each node's flag.
+
+### Strong circumstantial case: fn@0x1146C's flag is host-driven
+
+| Evidence | What it tells us |
+|---|---|
+| T255: scheduler state [0x6296C..0x629B4] identical across 23 dwells | Rules out periodic timer tick (would drift) |
+| T257: WFI DEFINITIVE (host bypass of MSI/IRQ setup) | Matches "host should be signaling something but isn't" |
+| Upstream brcmfmac protocol: hostready gate on HOSTRDY_DB1 | Confirms pattern where host triggers fw wake events |
+| fn@0x1146C body: no HW regs, pure event-driven dispatch | Matches "await external event" — not HW-state polling |
+
+These all point to: **fn@0x1146C waits for a specific host-driven trigger** that our test harness never generates. Unlike pciedngl_isr (bit 3 = FN0_0 mailbox), we don't yet know which trigger — it's allocated from the same pool but via a different class-dispatch path.
+
+### What this means for next moves
+
+**Scaffold line (T258–T269) was doubly blocked**:
+1. The scaffold rang H2D_MAILBOX_1 without the HOSTRDY_DB1 gate — which wouldn't have mattered even with the gate, because fw never reaches pciedngldev-probe to advertise HOSTRDY_DB1.
+2. The scaffold would have fired bit 3 (FN0_0 = pciedngl_isr) which isn't even registered yet at the time of our scaffold firing (since pcidongle_probe hasn't run).
+3. The right wake-trigger for the CURRENT fw state is whatever fn@0x1146C's flag responds to — a DIFFERENT mailbox bit that we haven't been writing.
+
+### Next cheap static-analysis steps
+
+Each ~30 min:
+
+1. **Trace writers of `*(ctx+0x358)+0x100`** — which function(s) in the blob STORE to this pending-events word? The arguments / bit-patterns reveal what triggers fire the word.
+2. **Disasm the 9-thunk vector's WLC slot** (the one for WLC's `*(ctx+0xCC)` class index) — identifies which HW interrupt class WLC is attached to.
+3. **Disasm helpers `0x23374` and `0x113b4`** (called from fn@0x1146C body) — verify they don't have hidden HW reads.
+
+### Next hardware direction (only if static step 1 or 2 identifies a register)
+
+Design T274 scaffold to write the specific mailbox/doorbell/status register that fires fn@0x1146C's bit. If fw advances past the WFI, pciedngldev-probe may run → sharedram publish → HOSTRDY_DB1 → then the original scaffold design might work.
+
+BUT: the separate "MSI subscription itself wedges host" issue (code audit §4) remains. Even with a correct fw-wake trigger, the host-side wedge modes from T264/T265/T266 would still need to be addressed. Probably via `pci=noaer` removal or `pci=noaspm` (audit candidates B/C).
+
+### Session status
+
+- Zero hardware fires since 08:01 BST (T270-BASELINE).
+- Substrate window is closed (boot 0 uptime ~2h+; drift reliable within 25 min of cold cycle).
+- No hardware action planned until static analysis identifies a specific register to target.
+- fw-blob side: T273 concluded. T274-FW would be the pending-events-word writer trace.
