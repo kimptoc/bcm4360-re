@@ -5,7 +5,82 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 13:30 BST, POST-T281 + T279-CODE — **T281 static analysis resolved trigger-check pattern (fn@0x2309c reads pending-events word `[[ctx+0x10].[0x88]]+0x168`, ANDs with flag mask, W1C-clears on match); fn@0x23374 and fn@0x113b4 both contain printf/assert (strong console observability for T279). T279 directed mailbox-probe built and committed.** Advisor-corrected register direction (MAILBOXINT is D2H/W1C, not the trigger; H2D_MAILBOX_0/1 are the write targets). T279 writes H2D_MBX_1=1 (hypothesis: fn@0x1146C), 100 ms dwell, console delta dump; then H2D_MBX_0=1 (positive control: pciedngl_isr), 100 ms dwell, console delta dump. Also reads MAILBOXMASK as sanity check. No MSI, no request_irq. Requires T276+T277+T278. Build clean. Fire conditions: cold cycle for substrate cleanness.)
+## Current state (2026-04-24 14:57 BST, POST-T279-FIRE — **DECISIVE FINDING: `MAILBOXMASK = 0x00000000` at probe time. Fw has ALL MAILBOXINT bits masked at the ARM interrupt line. Neither H2D_MBX_1 (hypothesis) nor H2D_MBX_0 (positive control) produced any MAILBOXINT latch or new console content — BOTH writes saw `MAILBOXINT=0x0` post-msleep, `wr_idx=587 unchanged`.** The advisor's sanity-check caught the root cause: fw stays in WFI forever because the mask blocks any wake interrupt. Major reframe: the missing piece is NOT "which bit triggers fn@0x1146C" but "why doesn't fw unmask MAILBOXINT during its init, and will the host setting MAILBOXMASK itself advance fw?" T274's prior framing ("software pending-events word not written" / "HW-mapped") is consistent: even if H2D writes latched a pending bit, the mask gates whether that bit reaches ARM. Natural next test: T280 — write MAILBOXMASK to a known-good value (e.g. 0x300 = FN0_0|FN0_1), then re-fire the T279 probe sequence. Prior scaffolds that set MAILBOXMASK (T258-T269) wedged without shared_info; T280 has shared_info + console for pre-wedge observability.)
+
+---
+
+## POST-TEST.279 (2026-04-24 13:51 BST fire, boot -1 — **Decisive finding: `MAILBOXMASK = 0x00000000`. Both H2D mailbox writes landed with zero MAILBOXINT response and zero new console content. Advisor's sanity check identified the root cause: fw's mask blocks any wake interrupt. Major reframe.**)
+
+### Timeline (from `phase5/logs/test.279.journalctl.txt`, boot -1)
+
+- `13:51:22` insmod
+- `13:51:32` insmod returned
+- `13:51:55` chip_attach + fw download + FORCEHT + set_active complete
+- `13:51:55` T276 si[+0x010]=0x0009af88 at t+0ms (identical to T276/T277/T278 — fw response is stable across runs)
+- `13:51:55` T278 POST-POLL (full): wr_idx=587, 5 chunks dumped (identical 587 B fw console content as T278)
+- `13:51:55` **T279: pre-probe `MAILBOXMASK = 0x00000000` (0 = all fw ints masked)**
+- `13:51:55` T279: writing `H2D_MAILBOX_1 = 1` (hypothesis: fn@0x1146C trigger?)
+- `13:51:55` **Post-H2D_MBX_1 (+100ms): `MAILBOXINT = 0x00000000`** (D2H mirror stayed 0)
+- `13:51:55` **T278 POST-H2D_MBX_1 (+100ms): `no new log (wr_idx=587 unchanged)`**
+- `13:51:55` T279: writing `H2D_MAILBOX_0 = 1` (positive control: pciedngl_isr)
+- `13:51:55` **Post-H2D_MBX_0 (+100ms): `MAILBOXINT = 0x00000000`** (D2H mirror stayed 0)
+- `13:51:55` **T278 POST-H2D_MBX_0 (+100ms): `no new log (wr_idx=587 unchanged)`**
+- `13:51:55 → 13:53:15` T238 ladder runs t+100ms → t+90000ms (22 markers; standard wedge window at [t+90s, t+120s])
+- `13:53:15` boot ended (late-ladder wedge → watchdog reboot)
+
+### What T279 settled (factually)
+
+1. **`MAILBOXMASK = 0x00000000` in Phase 5's fw state.** All fw-side mailbox interrupt bits are masked. First time this has been primary-source measured.
+
+2. **Both H2D_MAILBOX writes landed but produced NO MAILBOXINT latch.** `H2D_MBX_1=1` and `H2D_MBX_0=1` are both valid writes (the register addresses are known to work per pcie.c constants + prior T240 attempts); fw saw them; fw's mask kept them from propagating to the ARM interrupt line.
+
+3. **Fw console stayed at `wr_idx=587`.** No fw code ran in the 100 ms windows — not fn@0x113b4 (which would produce printf output per T281), not pciedngl_isr (which would produce `"pciedngl_isr called"` per T274 blob analysis). This confirms fw's ARM is in WFI and the mailbox writes did not wake it.
+
+4. **Positive control failed as expected under MAILBOXMASK=0.** H2D_MBX_0 is the **known-good** path for pciedngl_isr per T274, but with MAILBOXMASK=0 even this known-good path is silent. The observation pipeline (console + delta cursor + pr_emerg) is NOT broken; the wake path is.
+
+5. **Late-ladder wedge unchanged** (orthogonal).
+
+### The reframe
+
+Prior assumption: fn@0x1146C's trigger is an unknown specific bit; T279 would identify it. Result: ANY bit we might write is blocked by MAILBOXMASK=0 before it reaches fw. Therefore:
+
+- The question "which bit triggers fn@0x1146C" is moot until the mask is opened.
+- The question BECOMES: "why is MAILBOXMASK=0, and what happens if we open it ourselves?"
+
+### What this tells us about fw init
+
+- T274's analysis of hndrte_add_isr said it "dispatches a class-specific unmask via a 9-entry thunk vector". The thunks (0x27EC region) should unmask the relevant MAILBOXINT bit for each registered ISR.
+- pciedngl_isr was registered (T255/T274 confirmed). But MAILBOXMASK=0 at our observation point means **either (a) the unmask didn't happen, (b) it happened to a different register, or (c) it was reset somehow.**
+- Prior framing: "fn@0x1146C waits for a trigger that never fires." True but the reason it never fires is a STEP EARLIER — fw's own init didn't unmask the interrupt line that would carry the trigger.
+
+This changes the investigation direction. Possible causes for the mask being 0:
+1. **Something resets MAILBOXMASK** after fw's init (PCIe link state, ARM reset, clock gate reset). Unlikely but possible.
+2. **hndrte_add_isr's unmask thunk writes to a different register** (not BAR0 PCIE2REG_MAILBOXMASK but perhaps a backplane-side register, or the INTMASK at BAR0+0x24).
+3. **Fw DOES unmask, but only after some further init step we haven't passed.** The unmask might be gated on a condition we haven't satisfied (e.g., host must set a specific register first to indicate readiness).
+4. **MAILBOXMASK gets reset on entry to WFI** (unlikely; masks are typically persistent).
+
+### Next-test direction (T280 candidate)
+
+**T280 — Set MAILBOXMASK ourselves and re-probe**: After T279's zero-response observation, write `MAILBOXMASK = 0x300` (enables FN0_0 + FN0_1 per upstream brcmfmac convention), then re-run the T279 sequence. Three outcomes:
+
+| T280 outcome | Reading | Follow-up |
+|---|---|---|
+| H2D_MBX_0=1 → fw logs `"pciedngl_isr called"` AND MAILBOXINT shows 0x100 latched | **Host-side mask unblocking works.** Fw's init path didn't unmask but host CAN do it. Test H2D_MBX_1 next; follow wherever it leads. | Stage a "patch: enable mailboxes post-set_active" and test if fw completes init naturally. |
+| H2D writes still produce 0 MAILBOXINT | Either MAILBOXMASK write didn't land (read back to verify) OR H2D writes don't latch regardless of mask. Deeper issue. | Read MAILBOXMASK after writing; investigate BAR0 write-path (prior T241/T243 had MBM round-trip tests). |
+| Host wedges on MAILBOXMASK write | Same wedge mode T258-T269 hit. Observation: those lacked shared_info; T280 has it. If still wedges, MAILBOXMASK write itself is toxic on this HW. | Fall back to INTMASK (BAR0+0x24) instead of MAILBOXMASK, or a different approach. |
+
+Safety: prior MAILBOXMASK-write scaffolds wedged host. T280 adds observability (T278 console + T279 MAILBOXINT reads) BEFORE the mailbox write, so even if the MAILBOXMASK write itself wedges, we have pre-wedge state captured. Also prior scaffolds wrote 0xFF0300; T280 should try a narrower 0x300 first.
+
+Alternative T280b: **Pre-write mask-enable EARLIER, before set_active**, so fw observes it during init. Might influence fw's behavior differently than a post-init override.
+
+Advisor call before committing to T280's exact shape.
+
+### Post-test checklist
+
+- Journal captured: ✓ `phase5/logs/test.279.journalctl.txt` (1447 lines).
+- Run output captured: ✓ `phase5/logs/test.279.run.txt` (3 lines — fire/insmod/return).
+- Outcome matrix resolved: ✓ row 3 ("No new log on either probe") — with root cause identified: MAILBOXMASK=0.
+- Ready to commit + push + sync.
 
 ---
 
