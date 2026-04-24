@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 08:01 BST, POST-TEST.270-BASELINE — **Substrate reproducibility CONFIRMED. T270-BASELINE reached `t+90000ms dwell` exactly like 06:33 BST baseline-postcycle (elapsed 91s vs 88s, same [t+90s, t+120s] wedge window). Clean post-cold-cycle substrate IS reproducible; 06:33 was not lucky. Validates the drift framing: cold cycle gives ~20-25 min of clean substrate, then drift returns. Next per code-audit recommendation #7: T271 = T266 scaffold + Candidate A (init_ringbuffers + init_scratchbuffers before scaffold) — highest-probability minimal fix addressing biggest load-bearing host-side skip. Hardware available post-cold-cycle; advisor + design before firing.**)
+## Current state (2026-04-24 08:10 BST, PRE-CODE-CHECK for T271 surfaced a BLOCKER — **Candidate A from the code audit is not a one-step add.** Pre-code grep + historical-log evidence: `devinfo->shared.ring_info_addr` is zero in our path because `brcmf_pcie_init_share_ram_info` is never called, because `sharedram_addr` at TCM[ramsize-4] is never populated by fw (T247 observed it stayed at 0xffc70038 NVRAM-trailer across all 23 dwells). **Tightens the hang reading**: si_attach completes (T252: 0x92440 populated) → fw enters WFI (T257 DEFINITIVE) → but sharedram publish never happens. The two milestones bracket the hang window tighter. Advisor directive: park T271 code work until fw-blob diss task (in-progress on another host) lands — "what wakes pciedngl_isr" and "what triggers shared-publish" are likely the same protocol question viewed from two sides. Waiting on fw-blob results.)
 
 ---
 
@@ -803,3 +803,54 @@ Advisor + T271 code design before next fire.
 - Run output captured: ✓ `phase5/logs/test.270-baseline.run.txt`.
 - Matrix outcome resolved: ✓ row 1 — "Reaches t+90000ms, wedges [t+90s, t+120s] — substrate-bounded."
 - Ready to commit + push + sync.
+
+---
+
+## T271 PRE-CODE-CHECK (2026-04-24 08:10 BST — **Advisor-flagged pre-code grep surfaces a blocker. No code written; no hardware fired.**)
+
+### The check
+
+Per advisor (prior to this session): before coding T271 (T266 scaffold + Candidate A ring-init), verify that `devinfo->shared.ring_info_addr` is populated on our code path before the scaffold point. If not, `brcmf_pcie_init_ringbuffers` would read garbage from TCM[0] and the experiment is unreadable.
+
+### Primary-source findings
+
+Grep of `phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c`:
+
+1. **`shared.ring_info_addr` is populated ONLY inside `brcmf_pcie_init_share_ram_info`** (line 2784: `shared->ring_info_addr = brcmf_pcie_read_tcm32(devinfo, addr);`).
+2. **`init_share_ram_info` is called from two sites inside `brcmf_pcie_download_fw_nvram`**: line 5700 (the T96/FullDongle-ready direct init) and line 5804 (the wrapper fallthrough at end of function).
+3. **Our T238 ultra_dwells branch at line 3581 exits `brcmf_pcie_download_fw_nvram` BEFORE lines 5700..5804.** We never reach either init_share_ram_info call.
+4. **T47/T96 markers** (which test.130 setup would log if either init_share_ram_info path executed) are **absent** from the T270-BASELINE journal — confirmed by grep.
+5. **`init_share_ram_info` itself requires `sharedram_addr` (fw-published at TCM[ramsize-4])** via the loop at line 5723-5727.
+6. **T247 primary-source observation (recorded in RESUME_NOTES_HISTORY line 830)**: TCM[ramsize-4] stayed at `0xffc70038` (NVRAM trailer marker) across all 23 dwells through t+120s. **Fw never publishes sharedram_addr.**
+
+### Implication: Candidate A is blocked upstream
+
+`init_ringbuffers → reads shared.ring_info_addr → populated only by init_share_ram_info → requires sharedram_addr → fw never publishes it.` The chain is broken at the source, not the sink. Candidate A as framed (add two function calls) is not a minimal-change test; the preconditions the audit presumed are absent.
+
+### Tightening the hang reading (new evidence)
+
+This evidence bounds the hang window tighter than before:
+
+- si_attach completes (T252: 0x92440 struct populated).
+- Fw enters WFI (T257: DEFINITIVE via scheduler path).
+- Fw does NOT publish sharedram_addr at TCM[ramsize-4] before entering WFI (primary-source via T247 probe across 23 dwells).
+
+Conclusion: **fw's WFI entry happens BEFORE the shared-info-publish step.** The init sequence reaches further than wlc_bmac_attach (per T251/T252) but stops before reaching shared-info publish. This narrows where in the init sequence the WFI-entry happens.
+
+### Advisor directive (current session)
+
+> "Don't code yet — fw-blob diss task is still running on another host; its results will almost certainly redirect T271 anyway — because 'what wakes pciedngl_isr' and 'what triggers shared-publish' are likely the same protocol question viewed from two sides."
+
+Action: park T271 coding. Wait for fw-blob diss task to land. When results arrive, redesign T271 with the wake/publish protocol in mind.
+
+### What this does NOT invalidate
+
+- The code audit (phase6/t269_code_audit_results.md) is still useful — its wedge-timing analysis, `pci=noaer` observation, threaded-IRQ analysis, and Candidates B/C/D/E/F are independent of this blocker.
+- The T270-BASELINE finding (substrate reproducibility) is unaffected.
+- Candidates B (remove `pci=noaer`) and C (add `pci=noaspm`) become higher-priority because they don't require shared-info to be populated.
+
+### Substrate budget status
+
+No hardware fired. Cold-cycle window still ~open (boot 0 at 07:58 BST, ~15 min old). If we want to fire anything soon: Candidate B (remove `pci=noaer` from boot cmdline) or Candidate C (add `pci=noaspm`) are the viable single-variable next tests, but both require reboot config changes and possibly another cold cycle.
+
+No immediate fire needed. Waiting for fw-blob diss + user direction.
