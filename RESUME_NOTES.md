@@ -5,7 +5,70 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 20:43 BST, preparing T287b fire after SMC reset + cold cycle — **T287a (20:27) host-wedged pre-fw at `test.125: after reset, before get_raminfo`, ~22 s into insmod — 3 markers deeper than T285's wedge point. Probe code in `download_fw_nvram` never reached. User SMC-reset + cold-cycled; fresh boot at 20:31:56 BST, uptime ~12 min, lspci clean (no MAbort/TAbort; CorrErr+/UnsupReq+ residual only). 287a logs preserved as `test.287a.{run,journalctl}.txt`. Firing T287b using existing PRE-TEST.287 run sequence (no code change). Tripwire per advisor: if T287b wedges before any T287 stage-0 emerg line, DO NOT fire T287c on same boot — pattern would falsify "substrate drift" reading and force Option C (static work) or longer power-off.**)
+## Current state (2026-04-24 20:50 BST, after T287b fire — **SUBSTANTIVE FIRE: 3 T287 stages captured including the critical post-set_active reading. Advisor confirms tripwire does not apply (tripwire was for null-fires; we got real data). Key finding: `+0x254/+0x258 = 0x18100000 (PCIE2 base)`, NOT chipcommon as T283 statically inferred. `+0x88/+0x8c = 0x18000000 (chipcommon)` present but at a different offset. T283's BIT_alloc chain points at PCIE2 + 0x100 (abs 0x18100100), not chipcommon INTSTATUS. Machine wedged at t+0ms of the 2s poll (earlier than T276/T280/T284 late-ladder window — timing anomaly, diagnose later). Logs saved as `test.287b.{run,journalctl}.txt`. Next step per advisor: grep pcie.h for PCIE2+0x100 semantics, then update KEY_FINDINGS (supersede T283 chipcommon claim), then commit+push. Do NOT refire — finding is substantial, static work produces next target register.**)
+
+---
+
+## POST-TEST.287b (2026-04-24 20:44 BST fire, boot -1 — **SUBSTANTIVE FIRE: 3 T287 stages captured. Primary-source scheduler ctx values. T283 BIT_alloc chipcommon claim FALSIFIED — `+0x254 = 0x18100000 (PCIE2)`, not 0x18000000 (chipcommon). Wedge at t+0ms of 2s poll (earlier than prior fires — timing anomaly noted, not diagnosed).**)
+
+### Timeline (from `phase5/logs/test.287b.journalctl.txt`)
+
+- `20:45:03` insmod → normal probe path (all markers identical to prior fires up through FORCEHT)
+- `20:45:03` T276 shared_info written, readback PASS
+- `20:45:03` **T287 pre-write (pre-set_active): all 7 offsets = 0** — scheduler ctx BSS-clear before ARM release
+- `20:45:03` T284 pre-write MBM=0x318 (normal), INT=0
+- `20:45:03` T285 pre-write CC.INTSTATUS=0xFFFFFFFF, INTMASK=0xFFFFFFFF, CC[0x168]=0 (`saved_win=0x18000000`)
+- `20:45:03` `brcmf_pcie_intr_enable` called, returned cleanly
+- `20:45:03` **T287 post-write (pre-set_active): still all 7 offsets = 0** — sched_ctx NOT populated by intr_enable
+- `20:45:03` T284 post-write MBM=0x318 (write dropped, matches T284 finding)
+- `20:45:03` `brcmf_chip_set_active returned TRUE`
+- `20:45:03` **T287 post-set_active (CRITICAL):**
+  - `+0x10 = 0x00000011` (non-zero flag-like)
+  - `+0x18 = 0x58680001` **← matches chipc.caps (T277/T278 console)** — readback infra proven
+  - `+0x88 = 0x18000000` (CHIPCOMMON MMIO base)
+  - `+0x8c = 0x18000000` (CHIPCOMMON MMIO base, twin)
+  - `+0x168 = 0x00000000` (remains zero — not the pending-events word here)
+  - `+0x254 = 0x18100000` **(PCIE2 MMIO base, NOT CHIPCOMMON)**
+  - `+0x258 = 0x18100000` **(PCIE2 MMIO base, twin)**
+- `20:45:03` T284 post-set_active MBM=0 (matches T284 — set_active clears MBM)
+- `20:45:03` T285 post-set_active CC.INTSTATUS=0xFFFFFFFF INTMASK=0xFFFFFFFF **`saved_win=0x18102000`** (window unrestored after macro — noted, not fatal)
+- `20:45:03` T276 2s poll entered; `t+0ms si[+0x010]=0x0009af88 fw_done=0 mbxint=0` — reproduces prior si[+0x010] response
+- [silent wedge; no further poll ticks; no AER/MCE/NMI/Oops]
+- `20:47` watchdog reboot to current boot 0
+
+### Key finding — T283 partial correction
+
+**T283 static disasm claimed** BIT_alloc reads `[scheduler_ctx+0x254]+0x100 = 0x18000100 (chipcommon INTSTATUS)`. **Primary-source RUNTIME value** shows `+0x254 = 0x18100000` = **PCIE2 MMIO base**. Therefore BIT_alloc's target is `0x18100100` = PCIE2 core + 0x100, not chipcommon.
+
+- T283's *structural* claim (BIT_alloc reads `[sched+0x254]+0x100`) appears to hold — offset chain matches. Just the BASE was misidentified.
+- Chipcommon IS still present in sched_ctx, but at `+0x88/+0x8c`, not `+0x254`. Different path, different purpose (allocator registration area?).
+- PCIE2 core + 0x100 is not one of the documented register names in pcie.h prior notes (those are MAILBOXINT=0x48, MAILBOXMASK=0x4C, H2D_MAILBOX_{0,1}=0x140/0x144). **Next task: grep pcie.h for 0x100/0x104/0x108 semantics.**
+
+### Cross-validation
+
+`sched[+0x18] = 0x58680001` is byte-for-byte the **chipc.caps** value fw's own console printed in T277/T278 runs. This proves the T287 TCM read machinery works — we're seeing real fw-written data.
+
+### What's now SUPERSEDED in KEY_FINDINGS
+
+- Row "BIT_alloc reads chipcommon INTSTATUS at absolute `0x18000100`" → **SUPERSEDED**. Correct target is PCIE2 core + 0x100.
+- Row claiming T283's chipcommon hypothesis fully holds → **PARTIAL** — offset chain structurally correct, base was wrong.
+- T285's chipcommon INTSTATUS=0xFFFFFFFF readings are now of unclear value (T283's chipcommon hypothesis is falsified, so T285 was probing the wrong register). Not a new target.
+
+### Wedge-timing anomaly (noted, not diagnosed)
+
+T276/T280/T284 wedge at t+90s–120s (late-ladder). T287b wedged at t+0ms of the 2s poll — FIRST tick. No crash markers (no AER, no NMI, no MCE, no Oops). Possible causes:
+- Substrate drift compounding across this session's fires (plausible — today's n is high).
+- 7 extra TCM reads per stage (BAR2 direct, microseconds each) tripping something not seen in smaller-scope probes.
+- The `saved_win=0x18102000` carry-over from T285 macro affecting subsequent reads.
+
+Don't refire on this boot. Static work (pcie.h grep) produces next-step info without substrate cost.
+
+### Next step (Option C per PRE-TEST.285)
+
+1. `grep -n '0x100\|0x104\|0x108\|0x168' .../brcmfmac/pcie.h` — identify PCIE2+0x100 register semantics (if named).
+2. Update KEY_FINDINGS with T283 supersession + new CONFIRMED sched_ctx layout.
+3. Commit + push.
+4. Design T288: READ-ONLY probe of PCIE2 core at offsets 0x100/0x104/0x108/0x168 at every T278 stage (same macro pattern as T285). No writes, no refire pressure on substrate.
 
 ---
 
