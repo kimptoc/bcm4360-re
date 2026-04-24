@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 20:34 BST, POST-T287a NULL-FIRE, preparing T287b retry on fresh cold boot — **T287a (20:27) host-wedged pre-fw at `test.125: after reset, before get_raminfo`, ~22 s into insmod — 3 markers deeper than T285's wedge point. Probe code in `download_fw_nvram` never reached. User SMC-reset + cold-cycled; fresh boot at 20:31:56 BST, uptime 2 min, lspci clean (no MAbort/TAbort). Retrying T287 now while substrate is fresh. 287a logs preserved as `test.287a.{run,journalctl}.txt`.**)
+## Current state (2026-04-24 20:43 BST, preparing T287b fire after SMC reset + cold cycle — **T287a (20:27) host-wedged pre-fw at `test.125: after reset, before get_raminfo`, ~22 s into insmod — 3 markers deeper than T285's wedge point. Probe code in `download_fw_nvram` never reached. User SMC-reset + cold-cycled; fresh boot at 20:31:56 BST, uptime ~12 min, lspci clean (no MAbort/TAbort; CorrErr+/UnsupReq+ residual only). 287a logs preserved as `test.287a.{run,journalctl}.txt`. Firing T287b using existing PRE-TEST.287 run sequence (no code change). Tripwire per advisor: if T287b wedges before any T287 stage-0 emerg line, DO NOT fire T287c on same boot — pattern would falsify "substrate drift" reading and force Option C (static work) or longer power-off.**)
 
 ---
 
