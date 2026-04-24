@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 07:52 BST, PRE-TEST.270-BASELINE — **Bare baseline re-fire after second cold power cycle. Single-variable reproducibility check: does baseline-postcycle's t+90s clean traversal reproduce? Outcome matrix: (reaches t+90s → substrate-bounded, drift is post-cycle-transient) / (earlier wedge → 06:33 baseline-postcycle run was lucky, framing needs reset) / (crash in probe path → different hardware state). No code changes, no new params — bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 only. Task brief at phase6/t269_baseline.md. Boot 0 at 07:50 BST, fresh cold cycle.**)
+## Current state (2026-04-24 08:01 BST, POST-TEST.270-BASELINE — **Substrate reproducibility CONFIRMED. T270-BASELINE reached `t+90000ms dwell` exactly like 06:33 BST baseline-postcycle (elapsed 91s vs 88s, same [t+90s, t+120s] wedge window). Clean post-cold-cycle substrate IS reproducible; 06:33 was not lucky. Validates the drift framing: cold cycle gives ~20-25 min of clean substrate, then drift returns. Next per code-audit recommendation #7: T271 = T266 scaffold + Candidate A (init_ringbuffers + init_scratchbuffers before scaffold) — highest-probability minimal fix addressing biggest load-bearing host-side skip. Hardware available post-cold-cycle; advisor + design before firing.**)
 
 ---
 
@@ -742,3 +742,64 @@ sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re
 - Smallest envelope available. No scaffold. No MSI. No request_irq.
 - Platform watchdog has been reliable (n=4+ of 4 for host-lockup recovery today).
 - Expected worst case: host wedge → watchdog reboot. User not needed unless recovery fails.
+
+---
+
+## POST-TEST.270-BASELINE (2026-04-24 07:54-07:55 BST run — **Reaches `t+90000ms dwell` cleanly, wedges in [t+90s, t+120s] — reproduces 06:33 BST baseline-postcycle within measurement noise. Substrate-bounded reading CONFIRMED.**)
+
+### Timeline (from `phase5/logs/test.270-baseline.journalctl.txt`, boot -1)
+
+- `07:54:05` insmod (per run.txt), FORCEHT, chip_attach, T238 ladder entry
+- `07:54:25` `brcmf_chip_set_active returned TRUE`
+- `07:54:25 → 07:55:56` T238 ladder traversed t+100ms → t+300 → t+500 → t+700 → t+1000 → t+1500 → t+2000 → t+3000 → t+5000 → t+10000 → t+15000 → t+20000 → t+25000 → t+26000 → t+27000 → t+28000 → t+29000 → t+30000 → t+35000 → t+45000 → **t+60000ms** → **t+90000ms** dwell
+- `07:55:56` **LAST MARKER: `t+90000ms dwell`** (22 dwells completed)
+- [silent lockup; t+120000ms dwell never fires]
+- `07:58:23` platform watchdog reboot (boot 0); user performed cold-cycle between boots based on boot gap
+
+### Direct comparison vs 06:33 BST baseline-postcycle
+
+| Metric | baseline-postcycle (06:33) | T270-BASELINE (07:54) | Delta |
+|---|---|---|---|
+| set_active TRUE at | 06:33:07 | 07:54:25 | (absolute time only) |
+| last marker | `t+90000ms dwell` | `t+90000ms dwell` | **identical** |
+| elapsed from set_active to last marker | 88s (06:33:07 → 06:34:35) | 91s (07:54:25 → 07:55:56) | +3s (within ladder-step jitter) |
+| wedge window | (t+90s, t+120s] | (t+90s, t+120s] | **identical** |
+| ladder markers landed | 22 | 22 | **identical** |
+| kernel crash trace | none | none | **identical** |
+| recovery | watchdog | watchdog + cold-cycle | (user cold-cycled between boots for cleanness) |
+
+### What T270-BASELINE settled (factually)
+
+- **Clean post-cold-cycle substrate IS reproducible.** Two independent cold-cycle firings, same .ko, same params, ~90 minutes apart, both reach t+90000ms dwell and crash in the same [t+90s, t+120s] window.
+- **The 06:33 BST baseline-postcycle run was NOT circumstantial.** The "cold cycle buys ~20-25 min of clean substrate" reading is now substantiated.
+- **The T269 result (46s of ladder, 44 min post-cold-cycle, after two watchdog reboots) IS consistent with drift accumulation, not with "baseline is inherently unreliable".**
+
+### What T270-BASELINE did NOT settle
+
+- The t+90→t+120 wedge mechanism itself — still unknown (activity accumulation? wall-clock watchdog? fw-side timer?).
+- How many fires the clean substrate tolerates before drift resets (n=1 post-cycle confirmed clean for this cycle; n=2+ behavior unknown).
+- Whether the substrate is "clean for time X" or "clean for Y operations" — 06:33 → 06:56 T269 crashed earlier after one intervening boot; was it the time (23 min) or the boot?
+
+### Next-test direction
+
+Code audit (phase6/t269_code_audit_results.md) recommends **Candidate A** as highest-probability scaffold fix: add `init_ringbuffers + init_scratchbuffers` before any T258-style scaffold. Rationale:
+
+- Candidate A addresses the biggest load-bearing skip in our harness vs upstream brcmfmac.
+- Without ring+scratch DMA buffers published to TCM, fw has no valid DMA target; any post-doorbell TLP hits unmapped address → with `pci=noaer` cmdline, result is silent wedge (matches observed pattern).
+- Cleanly discriminative: if scaffold now completes (markers fire, rmmod succeeds), ring-init was the load-bearing skip. If still wedges, ring-init is ruled out and we focus on ASPM L1 or PMU watchdog.
+
+Audit-recommended fire order now validated (step 1 complete):
+1. ✓ Baseline re-fire → substrate confirmed (THIS TEST).
+2. **T271**: T266 scaffold + Candidate A (init_ringbuffers + init_scratchbuffers before scaffold).
+3. Depending on (2), remove `pci=noaer` (Candidate B) or add readback markers (Candidate E).
+
+Constraint from substrate finding: each scaffold test consumes clean-substrate time; if we want T271 to be readable, fire it soon after a cold cycle (within ~20 min window based on the T269 vs baseline-postcycle gap). Sequence: cold cycle → T271 → if wedge, accept as-is and analyze; do NOT re-fire without another cold cycle.
+
+Advisor + T271 code design before next fire.
+
+### Post-test checklist
+
+- Journal captured: ✓ `phase5/logs/test.270-baseline.journalctl.txt` (1411 lines).
+- Run output captured: ✓ `phase5/logs/test.270-baseline.run.txt`.
+- Matrix outcome resolved: ✓ row 1 — "Reaches t+90000ms, wedges [t+90s, t+120s] — substrate-bounded."
+- Ready to commit + push + sync.
