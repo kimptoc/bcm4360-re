@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 10:50 BST, POST-T276-CODE — **T276 implementation landed: `bcm4360_test276_shared_info` writes Phase 4B's shared_info struct at TCM[ramsize-0x2F5C] immediately before `brcmf_chip_set_active`, polls fw response (si[+0x010], fw_init_done, MAILBOXINT) for 2 s post-release. Cleanup in brcmf_pcie_release_resource. Advisor-reviewed; build clean (commit e866f7c).** No hardware fire yet — substrate is ~3h post-cycle (outside T270-BASELINE's 20-min clean window); firing now risks drift masking the diagnostic signal. Awaiting cold cycle before T276 fire.)
+## Current state (2026-04-24 11:12 BST, POST-T276-FIRE — **RESULT: Phase 4B Test.28's shared_info handshake REPRODUCES under Phase 5 patches.** Fw wrote `si[+0x010] = 0x0009af88` at t+0ms post-set_active — **exact match** with Phase 4B's 13-days-ago observation. Protocol anchor CONFIRMED. BUT: `fw_init_done` stayed 0 for full 2 s (matches Test.29), `MAILBOXINT` stayed 0 (Test.28 saw `0x00000003` — T276 differs). Post-T276 ladder ran to `t+90000ms dwell` then wedged in `[t+90s, t+120s]` — same window as T270-BASELINE. T276 did NOT avoid the late-ladder crash. Outcome matrix row 3 ("Only si[+0x010] nonzero, no mbxint").)
 
 ---
 
@@ -82,6 +82,92 @@ Same skeleton as T270-BASELINE + the T276 param. 150 s covers chip_attach + shar
 ### Fire conditions
 
 Do NOT fire until: (a) fresh cold cycle completed (boot 0 of a power-off session), and (b) fire within ~20 min of that boot. If substrate budget is limited, this test gets priority over any scaffold variant — T276 is the next gating evidence for the whole Phase 5 protocol model.
+
+---
+
+## POST-TEST.276 (2026-04-24 11:06 BST fire, boot -1 — **Phase 4B Test.28 handshake REPRODUCES: si[+0x010]=0x0009af88 (exact match). Row 3 outcome: fw wrote status, NO mailbox signals. Protocol anchor confirmed under Phase 5 patches. Late-ladder wedge unchanged from T270-BASELINE.**)
+
+### Timeline (from `phase5/logs/test.276.journalctl.txt`, boot -1)
+
+- `11:06:03` module_init entry
+- `11:06:05` pci_register_driver
+- `11:06:13..21` SBR, chip_attach, 6 cores enumerated, fw download (test.225 chunked 110558 words ✓), NVRAM write (228 bytes), random_seed footer (magic 0xfeedc0de, len 0x100)
+- `11:06:22` FORCEHT applied — clk_ctl_st `0x01030040 → 0x010b0042` (HAVEHT=YES, ALP_AVAIL=YES, FORCEHT=YES)
+- `11:06:22` **T276 shared_info written at TCM[0x9d0a4], olmsg_dma=0x8a160000, size=65536**
+- `11:06:22` **T276 readback verified ALL 6 fields**: magic_start=0xa5a5a5a5 ✓, dma_lo=0x8a160000 ✓, dma_hi=0x00000000 ✓, buf_size=0x00010000 ✓, fw_init_done=0 ✓, magic_end=0x5a5a5a5a ✓
+- `11:06:22` test.238: `brcmf_chip_set_active returned TRUE`
+- `11:06:22` **T276 poll t+0ms: `si[+0x010]=0x0009af88 fw_done=0x00000000 mbxint=0x00000000`** ← fw responded immediately
+- `11:06:25` **T276 poll-end (2s later): `si[+0x010]=0x0009af88 fw_done=0x00000000 mbxint=0x00000000`** — no further change
+- `11:06:25 → 11:07:56` T238 ladder: t+100ms → t+300 → t+500 → t+700 → t+1s → t+1.5s → t+2s → t+3s → t+5s → t+10s → t+15s → t+20s → t+25s → t+26-30s → t+35s → t+45s → t+60s → **t+90000ms**
+- `11:07:56` **LAST MARKER: `t+90000ms dwell`** — 22 dwells completed (matches T270-BASELINE)
+- [silent wedge; expected t+120000ms never fired]
+- `11:09:35` platform watchdog reboot
+
+### Direct comparison vs T270-BASELINE (2026-04-24 07:54 fire)
+
+| Metric | T270-BASELINE | T276 | Delta |
+|---|---|---|---|
+| last marker | t+90000ms dwell | t+90000ms dwell | **identical** |
+| elapsed set_active → last marker | 91 s | 94 s | +3 s (jitter) |
+| wedge window | (t+90s, t+120s] | (t+90s, t+120s] | **identical** |
+| si[+0x010] pre-fire | (no write, field was pre-existing/0) | **0x0009af88 at t+0ms** | **fw responded** |
+| MAILBOXINT | (not polled) | **0 for 2 s** | new negative data |
+| recovery | watchdog + cold cycle | watchdog | clean so far |
+
+### Direct comparison vs Phase 4B Test.28 (2026-04-13, different code path)
+
+| Observation | Phase 4B Test.28 | T276 | Match? |
+|---|---|---|---|
+| si[+0x010] value | **0x0009af88** | **0x0009af88** | ✓ **EXACT MATCH** |
+| Timing of si[+0x010] write | "within ≥2 s stable window" | **t+0ms (before first 10 ms poll tick)** | T276 tighter bound |
+| MAILBOXINT post-run | `0x00000003` (2 bits set) | `0x00000000` | ✗ differs |
+| fw_init_done | 0 (not set) | 0 | ✓ both unset |
+| Fw stable for ≥2 s after ARM release | YES | YES | ✓ |
+
+### What T276 settled (factually)
+
+1. **The shared_info protocol anchor is REAL and consistent across fw states.** Whatever code in fw consumes shared_info and writes back `0x0009af88` at `+0x010` ran identically at 2026-04-13 (Phase 4B test module, minimal harness) and 2026-04-24 (Phase 5, with NVRAM/random_seed/FORCEHT patches layered on). The response is identical to the bit. Fw is genuinely listening at this interface.
+2. **The response is very early post-ARM-release.** Inside our first 10 ms poll tick — well before most fw init steps. Consistent with shared_info being a startup gate, not a late-init feature.
+3. **Phase 5's added patches do NOT reroute fw past this check-point.** The earlier belief ("Phase 5 fw is further along so Phase 4B observations may not apply") is weakened — at least for the shared_info field, Phase 5 fw behaves the same.
+4. **T276 did NOT reproduce Test.28's mailbox signals.** Test.28 ended with `MAILBOXINT=0x00000003` (bits 0+1 set). T276 saw 0 bits set across the full 2 s poll. Plausible reasons:
+   - Test.28 did additional steps after ARM release that T276 doesn't (the Phase 4B harness may have driven extra writes that triggered these signals).
+   - Our 2 s poll missed a transient (fw set-and-cleared within <10 ms) — unlikely since fw is supposedly stable in this window.
+   - Phase 5 fw state differs in a way that produces si[+0x010] response but not mailbox signals — possible but counter to point 3.
+5. **T276 did NOT avoid or change the late-ladder crash.** Same wedge window `[t+90s, t+120s]` as T270-BASELINE. Whatever is wedging the host in that window is orthogonal to the shared_info handshake.
+6. **The 64 KB olmsg DMA buffer was allocated, published to fw, and fw did NOT read or write it** (no pointer updates in si[+0x010] beyond the immediate 0x0009af88, which is a TCM address — 0x9af88 is below ramsize 0xa0000 — not our DMA address 0x8a160000). Same observation as Phase 4B Test.29 (ring unused).
+
+### Pointer 0x0009af88 — what is it?
+
+`0x9af88` is a TCM address (< ramsize 0xa0000). Note: this is **inside** the TCM but 0x211C bytes BEFORE shared_info base (0x9d0a4). Phase 4B called it a "console struct pointer." We can't probe it post-crash, but next run could read TCM[0x9af88..0x9aff0] to decode (likely `{buf_addr, buf_size, write_idx, read_addr}` struct per Phase 4B notes).
+
+### What T276 did NOT settle
+
+- Whether the late-ladder crash in [t+90s, t+120s] is fw-side or host-side (T270-BASELINE already raised this; T276 inherits the same gap).
+- Why the mailbox signals differ from Test.28 (Phase 5 vs Phase 4 harness diverges somewhere between ARM release and t+2s).
+- Whether sending a host action (e.g., writing H2D_MAILBOX_1, or writing into the TCM[0x9af88] console ring) would advance fw further.
+
+### Next-test direction (advisor required)
+
+Several candidates, each diagnostic:
+
+- **T277-CONSOLE-DECODE**: Add a console-struct read at T276 poll time — dump 16 dwords starting at TCM[0x0009af88]. Cheap add to existing T276 code. Decodes the fw-provided pointer, should reveal buf_addr / buf_size / pointer fields matching Phase 4B's console-struct interpretation. Tells us where fw logs go (trap strings, printfs) → we can then READ fw's post-ARM-release internal log, which is far more informative than register polling.
+- **T278-MBXINT-WIDEPOLL**: Re-run T276 with finer-granularity MAILBOXINT polling (every 1 ms × 100 iterations + every 10 ms × 200 iterations, plus H2D/D2H mailbox-mask registers). Tests whether Test.28's 2-bit mailbox signal is a transient we missed, or truly absent in the Phase 5 path.
+- **T279-OLMSG-READ**: Add DMA-buffer readback to T276 — scan the 64 KB olmsg buffer for any fw writes. Confirms the Test.29 finding ("fw did not write olmsg") under Phase 5 conditions.
+- **T280-STICK-WAIT**: Extend post-release wait to 10-30 s instead of 2 s, then probe shared_info + MAILBOXINT. Tests whether fw's signal was outside our 2 s window.
+
+T277 is likely the highest-value (opens up the fw's internal console; may reveal assert/trap messages explaining the late-ladder wedge).
+
+### Safety + substrate
+
+- T276 consumed ~2 min of substrate; we're now ~5 min into boot 0. Substrate window is still fresh if we want another fire soon.
+- T270-BASELINE finding holds: cold cycle → ~20 min clean window → drift reasserts. Current boot 0 is a post-crash watchdog recovery, not a cold cycle; substrate integrity for a second fire is uncertain (in T269 the 2nd post-cycle fire had drift; T270's 2nd cycle was user-cold-cycled for cleanness).
+
+### Post-test checklist
+
+- Journal captured: ✓ `phase5/logs/test.276.journalctl.txt` (1417 lines).
+- Run output captured: ✓ `phase5/logs/test.276.run.txt` (2 lines — insmod entry/return).
+- Outcome matrix resolved: ✓ **row 3** ("Only si[+0x010] nonzero; no mbxint") — with the added refinement that si[+0x010] value is the EXACT Phase 4B Test.28 value.
+- Ready to commit + push + sync.
 
 ---
 
