@@ -5,7 +5,95 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 17:05 BST, POST-T283-STATIC — **MAJOR reframe: fn@0x1146C's "mask" is SCHEDULER-SIDE SOFTWARE FLAG (`[node+0xc] & pending_events`), NOT the PCIE2 MAILBOXMASK at BAR0+0x4C. The whole T280/T284 mask-investigation was diagnosing the wrong register.** T283 static disasm resolved: (a) scheduler ctx is TCM-backed at `*0x6296c` populated by fn@0x672e4 (which pushes `0x18000000` = CHIPCOMMON MMIO base as init arg); (b) BIT_alloc at fn@0x9940/0x9944 reads chipcommon INTSTATUS at absolute `0x18000100` (bits 0-4 for class 0, bits 8-12 for class 0x812); (c) class-0 thunk at 0x27ec sets `scheduler_ctx+0x254 = CHIPCOMMON_BASE`; (d) fn@0x2309c's pending-events word at `[wlc_ctx+0x18][+8][+0x10][+0x88]+0x168` operates on a wlc-owned struct chain — absolute address not fully statically resolved, but structural and T274-consistency inference says it's likely another chipcommon-side register near `0x18000168`. **Fw WFI wake path is likely chipcommon interrupt, not PCIE2 MAILBOXINT.** Next direction: T285 — read chipcommon INTSTATUS/INTMASK across T278 stages to confirm the chipcommon hypothesis before attempting any write.)
+## Current state (2026-04-24 17:25 BST, POST-T285-CODE — **T285 chipcommon-read probe built (READ-ONLY). Adds `bcm4360_test285_chipcommon_read` param + helper macro `BCM4360_T285_READ_CC(tag)` that saves BAR0_WINDOW, switches via `select_core(BCMA_CORE_CHIPCOMMON)`, reads 3 targeted registers (INTSTATUS 0x100, INTMASK 0x104, 0x168 — the T283 inference-target), restores BAR0_WINDOW. Piggybacks on every T284 stage readback site.** Advisor emphasized window-restore pattern as mandatory — PCIE2 accesses elsewhere in probe path would silently misbehave otherwise. Build clean.)
+
+---
+
+## PRE-TEST.285 (2026-04-24 17:25 BST — **Chipcommon register read-only probe across T278 stages. Confirm/falsify T283's inference that fw's wake path is chipcommon-side. 3 targeted registers: INTSTATUS (0x100), INTMASK (0x104), 0x168.**)
+
+### Hypothesis
+
+T283 static disasm resolved:
+- BIT_alloc reads chipcommon INTSTATUS at `0x18000100`.
+- Scheduler ctx links to CHIPCOMMON MMIO base.
+- Strong inference: fn@0x2309c's pending-events word is another chipcommon-side register, plausibly at `0x18000168`.
+
+If correct, T285 observations will show:
+- INTSTATUS with some bits set at/after set_active (fw has outstanding interrupt bits).
+- INTMASK either open (bits 3/4 set = unmasked) or closed (explaining why fw doesn't wake).
+- `0x168` matching pattern with INTSTATUS (if it's indeed the pending-events reg for fn@0x2309c).
+
+### Outcome matrix (advisor-framed)
+
+| INTSTATUS @set_active | INTMASK @set_active | 0x168 @set_active | Reading |
+|---|---|---|---|
+| Non-zero w/ bits 3/4 set | Non-zero w/ bits 3/4 set | Any | Trigger bits ARE set AND unmasked — fw should be wakeable. Something else gating (maybe node linkage timing). Narrow via T286. |
+| Non-zero w/ bits 3/4 set | 0 (masked) | Any | **Chipcommon INTMASK is the gate.** T287 writes unmask there; high-value fix. |
+| 0 or unrelated bits | Any | Any | Trigger bits NOT in chipcommon. T283 hypothesis wrong; different register entirely. T286 deep wlc-trace becomes next. |
+| 0x168 reads != INTSTATUS pattern | — | — | 0x168 isn't the pending-events word. Narrows where it actually is. |
+| 0x168 == INTSTATUS | — | — | 0x168 is a mirror/alias. Reading it is free information; not a new target. |
+
+### Design (advisor-approved)
+
+Code landed. Gated behind `bcm4360_test285_chipcommon_read=1`; requires T276+T277+T278+T284.
+
+1. Window-safe helper macro `BCM4360_T285_READ_CC(tag)`:
+   ```c
+   save BAR0_WINDOW → select_core(CHIPCOMMON) → read 0x100/0x104/0x168 → restore BAR0_WINDOW
+   ```
+   All 4 operations are in-macro so no caller can forget the restore.
+2. Piggybacks on 5 T284 MBM readback sites:
+   - pre-write (pre-set_active)
+   - post-write (pre-set_active)
+   - post-set_active (CRITICAL)
+   - post-T276-poll
+   - post-T278-initial-dump
+3. Plus 4 T278 stage hooks (t+500ms, t+5s, t+30s, t+90s) — the `BCM4360_T278_HOOK` macro extended to call T285 after T284.
+
+Total: 9 chipcommon readback points per fire, each emitting `INTSTATUS / INTMASK / 0x168` plus a `saved_win` sanity value.
+
+READ-ONLY. No writes anywhere. No state mutation.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test284_premask_enable=1 bcm4360_test285_chipcommon_read=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.285.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.285.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.285.journalctl.txt
+```
+
+T284 stays enabled so MBM time-series + chipcommon time-series line up one-to-one. T279 intentionally OFF (would add MMIO noise; not the question this fire).
+
+### Safety
+
+- Read-only probe. 9 × 3 reads = 27 values. Each operation is microseconds.
+- Window save/restore discipline inside macro protects other BAR0 accesses.
+- Late-ladder wedge expected same as prior fires — T285 data lands in first ~3 s.
+
+### Pre-test checklist
+
+1. **Build**: ✓ committed next push; modinfo shows `bcm4360_test285_chipcommon_read`; 1 T285 pr_emerg string present (all 9 stages use same format string).
+2. **PCIe state**: verify clean before fire.
+3. **Hypothesis**: this block.
+4. **Plan**: this block (commit before fire).
+5. **Host state**: needs fresh cold cycle (previous was for T284).
+6. **Log attribution**: `saved_win` field in each T285 line = sanity (if it changes unexpectedly, the window restoration isn't working).
+
+### Fire expectations
+
+- Insmod + path to set_active: ~20 s
+- T284+T285 reads across 9 stages: ~1 s total
+- T238 ladder to wedge: ~90-120 s
+- Total ~115-145 s before wedge
+
+T285's diagnostic value lands in the first ~3 s after set_active. If the late-ladder wedge fires, all data is already in the journal.
 
 ---
 
