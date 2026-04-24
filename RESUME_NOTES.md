@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 19:10 BST, POST-T286-STATIC + T287-CODE — **T286 static wall reached: scheduler ctx at 0x62A98 is zero-init BSS, pending-events chain is runtime-populated. Pivoted to T287 runtime probe.** T287 reads 7 scheduler ctx fields (`+0x10/+0x18/+0x88/+0x8c/+0x168/+0x254/+0x258`) at every T284/T285 stage. If `+0x258 = 0x18000000` → T283's chipcommon hypothesis verified. If `+0x88` reveals an MMIO base, we know which core owns the pending-events word. Build clean. Fire pending clean substrate — last fire (T285) was null-fire at test.125 T268 pattern; need solid cold cycle before T287.)
+## Current state (2026-04-24 20:34 BST, POST-T287a NULL-FIRE, preparing T287b retry on fresh cold boot — **T287a (20:27) host-wedged pre-fw at `test.125: after reset, before get_raminfo`, ~22 s into insmod — 3 markers deeper than T285's wedge point. Probe code in `download_fw_nvram` never reached. User SMC-reset + cold-cycled; fresh boot at 20:31:56 BST, uptime 2 min, lspci clean (no MAbort/TAbort). Retrying T287 now while substrate is fresh. 287a logs preserved as `test.287a.{run,journalctl}.txt`.**)
 
 ---
 
