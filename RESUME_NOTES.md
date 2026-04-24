@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 06:48 BST, POST-TEST.BASELINE-POSTCYCLE — **Substrate good: reset_device/get_raminfo/firmware-download/chip_set_active all traversed cleanly after cold power cycle. BUT baseline STILL crashed between t+90000ms and t+120000ms dwell markers — with ZERO scaffold, no MSI, no request_irq. This reshapes the problem: the late-ladder window itself is the crasher, not the scaffold. Re-attributes all prior T265-T268 crashes: the scaffold may never have been the issue. Need advisor review before next step. Host up since 06:47 BST.**)
+## Current state (2026-04-24 06:55 BST, PRE-TEST.269 — **Early-exit at t+60000ms variant. Cut the T238 ladder short before the t+90→t+120 crash window, then let probe + rmmod run normally. Three discriminating outcomes: clean rmmod (stable reproducer, late-ladder/wall-clock crash avoidable), crash at ~111-143s regardless (wall-clock timer confirmed), crash in rmmod (cleanup path is real crasher). Module built, T269 marker verified. Historical grep: 12/13 prior tests reached t+120000ms but NONE rmmod'd cleanly — today's baseline stopped at t+90000ms with lean config. Scaffold framing of T265-T268 was likely misattributed. Next: fire T269.**)
 
 ---
 
@@ -106,6 +106,79 @@ The framing shift is large enough that I shouldn't pick the next test alone. Opt
 - **Reconcile with old "known-good" T218**: earlier in the project T218 was said to reach end-of-ladder reliably. Need to verify that claim vs today's crash.
 
 Consulting advisor next.
+
+### Reconciliation with history (added post-advisor)
+
+Grep across `test.2*.journalctl.txt`:
+
+| Logs reaching `t+120000ms dwell` | Logs with actual clean rmmod |
+|---|---|
+| 12/13 (244, 249, 256, 258, 259, 261, 262, 263, 264, 265, 266, 267; only 260 didn't) | **0/13** (cleanup_markers=1 matches were false-positives from unrelated `sd sdb: Media removed` lines) |
+
+So the "T218 / baseline reliably reaches end of ladder" claim that anchored POST-TEST.268's drift framing holds HALFWAY: prior runs do reach t+120000ms dwell marker, but none of them unload cleanly afterward. Every test since 244 crashed somewhere past the t+120000ms marker. Today's baseline-postcycle crashing at t+90→t+120 is slightly earlier than historical (which crashed past t+120), but the crash window is in the same general neighborhood.
+
+Implication: T265-T268 scaffold-attributed crashes were likely the **same late-window host-wedge mechanism** that affects the baseline. The scaffold was never the primary crasher. This validates the framing shift.
+
+---
+
+## PRE-TEST.269 (2026-04-24 06:55 BST, boot 0 — **Early-exit variant: stop the T238 ladder at t+60000ms and return, enabling clean rmmod.**)
+
+### Hypothesis
+
+Baseline reached `t+90000ms dwell` and crashed before `t+120000ms dwell` — a ~30s window that's never been safely traversed. Three mechanisms remain consistent with all evidence to date:
+
+1. **Wall-clock timer**: something fires at ~111-143s after insmod regardless of what code is doing.
+2. **Activity-accumulation**: cumulative PCIe/MMIO activity crosses some threshold at this time.
+3. **Cleanup-path trigger**: the real crasher is in the BM-clear/release path that runs after the ladder, and the ladder is just "time before cleanup fires".
+
+T269 discriminates cleanly:
+
+| Outcome | Reading |
+|---|---|
+| Ladder stops at t+60s, BM-clear + chip release + rmmod succeed | **Activity/late-ladder crash avoidable by early exit.** Stable reproducer found. (a) and (b) both consistent; (c) refuted. |
+| Ladder stops at t+60s but crash fires ~111-143s after insmod (during BM-clear or after) | **Wall-clock timer confirmed.** (a) confirmed. |
+| Crash during rmmod or in BM-clear path itself | **Cleanup path is the real crasher.** (c) confirmed. Rewrites the T265-T268 framing entirely. |
+
+### Design
+
+New param `bcm4360_test269_early_exit`. When set, the T238 ultra-dwells branch:
+1. Runs t+100ms through t+60000ms dwells as normal (with all probe helpers invoked at t+60000ms).
+2. **`goto ultra_dwells_done`** right after the t+60000ms probes, skipping t+90000ms, t+120000ms, and all scaffold blocks.
+3. Normal flow resumes at `ultra_dwells_done:` which runs BM-clear + chip release.
+
+Single variable change from baseline-postcycle: the ladder returns early.
+
+### Safety
+
+- Smallest exposure yet: 60s of ladder vs 120s (baseline-postcycle ran 90s before crash).
+- No scaffold, no MSI, no request_irq.
+- Platform watchdog reliable on host lockup.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test269_early_exit=1
+sleep 100
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+insmod probe thread runs: chip_attach (~25s) + T238 ladder to t+60s (~60s) = ~85s before probe returns. `sleep 100` gives margin, then rmmod.
+
+### Expected artifacts
+
+- `phase5/logs/test.269.journalctl.txt`
+- `phase5/logs/test.269.run.txt`
+
+### Pre-test checklist
+
+1. **Build**: module rebuilt; `bcm4360_test269_early_exit` param visible via modinfo; `test.269: early-exit at t+60000ms` marker in .ko strings.
+2. **PCIe state**: verified clean (Mem+ BusMaster+, no MAbort) at 06:48 BST.
+3. **Hypothesis**: this block.
+4. **Plan**: this block (committed before fire).
+5. **Host state**: boot 0, up since 06:47 BST.
 
 ---
 

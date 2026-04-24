@@ -777,6 +777,19 @@ static int bcm4360_test268_early_scaffold;
 module_param(bcm4360_test268_early_scaffold, int, 0644);
 MODULE_PARM_DESC(bcm4360_test268_early_scaffold, "BCM4360 test.268: run T267 scaffold right after brcmf_chip_set_active returns; skip the 120s dwell ladder entirely. Same T267 discrimination with 10× less exposure to the marginal probe region. (1=enable, 0=off)");
 
+/* BCM4360 test.269: early-exit at t+60000ms. Skip all ladder steps past
+ * t+60000ms (no t+90/t+120 dwells, no scaffolds). Goal: does the probe
+ * + ultra-dwells path return cleanly if we stop before the late-window
+ * crash region? Three outcomes discriminate cleanly:
+ *   - clean rmmod           -> late-ladder/wall-clock crash avoidable by
+ *                              exiting before it; stable reproducer.
+ *   - crash at ~111-143s    -> wall-clock timer confirmed regardless of
+ *                              ladder activity (high-value).
+ *   - crash during rmmod    -> cleanup path is the real crasher. */
+static int bcm4360_test269_early_exit;
+module_param(bcm4360_test269_early_exit, int, 0644);
+MODULE_PARM_DESC(bcm4360_test269_early_exit, "BCM4360 test.269: early-exit at t+60000ms — skip t+90s/t+120s dwells and all scaffolds; goto ultra_dwells_done for clean BM-clear + release. Tests wall-clock vs ladder-activity crash mechanism. (1=enable, 0=off)");
+
 /* BCM4360 test.256 scheduler-walk helper. 2 pr_emerg lines, 16 u32 each.
  * gate_flag arg lets caller pick between sched_walk (t+60s) and
  * sched_walk_early (t+100ms). */
@@ -3839,6 +3852,10 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				BCM4360_T253_SHARED_PROBE("t+60000ms");
 				BCM4360_T255_STRUCT_DECODE("t+60000ms");
 				BCM4360_T256_SCHED_WALK("t+60000ms");
+				if (bcm4360_test269_early_exit) {
+					pr_emerg("BCM4360 test.269: early-exit at t+60000ms — skipping t+90s/t+120s/scaffolds, jumping to ultra_dwells_done\n");
+					goto ultra_dwells_done;
+				}
 				msleep(30000);
 				pr_emerg("BCM4360 test.238: t+90000ms dwell\n");
 				BCM4360_T239_POLL("90000ms");
