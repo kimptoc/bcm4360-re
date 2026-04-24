@@ -5,11 +5,85 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 12:30 BST, POST-T275-CORRECTION — **T275's "BCDC-over-PCIe" plan was wrong direction. Phase 4B's olmsg/shared_info handshake is the real protocol.** Advisor pushed back on T275 for not reconciling Phase 4A (SoftMAC + offload) vs Phase 4B (FullMAC CDC). Deeper reading of `phase4/notes/test_crash_analysis.md §Test.28` revealed: Phase 4B already DEMONSTRATED the working handshake — write `shared_info` struct at TCM[0x9D0A4] with magic markers (0xA5A5A5A5 / 0x5A5A5A5A) + olmsg DMA buffer address before ARM release; fw runs stably for ≥2 s, reads DMA addr, writes status, signals via mailbox. The protocol is **olmsg** (offload messaging over DMA ring), not BCDC. BCDC symbols in blob are shared-codebase artifacts per Phase 4A's wl.ko analysis. Phase 5 NEVER carried this forward; T258-T275 rediscovered pieces of it the hard way. **New pinned file: `KEY_FINDINGS.md`** captures cross-phase facts so this doesn't happen again. CLAUDE.md now requires reading KEY_FINDINGS.md first. Next concrete step: port Phase 4B's shared_info+olmsg handshake into Phase 5's driver path — much more tractable than a BCDC-over-PCIe port.)
+## Current state (2026-04-24 10:50 BST, POST-T276-CODE — **T276 implementation landed: `bcm4360_test276_shared_info` writes Phase 4B's shared_info struct at TCM[ramsize-0x2F5C] immediately before `brcmf_chip_set_active`, polls fw response (si[+0x010], fw_init_done, MAILBOXINT) for 2 s post-release. Cleanup in brcmf_pcie_release_resource. Advisor-reviewed; build clean (commit e866f7c).** No hardware fire yet — substrate is ~3h post-cycle (outside T270-BASELINE's 20-min clean window); firing now risks drift masking the diagnostic signal. Awaiting cold cycle before T276 fire.)
 
 ---
 
-## PRE-TEST.BASELINE-POSTCYCLE (2026-04-24 06:30 BST, boot 0 — **Substrate check after cold power cycle; no scaffold, no new params.**)
+## PRE-TEST.276 (2026-04-24 10:50 BST, boot 0, substrate stale — **Port Phase 4B test.28's shared_info write into Phase 5; diagnostic observation of fw response under current patches. Not a claimed fix.**)
+
+### Hypothesis
+
+Phase 4B Test.28 (2026-04-13) proved: writing a valid `shared_info` struct at TCM[ramsize-0x2F5C] before ARM release prevents the 100 ms panic AND causes fw to (a) write a non-zero pointer to `shared_info[+0x010]` (observed value `0x0009af88`), and (b) send 2 PCIe mailbox signals (`PCIE_MAILBOXINT` = `0x00000003`).
+
+Phase 5 passes the panic point via NVRAM + random_seed + FORCEHT (different path), but currently makes **zero shared_info writes** (`grep 0xA5A5A5A5 pcie.c` → no matches). Fw enters WFI by ~t+12 ms; scheduler frozen across 23 dwells (T255); sharedram_addr never published (T247).
+
+T276 adds the missing shared_info write. Under Phase 5's patches (fw already past Phase 4B's panic point), does the fw still exhibit Test.28's response pattern, or does the different fw init state (further-along) change what it does?
+
+### Outcome matrix
+
+| Observation | Interpretation | Follow-up |
+|---|---|---|
+| `si[+0x010]` becomes non-zero AND ≥1 `mbxint` bit set within 2 s | **Test.28 reproduces under Phase 5 patches.** Fw is listening to shared_info even past panic point. Protocol anchor confirmed. | Decode pointer at si[+0x010]; probe referenced TCM region; consider next handshake step (fw_init_done, or olmsg ring poke). |
+| Only `mbxint` becomes non-zero (no si[+0x010] update) | Partial response — fw notices handshake but doesn't complete the status-write step Test.28 saw. Fw state is genuinely further than Phase 4B. | Check scheduler state [0x6296C..0x629B4] — does it differ from T255 frozen baseline? Probe WLC-side register writes. |
+| Only `si[+0x010]` becomes non-zero (no `mbxint`) | Inverse partial — fw writes status but doesn't signal. Unusual. | Check if fw wrote anywhere else in shared_info region; scan for additional pointer updates. |
+| Both stay zero across 2 s | **Test.28 does NOT reproduce under Phase 5 patches.** Protocol model for this fw state needs rethinking. | Verify readbacks (rule out failed writes); compare scheduler state vs T270-BASELINE; reframe based on evidence. |
+| `fw_init_done` becomes non-zero | Full init — would be a significant surprise given Test.29. | Switch from diagnostic to communication — probe olmsg ring for fw→host messages, try sending a command. |
+| Host wedges earlier than T270-BASELINE's t+90-120s window | Regression from T276's bus-master + DMA alloc interacting with drifted substrate | Disable T276; re-fire T270-BASELINE to confirm drift vs T276-caused. |
+| Readback magic check fails | Write path issue (not a fw-response issue) | Debug write_ram32 semantics for our specific offset; re-derive rambase assumption. |
+
+### Design
+
+Code already landed in commit `e866f7c`. When `bcm4360_test276_shared_info=1`:
+1. Before `brcmf_chip_set_active` (after FORCEHT): `dma_alloc_coherent(64 KB)` + memset zero + write olmsg ring header (2 rings × 16 B + 2×30 KB data areas).
+2. Zero shared_info TCM region `[ramsize-0x2F5C..ramsize-0x20)` (0x2F3C bytes).
+3. Write 6 fields: magic_start (0xA5A5A5A5), dma_lo, dma_hi, buf_size (0x10000), fw_init_done (0), magic_end (0x5A5A5A5A).
+4. Readback-verify ALL 6 fields (not just magic — DMA_LO/HI are what fw uses).
+5. Call `brcmf_chip_set_active` (standard T238 path).
+6. Poll post-release at 10 ms intervals for 2 s: read si[+0x010], fw_init_done, MAILBOXINT. Log on any change (don't break — Phase 4B saw multiple signals). Print final snapshot always.
+7. Proceed into T238 ultra-dwell ladder as normal.
+
+Cleanup: `dma_free_coherent` in `brcmf_pcie_release_resource` (covers remove + probe-failure paths).
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.276.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.276.run.txt || true
+sudo journalctl -k --since "5 minutes ago" > /home/kimptoc/bcm4360-re/phase5/logs/test.276.journalctl.txt
+```
+
+Same skeleton as T270-BASELINE + the T276 param. 150 s covers chip_attach + shared_info write (~1 s) + set_active + 2 s T276 poll + full T238 ladder to t+120s = ~140 s expected.
+
+### Expected artifacts
+
+- `phase5/logs/test.276.run.txt`
+- `phase5/logs/test.276.journalctl.txt`
+
+### Safety
+
+- Same T270-BASELINE envelope + DMA alloc + TCM writes into a region no other Phase 5 code touches (T234 gated off when test236=1, verified).
+- No MSI, no `request_irq` — deliberately orthogonal to the T264-T266 MSI-wedge issue.
+- Worst case: host wedge in [t+90s, t+120s] matching T270-BASELINE; platform watchdog recovers.
+
+### Pre-test checklist
+
+1. **Build**: ✓ committed (e866f7c); modinfo shows `bcm4360_test276_shared_info`; 5 test.276 strings visible.
+2. **PCIe state** (at 10:50 BST): `Mem+ BusMaster+`, no MAbort+. **Clean per registers.**
+3. **Substrate**: ⚠ ~3 h post-cycle (boot 0 up since 07:59 BST). **Outside T270-BASELINE's 20-min clean window.** T269 drift pattern: at 23 min post-cycle, crash window halved. At 3 h, drift is expected dominant. Signal likely muddied.
+4. **Hypothesis**: this block.
+5. **Plan**: this block (committed before fire).
+6. **Recommendation**: **cold power cycle before fire** for cleanest read. Without a cold cycle, a null result would be ambiguous (drift vs no-response); firing inside the clean window gives the diagnostic its full power.
+
+### Fire conditions
+
+Do NOT fire until: (a) fresh cold cycle completed (boot 0 of a power-off session), and (b) fire within ~20 min of that boot. If substrate budget is limited, this test gets priority over any scaffold variant — T276 is the next gating evidence for the whole Phase 5 protocol model.
+
+---
 
 ### Hypothesis
 
