@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 00:29 BST, POST-TEST.266 → PRE-TEST.267 — **Trigger upper bound compressed to ≤50ms across T264/T265/T266. Next: T267a removes msleep entirely (scaffold = MSI + request_irq + immediate free_irq + pci_disable_msi). Existing cleanup markers give 5-position discrimination: last-marker-seen tells us exactly where in the sequence the crash fires. Clean completion would confirm msleep-duration is necessary — a headline finding. Host stable, boot 0 up since 00:27 BST.**)
+## Current state (2026-04-24 01:40 BST, POST-TEST.268 null — **T268 crashed even earlier than T267: stopped at `test.125: after reset_device return` (01:33:46), never reached firmware download, never reached `chip_set_active`, scaffold never fired. Third consecutive null run. Hardware marginality is escalating: T267 first fire crashed in t+120000ms probe burst, T267 re-fire also in probe burst, T268 crashes before probe path even begins. Need to step back and reconsider: is this reproducible on ANY code path now, or is the degradation specific to recent insmod paths? Next: consult advisor before another fire.**)
 
 ---
 
@@ -394,3 +394,59 @@ No probe params needed — we're skipping the ladder. `sleep 30` gives init + ch
 5. **Host state**: boot 0 up since 01:15 BST.
 
 Advisor-confirmed. Code + build + fire pending.
+
+---
+
+## POST-TEST.268 (2026-04-24 01:33 BST run — **Null test: crashed before scaffold could run, before firmware download, before `chip_set_active`.**)
+
+### Timeline (from `phase5/logs/test.268.journalctl.txt`)
+
+- `01:33:32` insmod entry, test.188 module_init entry
+- `01:33:33–01:33:43` normal path: SDIO register, PCI register, probe entry, SBR, chip_attach, BAR0 probes, 6 cores enumerated
+- `01:33:43` `test.125: buscore_reset entry, ci assigned`
+- `01:33:43` `test.122: reset_device bypassed; probe-start SBR already completed`
+- `01:33:46` `test.125: after reset_device return` — **LAST MARKER**
+- [silent lockup, no further kernel output]
+- `01:34+` platform watchdog reboot
+
+### Key observation
+
+The next expected marker after `after reset_device return` is `test.125: after reset, before get_raminfo` (seen in T267 journal at 01:09:00 → 01:09:03, a ~3s gap). T268 never produced that marker.
+
+Crash happened in the 3-second window between `buscore_reset` returning and `get_raminfo` being called — **host-side code path with zero involvement of firmware, scaffold, or dwell ladder**. The plainest failure path seen so far.
+
+### What T268 did NOT settle
+
+- **T268 scaffold never executed.** Any msleep-duration / cleanup-path / fixed-timer claim remains unresolved from T264-T266.
+
+### Crash-stage trend (hardware marginality escalating)
+
+| Fire | Last marker before crash | Stage |
+|---|---|---|
+| T265 | `entering msleep(500)` (scaffold running) | post-firmware-download, inside scaffold window |
+| T266 | `entering msleep(50)` (scaffold running) | same |
+| T267 #1 | mid t+120000ms probe burst | dwell ladder late |
+| T267 #2 | mid t+120000ms probe burst (different position) | dwell ladder late |
+| T268 | `test.125: after reset_device return` | pre-firmware-download host path |
+
+Four consecutive fires crashed progressively earlier. T268's crash is in a host-only code path — no scaffold, no firmware, no probes.
+
+### Surviving hypotheses (unchanged from POST-TEST.266)
+
+1. Duration-proportional trigger in scaffold window
+2. Fixed timer in [0, 50ms]
+3. Msleep-exit transition
+4. Cleanup path crasher
+5. PCIe/ASPM L1 retrain
+
+**None of these were tested by T268.**
+
+### Next-test direction (advisor required)
+
+Possible pivots:
+- **Cold-baseline re-fire**: fire T218 baseline (no scaffold) to see if plain probe path is reliably failing.
+- **Even-earlier scaffold (T269)**: scaffold right after SBR — but T268's crash is in buscore_reset→get_raminfo, so scaffold would need to move even earlier in the probe path.
+- **Abandon scaffold line temporarily**: step back to passive T218 observation.
+- **Full power cycle / longer cool-down** before next fire — hardware thermal/state drift.
+
+Consulting advisor next.

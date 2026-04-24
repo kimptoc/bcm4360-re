@@ -1,0 +1,30 @@
+Apr 24 01:33:32 nixos kernel: brcmfmac: loading out-of-tree module taints kernel.
+Apr 24 01:33:32 nixos kernel: brcmfmac: BCM4360 test.188: module_init entry — extended post-release TCM sampling
+Apr 24 01:33:32 nixos kernel: brcmfmac: BCM4360 test.156: before brcmf_core_init()
+Apr 24 01:33:32 nixos kernel: brcmfmac: BCM4360 test.155: brcmf_core_init() entry
+Apr 24 01:33:33 nixos kernel: brcmfmac: BCM4360 test.155: before brcmf_sdio_register()
+Apr 24 01:33:33 nixos kernel: brcmfmac: BCM4360 test.155: after brcmf_sdio_register() err=0
+Apr 24 01:33:33 nixos kernel: brcmfmac: BCM4360 test.155: post-SDIO sync (before PCI)
+Apr 24 01:33:33 nixos kernel: brcmfmac: BCM4360 test.155: before brcmf_pcie_register()
+Apr 24 01:33:34 nixos kernel: brcmfmac: BCM4360 test.188: brcmf_pcie_register() entry
+Apr 24 01:33:34 nixos kernel: brcmfmac: BCM4360 test.188: before pci_register_driver
+Apr 24 01:33:35 nixos kernel: brcmfmac: BCM4360 test.128: PROBE ENTRY (device=43a0 vendor=14e4 id=000000002bc8daaa)
+Apr 24 01:33:35 nixos kernel: brcmfmac: BCM4360 test.158: probe entry flush done — proceeding
+Apr 24 01:33:36 nixos kernel: brcmfmac: BCM4360 test.127: devinfo allocated, before pdev assign
+Apr 24 01:33:36 nixos kernel: brcmfmac: BCM4360 test.127: devinfo->pdev assigned, before SBR
+Apr 24 01:33:37 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: SBR via bridge 0000:00:1c.2 (bridge_ctrl=0x0002) before chip_attach
+Apr 24 01:33:37 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: SBR complete — bridge_ctrl restored
+Apr 24 01:33:38 nixos kernel: brcmfmac: BCM4360 test.158: before brcmf_chip_attach
+Apr 24 01:33:39 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 debug: BAR0=0xb0600000 BAR2=0xb0400000 BAR2_size=0x200000 tcm=ffffcb7801200000
+Apr 24 01:33:39 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.53: BAR0 probe (CC@0x18000000 off=0) = 0x15034360 — alive
+Apr 24 01:33:39 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.131: BAR0 2nd probe = 0x15034360 — stable
+Apr 24 01:33:40 nixos kernel: brcmfmac: BCM4360 test.218: core[1 ] id=0x800:rev43  base=0x18000000 wrap=0x18100000
+Apr 24 01:33:40 nixos kernel: brcmfmac: BCM4360 test.218: core[2 ] id=0x812:rev42  base=0x18001000 wrap=0x18101000
+Apr 24 01:33:41 nixos kernel: brcmfmac: BCM4360 test.218: core[3 ] id=0x83e:rev2   base=0x18002000 wrap=0x18102000
+Apr 24 01:33:41 nixos kernel: brcmfmac: BCM4360 test.218: core[4 ] id=0x83c:rev1   base=0x18003000 wrap=0x18103000
+Apr 24 01:33:42 nixos kernel: brcmfmac: BCM4360 test.218: core[5 ] id=0x81a:rev17  base=0x18004000 wrap=0x18104000
+Apr 24 01:33:43 nixos kernel: brcmfmac: BCM4360 test.218: core[6 ] id=0x135:rev0   base=0x00000000 wrap=0x18108000
+Apr 24 01:33:43 nixos kernel: brcmfmac: BCM4360 test.218: host-side enumerated 6 cores total
+Apr 24 01:33:43 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.125: buscore_reset entry, ci assigned
+Apr 24 01:33:43 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.122: reset_device bypassed; probe-start SBR already completed
+Apr 24 01:33:46 nixos kernel: brcmfmac 0000:03:00.0: BCM4360 test.125: after reset_device return
