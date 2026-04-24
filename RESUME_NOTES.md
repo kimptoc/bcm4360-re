@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 11:00 BST, POST-T274-FW — **Architectural mismatch discovered. This fw is PCIE-CDC (per banner `RTE (PCIE-CDC) 6.30.223 (TOB)`), not msgbuf. Upstream brcmfmac's PCIe driver is msgbuf-only — our driver path may be architecturally wrong for this chip.** Evidence: (1) fw does NOT reference HOSTRDY_DB1 constant (0x10000000) anywhere in code — 5 byte-pattern matches are all data-region false positives; (2) pcidongle_probe DOES complete fully (T255/T256 show pciedngl_isr registered as scheduler node[0]), contradicting the earlier "pcidongle_probe never reached" reading; (3) pcidongle_probe's full body maps to: alloc devinfo → register ISR → init ISR_STATUS mirror → init msg queue → return — all clean, no hangs; (4) sharedram publish NOT inside pcidongle_probe — must happen in a later phase gated on an event that never fires. Fw expects wake via CDC protocol, not msgbuf doorbell. Next productive direction: **upstream audit** — is there any version of brcmfmac (past or present) that drove PCIe-CDC fw? If yes, that's our reference path. If no, the project reframes as port-or-write a CDC-PCIe driver. Full T274 writeup at phase6/t274_events_investigation.md. No hardware fires since 08:01.)
+## Current state (2026-04-24 11:45 BST, POST-T275-UPSTREAM-AUDIT — **Phase 4 rediscovery closes the loop; concrete engineering path identified.** Upstream brcmfmac's PCIe path is msgbuf-only but the BCDC proto code exists (bcdc.c/h, currently wired to SDIO+USB). Critical observation: `brcmf_pcie_tx_ctlpkt`/`rx_ctlpkt` (pcie.c:2597/2604) are **stubs returning 0** — unused by msgbuf but required by the bus_ops interface. BCDC uses exactly these callbacks. The path forward: (1) change `proto_type = BRCMF_PROTO_BCDC` for BCM4360 in pcie.c; (2) implement tx_ctlpkt/rx_ctlpkt to shuttle CDC bytes via the H2D/D2H mailbox registers; (3) the fw side (pciedngl_isr + hndrte_add_isr + handshake) is already fully characterized from T269-T274. This also resolves a contradiction in my T274 writeup: "fw never references HOSTRDY_DB1" is correct, but the story is not "fw expects some other mystery wake trigger" — it's simpler: **fw expects the host to send the first CDC command, which starts the init state machine**. We never send one because we're using the wrong proto layer entirely. Phase 4B commit fc73a12 (2026-04-12) already reached this conclusion; T258-T274 was rediscovery work. Full T275 writeup at phase6/t275_upstream_audit.md. Next: advisor-check the engineering plan before any code.)
 
 ---
 
@@ -1160,3 +1160,65 @@ Either answer unblocks. Continuing blob spelunking at this depth has diminishing
 - No hardware fires planned.
 - Static analysis at diminishing-return depth.
 - Next action: upstream audit for CDC-PCIe driver support (possibly in git history of brcmfmac, or in broadcom/brcmsmac, or in the out-of-tree broadcom drivers).
+
+---
+
+## POST-T275-UPSTREAM-AUDIT (2026-04-24 11:45 BST — **Phase 4 rediscovery + engineering path identified. Full writeup at phase6/t275_upstream_audit.md.**)
+
+### What T275 settled
+
+1. **Upstream brcmfmac PCIe is msgbuf-only.** `pcie.c:6877` hardcodes `proto_type = BRCMF_PROTO_MSGBUF`. Kconfig's `BRCMFMAC_PCIE` selects `BRCMFMAC_PROTO_MSGBUF`. No upstream version ever drove PCIe-CDC.
+2. **But BCDC code is in brcmfmac**, wired to SDIO (`bcmsdh.c:1081`) and USB (`usb.c:1263`). BCDC talks to bus via standard `txctl`/`rxctl`/`txdata` callbacks defined in `brcmf_bus_ops`.
+3. **Critical observation**: PCIe's `brcmf_pcie_tx_ctlpkt` and `brcmf_pcie_rx_ctlpkt` (pcie.c:2597/2604) are **stubs returning 0**. Msgbuf doesn't call them; they exist only to satisfy the bus_ops struct.
+4. **Phase 4B already reached this conclusion** (commit `fc73a12`, 2026-04-12): "BCM4360 wl firmware uses BCDC protocol… No msgbuf firmware exists for BCM4360 in any known source… Driver patches are proven working — firmware compatibility is the sole blocker." T258-T274 was ~2 weeks of rediscovery work.
+5. **T274's misread corrected**: "fw never references HOSTRDY_DB1" is correct fact, but my interpretation "fw expects some other mystery wake trigger" was wrong. Simpler: **fw expects host to send the first CDC command, which starts the init state machine**. We don't send one because we use msgbuf proto, not BCDC.
+
+### The engineering path (novel contribution of T275)
+
+Minimal patchset:
+
+1. New Kconfig option `BRCMFMAC_PCIE_BCDC` (or per-chip flag for BCM4360).
+2. Modify pcie.c:6877 to set `proto_type = BRCMF_PROTO_BCDC` for BCM4360.
+3. Implement `brcmf_pcie_tx_ctlpkt`:
+   - Copy CDC command bytes into a TCM buffer (pcidongle_probe's allocated buffer per T274 §4).
+   - Write H2D_MAILBOX_1 = 1 → fires fw's pciedngl_isr (bit 0x100 = FN0_0).
+   - Wait for completion.
+4. Implement `brcmf_pcie_rx_ctlpkt`:
+   - Register D2H mailbox IRQ handler (needed before first command).
+   - Handler copies CDC response bytes from TCM + wakes waitqueue.
+   - `rx_ctlpkt` sleeps until handler signals, copies to caller's `msg` buffer.
+5. First test: `WLC_GET_VERSION` dcmd round-trip. Success = response with valid version + sharedram_addr subsequently published (side-effect of fw advancing past CDC-wait).
+
+### Why this should work when scaffolds didn't
+
+Scaffolds (T258-T269) wrote H2D_MAILBOX_1 into a fw state with no valid command buffer. Fw's `pciedngl_isr` fired on the doorbell, read nonsense from the command buffer, and either ignored it or crashed silently.
+
+With BCDC wiring, the command buffer contains a real CDC command BEFORE the doorbell. Fw reads a valid command, processes it, returns a response. Standard CDC operation that the fw was built for.
+
+### What this re-frames
+
+- **T274's "mystery wake trigger"** — resolved. It's just "host sends CDC command".
+- **T273's fn@0x1146C** — the wlc-side scheduler callback. Probably fires when WLC init messages arrive via CDC (once the host sends them). Not a blocker to get initial CDC working.
+- **The T258-T269 scaffold line** — fundamentally wrong approach. Writing mailbox doorbells without valid command bytes in the buffer can't wake fw productively.
+- **The host-side MSI-wedge issue** (from code audit) — orthogonal, still live. Need to solve it as part of this work (MSI subscription is required to receive D2H responses).
+
+### Open questions for advisor / next session
+
+1. **Sanity-check the rediscovery**: Phase 4 ended with "fw compat is the blocker". T275 says "actually, the BCDC proto layer + the empty PCIe stubs give us a clean path without needing new fw". Why did Phase 4 not take this path? Either we missed something Phase 4 knew, or Phase 4 didn't realize the stubs existed.
+2. **CDC bringup sequence**: what's the first few commands to send? (Possibly inferable from wl.ko or from Broadcom docs; brcmfmac's SDIO path must do the same dialog.)
+3. **Where is pcidongle_probe's command-input buffer** in TCM? `devinfo->[0x10]` at runtime — needs live lookup or further blob analysis to find its TCM offset.
+4. **MSI-wedge on BCM4360** (code audit §4): independent of proto choice; needs its own fix before D2H responses can be received.
+
+### Session-level summary
+
+Two full days of blob spelunking (T250-T274) converged on a conclusion that Phase 4B (2026-04-12) had already reached. The unique contribution of this session is:
+
+- **Direct evidence** for the architectural mismatch (T274: zero HOSTRDY_DB1 refs, pciedngl_isr/hndrte_add_isr fully characterized, all scheduler state mapped).
+- **The specific stub-implementation path** (T275: txctl/rxctl exist as empty stubs, BCDC proto attach already handles everything else).
+- **Clean re-grounding** of the engineering plan: patch 2 stubs + 1 line to switch proto_type = concrete code change, not a vague "fw compat is the blocker."
+
+### Session status
+
+- No hardware fires today since 08:01 BST (T270-BASELINE).
+- All commits pushed and filesystem synced.
+- Ready to advisor-check the engineering plan. If approved, next session implements the 2-stubs + Kconfig change.
