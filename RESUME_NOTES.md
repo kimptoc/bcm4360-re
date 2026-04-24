@@ -5,7 +5,54 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 01:40 BST, POST-TEST.268 null — **T268 crashed even earlier than T267: stopped at `test.125: after reset_device return` (01:33:46), never reached firmware download, never reached `chip_set_active`, scaffold never fired. Third consecutive null run. Hardware marginality is escalating: T267 first fire crashed in t+120000ms probe burst, T267 re-fire also in probe burst, T268 crashes before probe path even begins. Need to step back and reconsider: is this reproducible on ANY code path now, or is the degradation specific to recent insmod paths? Next: consult advisor before another fire.**)
+## Current state (2026-04-24 06:30 BST, PRE-TEST.BASELINE-POSTCYCLE — **Full cold power cycle complete (shutdown + unplug + 60s wait + SMC reset + boot). PCIe clean (Mem+ BusMaster+, no MAbort). Next action: fire the T218 known-good baseline (T236 seed + T238 ultra-dwells, no scaffold, no T259/T265/T266/T267/T268 params) to confirm the substrate traverses the firmware-download path again. If baseline completes → substrate good, re-attempt T268. If baseline crashes at same `after reset_device return` point → hardware needs user escalation. Hypothesis: fresh chip state clears the T265→T268 drift trend. Host up since 06:29 BST.**)
+
+---
+
+## PRE-TEST.BASELINE-POSTCYCLE (2026-04-24 06:30 BST, boot 0 — **Substrate check after cold power cycle; no scaffold, no new params.**)
+
+### Hypothesis
+
+Four consecutive T265-T268 fires crashed progressively earlier, with T268 finally failing on a host-only pre-firmware path that worked 24 minutes earlier. A full cold power cycle (shutdown + unplug + 60s + SMC reset) resets chip/PCIe endpoint rails that platform watchdog reboots don't. Prediction: the baseline T218 ultra-dwell path that was reliable earlier in the session now works again.
+
+### Design
+
+Bare-minimum insmod — only the two params that establish the known-good path:
+- `bcm4360_test236_force_seed=1` — standard seeding
+- `bcm4360_test238_ultra_dwells=1` — ultra-dwell ladder (the verified-reliable path from session start)
+
+No scaffold (T259/T265/T266/T267/T268 all off). No probe extensions. Module unchanged (ko built at 01:33 for T268; T268 code is gated behind its own param, so leaving `bcm4360_test268_early_scaffold=0` = identical control flow to pre-T268 code).
+
+### Outcome matrix
+
+| Outcome | Reading |
+|---|---|
+| Reaches end of ultra-dwells, rmmod succeeds | Substrate good. Re-fire T268 next. |
+| Crashes at `after reset_device return` again | Hardware in bad state; escalate to user. |
+| Crashes elsewhere in mid-ladder | Partial drift; discuss with advisor before next fire. |
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+### Expected artifacts
+
+- `phase5/logs/test.baseline-postcycle.journalctl.txt`
+- `phase5/logs/test.baseline-postcycle.run.txt`
+
+### Pre-test checklist
+
+1. **Build**: already built at 01:33 (T268 code present but gated off via unset param).
+2. **PCIe state**: verified clean (Mem+ BusMaster+, no MAbort).
+3. **Hypothesis**: cold power cycle restores substrate → baseline path traverses end-to-end again.
+4. **Plan**: this block (committed before fire).
+5. **Host state**: boot 0, up since 06:29 BST.
 
 ---
 
