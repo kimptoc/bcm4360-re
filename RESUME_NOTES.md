@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 11:45 BST, POST-T275-UPSTREAM-AUDIT — **Phase 4 rediscovery closes the loop; concrete engineering path identified.** Upstream brcmfmac's PCIe path is msgbuf-only but the BCDC proto code exists (bcdc.c/h, currently wired to SDIO+USB). Critical observation: `brcmf_pcie_tx_ctlpkt`/`rx_ctlpkt` (pcie.c:2597/2604) are **stubs returning 0** — unused by msgbuf but required by the bus_ops interface. BCDC uses exactly these callbacks. The path forward: (1) change `proto_type = BRCMF_PROTO_BCDC` for BCM4360 in pcie.c; (2) implement tx_ctlpkt/rx_ctlpkt to shuttle CDC bytes via the H2D/D2H mailbox registers; (3) the fw side (pciedngl_isr + hndrte_add_isr + handshake) is already fully characterized from T269-T274. This also resolves a contradiction in my T274 writeup: "fw never references HOSTRDY_DB1" is correct, but the story is not "fw expects some other mystery wake trigger" — it's simpler: **fw expects the host to send the first CDC command, which starts the init state machine**. We never send one because we're using the wrong proto layer entirely. Phase 4B commit fc73a12 (2026-04-12) already reached this conclusion; T258-T274 was rediscovery work. Full T275 writeup at phase6/t275_upstream_audit.md. Next: advisor-check the engineering plan before any code.)
+## Current state (2026-04-24 12:30 BST, POST-T275-CORRECTION — **T275's "BCDC-over-PCIe" plan was wrong direction. Phase 4B's olmsg/shared_info handshake is the real protocol.** Advisor pushed back on T275 for not reconciling Phase 4A (SoftMAC + offload) vs Phase 4B (FullMAC CDC). Deeper reading of `phase4/notes/test_crash_analysis.md §Test.28` revealed: Phase 4B already DEMONSTRATED the working handshake — write `shared_info` struct at TCM[0x9D0A4] with magic markers (0xA5A5A5A5 / 0x5A5A5A5A) + olmsg DMA buffer address before ARM release; fw runs stably for ≥2 s, reads DMA addr, writes status, signals via mailbox. The protocol is **olmsg** (offload messaging over DMA ring), not BCDC. BCDC symbols in blob are shared-codebase artifacts per Phase 4A's wl.ko analysis. Phase 5 NEVER carried this forward; T258-T275 rediscovered pieces of it the hard way. **New pinned file: `KEY_FINDINGS.md`** captures cross-phase facts so this doesn't happen again. CLAUDE.md now requires reading KEY_FINDINGS.md first. Next concrete step: port Phase 4B's shared_info+olmsg handshake into Phase 5's driver path — much more tractable than a BCDC-over-PCIe port.)
 
 ---
 
@@ -1222,3 +1222,71 @@ Two full days of blob spelunking (T250-T274) converged on a conclusion that Phas
 - No hardware fires today since 08:01 BST (T270-BASELINE).
 - All commits pushed and filesystem synced.
 - Ready to advisor-check the engineering plan. If approved, next session implements the 2-stubs + Kconfig change.
+
+---
+
+## POST-T275-CORRECTION (2026-04-24 12:30 BST — **Advisor blocked T275's BCDC plan. Primary sources in phase4/notes show olmsg/shared_info is the right protocol.**)
+
+### What happened
+
+Advisor flagged two unreconciled things before any code:
+
+1. **Phase 4A (`phase4/notes/transport_discovery.md`) says BCM4360 is SoftMAC NIC + offload engine, NOT FullMAC dongle.** "There is no BCDC-over-PCIe transport protocol to reverse-engineer" — explicitly ruling out what T275 proposed.
+2. **Phase 4B's conclusion doc (`phase4/notes/test_crash_analysis.md`, added by commit `a8007d2`) had specific runtime findings I hadn't read.**
+
+Reading the Phase 4B conclusion doc revealed:
+
+- **Test.28 (2026-04-13)**: writing a valid `shared_info` struct at **TCM[0x9D0A4]** before ARM release completely prevents the 100 ms panic. Fw runs stably for ≥2 s, finds magic markers, reads the olmsg DMA buffer address, writes status (`0x0009af88`) to `shared_info[0x10]`, sends 2 PCIe mailbox signals.
+- Layout (`phase4/notes/level4_shared_info_plan.md`):
+  - `+0x000` magic_start `0xA5A5A5A5`
+  - `+0x004..+0x00B` olmsg DMA addr (lo + hi 32-bit)
+  - `+0x00C` buffer size `0x10000` (64 KB)
+  - `+0x010` fw-writable status
+  - `+0x2028` fw_init_done (fw sets when ready)
+  - `+0x2F38` magic_end `0x5A5A5A5A`
+
+### The correct protocol
+
+**olmsg** (offload messaging) over a DMA ring buffer, address published via `shared_info` in TCM. NOT BCDC.
+
+`bcm_olmsg_*` symbols in the fw blob correspond to Phase 4A's wl.ko-side `bcm_olmsg_writemsg`/`bcm_olmsg_readmsg` helpers. This is the protocol wl.ko (Broadcom's proprietary driver) uses for BCM4360. The BCDC strings (`bcmcdc`, `pciedngl_*`) in the blob are shared-codebase artifacts — fw CAN parse CDC but the HOST-observable runtime protocol is olmsg.
+
+### Phase 4A vs 4B reconciled
+
+- **Phase 4A** analyzed `wl.ko` host-side. Saw offload usage. Correctly concluded the runtime protocol is olmsg.
+- **Phase 4B** analyzed the fw blob. Saw wlc_*, pciedngl_*, bcmcdc. Concluded "FullMAC CDC" — but this described the *fw binary's compiled capabilities*, not the runtime protocol the host drives.
+- **The two readings are compatible**: fw binary has both FullMAC and offload code; wl.ko chose offload path; we should too.
+
+### Why T275 went off course
+
+I reached for the familiar framework (brcmfmac + BCDC/msgbuf dispatch) without reconciling against Phase 4's specific runtime findings. T274's "fw expects some mystery wake" should have triggered a Phase 4 lookup — it didn't. Rediscovered the mismatch from first principles over T250-T274, then proposed a plan that contradicted Phase 4's own conclusion.
+
+### New pinned file: `KEY_FINDINGS.md`
+
+Created at repo root. Schema: Fact | Status (CONFIRMED / RULED-OUT / LIVE / SUPERSEDED) | Evidence | Date. Seeded with ~40 cross-phase facts including the shared_info offsets, olmsg ring layout, Phase 4B's test.28 evidence, Phase 5's current progression, and what's been ruled out (BCDC-over-PCIe, tight HW-poll, writing doorbells without shared_info).
+
+**CLAUDE.md updated** to require reading KEY_FINDINGS.md first, and to instruct "grep prior phases before declaring a new finding". Final section of KEY_FINDINGS.md is a self-review reminder for end-of-session updates.
+
+### Corrected engineering path
+
+Not "wire BCDC via two stubs." Instead:
+
+1. **In Phase 5's `brcmf_pcie_setup` (before the early return for BCM4360)**: write Phase 4B's `shared_info` struct to TCM[0x9D0A4] after allocating a 64 KB DMA coherent buffer for olmsg.
+2. After ARM release: poll `shared_info[+0x2028]` (fw_init_done) for up to ~2 s. If fw sets it, handshake succeeded.
+3. Parse olmsg ring structure (ring 0 = host→fw, ring 1 = fw→host, each 30 KB data area + 16-byte header).
+4. Send a `BCM_OL_*` command via olmsg ring 0 (e.g., `BCM_OL_BEACON_ENABLE` or similar bringup command — requires further cross-ref to enumerate the early-init command set).
+5. Wait for response on ring 1 via PCIe mailbox signal.
+
+This is closer to what wl.ko does. Patch it into brcmfmac-PCIe as a "BCM4360-specific olmsg attach" path — parallel to (not replacing) the msgbuf attach.
+
+### What T275 still contributes
+
+The STUB observation (PCIe's `tx_ctlpkt`/`rx_ctlpkt` return 0) is factually correct but irrelevant. Msgbuf doesn't use them and BCDC wiring wouldn't work because BCDC is the wrong protocol. The T275 writeup should be read with a correction header saying "BCDC direction is wrong — olmsg is right; see POST-T275-CORRECTION and KEY_FINDINGS.md."
+
+### Session status (updated)
+
+- KEY_FINDINGS.md and CLAUDE.md pointer added.
+- T275 is recorded but flagged as SUPERSEDED-CORRECT (the stub observation stands; the BCDC conclusion doesn't).
+- olmsg handshake path identified as the next LIVE hypothesis.
+- No hardware fires since 08:01 BST.
+- Advisor-check on olmsg port before coding (the patch is bigger than "two stubs" — needs DMA buffer alloc, TCM write, fw_init_done poll, olmsg ring parsing, mailbox handler).

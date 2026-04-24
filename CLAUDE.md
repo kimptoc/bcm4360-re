@@ -3,7 +3,10 @@ Review the current bcm4360-re project state, and continue development.
 Rules:
 - Always push immediately after every commit
 - You have sudo permissions; run tests yourself (insmod, rmmod, journalctl, scripts)
-- Read RESUME_NOTES.md first to pick up where the last session left off
+- **Read KEY_FINDINGS.md FIRST** — cross-phase load-bearing facts, pinned. Cheap to read, expensive to skip.
+- Then read RESUME_NOTES.md for recent tests and current state.
+- **Before declaring a "new finding"**: grep prior phases. Run `git log --all --grep '<keyword>'` and `grep -rn '<keyword>' phase*/notes/ *.md`. Cite prior work rather than rediscovering.
+- **When closing the session** (before the user ends it or compaction hits): review this session's work and assess whether any load-bearing fact needs adding, updating, or superseding in KEY_FINDINGS.md. See the last section of that file for the schema.
 
 ## Pre-test checklist (hardware/kernel module tests)
 
