@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 06:30 BST, PRE-TEST.BASELINE-POSTCYCLE — **Full cold power cycle complete (shutdown + unplug + 60s wait + SMC reset + boot). PCIe clean (Mem+ BusMaster+, no MAbort). Next action: fire the T218 known-good baseline (T236 seed + T238 ultra-dwells, no scaffold, no T259/T265/T266/T267/T268 params) to confirm the substrate traverses the firmware-download path again. If baseline completes → substrate good, re-attempt T268. If baseline crashes at same `after reset_device return` point → hardware needs user escalation. Hypothesis: fresh chip state clears the T265→T268 drift trend. Host up since 06:29 BST.**)
+## Current state (2026-04-24 06:48 BST, POST-TEST.BASELINE-POSTCYCLE — **Substrate good: reset_device/get_raminfo/firmware-download/chip_set_active all traversed cleanly after cold power cycle. BUT baseline STILL crashed between t+90000ms and t+120000ms dwell markers — with ZERO scaffold, no MSI, no request_irq. This reshapes the problem: the late-ladder window itself is the crasher, not the scaffold. Re-attributes all prior T265-T268 crashes: the scaffold may never have been the issue. Need advisor review before next step. Host up since 06:47 BST.**)
 
 ---
 
@@ -53,6 +53,59 @@ sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
 3. **Hypothesis**: cold power cycle restores substrate → baseline path traverses end-to-end again.
 4. **Plan**: this block (committed before fire).
 5. **Host state**: boot 0, up since 06:29 BST.
+
+---
+
+## POST-TEST.BASELINE-POSTCYCLE (2026-04-24 06:32 BST run — **Substrate good; crash migrates from scaffold region to late-ladder (t+90→t+120s) under pure ladder config.**)
+
+### Timeline (from `phase5/logs/test.baseline-postcycle.journalctl.txt`)
+
+- `06:32:44` insmod entry
+- `06:32:49` full probe path traversed: SBR ✓, chip_attach ✓, **test.125 after reset_device return ✓** (where T268 wedged), get_raminfo ✓, chip_attach returned successfully, ASPM disabled
+- `06:33:07` firmware download complete (test.188 fw-sample MATCH entries), `chip_set_active returned TRUE`
+- `06:33:07–06:34:35` T238 ladder progression: t+100ms → t+500ms → t+2000ms → t+10s → t+30s → t+45s → t+60s → t+90000ms
+- `06:34:35` **LAST MARKER: `t+90000ms dwell`**
+- [silent lockup, no further kernel output; expected next marker t+120000ms never fires]
+- `06:47` platform watchdog reboot
+
+Crash window: [t+90000ms marker fired, t+120000ms marker never fired] — crashed somewhere in the ~30s gap between these two dwell points.
+
+### What baseline did NOT have (significant)
+
+- NO scaffold (T259/T265/T266/T267/T268 all OFF)
+- NO MSI enable, NO request_irq, NO interrupt-handler registration
+- NO T239 poll_sharedram, NO T240 wide_poll, NO T247 preplace_shared, NO T248 wide_tcm_scan
+
+Pure T238 ultra-dwell ladder with T236 seed. Minimal config.
+
+### Key reinterpretation
+
+The late-ladder crash window (t+90s → t+120s) is reached under the bare T238 ladder. **Prior test crashes in this same window have been attributed to various scaffold/param combinations, but the ladder alone is sufficient.** This substantially weakens the "scaffold is the crasher" framing that guided T265-T268.
+
+Previous interpretations that should now be questioned:
+- T267's "mid t+120000ms probe burst" crashes may be intrinsic to the ladder, not caused by the scaffold.
+- T265/T266 msleep-based framing only holds IF the scaffold actually reaches execution — in this pure-ladder run, no scaffold is present.
+- T264's "duration-proportional" phrasing conflated scaffold duration with total-elapsed-time; the crash may be elapsed-time-based regardless of scaffold.
+
+### What baseline settled (factually)
+
+- **Cold power cycle cleared the T268-stage host-path drift.** The `after reset_device return` wedge is state-dependent and can be reset by full AC disconnect + 60s wait + SMC reset.
+- **The t+90s→t+120s crash window is reproducible WITHOUT the scaffold.** This is a new data point not previously isolated.
+
+### What baseline did NOT settle
+
+- Whether the crash is at a fixed wall-clock time (~2min post-insmod / ~90-120s post-set_active) or depends on cumulative MMIO activity.
+- Which operation inside the t+90→t+120 window triggers the crash (the ladder has minimal activity in this interval — mostly sleep).
+- Whether simply extending the interval would still crash in the same window if more granular markers were inserted.
+
+### Next-test direction (advisor required)
+
+The framing shift is large enough that I shouldn't pick the next test alone. Options:
+- **B-variant: bisect the t+90→t+120 window** with extra dwell markers at t+95s, t+100s, t+105s, t+110s, t+115s, t+120s. Single-param change to T238. Tells us whether the crash is at a specific sub-window.
+- **B-variant: cut the ladder short at t+90s and rmmod cleanly.** Does the cleanup path work if we exit before the crash window? High-value — if rmmod succeeds, confirms the crash is elapsed-time/ladder-work related, and gives us a stable baseline to build on.
+- **Reconcile with old "known-good" T218**: earlier in the project T218 was said to reach end-of-ladder reliably. Need to verify that claim vs today's crash.
+
+Consulting advisor next.
 
 ---
 
