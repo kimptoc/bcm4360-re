@@ -5,7 +5,89 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 15:05 BST, POST-T280-CODE — **T280 mask-enable probe built and committed.** Calls `brcmf_pcie_intr_enable()` (upstream-canonical write of 0xFF0300 = int_d2h_db|int_fn0 to MAILBOXMASK) between T278 post-poll and T279 H2D probes. Pre-log marker for mid-call wedge attribution. Readback verifies the write landed. 100 ms dwell + T278 console delta dump captures "does mask alone wake fw" outcome. If T279 is ALSO enabled, it runs AFTER T280's delta dump, so both "mask alone" and "mask + H2D" cases are discriminable in one fire. No MSI, no request_irq, no hostready call. Requires T276+T277+T278. Build clean.)
+## Current state (2026-04-24 15:49 BST, POST-T280-FIRE — **DECISIVE: MAILBOXMASK write SILENTLY FAILS at post-set_active.** `brcmf_pcie_intr_enable` called cleanly (both pre/post markers fired — no mid-call wedge); MAILBOXMASK readback post-call = `0x00000000`, expected `0xFF0300`. Write silently dropped on BCM4360 post-set_active. Prior tests (T241 pre-set_active) showed MBM round-trip passing, so something about the post-set_active state makes this BAR0 register read-only. New blocker for the whole scaffold approach: the upstream-canonical mask-enable path doesn't work on this chip in this state. Next direction: investigate whether DIFFERENT access method (raw iowrite32 via different reginfo, or different timing, or different register) works. Alternatively: re-disasm fw blob for the actual mask-register location fw's init uses — may be a different offset, not BRCMF_PCIE_PCIE2REG_MAILBOXMASK (BAR0+0x4C).)
+
+---
+
+## POST-TEST.280 (2026-04-24 15:31 BST fire, boot -1 — **MAILBOXMASK write SILENTLY DROPS at post-set_active. `brcmf_pcie_intr_enable` runs cleanly but the register doesn't change. Matrix row 5. Blocks the "unblock mask → wake fw" approach via this register/path/timing.**)
+
+### Timeline (from `phase5/logs/test.280.journalctl.txt`, boot -1)
+
+- `15:31:39` insmod
+- `15:31:49` insmod returned
+- `15:32:12` chip_attach + fw download + FORCEHT + set_active (identical to T278/T279 path)
+- `15:32:12` T276 si[+0x010]=0x0009af88 at t+0ms (identical fw response — consistent across all 4 fires today)
+- `15:32:12` T278 POST-POLL (full): 587 B dumped (identical fw console content)
+- `15:32:12` **T280: pre-enable `MAILBOXMASK=0x00000000 MAILBOXINT=0x00000000`** (matches T279)
+- `15:32:12` T280: "calling brcmf_pcie_intr_enable" marker
+- `15:32:12` T280: "brcmf_pcie_intr_enable returned" marker — **no mid-call wedge; helper completed**
+- `15:32:12` **T280: post-enable `MAILBOXMASK=0x00000000` (expected 0xFF0300)** — **WRITE SILENTLY DROPPED**
+- `15:32:12` T280: post-enable MAILBOXINT=0 (consistent with mask still closed)
+- `15:32:12` T280 post-mask-enable delta: `no new log (wr_idx=587 unchanged)` — fw did NOT wake
+- `15:32:12` T280: +100ms MAILBOXINT=0 (no late-arriving signals)
+- `15:32:12` T279 ran with MAILBOXMASK still 0: both H2D writes produced `MAILBOXINT=0`, `no new log` — identical to T279 fire
+- `15:32:12 → 15:33:33` T238 ladder to `t+90000ms dwell`, then wedge [t+90s, t+120s] (unchanged)
+- `15:48:28` boot 0 (user cold-cycled)
+
+### What T280 settled (factually)
+
+1. **`brcmf_pcie_intr_enable` (the upstream-canonical helper) does NOT modify MAILBOXMASK on this chip in the post-set_active state.** Both pre/post markers fired, no wedge; MBM readback shows the register unchanged at 0x00000000.
+
+2. **New class of silent-failure finding.** Unlike prior T258/T259 which WEDGED the host when writing MAILBOXMASK (with different timing — t+120s ladder, plus MSI subscription), T280's MBM write produced zero effect, zero wedge. Either:
+   - (a) The write never reached the register (BAR0 access issue at this time / state).
+   - (b) The write reached but the register is read-only / write-masked in this state.
+   - (c) The write landed briefly, then something reset the register to 0 before readback.
+
+3. **Clean call chain.** `brcmf_pcie_intr_enable` is a 2-line helper that calls `brcmf_pcie_write_reg32(devinfo, devinfo->reginfo->mailboxmask, devinfo->reginfo->int_d2h_db | devinfo->reginfo->int_fn0)`. We have no indication `reginfo->mailboxmask` is wrong (it's `BRCMF_PCIE_PCIE2REG_MAILBOXMASK = 0x4C`). The write path is the same one T241 verified passing at pre-set_active.
+
+4. **Pre-latched bits confirmed zero.** `MAILBOXINT=0` both pre and post — fw has NOT pre-latched any H2D bits waiting for the mask to open. Even if we could open the mask, there's nothing currently waiting.
+
+5. **T279 probes re-ran under mask=0 and reproduced T279's null response.** Consistent across fires. No drift in the diagnostic itself.
+
+### What changes between pre-set_active (T241 PASS) and post-set_active (T280 FAIL)?
+
+During `brcmf_chip_set_active`:
+- ARM CR4 reset de-asserted (fw starts executing).
+- Clock states change (FORCEHT already applied pre-call; other clocks may switch).
+- Fw takes ownership of some HW state.
+
+Candidate causes for MBM write silent failure:
+- **PCIE2 core in a different reset/clock state after fw runs.** Fw could disable the PCIE2 register block's write enable after init.
+- **Backplane window shift.** BAR0 window's mapping could change if fw writes to the BAR0_WINDOW register; pcie.c's `buscore_prep_addr` handles this but only for buscore reads/writes, not for the MBM path which uses a fixed offset into BAR0.
+- **ARM-owned bit.** Some PCIe2 registers have ARM-only write access once fw is running — would be a HW design decision not documented.
+
+### Implications
+
+- The whole "host writes MAILBOXMASK to wake fw" approach is blocked at this register/timing/method.
+- Prior T258/T259 wedges were probably a DIFFERENT failure mode (MSI-subscription related, which IS gated by time-in-MSI-bound-state per T264-T266). The MBM write itself may also have silently dropped in those runs; we just didn't read back.
+
+### What T280 did NOT settle
+
+- Whether MAILBOXMASK at a DIFFERENT offset works (e.g., BAR0+0xC34 = `BRCMF_PCIE_64_PCIE2REG_MAILBOXMASK` — but that's 64-bit-addressing variant, shouldn't apply to BCM4360).
+- Whether the write works via a DIFFERENT access method (buscore prep addr, window-mapped access, direct TCM-shadow write).
+- Whether the write works at DIFFERENT timing (pre-set_active via an earlier probe extension; mid-ladder; post-ladder).
+- Whether fw's own init ever unmasks (it apparently doesn't, based on T279/T280 readings).
+
+### Next-test direction (advisor required)
+
+Candidates, small-to-large:
+
+- **T282-MBM-WRITE-VARIANTS**: fire with multiple attempted MBM writes at post-set_active time — different values (narrow 0x100 vs full 0xFF0300), different helpers (raw iowrite32 bypassing reginfo, buscore-prepped write), different timings (immediately post-set_active, after a delay). Small, diagnostic-first.
+
+- **T283-FW-MBM-TRACE**: blob disasm for the actual mask-register writes fw's init code performs. If fw writes the mask itself but at a different offset, we know where the "real" mask register is. Static analysis; no substrate cost.
+
+- **T284-PRE-SET-ACTIVE-MBM**: Call `brcmf_pcie_intr_enable` BEFORE `brcmf_chip_set_active`. T241 verified MBM write works at this stage. Open question: does fw's ARM-release clear the mask we just set, or does our pre-set-active mask survive into fw runtime?
+
+T283 is the highest-info-per-cost (pure static, likely reveals the right register). T284 is the highest-payoff-if-it-works (direct fix). T282 is detailed narrowing.
+
+Advisor call before committing to shape.
+
+### Post-test checklist
+
+- Journal captured: ✓ `phase5/logs/test.280.journalctl.txt` (1467 lines).
+- Run output captured: ✓ `phase5/logs/test.280.run.txt`.
+- Outcome matrix resolved: ✓ **row 5** ("MBM readback mismatch — write didn't land").
+- Ready to commit + push + sync.
 
 ---
 
