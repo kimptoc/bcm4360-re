@@ -5,7 +5,60 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 17:25 BST, POST-T285-CODE — **T285 chipcommon-read probe built (READ-ONLY). Adds `bcm4360_test285_chipcommon_read` param + helper macro `BCM4360_T285_READ_CC(tag)` that saves BAR0_WINDOW, switches via `select_core(BCMA_CORE_CHIPCOMMON)`, reads 3 targeted registers (INTSTATUS 0x100, INTMASK 0x104, 0x168 — the T283 inference-target), restores BAR0_WINDOW. Piggybacks on every T284 stage readback site.** Advisor emphasized window-restore pattern as mandatory — PCIE2 accesses elsewhere in probe path would silently misbehave otherwise. Build clean.)
+## Current state (2026-04-24 18:40 BST, POST-T285-NULL-FIRE — **T285 fire wedged at `test.125: after reset_device return` — PRE-firmware-download, PRE any T285/T284 code. Null fire: no chipcommon data captured.** This is the T268 host-side wedge pattern recurring (see 2026-04-24 01:33 fire). Code never reached download_fw_nvram. Substrate was cold-cycled but the 2h gap between boot -2 end (18:20:16) and boot -1 start (18:22:07) suggests the power-off was short (~2 min). T268 notes said "host-only code path with zero involvement of firmware, scaffold, or dwell ladder". Likely substrate drift despite SMC reset, insufficient cool-down. Fix: longer cold-cycle (5+ min power-off) before T285 retry. No code changes required — T285 code is unchanged and build is still valid.)
+
+---
+
+## POST-TEST.285 (2026-04-24 18:23 BST fire, boot -1 — **NULL FIRE. Host wedged at `test.125: after reset_device return`, ~20 s into insmod — BEFORE any T285/T284 code executes. T268-pattern host-side wedge recurrence. No chipcommon data captured. Retry after longer cold-cycle.**)
+
+### Timeline (from `phase5/logs/test.285.journalctl.txt`, boot -1)
+
+- `18:23:34` insmod starts, `test.188: module_init entry`
+- `18:23:36` `brcmf_pcie_register() entry` + `before pci_register_driver`
+- `18:23:54` `test.125: buscore_reset entry, ci assigned` (~20 s into insmod, normal probe path)
+- `18:23:55` **`test.125: after reset_device return`** — LAST MARKER
+- [silent lockup; expected next marker `test.125: after reset, before get_raminfo` never fires]
+- `18:23:55` boot ended (watchdog reboot)
+- `18:39:10` boot 0 (user cold-cycled)
+
+### What T285 DID NOT settle
+
+- **Zero T285 data captured.** The probe block lives in `brcmf_pcie_download_fw_nvram`, which sits FAR after `buscore_reset`. We never got past buscore_reset → get_raminfo. No chipcommon INTSTATUS/INTMASK/0x168 values collected.
+- **T284 MBM readbacks also not collected** for the same reason.
+
+### What T285 DID observe (indirectly)
+
+- **T268's pre-firmware wedge is REPRODUCIBLE**. The `test.125: after reset_device return → get_raminfo` window is a known host-side failure point. Previously observed 2026-04-24 01:33 (T268's fire). Today 2026-04-24 18:23 same marker pattern, same wedge.
+- **Substrate was NOT fully clean despite cold cycle with SMC reset**. Boot -2 ran 16:26 → 18:20 (2 hours, likely system idle), then boot -1 started 18:22 (only ~2 min gap). Short power-off window may not have given chip sufficient cool-down. Prior reliable cold cycles in this project (T270-BASELINE, baseline-postcycle) may have had longer power-off durations.
+
+### Code status
+
+- **No T285 code changes required.** T285 code is correct; it just never ran.
+- Build at commit `543eaa2` is still valid.
+- Fire command unchanged.
+
+### Next-test direction
+
+**Option A (fastest, advisor-unneeded): immediate retry after longer cold cycle.**
+- User performs ≥5 min full power-off (unplug preferred, per CLAUDE.md "full cold power cycle (shutdown + ≥60 s + SMC reset)") before retry.
+- Re-verify substrate via lspci + lsmod before insmod.
+- Fire the exact same T285+T284+T278+T277+T276 combo.
+- If host wedges at same `test.125` point again, substrate is genuinely degraded and we escalate to the user.
+
+**Option B: stop for the day; resume later with cooler chip.**
+- Session has accumulated ~8 fires since 07:54 BST. Today's n-of-wedges reaches into double digits.
+- Tomorrow's fresh chip likely reaches the T285 probe code.
+
+**Option C: static work instead (no substrate cost).**
+- Deep-trace wlc-probe r7 setup (the T286 candidate from T283). Would resolve fn@0x2309c's pending-events word absolute address without firing anything.
+- Would produce additional info for T287 design even if T285 fires cleanly later.
+
+### Post-fire checklist
+
+- Journal captured: ✓ `phase5/logs/test.285.journalctl.txt` (1077 lines — truncated by early wedge).
+- Run output captured: ✓ `phase5/logs/test.285.run.txt` (insmod start only — no "returned" timestamp).
+- Null-fire recorded: ✓ this block.
+- No KEY_FINDINGS updates needed (no new primary-source data).
 
 ---
 
