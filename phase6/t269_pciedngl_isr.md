@@ -118,7 +118,7 @@ The fw's "I am ready to receive FN0_0" state is reached only at the return of `h
 | `0x00000300` (int_fn0 combo) | 5 (all false positives in random integer data) | Not used as a distinct mask literal. |
 | `0x00000048` (MAILBOXINT BAR0 offset) | 2 (both false positives — WLRPC ID enum entries 0x47, 0x48, 0x49, …) | Fw does not refer to the host-side BAR0 offset by that number. |
 | `0x00000144` (H2D_MAILBOX_1 BAR0 offset) | **0** | As expected: fw does not write host-doorbell addresses. |
-| `0x10000000` (`BRCMF_PCIE_SHARED_HOSTRDY_DB1`) | 0 in direct-literal search (wider search to do if needed) | Fw's announcement path likely builds this by shifting, not by literal load. |
+| `0x10000000` (`BRCMF_PCIE_SHARED_HOSTRDY_DB1`, pcie.c:1016) | 21 raw byte-match hits, **5 at a 4-byte-aligned offset** (0x400, 0x45CAC, 0x504C4, 0x57C18, 0x57C20) | The aligned hits sit in data/table regions, not in obvious literal pools adjacent to code that writes a shared-struct flags field. The fw likely builds this bit by shift/OR (e.g., `1 << 28`) or composes it from per-bit defines rather than loading the combined literal — so absence of a tight code-pool hit does not refute the handshake expectation. Caveat: none of the 5 aligned hits were traced to confirm whether any sits near a shared.flags writer; that is follow-up work. |
 
 No host-facing register literal surfaces — consistent with the picture that the fw side accesses its own mirror of MAILBOXINT through the backplane window, not via the PCIe2Reg BAR0 offsets the host uses.
 

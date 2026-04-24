@@ -85,7 +85,8 @@ for label, val in [
     ("MAILBOXINT offset", 0x00000048),
     ("MAILBOXMASK offset", 0x0000004C),
     ("BRCMF_H2D_HOST_D3_INFORM", 0x00000001),  # noisy but worth locating
-    ("BRCMF_PCIE_SHARED_HOSTRDY_DB1 bit", 0x20000000),  # conventional
+    # Upstream bcmfmac: pcie.c:1016 #define BRCMF_PCIE_SHARED_HOSTRDY_DB1 0x10000000
+    ("BRCMF_PCIE_SHARED_HOSTRDY_DB1 bit", 0x10000000),
 ]:
     hits = find_lit_exact(val)
     label_n = min(20, len(hits))

@@ -5,12 +5,42 @@ disassembly are exposed here.
 """
 import ctypes
 import ctypes.util
+import glob
+import os
 
 CS_ARCH_ARM = 0
 CS_MODE_THUMB = 1 << 4
 CS_ERR_OK = 0
 
-_LIB = "/nix/store/w0i5kgw8zhdimryqm78mmydz6kiddy63-capstone-5.0.7/lib/libcapstone.so.5"
+
+def _find_libcapstone():
+    # 1. Honour an explicit override.
+    env = os.environ.get("LIBCAPSTONE")
+    if env and os.path.exists(env):
+        return env
+    # 2. Standard ctypes lookup (ldconfig / LD_LIBRARY_PATH).
+    name = ctypes.util.find_library("capstone")
+    if name:
+        return name
+    # 3. Common FHS paths.
+    for cand in (
+        "/usr/lib/x86_64-linux-gnu/libcapstone.so.5",
+        "/usr/lib/libcapstone.so.5",
+        "/usr/local/lib/libcapstone.so.5",
+    ):
+        if os.path.exists(cand):
+            return cand
+    # 4. Nix store fallback (this host's setup — glob any matching derivation
+    #    instead of pinning a single hash so a GC sweep + rebuild doesn't break).
+    for cand in sorted(glob.glob("/nix/store/*capstone*/lib/libcapstone.so.5")):
+        return cand
+    raise RuntimeError(
+        "libcapstone.so not found. Set LIBCAPSTONE=/path/to/libcapstone.so.5 "
+        "or install capstone via your system package manager."
+    )
+
+
+_LIB = _find_libcapstone()
 _cs = ctypes.CDLL(_LIB)
 
 
