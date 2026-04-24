@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 07:11 BST, POST-TEST.269 — **T269 crashed at `t+45000ms dwell` — EARLIER than baseline-postcycle (which reached t+90000ms) 23 minutes prior on identical-up-to-that-point code. Crash time halved. Hardware drift signal reasserted: cold power cycle at 06:30 bought ONE clean late-ladder traversal (baseline-postcycle), then drift returned. PCIe state still clean post-reboot (Mem+ BusMaster+, no MAbort). Zero data on the early-exit hypothesis — the test never reached t+60000ms to exit. Advisor required before next fire.**)
+## Current state (2026-04-24 07:52 BST, PRE-TEST.270-BASELINE — **Bare baseline re-fire after second cold power cycle. Single-variable reproducibility check: does baseline-postcycle's t+90s clean traversal reproduce? Outcome matrix: (reaches t+90s → substrate-bounded, drift is post-cycle-transient) / (earlier wedge → 06:33 baseline-postcycle run was lucky, framing needs reset) / (crash in probe path → different hardware state). No code changes, no new params — bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 only. Task brief at phase6/t269_baseline.md. Boot 0 at 07:50 BST, fresh cold cycle.**)
 
 ---
 
@@ -682,3 +682,63 @@ Options to consider:
 Today's n-of-wedges is now 23+. Hardware signal is noisy and getting noisier.
 
 Consulting advisor next.
+
+---
+
+## PRE-TEST.270-BASELINE (2026-04-24 07:52 BST, boot 0 after second cold power cycle at ~07:47 BST — **Reproducibility check: fire bare baseline config (no T269, no scaffold, no probes) and see if baseline-postcycle's t+90s clean traversal reproduces post-cold-cycle.**)
+
+### Hypothesis
+
+The 06:33 BST baseline-postcycle run reached `t+90000ms dwell` cleanly after a cold power cycle at 06:30 BST. T269 fired 23 min later (still within same cold-cycle session) crashed at `t+45000ms` — drift returned within ~25 min.
+
+If baseline-postcycle's clean run was substrate-driven (post-cold-cycle is reliably clean for ~20 min), this fire will reproduce: ladder runs t+100ms → t+90000ms cleanly, host wedges in [t+90s, t+120s], platform watchdog reboots.
+
+If it was circumstantial (one lucky roll), this fire will wedge earlier — anywhere from mid-probe-path to mid-ladder — and the whole T265–T269 framing built on "cold cycle restores substrate" needs re-examination.
+
+### Design
+
+Single-variable — strict reproduction of 06:33 BST config:
+- `bcm4360_test236_force_seed=1` — standard seeding.
+- `bcm4360_test238_ultra_dwells=1` — ultra-dwell ladder to t+120s.
+- No probe params, no scaffold params (T259/T265/T266/T267/T268/T269 all OFF).
+
+Same module .ko (built 01:33, bit-for-bit identical to baseline-postcycle's and T269's). All new params gated off = identical control flow.
+
+### Outcome matrix
+
+| Outcome | Reading | Follow-up |
+|---|---|---|
+| Reaches `t+90000ms dwell`, wedges in [t+90s, t+120s] like 06:33 | Substrate-bounded. Clean post-cold-cycle run reproducible. Can build on this substrate (careful). | Advisor + consider T270 with scaffold variant on this now-validated substrate. |
+| Crashes earlier in ladder (t+X000ms, X<90) | 06:33 was lucky; drift already active. Scaffold-driven framing of T265–T269 needs re-examination. | Stop firing today; pivot to fw-blob (task phase6/t269_fw_blob_diss.md). |
+| Crashes in probe path before set_active | Different hardware state from 06:33; chip/bridge in a harder-to-recover state. | Escalate to user; longer cool-down; no more fires today. |
+
+### Pre-test checklist
+
+1. **Build status**: VERIFIED. modinfo shows `bcm4360_test236_force_seed` and `bcm4360_test238_ultra_dwells`. No rebuild.
+2. **PCIe state**: VERIFIED clean at 07:52 BST — `Mem+ BusMaster+`, no `MAbort+` / `CommClk-` / `>SERR-` / `<PERR-`.
+3. **Hypothesis**: this block.
+4. **Plan**: this block (committing before fire).
+5. **Host state**: boot 0, up since 07:50 BST. Fresh cold cycle completed at ~07:47 BST (boot -1 was a transient 17s boot, then cold cycle, then boot 0).
+6. **Task brief**: `phase6/t269_baseline.md` (committed 6e9645d).
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.270-baseline.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.270-baseline.run.txt || true
+```
+
+### Expected artifacts
+
+- `phase5/logs/test.270-baseline.journalctl.txt`
+- `phase5/logs/test.270-baseline.run.txt`
+
+### Safety
+
+- Smallest envelope available. No scaffold. No MSI. No request_irq.
+- Platform watchdog has been reliable (n=4+ of 4 for host-lockup recovery today).
+- Expected worst case: host wedge → watchdog reboot. User not needed unless recovery fails.
