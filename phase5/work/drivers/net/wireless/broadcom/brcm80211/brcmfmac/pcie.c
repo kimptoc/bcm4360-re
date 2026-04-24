@@ -933,6 +933,57 @@ MODULE_PARM_DESC(bcm4360_test285_chipcommon_read, "BCM4360 test.285: at each T28
 			 tag, _cc_intstatus, _cc_intmask, _cc_0x168, _saved_win); \
 	} \
 } while (0)
+
+/* BCM4360 test.287: read scheduler ctx struct fields at TCM[0x62A98]
+ * (per T283 static analysis — ctx populated by fn@0x672e4).
+ *
+ * T286 hit the static wall: pending-events word's absolute address
+ * depends on runtime-populated pointers that we can't resolve from
+ * static disasm. T287 reads the ACTUAL live values at each stage.
+ *
+ * Target fields:
+ *   +0x010 = flag_struct ptr (fn@0x2309c's [r0+0x10])
+ *   +0x018 = dispatch_ctx_ptr (fn@0x1146C's [r0+0x18])
+ *   +0x088 = sub_struct ptr (fn@0x2309c's [flag+0x88])
+ *   +0x08c = source copied to +0x88 by class-0 thunk (T283)
+ *   +0x168 = pending-events CANDIDATE (if scheduler_ctx IS the
+ *            dispatcher ctx — may be 0 if the chain lives in a
+ *            different struct)
+ *   +0x254 = BIT_alloc base (T283: [this]+0x100 = chipcommon INTSTATUS)
+ *   +0x258 = source copied to +0x254 by class-0 thunk
+ *
+ * If [+0x258] = 0x18000000, T283's inference chain is fully verified.
+ * If [+0x88] = 0x18000xxx or 0x18001xxx, that's the pending-events
+ * word's actual MMIO base.
+ * Requires T276+T277+T278. READ-ONLY. */
+static int bcm4360_test287_sched_ctx_read;
+module_param(bcm4360_test287_sched_ctx_read, int, 0644);
+MODULE_PARM_DESC(bcm4360_test287_sched_ctx_read, "BCM4360 test.287: read scheduler ctx fields at TCM[0x62A98] {+0x010/+0x018/+0x088/+0x08c/+0x168/+0x254/+0x258} at each T284/T285 stage to resolve runtime pointer chain. READ-ONLY. Requires T276+T277+T278. (1=enable, 0=off)");
+
+#define BCM4360_T287_SCHED_CTX_BASE	0x62A98
+
+/* BCM4360 test.287: scheduler-ctx field dump helper. */
+#define BCM4360_T287_READ_SCHED(tag) do { \
+	if (bcm4360_test287_sched_ctx_read) { \
+		u32 _t287_10  = brcmf_pcie_read_ram32(devinfo, \
+			BCM4360_T287_SCHED_CTX_BASE + 0x010); \
+		u32 _t287_18  = brcmf_pcie_read_ram32(devinfo, \
+			BCM4360_T287_SCHED_CTX_BASE + 0x018); \
+		u32 _t287_88  = brcmf_pcie_read_ram32(devinfo, \
+			BCM4360_T287_SCHED_CTX_BASE + 0x088); \
+		u32 _t287_8c  = brcmf_pcie_read_ram32(devinfo, \
+			BCM4360_T287_SCHED_CTX_BASE + 0x08c); \
+		u32 _t287_168 = brcmf_pcie_read_ram32(devinfo, \
+			BCM4360_T287_SCHED_CTX_BASE + 0x168); \
+		u32 _t287_254 = brcmf_pcie_read_ram32(devinfo, \
+			BCM4360_T287_SCHED_CTX_BASE + 0x254); \
+		u32 _t287_258 = brcmf_pcie_read_ram32(devinfo, \
+			BCM4360_T287_SCHED_CTX_BASE + 0x258); \
+		pr_emerg("BCM4360 test.287: %s sched[+0x10]=0x%08x +0x18=0x%08x +0x88=0x%08x +0x8c=0x%08x +0x168=0x%08x +0x254=0x%08x +0x258=0x%08x\n", \
+			 tag, _t287_10, _t287_18, _t287_88, _t287_8c, \
+			 _t287_168, _t287_254, _t287_258); \
+	} \
+} while (0)
 /* T278 helper body is defined after brcmf_pcie_read_ram32 (needs it)
  * and after struct brcmf_pciedev_info. See bcm4360_t278_dump_console_delta
  * later in this file. */
@@ -953,6 +1004,7 @@ MODULE_PARM_DESC(bcm4360_test285_chipcommon_read, "BCM4360 test.285: at each T28
 			&devinfo->t278_prev_write_idx); \
 		BCM4360_T284_READ_MBM("stage " tag); \
 		BCM4360_T285_READ_CC("stage " tag); \
+		BCM4360_T287_READ_SCHED("stage " tag); \
 	} \
 } while (0)
 
@@ -4091,11 +4143,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				 * pre-set_active MBM writes work. Open question:
 				 * does the pre-set mask survive fw init? */
 				if (bcm4360_test284_premask_enable) {
-					BCM4360_T284_READ_MBM("pre-write (pre-set_active)"); BCM4360_T285_READ_CC("pre-write (pre-set_active)");
+					BCM4360_T284_READ_MBM("pre-write (pre-set_active)"); BCM4360_T285_READ_CC("pre-write (pre-set_active)"); BCM4360_T287_READ_SCHED("pre-write (pre-set_active)");
 					pr_emerg("BCM4360 test.284: calling brcmf_pcie_intr_enable (pre-set_active — writes MBM = 0xFF0300)\n");
 					brcmf_pcie_intr_enable(devinfo);
 					pr_emerg("BCM4360 test.284: brcmf_pcie_intr_enable returned\n");
-					BCM4360_T284_READ_MBM("post-write (pre-set_active)"); BCM4360_T285_READ_CC("post-write (pre-set_active)");
+					BCM4360_T284_READ_MBM("post-write (pre-set_active)"); BCM4360_T285_READ_CC("post-write (pre-set_active)"); BCM4360_T287_READ_SCHED("post-write (pre-set_active)");
 				}
 
 				pr_emerg("BCM4360 test.238: calling brcmf_chip_set_active resetintr=0x%08x (ultra-extended ladder t+120s)\n",
@@ -4106,7 +4158,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				else
 					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned TRUE\n");
 
-				BCM4360_T284_READ_MBM("post-set_active (CRITICAL: does ARM release clear it?)"); BCM4360_T285_READ_CC("post-set_active");
+				BCM4360_T284_READ_MBM("post-set_active (CRITICAL: does ARM release clear it?)"); BCM4360_T285_READ_CC("post-set_active"); BCM4360_T287_READ_SCHED("post-set_active");
 
 				/* BCM4360 test.276: 2 s post-ARM-release poll of
 				 * shared_info response fields. Log on any change,
@@ -4155,7 +4207,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						 brcmf_pcie_read_reg32(devinfo,
 							BRCMF_PCIE_PCIE2REG_MAILBOXINT));
 
-					BCM4360_T284_READ_MBM("post-T276-poll"); BCM4360_T285_READ_CC("post-T276-poll");
+					BCM4360_T284_READ_MBM("post-T276-poll"); BCM4360_T285_READ_CC("post-T276-poll"); BCM4360_T287_READ_SCHED("post-T276-poll");
 
 					/* BCM4360 test.277: post-poll console decode.
 					 * Re-read the pointer fw published at si[+0x010]
@@ -4240,7 +4292,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							"POST-POLL (full)",
 							t278_ptr,
 							&devinfo->t278_prev_write_idx);
-						BCM4360_T284_READ_MBM("post-T278-initial-dump"); BCM4360_T285_READ_CC("post-T278-initial-dump");
+						BCM4360_T284_READ_MBM("post-T278-initial-dump"); BCM4360_T285_READ_CC("post-T278-initial-dump"); BCM4360_T287_READ_SCHED("post-T278-initial-dump");
 					} else if (bcm4360_test278_console_periodic) {
 						pr_emerg("BCM4360 test.278: requires bcm4360_test277_console_decode=1; skipping\n");
 					}

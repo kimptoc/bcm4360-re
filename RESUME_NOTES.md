@@ -5,7 +5,76 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 18:40 BST, POST-T285-NULL-FIRE — **T285 fire wedged at `test.125: after reset_device return` — PRE-firmware-download, PRE any T285/T284 code. Null fire: no chipcommon data captured.** This is the T268 host-side wedge pattern recurring (see 2026-04-24 01:33 fire). Code never reached download_fw_nvram. Substrate was cold-cycled but the 2h gap between boot -2 end (18:20:16) and boot -1 start (18:22:07) suggests the power-off was short (~2 min). T268 notes said "host-only code path with zero involvement of firmware, scaffold, or dwell ladder". Likely substrate drift despite SMC reset, insufficient cool-down. Fix: longer cold-cycle (5+ min power-off) before T285 retry. No code changes required — T285 code is unchanged and build is still valid.)
+## Current state (2026-04-24 19:10 BST, POST-T286-STATIC + T287-CODE — **T286 static wall reached: scheduler ctx at 0x62A98 is zero-init BSS, pending-events chain is runtime-populated. Pivoted to T287 runtime probe.** T287 reads 7 scheduler ctx fields (`+0x10/+0x18/+0x88/+0x8c/+0x168/+0x254/+0x258`) at every T284/T285 stage. If `+0x258 = 0x18000000` → T283's chipcommon hypothesis verified. If `+0x88` reveals an MMIO base, we know which core owns the pending-events word. Build clean. Fire pending clean substrate — last fire (T285) was null-fire at test.125 T268 pattern; need solid cold cycle before T287.)
+
+---
+
+## PRE-TEST.287 (2026-04-24 19:10 BST — **Runtime scheduler-ctx probe. Read TCM[0x62A98 + {0x10,0x18,0x88,0x8c,0x168,0x254,0x258}] at every T284/T285 stage. Resolves T286's static-trace wall.**)
+
+### Hypothesis
+
+T283 static analysis resolved:
+- `scheduler_ctx+0x258 = [something]`, copied to `+0x254`.
+- `[scheduler_ctx+0x254]+0x100` = BIT_alloc's register read = strongly inferred to be CHIPCOMMON INTSTATUS (0x18000100).
+- `scheduler_ctx+0x88 = [scheduler_ctx+0x8c]`, copied by class-0 thunk.
+
+T286 confirmed the scheduler ctx is zero-init BSS at 0x62A98 statically, so we can only resolve the pointer values at RUNTIME.
+
+T287 reads the actual runtime values. Expected discrimination:
+
+| `+0x258` value | `+0x88` value | `+0x168` value | Reading |
+|---|---|---|---|
+| `0x18000000` (CHIPCOMMON) | `0x18000xxx` or similar | Any | T283 hypothesis fully verified. Pending-events word is at `[+0x88]+0x168` = a chipcommon offset. |
+| `0x18000000` | `0x18100000` (PCIE2) or other | Any | Bit-pool is chipcommon but pending-events is a different core. Tells us which. |
+| Not MMIO (TCM or 0) | Any | `0x` pattern non-zero | pending-events may be TCM-backed. Host can directly write it. |
+| All zeros | All zeros | All zeros | Scheduler ctx hasn't been initialized (class-0 thunk didn't run or crashed silently). Would be unexpected given T255 shows callbacks registered. |
+| `+0x18` non-zero | — | — | dispatch_ctx_ptr populated at runtime — T286's chain can be walked further via TCM reads at the dumped pointer values. |
+
+### Design
+
+Code landed. New param `bcm4360_test287_sched_ctx_read`. Helper macro `BCM4360_T287_READ_SCHED(tag)` reads 7 specific offsets in one pr_emerg line. Piggybacks on 5 T284/T285 sites + 4 T278 stage hooks (total 9 readback points).
+
+All reads are `brcmf_pcie_read_ram32` (BAR2 direct TCM access) — independent of BAR0_WINDOW state. No core-switching needed.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test284_premask_enable=1 bcm4360_test285_chipcommon_read=1 \
+    bcm4360_test287_sched_ctx_read=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.287.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.287.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.287.journalctl.txt
+```
+
+All previous readback infrastructure enabled (T284 MBM + T285 CC registers + T287 sched ctx fields) for aligned time-series across the full fw init.
+
+### Substrate note
+
+**Previous fire (T285) was null at T268 pattern.** Before T287 fire, user should do a full cold cycle (shutdown, unplug, wait ≥5 min, SMC reset, plug, boot). T268 pattern suggests substrate drift even despite SMC reset when power-off is short.
+
+### Pre-test checklist
+
+1. **Build**: ✓ committed next push; modinfo shows `bcm4360_test287_sched_ctx_read`; T287 pr_emerg string present.
+2. **PCIe state**: verify clean before fire.
+3. **Hypothesis**: this block.
+4. **Plan**: this block (commit before fire).
+5. **Substrate**: **longer cold cycle required** (≥5 min power-off per T268/T285 pattern).
+6. **Fire log**: all previous readback + new T287 per-stage row.
+
+### Outcome interpretation notes
+
+- If T287 reveals `+0x258 = 0x18000000`, advisor's T283 hypothesis is fully confirmed and T289 (write chipcommon to wake fw) becomes the direct next step.
+- If `+0x258` is something else, T283's chipcommon-INTSTATUS claim needs revision — we'd expand T287 to dump more offsets or trace the allocator path.
+
+### Fire expectations
+
+Same envelope as T284/T285 fires (~115-145 s to late-ladder wedge). T287 data lands in first ~3 s after set_active. 9 readback stages × 7 values = 63 data points per fire; all in journal regardless of late-ladder wedge.
 
 ---
 
