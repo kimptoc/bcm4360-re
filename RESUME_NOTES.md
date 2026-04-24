@@ -5,7 +5,84 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 11:18 BST, POST-T277-CODE — **T277 console-decode extension built (new param `bcm4360_test277_console_decode`). Reads TCM struct at fw-published pointer (T276 saw 0x9af88) at two points: pre-shared_info-write (baseline) + post-2s-poll. Validates buf_addr < ramsize before following, then dumps 128 B of buffer content as ASCII-escaped text + hex. Advisor-approved design. Build clean.** No hardware fire yet. Current substrate is watchdog-recovered boot 0 from the T276 crash (not a cold cycle) — advisor flagged this as a noise source; recommend cold cycle before T277 fire so any delta from T276's results is substrate-clean.)
+## Current state (2026-04-24 12:04 BST, POST-T277-FIRE — **RESULT: fw's live console captured — 587 bytes of fw-written log text at TCM[0x96f78].** Pre-write struct was garbage (uninitialized); post-poll struct populated by fw: `buf_addr=0x00096f78 size=0x4000 wr_idx=0x24b rd_addr=0x00096f78`. First 128 B decoded: `"Found chip type AI (0x15034360)\r\n125888.000 Chipc: rev 43, caps 0x58680001, chipst 0x9a4d pmurev 17, pmucaps 0x10a22b11\r\n125888."` — fw is writing a real console with timestamps + chipc state. Struct populated by fw post-set_active (row 1 of pre/post matrix). Late-ladder wedge unchanged — T277 doesn't fix or affect it. Next: T278 extend dump to full 587 B / grow buffer + periodic reads during ladder to catch late-phase fw log entries.)
+
+---
+
+## POST-TEST.277 (2026-04-24 11:55 BST fire, boot -1 — **Fw's live console captured: 587 B of fw-written log at TCM[0x96f78]. `buf_addr/size/wr_idx/rd_addr` struct layout Phase 4B proposed is CONFIRMED. Console is a real ring with timestamps. First 128 B decoded — rest unread (extend in T278).**)
+
+### Timeline (from `phase5/logs/test.277.journalctl.txt`, boot -1)
+
+- `11:55:14` insmod fire (post cold-cycle)
+- `11:55:34` fw download + NVRAM + FORCEHT complete (20 s into fire)
+- `11:55:34` **T277 PRE-WRITE struct@0x9af88**: `buf_addr=0xad9afa8b buf_size=0x02d5bf1b write_idx=0x5370158c read_addr=0x23535c0b` — ALL GARBAGE (uninitialized memory, struct not yet populated)
+- `11:55:34` T276 shared_info written at TCM[0x9d0a4] (olmsg_dma=0x89b10000, all 6 fields verified)
+- `11:55:34` `brcmf_chip_set_active returned TRUE`
+- `11:55:34` T276 t+0ms: `si[+0x010]=0x0009af88 fw_done=0 mbxint=0` (same response as T276)
+- `11:55:37` T276 poll-end: unchanged
+- `11:55:37` **T277 POST-POLL struct@0x0009af88**: `buf_addr=0x00096f78 buf_size=0x00004000 write_idx=0x0000024b read_addr=0x00096f78` — **ALL FIELDS VALID TCM ADDRESSES**
+- `11:55:37` **T277 buffer@0x00096f78 (first 128 B) ASCII**: `"Found chip type AI (0x15034360)\r\n125888.000 Chipc: rev 43, caps 0x58680001, chipst 0x9a4d pmurev 17, pmucaps 0x10a22b11\r\n125888."`
+- `11:55:37 → 11:57:08` T238 ladder: t+100ms → ... → t+90000ms dwell (22 markers, same pattern as T276/T270-BASELINE)
+- `11:57:08` **LAST MARKER: `t+90000ms dwell`** — wedge in [t+90s, t+120s]
+- `12:02:28` boot 0 (user cold-cycled during recovery)
+
+### What T277 settled (factually)
+
+1. **Phase 4B's struct layout interpretation is CONFIRMED.** 4 dwords at fw-published pointer = `{buf_addr, buf_size, write_idx, read_addr}`. All four fields make internal sense: buf_addr and read_addr both point to 0x96f78 (ring's fresh-read state — nothing consumed yet); buf_size is a plausible 16 KB ring size; write_idx is plausible <buf_size.
+
+2. **Fw DOES populate the struct during post-set_active init.** Pre-write struct at 0x9af88 was uninitialized garbage; post-poll it's fully populated with valid values. Row 1 of the pre/post matrix ("struct populated by fw during post-set_active init") — CONFIRMED.
+
+3. **Fw writes real log content during init.** 587 bytes of genuine ASCII text including:
+   - chip identification: `"Found chip type AI (0x15034360)"` (AI = AXI Interconnect — matches Phase 4's chip architecture observations)
+   - timestamped register dump: `"125888.000 Chipc: rev 43, caps 0x58680001, chipst 0x9a4d pmurev 17, pmucaps 0x10a22b11"`
+   - Second timestamp `125888.` starts at byte 128 (our dump cuts mid-line)
+
+4. **The timestamp unit is an open question.** `125888.000` appears at the first log line — too large for microseconds-since-boot, too large for milliseconds. Possibilities: PMU free-running counter value (chipc has one); arbitrary tick counter; or the buffer isn't starting at position 0 of the boot sequence. Not load-bearing for the next-step decisions.
+
+5. **Buffer has NOT wrapped.** write_idx = 0x24b = 587 bytes << buf_size = 16 KB. read_addr = buf_addr = no host has consumed any entries. A dump of `buf_addr..buf_addr+write_idx` captures the full fw log so far.
+
+6. **Late-ladder wedge unchanged.** Same `t+90000ms` last marker as T270-BASELINE and T276. T277 is pure read-only; doesn't affect the wedge mechanism.
+
+### What T277 did NOT settle
+
+- **What's in bytes 128..587** of fw's console. Our 128 B dump cuts mid-line (second `125888.` timestamp truncates). The remaining 459 bytes likely contain more register dumps, init-phase messages, and may contain the decisive clue about where/why fw enters WFI. **This is the T278 target.**
+- Whether fw writes MORE log content during the ladder (t+100ms → t+90s window). The 587-byte snapshot is from ~2 s post-set_active; if fw continues to log during the ladder, periodic reads would catch that.
+- What `0x00096f78` as `buf_addr` means in the TCM layout. It's 0x9af88 - 0x96f78 = 0x4010 below the console struct; 16 KB ring stops at 0x96f78 + 0x4000 = 0x9af78, which is 0x10 below the struct at 0x9af88. So the buffer is contiguous: `[0x96f78 .. 0x9af78)` then a 16 B gap, then the struct at 0x9af88. Neat layout.
+
+### Decoded chip-identity from fw's log (cross-check)
+
+Fw reports: chip type AI, `0x15034360` (full chip ID with rev/pkg bits), Chipc rev 43, caps `0x58680001`, chipst `0x9a4d`, pmurev 17, pmucaps `0x10a22b11`.
+
+Cross-ref with Phase 4 identity from Python probe scripts + T252: chip 4360 / rev 3 / pkg 0, so `0x15034360` decoded = `0x1500_4360 | (rev 3 << 16) | (pkg 0 << 28)`. Consistent. The `0x58680001 ` Chipc caps + `0x9a4d` chipst haven't been recorded in our prior probes — new primary-source facts from fw itself, worth saving.
+
+### Next-test direction
+
+T278-CONSOLE-EXTENDED — two-axis extension of T277:
+
+1. **Dump size**: use `min(write_idx, 4096)` (or even the full `buf_size` for completeness) in post-poll. Captures the entire current log, not just the first 128 B. Multiple pr_emerg lines with 128 B chunks per line (kernel printk line length limits). Expected payoff: **full fw init log** in one fire.
+
+2. **Periodic reads during dwell ladder**: at t+500ms, t+5s, t+30s, t+60s, t+90s — re-read struct + dump newly-written region (bytes `write_idx_prev..write_idx_current`). If write_idx advances, we see what fw logs during the ladder and — critically — may see what fw logs right before the wedge.
+
+Two independent axes; combine into one test or separate into T278+T279. Advisor call on which to prefer.
+
+### What opens up
+
+If fw keeps writing to the console, we have a primary-source channel for fw internal state that didn't exist before. Examples of things we could now learn:
+
+- What init phase fw reaches (specific function/subsystem names in log lines).
+- Whether fw self-reports ASSERT/TRAP messages (these are usually verbose in Broadcom fw).
+- When (and whether) fw tries to read something from shared_info that we haven't provided.
+- When fw transitions from init to "ready" state (if ever).
+
+This is potentially the biggest lever we've had in Phase 5. Progress it carefully.
+
+### Post-test checklist
+
+- Journal captured: ✓ `phase5/logs/test.277.journalctl.txt` (1436 lines).
+- Run output captured: ✓ `phase5/logs/test.277.run.txt`.
+- Pre/post matrix resolved: ✓ row 1 ("struct populated by fw during post-set_active init").
+- Buffer matrix resolved: ✓ row 1 ("readable log text").
+- Ready to commit + push + sync.
 
 ---
 
