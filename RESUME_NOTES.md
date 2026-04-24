@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 06:55 BST, PRE-TEST.269 — **Early-exit at t+60000ms variant. Cut the T238 ladder short before the t+90→t+120 crash window, then let probe + rmmod run normally. Three discriminating outcomes: clean rmmod (stable reproducer, late-ladder/wall-clock crash avoidable), crash at ~111-143s regardless (wall-clock timer confirmed), crash in rmmod (cleanup path is real crasher). Module built, T269 marker verified. Historical grep: 12/13 prior tests reached t+120000ms but NONE rmmod'd cleanly — today's baseline stopped at t+90000ms with lean config. Scaffold framing of T265-T268 was likely misattributed. Next: fire T269.**)
+## Current state (2026-04-24 07:11 BST, POST-TEST.269 — **T269 crashed at `t+45000ms dwell` — EARLIER than baseline-postcycle (which reached t+90000ms) 23 minutes prior on identical-up-to-that-point code. Crash time halved. Hardware drift signal reasserted: cold power cycle at 06:30 bought ONE clean late-ladder traversal (baseline-postcycle), then drift returned. PCIe state still clean post-reboot (Mem+ BusMaster+, no MAbort). Zero data on the early-exit hypothesis — the test never reached t+60000ms to exit. Advisor required before next fire.**)
 
 ---
 
@@ -621,5 +621,64 @@ Possible pivots:
 - **Even-earlier scaffold (T269)**: scaffold right after SBR — but T268's crash is in buscore_reset→get_raminfo, so scaffold would need to move even earlier in the probe path.
 - **Abandon scaffold line temporarily**: step back to passive T218 observation.
 - **Full power cycle / longer cool-down** before next fire — hardware thermal/state drift.
+
+Consulting advisor next.
+
+---
+
+## POST-TEST.269 (2026-04-24 06:56-06:57 BST run — **Ladder crashed at `t+45000ms dwell`; never reached the t+60000ms early-exit. Zero evidence for or against the early-exit hypothesis. Significantly EARLIER than baseline-postcycle 23 min prior on identical code — hardware drift signal reasserted.**)
+
+### Timeline (from `phase5/logs/test.269.journalctl.txt`, boot -1)
+
+- `06:56:24` insmod entry, SBR, chip_attach, FORCEHT, `brcmf_chip_set_active returned TRUE`
+- `06:56:24 → 06:57:10` T238 ladder progressed t+100ms → t+300 → t+500 → t+700 → t+1000 → t+1500 → t+2000 → t+3000 → t+5000 → t+10000 → t+15000 → t+20000 → t+25000 → t+26s → t+27s → t+28s → t+29s → t+30000 → t+35000 → **t+45000ms** dwell
+- `06:57:10` **LAST MARKER: `t+45000ms dwell`**
+- [silent lockup; no further kernel output; expected next markers t+50000ms / t+60000ms never fired]
+- `07:02:51` platform watchdog reboot (boot 0)
+
+### What T269 settled (factually)
+
+- **The crash time halved vs baseline-postcycle.** Comparison of runs on identical code (T269 diverges from baseline only at t+60000ms; crash happened at t+45000ms before the divergence):
+  - `baseline-postcycle` (06:33:07 set_active) → crashed between `t+90000ms` (06:34:35) and `t+120000ms` → **survived ~88s of ladder**
+  - `T269` (06:56:24 set_active) → crashed between `t+45000ms` (06:57:10) and `t+50000ms` → **survived ~46s of ladder**
+  - Same host, same hardware, same code up to the crash point, runs 23 minutes apart → clear drift signal.
+
+- **Early-exit hypothesis: UNTESTED.** T269 never reached the t+60000ms branch point. All three outcomes enumerated in PRE-TEST.269 are neither confirmed nor refuted.
+
+- **PCIe state clean on next boot.** Post-crash boot 0 shows `Mem+ BusMaster+`, no MAbort — the lockup left PCI config space intact (watchdog reboot cleared it).
+
+### What T269 did NOT settle
+
+- Whether the crash is wall-clock-based (fires ~N seconds after insmod regardless of what code does), activity-accumulation-based (crosses a cumulative-MMIO threshold), or cleanup-path-based.
+- Whether the early-exit would have completed cleanly had the ladder reached it — cannot test this path under current hardware state.
+
+### Drift pattern (today's run history)
+
+| Run | Time | set_active | Last marker | Elapsed-at-crash |
+|---|---|---|---|---|
+| T267 #1 | 00:36 BST | ✓ | mid t+120000ms probe burst | ~130s |
+| T267 #2 | 01:08 BST | ✓ | mid t+120000ms probe burst (earlier position) | ~125s |
+| T268 | 01:33 BST | ✗ (never reached) | `after reset_device return` (pre-fw) | ~3s |
+| baseline-postcycle | 06:33 BST (post cold power cycle) | ✓ | t+90000ms dwell | ~88s |
+| T269 | 06:56 BST | ✓ | t+45000ms dwell | ~46s |
+
+Cold power cycle at 06:30 BST gave **one** clean late-ladder traversal (baseline-postcycle), then drift restored within 23 min. This is consistent with T267's "hardware drift actively polluting signal" finding — the cold cycle's effect is transient.
+
+### Surviving candidate mechanisms (unchanged from POST-BASELINE-POSTCYCLE, still no evidence for any)
+
+- Wall-clock timer (but now timing varies widely — 46s vs 88s — suggesting not fixed)
+- Activity-accumulation (plausible but the two runs had very similar MMIO patterns up to t+45s)
+- Cleanup-path crasher (still unreachable)
+
+### Next-test direction (advisor required — drift dominates signal)
+
+Options to consider:
+
+1. **Another cold power cycle + immediate re-fire of T269** (n=2 reproducibility check of the early-exit hypothesis). If hardware behaves like baseline-postcycle did (one clean run after cold cycle), T269 may succeed. Risk: drift back by second fire.
+2. **Re-fire baseline (no T269 variant) after cold cycle**, to check whether the drift reading holds (is the "clean run" reproducible at all, or did baseline-postcycle get lucky?).
+3. **Pause hardware tests entirely**; pivot to firmware-blob analysis (the T253-T255 thread on wlc_phy_attach internals was deferred when hardware leads opened). This is the lowest-cost option and doesn't consume hardware state.
+4. **Extended cool-down** (hours, not minutes) before any further hardware fire.
+
+Today's n-of-wedges is now 23+. Hardware signal is noisy and getting noisier.
 
 Consulting advisor next.
