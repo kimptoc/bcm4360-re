@@ -768,6 +768,15 @@ static int bcm4360_test267_no_msleep;
 module_param(bcm4360_test267_no_msleep, int, 0644);
 MODULE_PARM_DESC(bcm4360_test267_no_msleep, "BCM4360 test.267: no-msleep scaffold — MSI + request_irq + IMMEDIATE cleanup. No sleep between request_irq and free_irq. Tests whether msleep duration is necessary for the crash trigger. (1=enable, 0=off)");
 
+/* BCM4360 test.268: early-scaffold pivot. Runs the T267 scaffold RIGHT
+ * AFTER brcmf_chip_set_active() returns, skipping the entire 120s dwell
+ * ladder. Moves the scaffold out of the marginal t+120000ms probe-burst
+ * region that caused two consecutive T267 null-test fires. Same
+ * discrimination as T267; ~10× less exposure to the flaky region. */
+static int bcm4360_test268_early_scaffold;
+module_param(bcm4360_test268_early_scaffold, int, 0644);
+MODULE_PARM_DESC(bcm4360_test268_early_scaffold, "BCM4360 test.268: run T267 scaffold right after brcmf_chip_set_active returns; skip the 120s dwell ladder entirely. Same T267 discrimination with 10× less exposure to the marginal probe region. (1=enable, 0=off)");
+
 /* BCM4360 test.256 scheduler-walk helper. 2 pr_emerg lines, 16 u32 each.
  * gate_flag arg lets caller pick between sched_walk (t+60s) and
  * sched_walk_early (t+100ms). */
@@ -3710,6 +3719,37 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned FALSE\n");
 				else
 					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned TRUE\n");
+				if (bcm4360_test268_early_scaffold) {
+					struct pci_dev *_pdev268 = devinfo->pdev;
+					int _prev_irq268 = _pdev268->irq;
+					int _msi_ret268, _req_ret268;
+					mdelay(100);
+					pr_emerg("BCM4360 test.268 early: skipping dwell ladder; running scaffold NOW\n");
+					atomic_set(&bcm4360_t259_irq_count, 0);
+					atomic_set(&bcm4360_t259_last_mailboxint, 0);
+					_msi_ret268 = pci_enable_msi(_pdev268);
+					pr_emerg("BCM4360 test.268 early: pci_enable_msi=%d prev_irq=%d new_irq=%d\n",
+						 _msi_ret268, _prev_irq268, _pdev268->irq);
+					_req_ret268 = request_irq(_pdev268->irq,
+								  bcm4360_t259_safe_handler,
+								  IRQF_SHARED, "t268_early", devinfo);
+					pr_emerg("BCM4360 test.268 early: request_irq ret=%d\n", _req_ret268);
+					if (_req_ret268 == 0) {
+						pr_emerg("BCM4360 test.268 early: SKIPPING msleep — immediate cleanup\n");
+						pr_emerg("BCM4360 test.268 early: calling free_irq\n");
+						free_irq(_pdev268->irq, devinfo);
+						pr_emerg("BCM4360 test.268 early: free_irq returned\n");
+					} else {
+						pr_emerg("BCM4360 test.268 early: request_irq FAILED (%d)\n", _req_ret268);
+					}
+					if (_msi_ret268 == 0) {
+						pr_emerg("BCM4360 test.268 early: calling pci_disable_msi\n");
+						pci_disable_msi(_pdev268);
+						pr_emerg("BCM4360 test.268 early: pci_disable_msi returned\n");
+					}
+					pr_emerg("BCM4360 test.268 early: scaffold complete; jumping to end of ultra-dwells branch\n");
+					goto ultra_dwells_done;
+				}
 				mdelay(100);
 				pr_emerg("BCM4360 test.238: t+100ms dwell\n");
 				BCM4360_T242_WRITEVERIFY("100ms");
@@ -4045,6 +4085,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						pr_emerg("BCM4360 test.267 no_msleep: pci_disable_msi returned\n");
 					}
 				}
+				ultra_dwells_done: ;
 #undef BCM4360_T239_POLL
 			} else if (bcm4360_test237_extended_dwells) {
 				pr_emerg("BCM4360 test.237: calling brcmf_chip_set_active resetintr=0x%08x (extended-dwell ladder)\n",
