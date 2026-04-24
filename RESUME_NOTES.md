@@ -297,3 +297,13 @@ sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
 5. **Host state**: boot 0 up since 00:27 BST.
 
 Advisor-confirmed. Code + build + fire pending.
+
+### T267 first fire (2026-04-24 00:36 BST) — **NULL TEST; scaffold never ran, crashed mid-t+120000ms probe burst**
+
+Like T264's first fire: reached the t+120000ms probe burst, printed test.238/239/240/247, then crashed before test.249 (next probe = `brcmf_pcie_read_ram32(0x9d000)`). Pacing of probes was normal (all in same second). T267 scaffold never executed — no discrimination data.
+
+Per prior advisor guidance on T264 first fire: re-fire T267 unchanged. Two outcomes:
+- Crashes again at same point → reproducible new failure mode in t+120000ms probe burst
+- Reaches scaffold → first crash was noise; discrimination data available.
+
+SMC reset may be needed if PCIe dirty. Re-firing pending.
