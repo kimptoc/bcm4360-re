@@ -5,7 +5,102 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 12:10 BST, POST-T278-CODE — **T278 periodic console dump built.** New param `bcm4360_test278_console_periodic`. New helper `bcm4360_t278_dump_console_delta` tracks a `t278_prev_write_idx` cursor per devinfo; validates `buf_addr < ramsize`, `write_idx <= buf_size`; dumps `[buf_addr + prev .. buf_addr + write_idx)` in 128 B chunks (1 KB cap per call). Wired at post-poll (seeded prev=0 for full initial dump) + at 4 dwell stages t+500ms, t+5s, t+30s, t+90s. Advisor-approved. Build clean.)
+## Current state (2026-04-24 13:08 BST, POST-T278-FIRE — **RESULT: FULL FW LOG CAPTURED (587 B). Fw reached `wl_probe called` (wlc-probe entry = T273's `fn@0x67614`), printed chipc info, then WENT SILENT. All 4 ladder stages (t+500ms, t+5s, t+30s, t+90s) report `wr_idx=587 unchanged`.** T257's WFI reading PROMOTED: fw primary-source confirms "not looping, not asserting, quietly waiting". Watchdog tick = 32 ms from fw log (`wd_msticks=32`). Hang bracket refined: wl_probe's tail, after chipc dump, before any wlc_bmac/wlc_attach internal logging. Reconciles with T273's finding that `fn@0x1146C` is registered as a scheduler callback inside wl_probe — fw now known to complete wl_probe's registration phase and drop to WFI awaiting `fn@0x1146C`'s trigger. No assert, no trap, no timeout string. Late-ladder wedge persists [t+90s, t+120s] — orthogonal to T278 observation.)
+
+---
+
+## POST-TEST.278 (2026-04-24 12:50 BST fire, boot -1 — **Full 587 B fw console captured; all 4 stage hooks report silence. Matrix row 1: fw logs only during first ~2s. Primary-source confirmation of T257's WFI reading. Hang bracket refined to inside wl_probe.**)
+
+### Timeline (from `phase5/logs/test.278.journalctl.txt`, boot -1)
+
+- `12:50:54` insmod fire (post cold-cycle)
+- `12:51:04` insmod returned (10 s)
+- `12:51:19` chip_attach + fw download + NVRAM + FORCEHT + set_active complete
+- `12:51:19` T276 si[+0x010]=0x0009af88 at t+0ms (same response as T276/T277)
+- `12:51:19` T278 **POST-POLL (full) wr_idx=587 prev=0 delta=587 dumping=587 bytes** across 5 chunks (128+128+128+128+75 B)
+- `12:51:19` T278 t+500ms: `no new log (wr_idx=587 unchanged)`
+- `12:51:21` T278 t+5s: `no new log (wr_idx=587 unchanged)`
+- `12:51:47` T278 t+30s: `no new log (wr_idx=587 unchanged)`
+- `12:52:48` T278 t+90s: `no new log (wr_idx=587 unchanged)`
+- [wedge in [t+90s, t+120s]; boot ended 12:52:48]
+
+### Reassembled fw console (full 587 B)
+
+```
+Found chip type AI (0x15034360)
+125888.000 Chipc: rev 43, caps 0x58680001, chipst 0x9a4d pmurev 17, pmucaps 0x10a22b11
+125888.000 si_kattach done. ccrev = 43, wd_msticks = 32
+125888.000 
+RTE (PCI-CDC) 6.30.223 (TOB) (r) on BCM4360 r3 @ 40.0/160.0/160.0 MHz
+125888.000 pciedngl_probe called
+125888.000 Found chip type AI (0x15034360)
+125888.000 Chipc: rev 43, caps 0x58680001, chipst 0x9a4d pmurev 17, pmucaps 0x10a22b11
+125888.000 wl_probe called
+125888.000 Found chip type AI (0x15034360)
+125888.000 Chipc: rev 43, caps 0x58680001, chipst 0x9a4d pmurev 17, pmucaps 0x10a22b11
+```
+
+### What T278 settled (factually)
+
+1. **Fw reaches `wl_probe` (WLC device probe = T273's `fn@0x67614`).** Primary-source confirmation. Earlier indirect evidence (scheduler callback registered for `fn@0x1146C`) suggested this; T278's log text makes it direct.
+
+2. **Fw reaches `pciedngl_probe`** and completes it (advances past into wl_probe). Confirms T274's finding that pcidongle_probe's body runs through without hangs.
+
+3. **Fw completes `si_kattach`** before RTE banner is printed. Kernel-attach stage done; chipcommon register access is working.
+
+4. **Watchdog tick = 32 ms** (`wd_msticks = 32` from `si_kattach` log). New primary-source timing fact. Relevant for future analysis of fw-side watchdog behaviour.
+
+5. **RTE banner**: `"RTE (PCI-CDC) 6.30.223 (TOB) (r) on BCM4360 r3 @ 40.0/160.0/160.0 MHz"`. Clock rates 40 MHz XTAL / 160 MHz backplane / 160 MHz ARM CPU, consistent with chipst 0x9a4d decode.
+
+6. **Fw goes silent after wl_probe's initial chipc dump.** No subsequent log output across the full dwell ladder — t+500ms through t+90s all show `wr_idx=587 unchanged`.
+
+7. **T257's WFI reading is now primary-source confirmed.** The scheduler isn't busy-looping (would produce log entries over time); fw isn't asserting (no "ASSERT" / "TRAP" / "PC=" strings); fw isn't timing out (no watchdog print despite 32 ms tick). The silence is consistent only with "scheduler idle via WFI, waiting for an event".
+
+8. **No fw-side self-diagnosis string.** Fw doesn't self-identify a missing input. Unlike many embedded systems that print "waiting for X" or "timeout on Y", this fw just returns to scheduler and idles. Means we can't learn the missing trigger from the log alone — we have to either disasm the wl_probe tail (T273 territory) or induce triggers on hardware (T279 territory).
+
+### Hang bracket — tightened to wl_probe's tail
+
+Prior reading (from T272-FW / T273-FW): "hang is somewhere in wl_probe's tail, inside sub-functions we haven't fully traced."
+
+T278 refines: wl_probe PRINTS "wl_probe called" → "Found chip type AI" → "Chipc: rev 43..." then goes quiet. There are two orderings for the quiet region:
+
+- **(A)** wl_probe's sub-calls (including `hndrte_add_isr(fn@0x1146C, ...)`) do NOT log. They just complete their work (registrations, init) and wl_probe returns. Scheduler sees no runnable events → WFI.
+- **(B)** wl_probe enters an inner sub-call that is silent AND happens to never return (a HW-dependent stall that the T273/T274 disasm failed to identify).
+
+T257's WFI-via-scheduler-state finding favours (A): the scheduler's frozen node state means RTE's scheduler is running idle, which only happens after all probes return. (B) would leave wl_probe mid-execution on the call stack — scheduler wouldn't be reached.
+
+**Conclusion: wl_probe completes normally (no assert, no hang). Fw reaches the scheduler idle state and WFI-waits for `fn@0x1146C`'s callback trigger, which never fires in our test harness.**
+
+### What T278 did NOT settle
+
+- **What trigger fn@0x1146C is waiting on.** T273 identified the callback registration but the specific MAILBOXINT bit / HW event / host action that fires it is unknown.
+- Why Test.28 saw MAILBOXINT=0x3 in Phase 4B harness but T276/T277/T278 see 0 under Phase 5 patches. The console log suggests fw does not self-initiate mailbox signals during init; Test.28's signals may have been host-driven by Phase 4B harness writing something we don't.
+- Whether writing to a specific MAILBOXINT bit in the scheduler's pending-events word would wake fn@0x1146C. T274 looked for writers of this word and found none — suggesting the bit IS HW-mapped and requires a PCIe-side action, not a TCM write.
+
+### Next-test direction (advisor required)
+
+Candidates:
+
+- **T279-MBXINT-PROBE**: With T278 periodic console running, fire a single MAILBOXINT write (e.g., bit 0x1 = FN0_0 = pciedngl_isr trigger; or bit 0x2; or H2D_MAILBOX_0) AFTER set_active + T276 poll, and watch the console for fw response. Observable: if fw logs `"pciedngl_isr called"` (string at blob 0x40685 per T274 analysis), we've confirmed the FN0_0 mapping AND woken up fw partially. Safety concern: prior scaffolds (T258-T269) that wrote MAILBOXINT without console access all wedged the host; now with console readable via T278, we can observe even a short fw activity before any wedge.
+
+- **T280-MBXMASK-WIDE-POLL**: Still observation-only. Read not just `MAILBOXINT` but also `MAILBOXMASK`, `H2D_MAILBOX_0/1/2`, `D2H_MAILBOX_0/1/2` during the T278 stages. Discriminates whether any of these registers change passively across the ladder. Low-risk, low-reward — probably all zero.
+
+- **T281-POKE-FN1146C**: Blob-disasm fn@0x1146C more carefully to identify the specific flag bit or event it responds to. Static analysis, no fire. Could make T279's write target specific rather than guessed.
+
+Highest-value-per-fire: **T279** (console-observed mailbox poke). Safest: **T281** (static). Between them, probably T281 first (cheap, directed), then T279 (directed fire) after.
+
+### Safety + substrate
+
+- T278 ran the same ~150 s envelope as T270-BASELINE. Late-ladder wedge consumed one cold-cycle substrate budget.
+- Current boot 0 is post-T278-wedge cold cycle (user performed SMC reset). Clean substrate available for next fire.
+
+### Post-test checklist
+
+- Journal captured: ✓ `phase5/logs/test.278.journalctl.txt` (1449 lines).
+- Run output captured: ✓ `phase5/logs/test.278.run.txt`.
+- Outcome matrix resolved: ✓ **row 1** ("Fw logged ONLY during first ~2s; silence across all 4 stage hooks").
+- Full fw console reassembled above; key facts extracted.
+- Ready to commit + push + sync.
 
 ---
 
