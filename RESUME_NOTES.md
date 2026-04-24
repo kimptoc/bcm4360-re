@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 08:40 BST, POST-FW-BLOB-DISS REFRAME — **fw-blob diss task landed (phase6/t269_pciedngl_isr.md) and dovetails with the T271 pre-code blocker into a coherent reframe.** The scaffold investigation line (T258–T269) was trying to drive a wake handshake whose fw-side precondition — fw completing `pcidongle_probe` → `hndrte_add_isr(pciedngl_isr, bit=3)` and then publishing `shared.flags |= HOSTRDY_DB1` (0x10000000) — was NEVER met. Upstream's `brcmf_pcie_hostready` explicitly gates on `HOSTRDY_DB1`; our scaffolds skipped that gate and wrote H2D_MAILBOX_1 into a fw state where `pciedev+0x18` was NULL, causing silent fw-side NULL-deref matching our wedge signature. **New bracketing**: fw reaches wlc_bmac_attach (T251/T252) → enters WFI (T257) → does NOT reach pcidongle_probe (T247: TCM[ramsize-4] unchanged 23/23 dwells). The hang is in the init chain between wlc_bmac_attach and pcidongle_probe. T271/Candidate-A-as-framed is moot. New productive thread: T272-FW, trace fw init chain between those two points. Zero hardware fires today since 08:01. Substrate window still open.)
+## Current state (2026-04-24 09:30 BST, POST-T272-FW — **Init chain mapped; hang bracket tightened to 3 specific sub-calls inside wlc_bmac_attach's tail**. `wlc_phy_attach ← wlc_bmac_attach ← fn@0x68A68 ← fn@0x67614 ← (indirect dispatch)` — both wlc and pciedngldev are RTE-registered devices with fn-pointer tables (bases 0x58EFC and ~0x58C88). Probes called in static-linked registration order; if wlc hangs, pciedngldev never runs → sharedram never published → observed. T251 saved-LR 0x68321 places fw past the `bl #0x1415C` SB-reset-waiter (T253/T254 bounded). Next BL in the continuation is `bl #0x179C8` at 0x6832C (UNTRACED). Two other un-traced calls: `bl #0x67E1C` at 0x6836E (medium-priority) and `bl #0x67F2C` at 0x68ACA (low-priority). T273-FW: disassemble these three, look for HW polling loops with host-dependent conditions. No hardware fires today since 08:01; substrate window expected closed (boot 1h40m+).)
 
 ---
 
@@ -942,3 +942,63 @@ Trace the fw init chain between wlc_bmac_attach completion and pcidongle_probe e
 Output: `phase6/t272_init_chain.md` describing the gap + specific init-step candidates.
 
 Advisor call if the gap is large or ambiguous. No new hardware fires until this analysis produces a concrete candidate.
+
+---
+
+## POST-T272-FW (2026-04-24 09:30 BST — **Init chain mapped. Hang bracket tightened to a 2–3-call sub-tree inside wlc_bmac_attach's tail. Next static-analysis step named. No hardware fires.**)
+
+### What T272-FW settled
+
+Full doc: `phase6/t272_init_chain.md`. Key facts:
+
+- **Device-registration struct layout identified.** Both `wlc` (base `0x58EFC`) and `pciedngldev` (base `~0x58C88`) use Broadcom hndrte-style fn-pointer tables. Probe slots: `[0x58F1C] → fn@0x67614` (wlc) and `[0x58C9C] → pcidongle_probe (0x1E90)` (pciedngldev).
+- **Both probes reached ONLY via indirect dispatch** through a (static-linked) device-list iterator. No direct BL callers for `fn@0x67614` or `pcidongle_probe`. RTE walks the device list and invokes each probe in registration order.
+- **Direct call chain** (innermost first): `wlc_phy_attach (0x6A954) ← wlc_bmac_attach (0x6820C) ← fn@0x68A68 ← fn@0x67614 ← indirect`.
+- **"wlc_attach" is a stage-name, not a function**. The `"wlc_attach"` ASCII string at `0x4B1FF` is referenced only from trace strings inside `wlc_bmac_attach`'s error paths. No dedicated `wlc_attach` function body in this blob.
+- **Saved-LR 0x68321 from T251 resolves to**: return from `bl #0x1415C` at 0x6831C (SB-core-reset waiter; bounded 20ms per T253/T254). fw had reached at least that point inside `wlc_bmac_attach`, and fn_1415C had returned.
+
+### Hang bracket — tightened
+
+After the T251 saved-LR return point (0x68320), wlc_bmac_attach continues with these sub-calls:
+
+```
+0x68326:  bl #0x15940        ; T254 already cleared (no loops)
+0x6832C:  bl #0x179C8        ; UNTRACED — HIGHEST PRIORITY candidate
+0x68330:  cbnz r0, +0x28     ; error check
+0x6835E:  bl #0x52A2         ; lookup helper
+0x6836E:  bl #0x67E1C        ; UNTRACED — second priority
+```
+
+Also (but lower priority since fw already passed it to reach the saved-LR point):
+
+```
+0x68ACA:  (inside fn@0x68A68, before bl wlc_bmac_attach)
+          bl #0x67F2C        ; UNTRACED — tertiary
+```
+
+### The 3 untraced sub-calls that could contain the hang
+
+| Addr | Pattern heuristic | Priority |
+|---|---|---|
+| `0x179C8` | First BL after T251-observed saved-LR; position suggests HW/MAC bringup | HIGH |
+| `0x67E1C` | Second BL in continuation chain | MEDIUM |
+| `0x67F2C` | In fn@0x68A68 wrapper, before wlc_bmac_attach call | LOW (likely completed) |
+
+If `0x179C8` contains an unbounded polling loop with a host-dependent condition (bit that only flips when host writes to a specific register), the hang location is identified and the fix is "set that bit before fw reaches 0x179C8."
+
+### Observations on probe ordering
+
+If device-probe-iterator invokes `wlc` before `pciedngldev` (order in static linked list), and `wlc`-probe hangs, `pciedngldev`-probe never runs → `pcidongle_probe` never runs → no `hndrte_add_isr(pciedngl_isr, bit=3)` → no sharedram publish → no HOSTRDY_DB1 advertising → host cannot safely ring doorbell. This is exactly what T247/T255/T257 observed.
+
+### Why this is a reasonable stopping point for today
+
+- T272-FW narrowed the hang window from "somewhere between si_attach and pcidongle_probe" to "inside one of three specific sub-functions, all in wlc_bmac_attach's tail."
+- Continuing would be T273-FW: disassemble `0x179C8`, `0x67E1C`, `0x67F2C` bodies; classify each as bounded / unbounded-polling / dispatcher-tail-call. That's the natural next analytical step.
+- No hardware fires today since 08:01 (T270-BASELINE). Substrate window has likely closed (boot uptime 1h40m+, drift expected). Next hardware fire needs another cold cycle.
+- If T273-FW identifies an unbounded polling loop in any of these calls, a targeted T274 hardware probe becomes designable: peek at the specific register the loop reads, confirm the hang point on live hardware.
+
+### What T272-FW did NOT settle
+
+- Exact hang address within the bracket — need T273-FW to disassemble the 3 sub-calls.
+- Which specific event / register / HW-state transition fw is waiting on — same answer.
+- Whether our scaffold investigation could ever produce a valid wake — still blocked by the shared-publish gap. That gap closes only if fw reaches pcidongle_probe, which requires the hang in wlc_bmac_attach's tail to be resolved first.
