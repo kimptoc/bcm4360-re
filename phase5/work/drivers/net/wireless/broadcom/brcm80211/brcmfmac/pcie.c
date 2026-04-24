@@ -835,6 +835,38 @@ MODULE_PARM_DESC(bcm4360_test277_console_decode, "BCM4360 test.277: dump console
 #define BCM4360_T277_STRUCT_DWORDS	4	/* buf_addr, size, wr_idx, rd_addr */
 #define BCM4360_T277_BUFFER_DUMP_BYTES	128	/* 32 dwords */
 
+/* BCM4360 test.278: periodic console dump across the dwell ladder.
+ * Extends T277 (single-point dump) to: (a) dump the full write_idx
+ * window at post-poll time (seeded prev=0), and (b) re-dump deltas at
+ * t+500ms, t+5s, t+30s, t+90s stages of the ladder. Catches fw log
+ * entries written after the initial chipc decode — potentially the
+ * decisive signal for the late-ladder wedge. Requires test276+test277.
+ * Design: advisor trace 2026-04-24 post-T277. */
+static int bcm4360_test278_console_periodic;
+module_param(bcm4360_test278_console_periodic, int, 0644);
+MODULE_PARM_DESC(bcm4360_test278_console_periodic, "BCM4360 test.278: periodic console delta dump during T238 dwell ladder. Post-poll seeds with prev=0 (full dump); then delta dumps at t+500ms, t+5s, t+30s, t+90s. Requires bcm4360_test276_shared_info=1 and bcm4360_test277_console_decode=1. (1=enable, 0=off)");
+
+#define BCM4360_T278_CHUNK_BYTES	128	/* per pr_emerg line */
+#define BCM4360_T278_MAX_BYTES_PER_CALL	1024	/* printk safety cap */
+/* T278 helper body is defined after brcmf_pcie_read_ram32 (needs it)
+ * and after struct brcmf_pciedev_info. See bcm4360_t278_dump_console_delta
+ * later in this file. */
+
+/* BCM4360 test.278: per-stage hook — re-read si[+0x010] for the struct
+ * pointer and dump delta since last call. Gated on both T277+T278 to
+ * match the post-poll seeding precondition. */
+#define BCM4360_T278_HOOK(tag) do { \
+	if (bcm4360_test278_console_periodic && \
+	    bcm4360_test277_console_decode) { \
+		u32 _t278_ptr = brcmf_pcie_read_ram32(devinfo, \
+			(devinfo->ci->ramsize - \
+			 BCM4360_T276_SHARED_INFO_OFFSET) + \
+			BCM4360_T276_SI_FW_STATUS); \
+		bcm4360_t278_dump_console_delta(devinfo, tag, _t278_ptr, \
+			&devinfo->t278_prev_write_idx); \
+	} \
+} while (0)
+
 /* BCM4360 test.256 scheduler-walk helper. 2 pr_emerg lines, 16 u32 each.
  * gate_flag arg lets caller pick between sched_walk (t+60s) and
  * sched_walk_early (t+100ms). */
@@ -1200,6 +1232,9 @@ struct brcmf_pciedev_info {
 	/* BCM4360 test.276: olmsg DMA buffer handed to fw via shared_info. */
 	void *t276_olmsg_buf;
 	dma_addr_t t276_olmsg_dma;
+	/* BCM4360 test.278: cursor for delta console dumps across the
+	 * dwell ladder. Reset on each insmod (kzalloc zeroes it). */
+	u32 t278_prev_write_idx;
 #ifdef DEBUG
 	u32 console_interval;
 	bool console_active;
@@ -1437,6 +1472,80 @@ brcmf_pcie_write_ram32(struct brcmf_pciedev_info *devinfo, u32 mem_offset,
 	void __iomem *addr = devinfo->tcm + devinfo->ci->rambase + mem_offset;
 
 	iowrite32(value, addr);
+}
+
+
+/* BCM4360 test.278: re-read console struct at struct_ptr, validate,
+ * dump [buf_addr + *prev_idx .. buf_addr + write_idx) as ASCII-escape
+ * 128 B chunks (capped at 1024 B per call), advance *prev_idx. On any
+ * validation failure or empty delta, log a one-line reason and return. */
+static void
+bcm4360_t278_dump_console_delta(struct brcmf_pciedev_info *devinfo,
+				const char *stage_tag,
+				u32 struct_ptr,
+				u32 *prev_idx_p)
+{
+	u32 t278_struct[BCM4360_T277_STRUCT_DWORDS];
+	u32 buf_addr, buf_size, write_idx;
+	u32 prev = *prev_idx_p;
+	u32 delta, to_dump, i, off;
+
+	if (struct_ptr == 0 || struct_ptr >= devinfo->ci->ramsize) {
+		pr_emerg("BCM4360 test.278: %s struct_ptr 0x%08x invalid; skipping\n",
+			 stage_tag, struct_ptr);
+		return;
+	}
+	for (i = 0; i < BCM4360_T277_STRUCT_DWORDS; i++)
+		t278_struct[i] = brcmf_pcie_read_ram32(devinfo,
+						       struct_ptr + i * 4);
+	buf_addr  = t278_struct[0];
+	buf_size  = t278_struct[1];
+	write_idx = t278_struct[2];
+	if (buf_addr == 0 || buf_addr >= devinfo->ci->ramsize ||
+	    buf_size == 0 || buf_size > devinfo->ci->ramsize ||
+	    write_idx > buf_size) {
+		pr_emerg("BCM4360 test.278: %s struct invalid (buf_addr=0x%08x buf_size=0x%08x wr_idx=0x%08x); skipping\n",
+			 stage_tag, buf_addr, buf_size, write_idx);
+		return;
+	}
+	if (write_idx == prev) {
+		pr_emerg("BCM4360 test.278: %s no new log (wr_idx=%u unchanged)\n",
+			 stage_tag, write_idx);
+		return;
+	}
+	if (write_idx < prev) {
+		/* Ring wrapped or reset. Log and restart from 0. */
+		pr_emerg("BCM4360 test.278: %s wr_idx=%u < prev=%u (wrap or reset); restarting cursor at 0\n",
+			 stage_tag, write_idx, prev);
+		prev = 0;
+	}
+	delta = write_idx - prev;
+	to_dump = min_t(u32, delta, (u32)BCM4360_T278_MAX_BYTES_PER_CALL);
+	pr_emerg("BCM4360 test.278: %s wr_idx=%u prev=%u delta=%u dumping=%u bytes\n",
+		 stage_tag, write_idx, prev, delta, to_dump);
+
+	for (off = 0; off < to_dump; off += BCM4360_T278_CHUNK_BYTES) {
+		u8 chunk[BCM4360_T278_CHUNK_BYTES];
+		u32 *u32p = (u32 *)chunk;
+		u32 this_bytes = min_t(u32, (u32)BCM4360_T278_CHUNK_BYTES,
+				       to_dump - off);
+		u32 this_dwords = (this_bytes + 3) / 4;
+		u32 j;
+
+		for (j = 0; j < this_dwords; j++)
+			u32p[j] = brcmf_pcie_read_ram32(
+				devinfo,
+				buf_addr + prev + off + j * 4);
+		pr_emerg("BCM4360 test.278: %s chunk@+%u (%u B): %*pE\n",
+			 stage_tag, prev + off, this_bytes,
+			 this_bytes, chunk);
+	}
+	if (delta > BCM4360_T278_MAX_BYTES_PER_CALL)
+		pr_emerg("BCM4360 test.278: %s ... truncated %u bytes (wr_idx=%u, dumped up to %u)\n",
+			 stage_tag, delta - BCM4360_T278_MAX_BYTES_PER_CALL,
+			 write_idx,
+			 prev + BCM4360_T278_MAX_BYTES_PER_CALL);
+	*prev_idx_p = write_idx;
 }
 
 
@@ -4006,6 +4115,27 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							}
 						}
 					}
+
+					/* BCM4360 test.278: seed periodic delta dump
+					 * with prev=0 so the FIRST call prints the full
+					 * write_idx window captured at post-poll time.
+					 * Subsequent per-stage calls in the dwell ladder
+					 * print only deltas since this point. */
+					if (bcm4360_test278_console_periodic &&
+					    bcm4360_test277_console_decode) {
+						u32 t278_ptr = brcmf_pcie_read_ram32(
+							devinfo,
+							t276_base + BCM4360_T276_SI_FW_STATUS);
+
+						devinfo->t278_prev_write_idx = 0;
+						bcm4360_t278_dump_console_delta(
+							devinfo,
+							"POST-POLL (full)",
+							t278_ptr,
+							&devinfo->t278_prev_write_idx);
+					} else if (bcm4360_test278_console_periodic) {
+						pr_emerg("BCM4360 test.278: requires bcm4360_test277_console_decode=1; skipping\n");
+					}
 				}
 				if (bcm4360_test268_early_scaffold) {
 					struct pci_dev *_pdev268 = devinfo->pdev;
@@ -4051,6 +4181,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				mdelay(200);
 				pr_emerg("BCM4360 test.238: t+500ms dwell\n");
 				BCM4360_T239_POLL("500ms");
+				BCM4360_T278_HOOK("t+500ms");
 				mdelay(200);
 				pr_emerg("BCM4360 test.238: t+700ms dwell\n");
 				BCM4360_T239_POLL("700ms");
@@ -4081,6 +4212,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				BCM4360_T239_POLL("3000ms");
 				msleep(2000);
 				pr_emerg("BCM4360 test.238: t+5000ms dwell\n");
+				BCM4360_T278_HOOK("t+5s");
 				BCM4360_T239_POLL("5000ms");
 				msleep(5000);
 				pr_emerg("BCM4360 test.238: t+10000ms dwell\n");
@@ -4109,6 +4241,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				BCM4360_T239_POLL("29000ms");
 				msleep(1000);
 				pr_emerg("BCM4360 test.238: t+30000ms dwell\n");
+				BCM4360_T278_HOOK("t+30s");
 				BCM4360_T239_POLL("30000ms");
 				/* Extend past t+30s to distinguish fw-timeout from late-wedge. */
 				msleep(5000);
@@ -4133,6 +4266,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				}
 				msleep(30000);
 				pr_emerg("BCM4360 test.238: t+90000ms dwell\n");
+				BCM4360_T278_HOOK("t+90s");
 				BCM4360_T239_POLL("90000ms");
 				BCM4360_T248_WIDESCAN("t+90000ms");
 				BCM4360_T249_ASSERT_WINDOW("t+90000ms");

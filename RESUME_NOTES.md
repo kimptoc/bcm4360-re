@@ -5,7 +5,85 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 12:04 BST, POST-T277-FIRE — **RESULT: fw's live console captured — 587 bytes of fw-written log text at TCM[0x96f78].** Pre-write struct was garbage (uninitialized); post-poll struct populated by fw: `buf_addr=0x00096f78 size=0x4000 wr_idx=0x24b rd_addr=0x00096f78`. First 128 B decoded: `"Found chip type AI (0x15034360)\r\n125888.000 Chipc: rev 43, caps 0x58680001, chipst 0x9a4d pmurev 17, pmucaps 0x10a22b11\r\n125888."` — fw is writing a real console with timestamps + chipc state. Struct populated by fw post-set_active (row 1 of pre/post matrix). Late-ladder wedge unchanged — T277 doesn't fix or affect it. Next: T278 extend dump to full 587 B / grow buffer + periodic reads during ladder to catch late-phase fw log entries.)
+## Current state (2026-04-24 12:10 BST, POST-T278-CODE — **T278 periodic console dump built.** New param `bcm4360_test278_console_periodic`. New helper `bcm4360_t278_dump_console_delta` tracks a `t278_prev_write_idx` cursor per devinfo; validates `buf_addr < ramsize`, `write_idx <= buf_size`; dumps `[buf_addr + prev .. buf_addr + write_idx)` in 128 B chunks (1 KB cap per call). Wired at post-poll (seeded prev=0 for full initial dump) + at 4 dwell stages t+500ms, t+5s, t+30s, t+90s. Advisor-approved. Build clean.)
+
+---
+
+## PRE-TEST.278 (2026-04-24 12:10 BST — **Periodic console dump across the dwell ladder. Post-poll full dump + deltas at t+500ms, t+5s, t+30s, t+90s. Single fire, combined axes per advisor.**)
+
+### Hypothesis
+
+T277 captured the first 128 B of 587 B fw wrote at ~t+2s post-set_active. Three questions remain open:
+
+1. **What's in bytes 128..587?** (near-certain: more chipc decode / init messages; potentially assertions)
+2. **Does fw continue logging past t+2s?** If yes, we see what fw does during the dwell ladder (up to the late-ladder wedge).
+3. **Is there a log entry around t+90s just before the wedge?** If yes, that's likely the decisive diagnostic.
+
+T278 answers all three in one fire: post-poll seeds the delta cursor with prev=0 so the first call dumps the full current window; then 4 per-stage hooks dump deltas at t+500ms, t+5s, t+30s, t+90s.
+
+### Outcome matrix
+
+| Observation | Interpretation | Follow-up |
+|---|---|---|
+| Post-poll dumps full 587 B; stage hooks all "no new log (wr_idx=587 unchanged)" | Fw logged ONLY during the first ~2 s post-set_active. It went quiet for the rest of the ladder — consistent with WFI per T257. Log content from bytes 128..587 may still reveal the init end-state. | Decode bytes 128..587 for assert/trap strings; decide if further FW wake-up is needed. |
+| Post-poll dumps 587 B; t+5s/t+30s deltas non-zero | Fw keeps logging during early ladder but stops before t+30s. | Content of each delta tells us what fw logged and when. |
+| Post-poll dumps 587 B; t+90s delta non-zero | **Fw logs right before the late-ladder wedge.** Highest-value. The t+90s delta content is the most likely to explain the wedge mechanism (assert, timeout, state dump). | Decode carefully. Could redirect the investigation immediately. |
+| Post-poll: struct becomes invalid between T277 capture and T278 read | Struct moved or got corrupted. Unlikely but the validator catches it. | Log shows reason; rethink. |
+| Some t+Xs delta contains known Broadcom trap string (`"ASSERT"`, `"TRAP"`, `"PC=0x"`) | **Smoking gun.** Fw self-reported a trap/assert. | Decode trap location against blob disasm; likely points to the exact fw state when wedge fires. |
+
+### Design
+
+Code landed; gated behind `bcm4360_test278_console_periodic=1` (requires `test276 + test277`). Helper function `bcm4360_t278_dump_console_delta` does all work:
+
+- Re-reads struct at `si[+0x010]` pointer (not hardcoded — robust to any offset change).
+- Validates `buf_addr / buf_size / write_idx` against `devinfo->ci->ramsize`.
+- Tracks delta via `devinfo->t278_prev_write_idx` (struct field, lifetime = devinfo).
+- Dumps in 128 B chunks with `%*pE` ASCII escape; hard cap at 1024 B per call to avoid printk truncation.
+- Prints `"no new log"` on empty delta (silence is data).
+
+Per-stage hooks use a small macro `BCM4360_T278_HOOK(tag)` inlined next to the 4 dwell pr_emerg lines.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.278.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.278.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.278.journalctl.txt
+```
+
+### Substrate note
+
+Current boot 0 is post-T277 recovery. Like PRE-TEST.277 noted, a fresh cold cycle before fire keeps results substrate-clean. **Recommended: cold cycle before T278 fire.**
+
+### Expected artifacts
+
+- `phase5/logs/test.278.run.txt`
+- `phase5/logs/test.278.journalctl.txt`
+
+### Safety
+
+- Same envelope as T276/T277 (existing shared_info write + DMA alloc + reads only).
+- 4 additional reads + ~4×(4+32)=144 read_ram32 calls during ladder (~2 ms added per stage — well under dwell granularity).
+- Platform watchdog expected to recover late-ladder wedge.
+
+### Pre-test checklist
+
+1. **Build**: ✓ committed once we push (next); modinfo shows `bcm4360_test278_console_periodic`; 8 T278 pr_emerg strings visible.
+2. **PCIe state**: verify clean before fire.
+3. **Hypothesis**: this block.
+4. **Plan**: this block (commit before fire).
+5. **Host state**: boot 0 up since ~12:02 BST (~10 min — inside T270-BASELINE's 20 min clean window, but consumed by T277 fire and recovery).
+6. **Recommendation**: cold cycle before fire (user-initiated).
+
+### Fire expectations
+
+~150 s total run time (same as T270-BASELINE / T276 / T277). Expected to wedge in [t+90s, t+120s] (orthogonal to T278). T278's diagnostic value lies in what the logs contain, not whether the ladder completes.
 
 ---
 
