@@ -5,7 +5,94 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 15:49 BST, POST-T280-FIRE — **DECISIVE: MAILBOXMASK write SILENTLY FAILS at post-set_active.** `brcmf_pcie_intr_enable` called cleanly (both pre/post markers fired — no mid-call wedge); MAILBOXMASK readback post-call = `0x00000000`, expected `0xFF0300`. Write silently dropped on BCM4360 post-set_active. Prior tests (T241 pre-set_active) showed MBM round-trip passing, so something about the post-set_active state makes this BAR0 register read-only. New blocker for the whole scaffold approach: the upstream-canonical mask-enable path doesn't work on this chip in this state. Next direction: investigate whether DIFFERENT access method (raw iowrite32 via different reginfo, or different timing, or different register) works. Alternatively: re-disasm fw blob for the actual mask-register location fw's init uses — may be a different offset, not BRCMF_PCIE_PCIE2REG_MAILBOXMASK (BAR0+0x4C).)
+## Current state (2026-04-24 16:05 BST, POST-T284-CODE — **T284 pre-set_active MBM enable probe built. Calls `brcmf_pcie_intr_enable` AFTER T276 shared_info write but BEFORE `brcmf_chip_set_active`. 8 MBM readback points across fw init: pre-write, post-write (pre-set_active), post-set_active (CRITICAL), post-T276-poll, post-T278-initial-dump, plus each T278 stage hook at t+500ms/t+5s/t+30s/t+90s. Advisor-approved direct test: T241 proved MBM writes WORK pre-set_active; T280 proved they silently fail post-set_active; T284 tests whether a pre-set mask PERSISTS through ARM release into fw runtime. Build clean.)
+
+---
+
+## PRE-TEST.284 (2026-04-24 16:05 BST — **Move `brcmf_pcie_intr_enable` call to BEFORE `brcmf_chip_set_active`. 8-point MBM readback tracks whether pre-set mask persists through fw init. Potential home-run single-fire test.**)
+
+### Hypothesis
+
+- T241 (pre-set_active): MBM round-trip PASS — write lands.
+- T280 (post-set_active): MBM write silently drops — register unresponsive.
+- Hypothesis: chip state during `brcmf_chip_set_active` transitions the register from writable to unwritable. A pre-set_active write may either (a) persist into fw runtime (home run — fw wakes), (b) get reset by fw's init (tells us WHEN it resets), or (c) be preserved but produce no wake (mask was not the whole gate; H2D probes next).
+
+### Outcome matrix
+
+| MBM persistence | Console advance past wr_idx=587 | Reading |
+|---|---|---|
+| Stays `0xFF0300` all 8 reads | **New log at t+500ms or earlier** | **HOME RUN.** Pre-set mask survives; fw wakes. Driver fix: move `brcmf_pcie_intr_enable` before `brcmf_chip_set_active`. |
+| Stays `0xFF0300` | No new log | Mask survived but no latched bits to wake. T279 H2D probes will fire productively now — can run in same fire if both enabled. |
+| Resets to 0 at some readback point | Any | **Diagnostic gold.** Pinpoints WHEN the reset happens (pre- or post-set_active timestamp). T283 static analysis follows to find the reset writer. |
+| Mid-fire wedge with pre-set_active MBM logged | — | Novel wedge: pre-set mask + ARM release trips fw's early ISR into NULL-deref or similar. Fall back to narrow `0x100` in T284b. |
+
+### Design
+
+Code landed. Gated behind `bcm4360_test284_premask_enable=1`; requires T276+T277+T278.
+
+1. After T276 shared_info write (if enabled), BEFORE `brcmf_chip_set_active`:
+   - Read MBM ("pre-write (pre-set_active)") — expect 0.
+   - `pr_emerg "calling brcmf_pcie_intr_enable (pre-set_active)"` — safety marker.
+   - Call `brcmf_pcie_intr_enable(devinfo)` (writes MBM = 0xFF0300).
+   - `pr_emerg "brcmf_pcie_intr_enable returned"`.
+   - Read MBM ("post-write (pre-set_active)") — expect 0xFF0300 (T241-consistent).
+2. `brcmf_chip_set_active` runs.
+3. Read MBM ("post-set_active") — CRITICAL persistence check.
+4. T276 2 s poll runs (if enabled) — reads si[+0x010], fw_done, mbxint.
+5. After T276 poll-end: Read MBM ("post-T276-poll").
+6. T277 decode runs (if enabled).
+7. T278 POST-POLL full dump runs (if enabled).
+8. After T278 initial dump: Read MBM ("post-T278-initial-dump").
+9. Ladder runs; at each T278 stage hook (t+500ms, t+5s, t+30s, t+90s): MBM read piggybacks the console delta dump ("stage t+Xs").
+
+Total: 8 MBM readback points across the full init → ladder timeline. `pr_emerg` for each → in journal even on wedge.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test284_premask_enable=1 bcm4360_test279_mbx_probe=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.284.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.284.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.284.journalctl.txt
+```
+
+T279 also enabled: if mask persists and console doesn't advance on its own, H2D probes run with mask=0xFF0300 → expected to produce MAILBOXINT latch and (hopefully) new fw console content. T280 NOT enabled (redundant — T284 already opens mask earlier).
+
+### Safety (advisor-flagged)
+
+Pre-set mask + ARM release is a new state in this harness. Two specific wedge paths:
+- Fw's ISR fires immediately on ARM release (if any bit was already latched before we wrote the mask); handler may not be fully initialized → NULL deref → fw TRAP.
+- ISR handler writes to TCM region we also read → races.
+
+Mitigation: readback markers at each stage give visibility up to wedge point. Pre-set_active MBM log line is already in the journal before ARM release, so any wedge-during-set_active is attributable.
+
+### Pre-test checklist
+
+1. **Build**: ✓ committed next push; modinfo shows `bcm4360_test284_premask_enable`; strings visible.
+2. **PCIe state**: verify clean before fire.
+3. **Hypothesis**: this block.
+4. **Plan**: this block (commit before fire).
+5. **Host state**: needs fresh cold cycle (previous was for T280 fire).
+6. **Log attribution**: pre/post-call markers discriminate mid-call wedge from later wedges.
+
+### Fire expectations
+
+- Insmod + chip_attach + fw download + FORCEHT: ~20 s
+- T276 shared_info write: ~50 ms
+- T284 pre-write / intr_enable / post-write: ~10 ms
+- brcmf_chip_set_active + post-set_active read: ~100 ms
+- T276 2s poll + T277 + T278 initial dump + post-T278 read: ~3 s
+- T279 H2D probes: ~250 ms
+- T238 ladder with 4 more MBM reads + potential wake: variable
+- Total: ~25 s before ladder; T238 ladder for 120 s; wedge or clean completion
+
+If HOME RUN (fw wakes), the late-ladder wedge may not happen — fw running normally consumes the ladder differently. Need to watch for that.
 
 ---
 

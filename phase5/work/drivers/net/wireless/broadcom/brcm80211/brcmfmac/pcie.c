@@ -875,13 +875,42 @@ MODULE_PARM_DESC(bcm4360_test279_mbx_probe, "BCM4360 test.279: post-T278-poll, r
 static int bcm4360_test280_mask_enable;
 module_param(bcm4360_test280_mask_enable, int, 0644);
 MODULE_PARM_DESC(bcm4360_test280_mask_enable, "BCM4360 test.280: post-T278-poll, call brcmf_pcie_intr_enable() to unblock MAILBOXMASK (writes 0xFF0300), readback-verify, 100 ms dwell, console delta dump. Runs BEFORE T279 H2D probes if both set. Requires T276+T277+T278. (1=enable, 0=off)");
+
+/* BCM4360 test.284: PRE-set_active MAILBOXMASK enable with persistence
+ * tracking. T280 proved MBM writes silently fail AT post-set_active;
+ * T241 proved MBM writes WORK at pre-set_active. T284 calls
+ * brcmf_pcie_intr_enable BEFORE brcmf_chip_set_active and reads MBM
+ * back at multiple stages through fw init to determine whether the
+ * pre-set mask survives ARM release (home run) or gets reset at some
+ * specific event. Readback cadence: pre-write, post-write (pre-set_active),
+ * post-set_active, post-T276-poll, post-T278-initial-dump, plus each
+ * T278 stage hook at t+500ms/t+5s/t+30s/t+90s. Requires T276+T277+T278.
+ * Advisor trace 2026-04-24 post-T280. */
+static int bcm4360_test284_premask_enable;
+module_param(bcm4360_test284_premask_enable, int, 0644);
+MODULE_PARM_DESC(bcm4360_test284_premask_enable, "BCM4360 test.284: call brcmf_pcie_intr_enable BEFORE brcmf_chip_set_active. Read MAILBOXMASK back at multiple stages (pre-write, post-write, post-set_active, post-T276-poll, post-T278-initial, and at each T278 stage hook) to track whether pre-set mask survives fw init. Requires T276+T277+T278. (1=enable, 0=off)");
+
+/* BCM4360 test.284: MBM + MBXINT one-line readback helper.
+ * Zero cost when gate flag is off. */
+#define BCM4360_T284_READ_MBM(tag) do { \
+	if (bcm4360_test284_premask_enable) { \
+		u32 _t284_mbm = brcmf_pcie_read_reg32(devinfo, \
+			BRCMF_PCIE_PCIE2REG_MAILBOXMASK); \
+		u32 _t284_mbx = brcmf_pcie_read_reg32(devinfo, \
+			BRCMF_PCIE_PCIE2REG_MAILBOXINT); \
+		pr_emerg("BCM4360 test.284: %s MAILBOXMASK=0x%08x MAILBOXINT=0x%08x\n", \
+			 tag, _t284_mbm, _t284_mbx); \
+	} \
+} while (0)
 /* T278 helper body is defined after brcmf_pcie_read_ram32 (needs it)
  * and after struct brcmf_pciedev_info. See bcm4360_t278_dump_console_delta
  * later in this file. */
 
 /* BCM4360 test.278: per-stage hook — re-read si[+0x010] for the struct
  * pointer and dump delta since last call. Gated on both T277+T278 to
- * match the post-poll seeding precondition. */
+ * match the post-poll seeding precondition. If T284 is also enabled,
+ * the MBM read piggybacks (prefixed with the same stage tag) so the
+ * MBM persistence time series lines up with console deltas. */
 #define BCM4360_T278_HOOK(tag) do { \
 	if (bcm4360_test278_console_periodic && \
 	    bcm4360_test277_console_decode) { \
@@ -891,6 +920,7 @@ MODULE_PARM_DESC(bcm4360_test280_mask_enable, "BCM4360 test.280: post-T278-poll,
 			BCM4360_T276_SI_FW_STATUS); \
 		bcm4360_t278_dump_console_delta(devinfo, tag, _t278_ptr, \
 			&devinfo->t278_prev_write_idx); \
+		BCM4360_T284_READ_MBM("stage " tag); \
 	} \
 } while (0)
 
@@ -4022,6 +4052,20 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					}
 				}
 
+				/* BCM4360 test.284: pre-set_active MAILBOXMASK enable.
+				 * Runs AFTER T276 shared_info write (if enabled) but
+				 * BEFORE brcmf_chip_set_active. T280 proved post-
+				 * set_active MBM writes silently fail; T241 proved
+				 * pre-set_active MBM writes work. Open question:
+				 * does the pre-set mask survive fw init? */
+				if (bcm4360_test284_premask_enable) {
+					BCM4360_T284_READ_MBM("pre-write (pre-set_active)");
+					pr_emerg("BCM4360 test.284: calling brcmf_pcie_intr_enable (pre-set_active — writes MBM = 0xFF0300)\n");
+					brcmf_pcie_intr_enable(devinfo);
+					pr_emerg("BCM4360 test.284: brcmf_pcie_intr_enable returned\n");
+					BCM4360_T284_READ_MBM("post-write (pre-set_active)");
+				}
+
 				pr_emerg("BCM4360 test.238: calling brcmf_chip_set_active resetintr=0x%08x (ultra-extended ladder t+120s)\n",
 					 resetintr);
 				mdelay(10);
@@ -4029,6 +4073,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned FALSE\n");
 				else
 					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned TRUE\n");
+
+				BCM4360_T284_READ_MBM("post-set_active (CRITICAL: does ARM release clear it?)");
 
 				/* BCM4360 test.276: 2 s post-ARM-release poll of
 				 * shared_info response fields. Log on any change,
@@ -4076,6 +4122,8 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							t276_base + BCM4360_T276_SI_FW_INIT_DONE),
 						 brcmf_pcie_read_reg32(devinfo,
 							BRCMF_PCIE_PCIE2REG_MAILBOXINT));
+
+					BCM4360_T284_READ_MBM("post-T276-poll");
 
 					/* BCM4360 test.277: post-poll console decode.
 					 * Re-read the pointer fw published at si[+0x010]
@@ -4160,6 +4208,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							"POST-POLL (full)",
 							t278_ptr,
 							&devinfo->t278_prev_write_idx);
+						BCM4360_T284_READ_MBM("post-T278-initial-dump");
 					} else if (bcm4360_test278_console_periodic) {
 						pr_emerg("BCM4360 test.278: requires bcm4360_test277_console_decode=1; skipping\n");
 					}
