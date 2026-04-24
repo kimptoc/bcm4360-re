@@ -318,3 +318,79 @@ Options:
 3. Accept this investigation has reached its practical limit for today; preserve state and resume after longer cool-down.
 
 **Not firing again without advisor consultation.** Pausing here to avoid further hardware stress while state is drifting.
+
+### Advisor reframe + T268 pivot (2026-04-24 01:2x BST)
+
+Advisor pushed back on "hardware drift" framing. Real read: t+120000ms probe burst region is **marginal** (6/9 pass today). Fix is the same either way: **pivot the scaffold out of the flaky region entirely.**
+
+The scaffold is a pure host-side MSI/request_irq test. It doesn't need the 120s dwell ladder (which exists for fw-state probing, a different question). Move the scaffold to run **right after `brcmf_chip_set_active()` returns TRUE**, before the dwell ladder starts. ~10× less exposure per test, identical scaffold evidence, duration-scaling results from T264/T265/T266 still compose.
+
+---
+
+## PRE-TEST.268 (2026-04-24 01:2x BST, boot 0 — **Early-scaffold pivot: run T267-style MSI + request_irq + immediate cleanup RIGHT AFTER `brcmf_chip_set_active` returns, skip the dwell ladder entirely.** 10× less exposure; same scaffold test.)
+
+### Hypothesis
+
+T267's scaffold would have given 5-position crash discrimination, but two consecutive T267 fires both crashed in the t+120000ms probe burst (the shared dwell-ladder exit region). T268 moves the scaffold to a quieter time window: right after chip activation, before any dwell probes.
+
+If T268 crashes inside scaffold: we get the same discrimination T267 was meant to provide. 
+If T268 completes cleanly: the msleep-duration hypothesis from T264-T266 stands — crash requires being MSI-bound long enough for a timer to fire.
+
+### Design
+
+New param `bcm4360_test268_early_scaffold`. When set:
+
+1. Dwell ladder entry prints `brcmf_chip_set_active` call + TRUE/FALSE marker (unchanged).
+2. **Skip the entire dwell ladder.** `goto ultra_dwells_done`.
+3. Run the exact same scaffold as T267: `pci_enable_msi` + `request_irq` + IMMEDIATE `free_irq` + `pci_disable_msi`, all markers bracketed.
+4. Proceed to BM-clear + chip release (unchanged — this is what runs after `#undef BCM4360_T239_POLL`).
+
+Conceptually this is `bcm4360_test267_no_msleep=1` but with the scaffold running 2 minutes earlier (right after chip activation, ~15s into insmod instead of ~2min).
+
+### Next-step matrix
+
+| Outcome | Reading |
+|---|---|
+| All 6 scaffold markers fire, module unloads | **msleep duration is necessary** for crash trigger. Headline finding. Re-fire once. |
+| Crash between markers A-B, B-C, C-D, D-E, or E-F | 5-position discrimination fires — tells us exactly where in pci_enable_msi / request_irq / free_irq / pci_disable_msi the crash happens. |
+| Crash before scaffold entry (in probe path earlier than scaffold) | Same flaky region hit again; investigate further. |
+
+### Safety
+
+- Scaffold envelope unchanged from T267; just moved earlier.
+- Skips 120s of MMIO reads — less exposure to the marginal region that failed T267 twice.
+- Same cleanup (free_irq + pci_disable_msi) before BM-clear/chip release.
+
+### Code change outline
+
+1. New module param `bcm4360_test268_early_scaffold`.
+2. Insert `if (bcm4360_test268_early_scaffold) { scaffold; goto ultra_dwells_done; }` right after `brcmf_chip_set_active returned TRUE/FALSE` prints at line ~3713.
+3. Add label `ultra_dwells_done: ;` right before `#undef BCM4360_T239_POLL` at line ~4048.
+4. Build + verify modinfo + strings.
+
+### Run sequence
+
+```bash
+sudo insmod .../brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test268_early_scaffold=1
+sleep 30
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil || true
+```
+
+No probe params needed — we're skipping the ladder. `sleep 30` gives init + chip_set_active + scaffold time to run (should be <20s).
+
+### Expected artifacts
+
+- `phase5/logs/test.268.journalctl.txt`
+- `phase5/logs/test.268.run.txt`
+
+### Pre-test checklist (pending code+build)
+
+1. **Build**: NOT yet rebuilt.
+2. **PCIe state**: verified clean (Mem+ BusMaster+, no MAbort).
+3. **Hypothesis**: move scaffold out of marginal ladder region; 5-position discrimination retained.
+4. **Plan**: this block (committed before code).
+5. **Host state**: boot 0 up since 01:15 BST.
+
+Advisor-confirmed. Code + build + fire pending.
