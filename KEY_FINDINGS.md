@@ -23,22 +23,25 @@
 | fw expects valid NVRAM board data. Without it, `wlc_bmac_attach` reads SROM → 0xFFFF → TRAPs at PC 0xB80EF234 ~100 ms after ARM release. | CONFIRMED | phase4/notes/test_crash_analysis.md §Phase 4 Conclusion item 2 | 2026-04-14 |
 | fw ignores NVRAM-in-TCM; reads HW SPROM instead. Writing NVRAM to ramsize-0x1ec..ramsize-4 DOES reach fw (observed side-effects on boot progression). | CONFIRMED | commit `79d2d9e` + Phase 5 T236 `random_seed` progression | 2026-04-13, 2026-04-23 |
 
-## Host-firmware protocol — **olmsg over shared-info DMA ring** (the right answer)
+## Host-firmware protocol — **shared_info handshake CONFIRMED; runtime protocol UNCERTAIN**
 
 | Claim | Status | Evidence | Date |
 |---|---|---|---|
-| **Primary host-fw protocol is olmsg (offload messaging) over a DMA ring buffer whose address is published via a `shared_info` struct in TCM.** Not msgbuf, not BCDC. | CONFIRMED | phase4/notes/transport_discovery.md (wl.ko symbolic evidence) + phase4/notes/test_crash_analysis.md §Test.28 (runtime handshake) | 2026-04-13 |
-| `shared_info` struct lives at **TCM[0x9D0A4]** (BCM4360 — ramsize - 0x2F5C). Layout: | CONFIRMED | phase4/notes/level4_shared_info_plan.md + test.28 | 2026-04-13 |
+| `shared_info` struct lives at **TCM[0x9D0A4]** (BCM4360 — ramsize - 0x2F5C). Writing it with magic markers before ARM release prevents the 100 ms panic. | CONFIRMED | phase4/notes/level4_shared_info_plan.md + test.28 (Level 4 PASS) | 2026-04-13 |
+| `shared_info` layout: | CONFIRMED | phase4/work/bcm4360_test.c:60-72 + test.28 observations | 2026-04-13 |
 | &nbsp;&nbsp;`+0x000` = `magic_start` (0xA5A5A5A5) | | | |
-| &nbsp;&nbsp;`+0x004`..`+0x00B` = olmsg DMA physical addr (lo+hi 32-bit) | | | |
+| &nbsp;&nbsp;`+0x004`..`+0x00B` = DMA phys addr (lo+hi 32-bit) | | | |
 | &nbsp;&nbsp;`+0x00C` = buffer size (0x10000 = 64 KB) | | | |
-| &nbsp;&nbsp;`+0x010` = fw-writable status field (observed `0x0009af88`) | | | |
-| &nbsp;&nbsp;`+0x2028` = `fw_init_done` (fw sets non-zero when ready) | | | |
+| &nbsp;&nbsp;`+0x010` = fw-writable — points to a **console struct** (buf_addr, buf_size, write_idx, read_addr). Observed value `0x0009af88`. | | | |
+| &nbsp;&nbsp;`+0x2028` = `fw_init_done` (fw sets non-zero on full init — **NEVER OBSERVED** set in Phase 4B testing) | | | |
 | &nbsp;&nbsp;`+0x2F38` = `magic_end` (0x5A5A5A5A) | | | |
-| Writing a valid `shared_info` BEFORE ARM release is sufficient to prevent the 100 ms panic. Fw runs stably for ≥2 s, reads DMA addr, writes status to +0x010, sends 2 PCIe mailbox signals. | CONFIRMED | phase4/notes/test_crash_analysis.md §Test.28 (Level 4 PASS) | 2026-04-13 |
-| olmsg ring structure: two rings (host→fw = ring 0, fw→host = ring 1). Each `{data_offset, size, read_ptr, write_ptr}` = 16 bytes header; ring data 0x7800 (30 KB) each; total 0xF020 within a 64 KB DMA buffer. | CONFIRMED | phase4/notes/option_c_feasibility.md (wl.ko disasm) | 2026-04-12 |
+| With shared_info written, fw runs stably for ≥2 s, writes console struct pointer to `+0x010`, sends 2 PCIe mailbox signals via `PCIE_MAILBOXINT` bits. | CONFIRMED | test.28 / test.29 | 2026-04-13 |
+| With shared_info + DMA bus master enabled: fw **did NOT write to the olmsg ring** (ring's write_ptr stayed 0). `fw_init_done` timed out. | CONFIRMED | test.29 | 2026-04-13 |
+| **The runtime protocol fw uses to talk to host is NOT proven.** Phase 4A inferred olmsg from wl.ko symbols; Phase 4B's runtime test showed olmsg ring unused. Phase 4B's level-5 code comment reads: `"This firmware is PCI-CDC (FullMAC), NOT olmsg offload"`. Current best reading: unknown; olmsg-only hypothesis is weak, CDC-only is contradicted by T274 (zero HOSTRDY_DB1 refs). | LIVE / UNRESOLVED | Contradictory sources; primary direct-observable evidence is mailbox signals + `shared_info[+0x010]` update | 2026-04-24 |
+| olmsg ring structure (if used): two rings (host→fw = ring 0, fw→host = ring 1). Each `{data_offset, size, read_ptr, write_ptr}` = 16 bytes header; ring data 0x7800 (30 KB) each; total 0xF020 within 64 KB DMA buffer. | CONFIRMED-layout-UNCONFIRMED-usage | phase4/notes/option_c_feasibility.md (wl.ko disasm) | 2026-04-12 |
 | Upstream brcmfmac PCIe path is **msgbuf-only**. BCM4360 fw does NOT speak msgbuf. No msgbuf fw variant for BCM4360 exists in linux-firmware. | CONFIRMED | commit `fc73a12` + T274 (zero HOSTRDY_DB1 refs in blob) | 2026-04-12, 2026-04-24 |
-| BCDC proto code exists in brcmfmac (bcdc.c/h), wired to SDIO + USB. PCIe's `tx_ctlpkt`/`rx_ctlpkt` (pcie.c:2597/2604) are stubs returning 0. **BCDC-over-PCIe was an incorrect direction** — BCM4360 speaks olmsg, not BCDC. | SUPERSEDED-CORRECT | phase6/t275_upstream_audit.md (discovered stubs); phase4B olmsg evidence (the actual protocol) | 2026-04-24 |
+| BCDC proto code exists in brcmfmac (bcdc.c/h), wired to SDIO + USB. PCIe's `tx_ctlpkt`/`rx_ctlpkt` (pcie.c:2597/2604) are stubs returning 0. | CONFIRMED | phase6/t275_upstream_audit.md | 2026-04-24 |
+| **T275's claim "BCDC-over-PCIe via 2 stubs is the path"** — SUPERSEDED. The stub observation stands, but "fw speaks BCDC" is unproven (T274 showed no HOSTRDY_DB1 refs; Phase 4B's PCI-CDC label applies to fw binary capability, not runtime behavior). | SUPERSEDED | phase6/t275 vs phase4/test.29 | 2026-04-24 |
 
 ## Current fw init state (what Phase 5's patches achieve, what's left)
 
@@ -49,7 +52,7 @@
 | `pcidongle_probe` body completes (alloc devinfo → helpers → hndrte_add_isr → fn@0x1E44 post-reg → return). No hangs in its direct body/sub-tree. | CONFIRMED | T274 disasm of 0x1E90..0x1F78 | 2026-04-24 |
 | After pcidongle_probe returns, fw enters WFI via scheduler idle path. Scheduler state at TCM[0x6296C..0x629B4] frozen across 23 dwells (t+100 ms through t+90 s). | CONFIRMED | T255 frozen-state probe + T257 WFI-reachability static analysis | 2026-04-23 |
 | fw never writes sharedram_addr to TCM[ramsize-4] — stays at NVRAM trailer `0xffc70038`. | CONFIRMED | T247 probe (22 reads across all dwells) | 2026-04-23 |
-| **Phase 5 never carried forward Phase 4B's shared_info write.** The olmsg handshake is missing from the Phase 5 driver path. | LIVE (the next fix) | phase5/work/.../pcie.c does not write to TCM[0x9D0A4]; Phase 5 T234 tried zeroing TCM[0x9FE00..] but NOT writing shared_info | 2026-04-24 |
+| **Phase 5 never carried forward Phase 4B's shared_info write.** Phase 5 pcie.c has ZERO writes of `0xA5A5A5A5`/`0x5A5A5A5A` (verified by grep). It only READS 0x9D0A4 expecting fw to write the magic — but Test.28 proved the HOST writes it FIRST, then fw responds. Handshake direction has been backwards throughout Phase 5. | LIVE (the next fix) | grep shows zero writes; Test.28 proved direction | 2026-04-24 |
 
 ## Host-side — hardware characteristics
 
@@ -91,8 +94,9 @@
 
 | Claim | Status | Evidence | Date |
 |---|---|---|---|
-| Adding a shared_info + olmsg DMA write to Phase 5's `brcmf_pcie_setup` early path will break the WFI-stall and let fw publish sharedram_addr. | LIVE (next to try) | phase4/notes/test_crash_analysis.md §Test.28 shows this pattern works pre-ARM-release; Phase 5 just needs to port it | 2026-04-24 |
-| BCDC-over-PCIe via brcmfmac's bcdc.c is a viable driver path. | LIKELY-WRONG | Correct protocol per primary sources is olmsg, not BCDC. BCDC symbols in blob are shared-codebase artifact. T275 writeup should be read with this caveat. | 2026-04-24 |
+| **Adding Phase 4B's shared_info write to Phase 5's `brcmf_pcie_setup` pre-ARM-release path will change fw behavior in a reproducible way.** Specifically: fw will write `shared_info[+0x010]` with a console struct pointer and send ≥1 PCIe mailbox signal — matching test.28 observations. Whether it advances further (sets `fw_init_done`, writes to olmsg ring) is UNKNOWN. | LIVE (next diagnostic test) | test.28/29 set the observable baseline; Phase 5 currently lacks this write | 2026-04-24 |
+| BCDC-over-PCIe via brcmfmac's bcdc.c is a viable driver path. | LIKELY-WRONG | T274 + Phase 4B test.29 don't support CDC wiring as sufficient. Don't build on this. | 2026-04-24 |
+| olmsg ring is the runtime communication path after shared_info. | UNCERTAIN | Phase 4A inferred; Phase 4B test.29 showed ring unused. Could depend on a further host action we didn't make. | 2026-04-24 |
 | MSI-subscription wedge (T264–T266) has a known fix via `pci=noaspm` or different MSI setup. | LIVE | phase6/t269_code_audit_results.md §Candidates B/C — not tested | 2026-04-24 |
 
 ## Session discipline — READ THIS LAST AND UPDATE WHAT'S NEEDED

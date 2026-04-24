@@ -790,6 +790,33 @@ static int bcm4360_test269_early_exit;
 module_param(bcm4360_test269_early_exit, int, 0644);
 MODULE_PARM_DESC(bcm4360_test269_early_exit, "BCM4360 test.269: early-exit at t+60000ms — skip t+90s/t+120s dwells and all scaffolds; goto ultra_dwells_done for clean BM-clear + release. Tests wall-clock vs ladder-activity crash mechanism. (1=enable, 0=off)");
 
+/* BCM4360 test.276: port Phase 4B test.28's shared_info pre-ARM-release
+ * write into Phase 5. Writes magic + olmsg DMA buffer address to TCM
+ * shared_info struct at ramsize-0x2F5C (0x9D0A4 for 640 KB TCM). After
+ * set_active, polls shared_info[+0x010], fw_init_done, and MAILBOXINT
+ * for 2 s, logging every change. Pure diagnostic — no MSI, no doorbell.
+ * Design: phase6/t276_shared_info_design.md. Protocol evidence:
+ * KEY_FINDINGS.md §Host-firmware protocol. */
+static int bcm4360_test276_shared_info;
+module_param(bcm4360_test276_shared_info, int, 0644);
+MODULE_PARM_DESC(bcm4360_test276_shared_info, "BCM4360 test.276: write shared_info handshake at TCM[ramsize-0x2F5C] and allocate 64 KB olmsg DMA buffer before ARM release; poll response for 2 s post-release. Ports Phase 4B test.28. (1=enable, 0=off)");
+
+/* BCM4360 test.276 constants — see phase4/notes/level4_shared_info_plan.md */
+#define BCM4360_T276_SHARED_INFO_OFFSET	0x2F5C	/* subtracted from ramsize */
+#define BCM4360_T276_SHARED_INFO_SIZE	0x2F3C	/* ramsize-0x2F5C..ramsize-0x20 */
+#define BCM4360_T276_SI_MAGIC_START	0x000
+#define BCM4360_T276_SI_DMA_LO		0x004
+#define BCM4360_T276_SI_DMA_HI		0x008
+#define BCM4360_T276_SI_BUF_SIZE	0x00C
+#define BCM4360_T276_SI_FW_STATUS	0x010	/* fw-writable */
+#define BCM4360_T276_SI_FW_INIT_DONE	0x2028
+#define BCM4360_T276_SI_MAGIC_END	0x2F38
+#define BCM4360_T276_MAGIC_START_VAL	0xA5A5A5A5
+#define BCM4360_T276_MAGIC_END_VAL	0x5A5A5A5A
+#define BCM4360_T276_OLMSG_BUF_SIZE	0x10000	/* 64 KB */
+#define BCM4360_T276_OLMSG_RING_SIZE	0x7800	/* 30 KB per ring */
+#define BCM4360_T276_OLMSG_HDR_SIZE	0x20	/* 2 rings * 16 B header */
+
 /* BCM4360 test.256 scheduler-walk helper. 2 pr_emerg lines, 16 u32 each.
  * gate_flag arg lets caller pick between sched_walk (t+60s) and
  * sched_walk_early (t+100ms). */
@@ -1152,6 +1179,9 @@ struct brcmf_pciedev_info {
 			  u16 value);
 	struct brcmf_mp_device *settings;
 	struct brcmf_otp_params otp;
+	/* BCM4360 test.276: olmsg DMA buffer handed to fw via shared_info. */
+	void *t276_olmsg_buf;
+	dma_addr_t t276_olmsg_dma;
 #ifdef DEBUG
 	u32 console_interval;
 	bool console_active;
@@ -3725,6 +3755,101 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					} \
 				} while (0)
 
+				/* BCM4360 test.276: pre-ARM-release shared_info write.
+				 * Placement: AFTER FORCEHT, IMMEDIATELY BEFORE
+				 * brcmf_chip_set_active, so nothing else in Phase 5's
+				 * probe path can touch the region between our write
+				 * and ARM release. See phase6/t276_shared_info_design.md. */
+				if (bcm4360_test276_shared_info &&
+				    devinfo->ci->chip == BRCM_CC_4360_CHIP_ID) {
+					u32 t276_base = devinfo->ci->ramsize -
+							BCM4360_T276_SHARED_INFO_OFFSET;
+					void *t276_buf = NULL;
+					dma_addr_t t276_dma = 0;
+					u32 t276_i;
+
+					t276_buf = dma_alloc_coherent(
+						&devinfo->pdev->dev,
+						BCM4360_T276_OLMSG_BUF_SIZE,
+						&t276_dma, GFP_KERNEL);
+					if (!t276_buf) {
+						pr_emerg("BCM4360 test.276: dma_alloc_coherent FAILED; skipping shared_info write\n");
+					} else {
+						__le32 *p = (__le32 *)t276_buf;
+
+						memset(t276_buf, 0,
+						       BCM4360_T276_OLMSG_BUF_SIZE);
+						/* olmsg ring header: ring0 (host->fw),
+						 * ring1 (fw->host). Each {data_off,
+						 * size, rd_ptr, wr_ptr}. */
+						p[0] = cpu_to_le32(BCM4360_T276_OLMSG_HDR_SIZE);
+						p[1] = cpu_to_le32(BCM4360_T276_OLMSG_RING_SIZE);
+						p[2] = 0;
+						p[3] = 0;
+						p[4] = cpu_to_le32(BCM4360_T276_OLMSG_HDR_SIZE +
+								   BCM4360_T276_OLMSG_RING_SIZE);
+						p[5] = cpu_to_le32(BCM4360_T276_OLMSG_RING_SIZE);
+						p[6] = 0;
+						p[7] = 0;
+
+						/* Zero shared_info TCM region before
+						 * writing known fields — clears any
+						 * prior content / fw trap state. */
+						for (t276_i = 0;
+						     t276_i < BCM4360_T276_SHARED_INFO_SIZE / 4;
+						     t276_i++)
+							brcmf_pcie_write_ram32(
+								devinfo,
+								t276_base + t276_i * 4,
+								0);
+
+						brcmf_pcie_write_ram32(devinfo,
+							t276_base + BCM4360_T276_SI_MAGIC_START,
+							BCM4360_T276_MAGIC_START_VAL);
+						brcmf_pcie_write_ram32(devinfo,
+							t276_base + BCM4360_T276_SI_DMA_LO,
+							lower_32_bits(t276_dma));
+						brcmf_pcie_write_ram32(devinfo,
+							t276_base + BCM4360_T276_SI_DMA_HI,
+							upper_32_bits(t276_dma));
+						brcmf_pcie_write_ram32(devinfo,
+							t276_base + BCM4360_T276_SI_BUF_SIZE,
+							BCM4360_T276_OLMSG_BUF_SIZE);
+						brcmf_pcie_write_ram32(devinfo,
+							t276_base + BCM4360_T276_SI_FW_INIT_DONE,
+							0);
+						brcmf_pcie_write_ram32(devinfo,
+							t276_base + BCM4360_T276_SI_MAGIC_END,
+							BCM4360_T276_MAGIC_END_VAL);
+
+						pr_emerg("BCM4360 test.276: shared_info written at TCM[0x%05x] olmsg_dma=0x%llx size=%d\n",
+							 t276_base,
+							 (unsigned long long)t276_dma,
+							 BCM4360_T276_OLMSG_BUF_SIZE);
+						pr_emerg("BCM4360 test.276: readback magic_start=0x%08x (exp 0x%08x) dma_lo=0x%08x (exp 0x%08x) dma_hi=0x%08x (exp 0x%08x)\n",
+							 brcmf_pcie_read_ram32(devinfo, t276_base),
+							 BCM4360_T276_MAGIC_START_VAL,
+							 brcmf_pcie_read_ram32(devinfo,
+								t276_base + BCM4360_T276_SI_DMA_LO),
+							 lower_32_bits(t276_dma),
+							 brcmf_pcie_read_ram32(devinfo,
+								t276_base + BCM4360_T276_SI_DMA_HI),
+							 upper_32_bits(t276_dma));
+						pr_emerg("BCM4360 test.276: readback buf_size=0x%08x (exp 0x%08x) fw_init_done=0x%08x (exp 0) magic_end=0x%08x (exp 0x%08x)\n",
+							 brcmf_pcie_read_ram32(devinfo,
+								t276_base + BCM4360_T276_SI_BUF_SIZE),
+							 BCM4360_T276_OLMSG_BUF_SIZE,
+							 brcmf_pcie_read_ram32(devinfo,
+								t276_base + BCM4360_T276_SI_FW_INIT_DONE),
+							 brcmf_pcie_read_ram32(devinfo,
+								t276_base + BCM4360_T276_SI_MAGIC_END),
+							 BCM4360_T276_MAGIC_END_VAL);
+
+						devinfo->t276_olmsg_buf = t276_buf;
+						devinfo->t276_olmsg_dma = t276_dma;
+					}
+				}
+
 				pr_emerg("BCM4360 test.238: calling brcmf_chip_set_active resetintr=0x%08x (ultra-extended ladder t+120s)\n",
 					 resetintr);
 				mdelay(10);
@@ -3732,6 +3857,54 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned FALSE\n");
 				else
 					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned TRUE\n");
+
+				/* BCM4360 test.276: 2 s post-ARM-release poll of
+				 * shared_info response fields. Log on any change,
+				 * continue for full 2 s (don't break on first
+				 * signal — Phase 4B Test.28 showed BOTH a TCM
+				 * update and mailbox signals). */
+				if (bcm4360_test276_shared_info &&
+				    devinfo->ci->chip == BRCM_CC_4360_CHIP_ID &&
+				    devinfo->t276_olmsg_buf) {
+					u32 t276_base = devinfo->ci->ramsize -
+							BCM4360_T276_SHARED_INFO_OFFSET;
+					u32 last_fw_status = 0xdeadbeef;
+					u32 last_fw_init = 0xdeadbeef;
+					u32 last_mbxint = 0xdeadbeef;
+					u32 t276_i;
+
+					pr_emerg("BCM4360 test.276: entering 2s poll post-set_active\n");
+					for (t276_i = 0; t276_i < 200; t276_i++) {
+						u32 fw_status = brcmf_pcie_read_ram32(
+							devinfo,
+							t276_base + BCM4360_T276_SI_FW_STATUS);
+						u32 fw_init = brcmf_pcie_read_ram32(
+							devinfo,
+							t276_base + BCM4360_T276_SI_FW_INIT_DONE);
+						u32 mbxint = brcmf_pcie_read_reg32(
+							devinfo,
+							BRCMF_PCIE_PCIE2REG_MAILBOXINT);
+
+						if (fw_status != last_fw_status ||
+						    fw_init != last_fw_init ||
+						    mbxint != last_mbxint) {
+							pr_emerg("BCM4360 test.276: t+%dms si[+0x010]=0x%08x fw_done=0x%08x mbxint=0x%08x\n",
+								 t276_i * 10, fw_status,
+								 fw_init, mbxint);
+							last_fw_status = fw_status;
+							last_fw_init = fw_init;
+							last_mbxint = mbxint;
+						}
+						msleep(10);
+					}
+					pr_emerg("BCM4360 test.276: poll-end si[+0x010]=0x%08x fw_done=0x%08x mbxint=0x%08x\n",
+						 brcmf_pcie_read_ram32(devinfo,
+							t276_base + BCM4360_T276_SI_FW_STATUS),
+						 brcmf_pcie_read_ram32(devinfo,
+							t276_base + BCM4360_T276_SI_FW_INIT_DONE),
+						 brcmf_pcie_read_reg32(devinfo,
+							BRCMF_PCIE_PCIE2REG_MAILBOXINT));
+				}
 				if (bcm4360_test268_early_scaffold) {
 					struct pci_dev *_pdev268 = devinfo->pdev;
 					int _prev_irq268 = _pdev268->irq;
@@ -5890,6 +6063,17 @@ static int brcmf_pcie_get_resource(struct brcmf_pciedev_info *devinfo)
 
 static void brcmf_pcie_release_resource(struct brcmf_pciedev_info *devinfo)
 {
+	/* BCM4360 test.276: free olmsg DMA buffer if allocated. Covers both
+	 * remove and probe-failure paths (this function is called from both). */
+	if (devinfo->t276_olmsg_buf) {
+		dma_free_coherent(&devinfo->pdev->dev,
+				  BCM4360_T276_OLMSG_BUF_SIZE,
+				  devinfo->t276_olmsg_buf,
+				  devinfo->t276_olmsg_dma);
+		devinfo->t276_olmsg_buf = NULL;
+		devinfo->t276_olmsg_dma = 0;
+	}
+
 	if (devinfo->tcm)
 		iounmap(devinfo->tcm);
 	if (devinfo->regs)
