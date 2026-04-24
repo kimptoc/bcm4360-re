@@ -5,7 +5,93 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 14:57 BST, POST-T279-FIRE — **DECISIVE FINDING: `MAILBOXMASK = 0x00000000` at probe time. Fw has ALL MAILBOXINT bits masked at the ARM interrupt line. Neither H2D_MBX_1 (hypothesis) nor H2D_MBX_0 (positive control) produced any MAILBOXINT latch or new console content — BOTH writes saw `MAILBOXINT=0x0` post-msleep, `wr_idx=587 unchanged`.** The advisor's sanity-check caught the root cause: fw stays in WFI forever because the mask blocks any wake interrupt. Major reframe: the missing piece is NOT "which bit triggers fn@0x1146C" but "why doesn't fw unmask MAILBOXINT during its init, and will the host setting MAILBOXMASK itself advance fw?" T274's prior framing ("software pending-events word not written" / "HW-mapped") is consistent: even if H2D writes latched a pending bit, the mask gates whether that bit reaches ARM. Natural next test: T280 — write MAILBOXMASK to a known-good value (e.g. 0x300 = FN0_0|FN0_1), then re-fire the T279 probe sequence. Prior scaffolds that set MAILBOXMASK (T258-T269) wedged without shared_info; T280 has shared_info + console for pre-wedge observability.)
+## Current state (2026-04-24 15:05 BST, POST-T280-CODE — **T280 mask-enable probe built and committed.** Calls `brcmf_pcie_intr_enable()` (upstream-canonical write of 0xFF0300 = int_d2h_db|int_fn0 to MAILBOXMASK) between T278 post-poll and T279 H2D probes. Pre-log marker for mid-call wedge attribution. Readback verifies the write landed. 100 ms dwell + T278 console delta dump captures "does mask alone wake fw" outcome. If T279 is ALSO enabled, it runs AFTER T280's delta dump, so both "mask alone" and "mask + H2D" cases are discriminable in one fire. No MSI, no request_irq, no hostready call. Requires T276+T277+T278. Build clean.)
+
+---
+
+## PRE-TEST.280 (2026-04-24 15:05 BST — **Host-side MAILBOXMASK unblock. Call brcmf_pcie_intr_enable between T278 dump and T279 H2D probes; see if the mask alone wakes fw or pre-latched bits fire.**)
+
+### Hypothesis
+
+T279 observed MAILBOXMASK=0 — fw's own init did NOT unmask, so no H2D write can propagate. Two candidate explanations:
+1. **Mask unmask is supposed to happen, didn't.** If fw set the *software* flag-mask when hndrte_add_isr registered pciedngl_isr and fn@0x1146C (T273/T274 evidence), but never propagated that to the HW MAILBOXMASK register, fw has a "latent ready" state: internal MAILBOXINT would latch an H2D bit, but the ARM never wakes because mask is 0.
+2. **Mask unmask requires a host action we haven't made.** Upstream brcmfmac's `brcmf_pcie_intr_enable` writes MAILBOXMASK; fw expects the host to do this.
+
+Both cases: writing MAILBOXMASK ourselves is the discriminator.
+
+Per advisor: if bits were ALREADY pre-latched in MAILBOXINT (waiting for the mask to open), the mask-enable alone will wake fw without any H2D write. This is the highest-value outcome and we lose it if T280 is merged with T279's H2D probes.
+
+### Outcome matrix
+
+| Post-mask-enable delta | Post-mask MBXINT | Post H2D_MBX_1 delta | Post H2D_MBX_0 delta | Reading |
+|---|---|---|---|---|
+| **New fw log** | Non-zero pre-latched | — | — | **Home run: mask was the sole gate; fw had bits pre-latched; unblocking wakes it.** Driver fix: call `brcmf_pcie_intr_enable` during setup. |
+| "no new log" | 0 | New wl/bmac/wl_rte.c log | (bonus) | fn@0x1146C's trigger = H2D_MBX_1 under open mask. Driver fix: mask enable + H2D_MBX_1. |
+| "no new log" | 0 | "no new log" | `"pciedngl_isr called"` | Positive control OK; fn@0x1146C's bit is neither H2D_MBX_0 nor H2D_MBX_1. Narrow search (T281b — enumerate other wake mechanisms). |
+| "no new log" | 0 | "no new log" | "no new log" | MBM readback will show whether write landed. If landed, mask not gating; deeper issue (INTMASK at 0x24? ARM vector at [0x224]?). Pivot to static analysis. |
+| readback mismatch (post MBM ≠ 0xFF0300) | — | — | — | MBM write didn't land. BAR0 write-path issue; prior T241/T243 had MBM round-trip tests — re-check. |
+| Mid-call wedge (only "calling brcmf_pcie_intr_enable" marker fires, "returned" does not) | — | — | — | Novel finding: `brcmf_pcie_intr_enable` itself wedges HW under shared_info-present conditions. Prior T258/T259 wedges had no shared_info. New class of wedge; fall back to raw write of narrower mask in T280b. |
+
+### Design
+
+Code landed. Gated on `bcm4360_test280_mask_enable=1`; requires T276+T277+T278.
+
+1. Read MAILBOXMASK (expect 0 per T279). Log.
+2. Read MAILBOXINT (expect 0). Log — shows any pre-latched bits.
+3. `pr_emerg "calling brcmf_pcie_intr_enable"` — safety marker for mid-call wedge attribution.
+4. Call `brcmf_pcie_intr_enable(devinfo)` (upstream helper — writes int_d2h_db | int_fn0 = 0xFF0300 to MAILBOXMASK).
+5. `pr_emerg "returned"` — confirms call didn't wedge.
+6. Read MAILBOXMASK (verify 0xFF0300). Log.
+7. Read MAILBOXINT (check for pre-latched bits). Log.
+8. msleep(100).
+9. T278 delta console dump — **critical observation: did mask enable alone wake fw?**
+10. Read MAILBOXINT again (log any late-arriving signals).
+11. If `bcm4360_test279_mbx_probe=1` also set: T279's H2D probes run AFTER this block.
+
+NO MSI, NO request_irq, NO hostready call. All orthogonal to the mask question.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test280_mask_enable=1 bcm4360_test279_mbx_probe=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.280.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.280.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.280.journalctl.txt
+```
+
+Both T279 and T280 enabled so one fire discriminates all matrix outcomes.
+
+### Safety
+
+- Prior T258/T259 wrote MAILBOXMASK via the same helper and wedged host. Those runs lacked shared_info; T280 has shared_info + console + pre-write log marker. That's a real conditions delta but not a guarantee.
+- Pre-log marker `"calling brcmf_pcie_intr_enable"` + post-log `"returned"` discriminates "wedge during MMIO write" from "wedge during subsequent probe reads" from "wedge during H2D write" from "wedge much later in ladder".
+- Expect wedge. Budget one cold cycle per fire.
+
+### Pre-test checklist
+
+1. **Build**: ✓ committed next push; modinfo shows `bcm4360_test280_mask_enable`; 6 T280 strings visible.
+2. **PCIe state**: verify clean before fire.
+3. **Hypothesis**: this block.
+4. **Plan**: this block (commit before fire).
+5. **Host state**: boot 0 up since ~14:55 BST (~10 min, inside T270's 20-min clean window). **Recommended: fresh cold cycle before fire** for cleanest read.
+6. **Log attribution markers**: pre/post-call `pr_emerg` lines make wedge-location diagnosable.
+
+### Fire expectations
+
+- Insmod + chip_attach + fw download + FORCEHT + set_active: ~20 s
+- T276 2s poll + T277 decode + T278 full dump: ~3 s
+- T280 mask-enable + 100 ms dwell + delta dump: ~150 ms
+- T279 H2D probes: ~250 ms
+- T238 ladder to wedge: ~90-120 s
+- Total: ~115-145 s before wedge
+
+T280's diagnostic lands in the first ~3.2 seconds after set_active. Wedge after that still leaves all diagnostic data in the journal.
 
 ---
 

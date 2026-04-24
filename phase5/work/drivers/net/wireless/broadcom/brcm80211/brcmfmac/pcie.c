@@ -860,6 +860,21 @@ MODULE_PARM_DESC(bcm4360_test278_console_periodic, "BCM4360 test.278: periodic c
 static int bcm4360_test279_mbx_probe;
 module_param(bcm4360_test279_mbx_probe, int, 0644);
 MODULE_PARM_DESC(bcm4360_test279_mbx_probe, "BCM4360 test.279: post-T278-poll, read MAILBOXMASK, write H2D_MAILBOX_1=1 (hypothesis), msleep+console-dump, write H2D_MAILBOX_0=1 (positive control), msleep+console-dump. Requires T276+T277+T278. (1=enable, 0=off)");
+
+/* BCM4360 test.280: MAILBOXMASK-enable probe. T279 proved MAILBOXMASK=0
+ * at post-set_active time — all mailbox interrupts blocked. T280 calls
+ * the canonical brcmf_pcie_intr_enable() (writes int_d2h_db | int_fn0 =
+ * 0xFF0300 to MAILBOXMASK), then waits 100 ms and does a T278 console
+ * delta dump. If fn@0x1146C's bit was already latched in fw's internal
+ * MAILBOXINT (just mask-blocked), the unblock alone wakes it and new
+ * log content appears BEFORE any H2D write. Safety: prior scaffolds
+ * (T258/T259) wedged when writing MAILBOXMASK without shared_info;
+ * T280 has shared_info + console. Pre-log marker immediately before
+ * the write to catch mid-call wedge. Requires T276+T277+T278. Advisor
+ * trace 2026-04-24 post-T279. */
+static int bcm4360_test280_mask_enable;
+module_param(bcm4360_test280_mask_enable, int, 0644);
+MODULE_PARM_DESC(bcm4360_test280_mask_enable, "BCM4360 test.280: post-T278-poll, call brcmf_pcie_intr_enable() to unblock MAILBOXMASK (writes 0xFF0300), readback-verify, 100 ms dwell, console delta dump. Runs BEFORE T279 H2D probes if both set. Requires T276+T277+T278. (1=enable, 0=off)");
 /* T278 helper body is defined after brcmf_pcie_read_ram32 (needs it)
  * and after struct brcmf_pciedev_info. See bcm4360_t278_dump_console_delta
  * later in this file. */
@@ -4147,6 +4162,58 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							&devinfo->t278_prev_write_idx);
 					} else if (bcm4360_test278_console_periodic) {
 						pr_emerg("BCM4360 test.278: requires bcm4360_test277_console_decode=1; skipping\n");
+					}
+
+					/* BCM4360 test.280: MAILBOXMASK-enable probe.
+					 * Runs BEFORE T279's H2D writes so the "mask alone
+					 * wakes fw" outcome is discriminable from "H2D
+					 * write wakes fw under open mask". T279 showed
+					 * MAILBOXMASK=0 at this point — all fw mailbox
+					 * ints blocked. brcmf_pcie_intr_enable() writes
+					 * the upstream-canonical 0xFF0300 (int_d2h_db |
+					 * int_fn0). Pre-log immediately before the call
+					 * so a mid-call wedge is attributable. */
+					if (bcm4360_test280_mask_enable &&
+					    bcm4360_test276_shared_info &&
+					    bcm4360_test277_console_decode &&
+					    bcm4360_test278_console_periodic) {
+						u32 mbm_pre, mbm_post;
+						u32 mbxint_pre, mbxint_post, mbxint_late;
+						u32 t280_ptr;
+
+						mbm_pre = brcmf_pcie_read_reg32(devinfo,
+							BRCMF_PCIE_PCIE2REG_MAILBOXMASK);
+						mbxint_pre = brcmf_pcie_read_reg32(devinfo,
+							BRCMF_PCIE_PCIE2REG_MAILBOXINT);
+						pr_emerg("BCM4360 test.280: pre-enable MAILBOXMASK=0x%08x MAILBOXINT=0x%08x\n",
+							 mbm_pre, mbxint_pre);
+
+						pr_emerg("BCM4360 test.280: calling brcmf_pcie_intr_enable (will write MAILBOXMASK = int_d2h_db | int_fn0 = 0xFF0300)\n");
+						brcmf_pcie_intr_enable(devinfo);
+						pr_emerg("BCM4360 test.280: brcmf_pcie_intr_enable returned\n");
+
+						mbm_post = brcmf_pcie_read_reg32(devinfo,
+							BRCMF_PCIE_PCIE2REG_MAILBOXMASK);
+						mbxint_post = brcmf_pcie_read_reg32(devinfo,
+							BRCMF_PCIE_PCIE2REG_MAILBOXINT);
+						pr_emerg("BCM4360 test.280: post-enable MAILBOXMASK=0x%08x (expect 0xFF0300) MAILBOXINT=0x%08x (pre-latched bits?)\n",
+							 mbm_post, mbxint_post);
+
+						msleep(100);
+
+						t280_ptr = brcmf_pcie_read_ram32(devinfo,
+							t276_base + BCM4360_T276_SI_FW_STATUS);
+						bcm4360_t278_dump_console_delta(devinfo,
+							"POST-MASK-ENABLE (+100ms)",
+							t280_ptr,
+							&devinfo->t278_prev_write_idx);
+
+						mbxint_late = brcmf_pcie_read_reg32(devinfo,
+							BRCMF_PCIE_PCIE2REG_MAILBOXINT);
+						pr_emerg("BCM4360 test.280: +100ms MAILBOXINT=0x%08x (any change = fw signalled)\n",
+							 mbxint_late);
+					} else if (bcm4360_test280_mask_enable) {
+						pr_emerg("BCM4360 test.280: requires T276+T277+T278 all enabled; skipping\n");
 					}
 
 					/* BCM4360 test.279: directed mailbox probe.
