@@ -817,6 +817,24 @@ MODULE_PARM_DESC(bcm4360_test276_shared_info, "BCM4360 test.276: write shared_in
 #define BCM4360_T276_OLMSG_RING_SIZE	0x7800	/* 30 KB per ring */
 #define BCM4360_T276_OLMSG_HDR_SIZE	0x20	/* 2 rings * 16 B header */
 
+/* BCM4360 test.277: follow the pointer fw writes to shared_info[+0x010]
+ * (observed value 0x0009af88 — T276). Phase 4B interprets this as a
+ * {buf_addr, buf_size, write_idx, read_addr} console struct. T277 dumps
+ * the struct at two points (pre-shared_info-write + post-2s-poll) to
+ * discriminate fw-boot-populated vs post-set_active-populated vs
+ * actively-advancing. If buf_addr is a valid TCM address, dumps the
+ * first 128 B of the buffer with ASCII escape so trap/log text is
+ * readable. See phase6/t276_shared_info_design.md + advisor trace. */
+static int bcm4360_test277_console_decode;
+module_param(bcm4360_test277_console_decode, int, 0644);
+MODULE_PARM_DESC(bcm4360_test277_console_decode, "BCM4360 test.277: dump console struct at fw-published pointer (T276 response 0x9af88) before and after the 2s poll, plus 128 B of the buffer it points to if buf_addr is a valid TCM address. Requires bcm4360_test276_shared_info=1. (1=enable, 0=off)");
+
+/* T277 uses the pointer value fw wrote to shared_info[+0x010] as
+ * the struct base. Phase 4B observed 0x0009af88 — we confirm at runtime
+ * by reading si[+0x010] after ARM release rather than hardcoding. */
+#define BCM4360_T277_STRUCT_DWORDS	4	/* buf_addr, size, wr_idx, rd_addr */
+#define BCM4360_T277_BUFFER_DUMP_BYTES	128	/* 32 dwords */
+
 /* BCM4360 test.256 scheduler-walk helper. 2 pr_emerg lines, 16 u32 each.
  * gate_flag arg lets caller pick between sched_walk (t+60s) and
  * sched_walk_early (t+100ms). */
@@ -3768,6 +3786,24 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					dma_addr_t t276_dma = 0;
 					u32 t276_i;
 
+					/* BCM4360 test.277: pre-shared_info-write dump of
+					 * the Phase 4B observed pointer 0x9af88. Discriminates
+					 * "struct pre-existed in fw image" vs "populated by
+					 * fw during post-set_active init". */
+					if (bcm4360_test277_console_decode) {
+						u32 t277_struct[BCM4360_T277_STRUCT_DWORDS];
+						u32 t277_j;
+
+						for (t277_j = 0;
+						     t277_j < BCM4360_T277_STRUCT_DWORDS;
+						     t277_j++)
+							t277_struct[t277_j] = brcmf_pcie_read_ram32(
+								devinfo, 0x9af88 + t277_j * 4);
+						pr_emerg("BCM4360 test.277: PRE-WRITE struct@0x9af88 buf_addr=0x%08x buf_size=0x%08x write_idx=0x%08x read_addr=0x%08x\n",
+							 t277_struct[0], t277_struct[1],
+							 t277_struct[2], t277_struct[3]);
+					}
+
 					t276_buf = dma_alloc_coherent(
 						&devinfo->pdev->dev,
 						BCM4360_T276_OLMSG_BUF_SIZE,
@@ -3904,6 +3940,72 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							t276_base + BCM4360_T276_SI_FW_INIT_DONE),
 						 brcmf_pcie_read_reg32(devinfo,
 							BRCMF_PCIE_PCIE2REG_MAILBOXINT));
+
+					/* BCM4360 test.277: post-poll console decode.
+					 * Re-read the pointer fw published at si[+0x010]
+					 * (T276 observed 0x9af88 both at t+0 and t+2s),
+					 * then dump the 4-dword struct there and — if
+					 * buf_addr is a valid TCM address — dump 128 B of
+					 * the buffer as ASCII-escaped text. */
+					if (bcm4360_test277_console_decode) {
+						u32 t277_ptr = brcmf_pcie_read_ram32(devinfo,
+							t276_base + BCM4360_T276_SI_FW_STATUS);
+						u32 t277_struct[BCM4360_T277_STRUCT_DWORDS];
+						u32 t277_j;
+
+						pr_emerg("BCM4360 test.277: POST-POLL struct-ptr from si[+0x010]=0x%08x\n",
+							 t277_ptr);
+
+						if (t277_ptr == 0 ||
+						    t277_ptr >= devinfo->ci->ramsize) {
+							pr_emerg("BCM4360 test.277: POST-POLL struct-ptr not a valid TCM address (ramsize=0x%x); skipping struct read\n",
+								 devinfo->ci->ramsize);
+						} else {
+							for (t277_j = 0;
+							     t277_j < BCM4360_T277_STRUCT_DWORDS;
+							     t277_j++)
+								t277_struct[t277_j] = brcmf_pcie_read_ram32(
+									devinfo,
+									t277_ptr + t277_j * 4);
+							pr_emerg("BCM4360 test.277: POST-POLL struct@0x%08x buf_addr=0x%08x buf_size=0x%08x write_idx=0x%08x read_addr=0x%08x\n",
+								 t277_ptr,
+								 t277_struct[0],
+								 t277_struct[1],
+								 t277_struct[2],
+								 t277_struct[3]);
+
+							/* If buf_addr is a valid TCM address,
+							 * dump 128 B of buffer content with
+							 * ASCII-escape so trap/log text is
+							 * readable without hex-decode. */
+							if (t277_struct[0] > 0 &&
+							    t277_struct[0] < devinfo->ci->ramsize) {
+								u8 t277_buf[BCM4360_T277_BUFFER_DUMP_BYTES];
+								u32 t277_dwords = BCM4360_T277_BUFFER_DUMP_BYTES / 4;
+								u32 *t277_u32p = (u32 *)t277_buf;
+
+								for (t277_j = 0;
+								     t277_j < t277_dwords;
+								     t277_j++)
+									t277_u32p[t277_j] = brcmf_pcie_read_ram32(
+										devinfo,
+										t277_struct[0] + t277_j * 4);
+								pr_emerg("BCM4360 test.277: buffer@0x%08x (first %u B) ASCII: %*pE\n",
+									 t277_struct[0],
+									 BCM4360_T277_BUFFER_DUMP_BYTES,
+									 BCM4360_T277_BUFFER_DUMP_BYTES,
+									 t277_buf);
+								pr_emerg("BCM4360 test.277: buffer@0x%08x (first %u B) HEX:   %*ph\n",
+									 t277_struct[0],
+									 BCM4360_T277_BUFFER_DUMP_BYTES,
+									 BCM4360_T277_BUFFER_DUMP_BYTES,
+									 t277_buf);
+							} else {
+								pr_emerg("BCM4360 test.277: buf_addr 0x%08x not a valid TCM address; skipping buffer dump\n",
+									 t277_struct[0]);
+							}
+						}
+					}
 				}
 				if (bcm4360_test268_early_scaffold) {
 					struct pci_dev *_pdev268 = devinfo->pdev;

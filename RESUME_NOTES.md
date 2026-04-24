@@ -5,7 +5,82 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 11:12 BST, POST-T276-FIRE — **RESULT: Phase 4B Test.28's shared_info handshake REPRODUCES under Phase 5 patches.** Fw wrote `si[+0x010] = 0x0009af88` at t+0ms post-set_active — **exact match** with Phase 4B's 13-days-ago observation. Protocol anchor CONFIRMED. BUT: `fw_init_done` stayed 0 for full 2 s (matches Test.29), `MAILBOXINT` stayed 0 (Test.28 saw `0x00000003` — T276 differs). Post-T276 ladder ran to `t+90000ms dwell` then wedged in `[t+90s, t+120s]` — same window as T270-BASELINE. T276 did NOT avoid the late-ladder crash. Outcome matrix row 3 ("Only si[+0x010] nonzero, no mbxint").)
+## Current state (2026-04-24 11:18 BST, POST-T277-CODE — **T277 console-decode extension built (new param `bcm4360_test277_console_decode`). Reads TCM struct at fw-published pointer (T276 saw 0x9af88) at two points: pre-shared_info-write (baseline) + post-2s-poll. Validates buf_addr < ramsize before following, then dumps 128 B of buffer content as ASCII-escaped text + hex. Advisor-approved design. Build clean.** No hardware fire yet. Current substrate is watchdog-recovered boot 0 from the T276 crash (not a cold cycle) — advisor flagged this as a noise source; recommend cold cycle before T277 fire so any delta from T276's results is substrate-clean.)
+
+---
+
+## PRE-TEST.277 (2026-04-24 11:18 BST — **Console-struct decode at the pointer T276 captured. Two-point read (pre-write + post-poll) + 128 B ASCII-escaped buffer dump. Advisor-approved.**)
+
+### Hypothesis
+
+T276 showed fw responds at shared_info[+0x010] with `0x0009af88` — a TCM address Phase 4B called a "console struct pointer". Phase 4B's interpretation is 4 dwords: `{buf_addr, buf_size, write_idx, read_addr}`. T277 tests the interpretation AND extracts whatever log text the buffer contains.
+
+Two-point read discriminates three possibilities for how the struct exists:
+
+| Pre-write struct | Post-poll struct | Reading |
+|---|---|---|
+| all zeros | populated (non-zero fields) | **Struct populated by fw during post-set_active init** (expected interpretation). |
+| populated | identical | **Struct pre-existed in fw image**; post-set_active fw just copied the pointer to si[+0x010]. |
+| populated | `write_idx` advanced (others unchanged) | **Fw is actively logging in our 2 s poll window.** Highest-value: the buffer is a live ring and our dump has fresh content. |
+| garbage both | — | Struct offset is not at 0x9af88 in this layout; interpretation needs revising. |
+
+### Outcome matrix
+
+| Buffer ASCII dump | Reading | Follow-up |
+|---|---|---|
+| Readable log text (trap strings, printf fragments, `bmac`, `phy`, timing) | **Fw internal log captured.** Content may reveal what fw's doing between set_active and the late-ladder wedge. | Decode trap line; cross-ref with T272-FW init chain. If late-ladder wedge has a fw-side cause, the log will show it in subsequent reads. |
+| Readable but only one or two lines, then zeros | Log is young — fw wrote a few lines then went quiet. | Extend dump to larger window (256 B–4 KB); track `write_idx` across ladder dwells. Design T278 around periodic console reads during the dwell ladder. |
+| Non-ASCII but structured (fixed-size records, pointers) | Not a text console — maybe a circular message struct (olmsg pre-ring?). | Re-decode as structured records; if records carry fw→host messages, this could be the actual response channel. |
+| All zeros or garbage | Struct is not at 0x9af88, OR `buf_addr` points somewhere uninitialized. | Check the struct fields — if buf_addr is 0, fw hasn't assigned one; if buf_addr is non-zero but points to zero bytes, log is genuinely empty (unexpected since fw is supposedly running code). |
+| `buf_addr` not in `[0, ramsize)` | Address out of TCM — pointer is a DMA address? A garbage/uninitialized value? Log to confirm. | Don't dereference; add separate check for PCIe BAR / DMA addr interpretation in T278. |
+
+### Design
+
+Code landed alongside T276 (same commit will wrap both). Gated behind `bcm4360_test277_console_decode=1`; requires `bcm4360_test276_shared_info=1` (reads si[+0x010] as the struct pointer).
+
+1. **Pre-shared_info-write**: read 4 dwords at TCM[0x9af88] (Phase 4B's observed pointer — hardcoded only for the pre-write read since fw hasn't published si[+0x010] yet). Logs `buf_addr / buf_size / write_idx / read_addr`.
+2. **Post-2s-poll**: read si[+0x010] dynamically; if in `[1, ramsize)` read 4 dwords at that address. Same labels.
+3. **If `buf_addr` ∈ (0, ramsize)**: read 128 B (32 dwords) starting at `buf_addr`, print as `%*pE` (ASCII escape) AND `%*ph` (hex). Escape form makes trap/log strings readable; hex form catches control bytes that `%*pE` hides.
+4. **If any pointer invalid**: skip the follow, log the value. Safe.
+
+No writes anywhere beyond the existing T276 writes. Pure read-only observation.
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.277.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.277.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.277.journalctl.txt
+```
+
+### Substrate note (advisor caveat)
+
+Current boot 0 is a watchdog recovery from the T276 crash, NOT a fresh cold cycle. T269 pattern: drift within ~25 min of post-wedge boots. If T277 differs from T276 on the `si[+0x010] = 0x0009af88` anchor value (e.g., 0 post-poll, or a different pointer), drift is a possible confound. Recommended: request cold cycle before T277 fire for cleanest comparison. If firing on current boot, accept and note in POST-T277 that substrate was post-wedge-recovery, not cold-cycle.
+
+### Expected artifacts
+
+- `phase5/logs/test.277.run.txt`
+- `phase5/logs/test.277.journalctl.txt`
+
+### Safety
+
+- Same envelope as T276 (existing shared_info write + DMA alloc) + new reads only.
+- No new writes, no MSI, no request_irq.
+- Host wedge in [t+90s, t+120s] still expected (orthogonal to T277); platform watchdog recovers.
+
+### Pre-test checklist
+
+1. **Build**: pending code commit + build verification (next action).
+2. **PCIe state**: verify clean before fire.
+3. **Hypothesis**: this block.
+4. **Plan**: this block (commit before fire).
+5. **Host state**: boot 0 up since 11:09:35 BST (watchdog-recovered, not cold-cycled).
+6. **Recommendation**: cold cycle before fire so result is not substrate-noise-polluted.
 
 ---
 
