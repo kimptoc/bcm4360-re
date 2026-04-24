@@ -65,10 +65,35 @@ Don't refire on this boot. Static work (pcie.h grep) produces next-step info wit
 
 ### Next step (Option C per PRE-TEST.285)
 
-1. `grep -n '0x100\|0x104\|0x108\|0x168' .../brcmfmac/pcie.h` — identify PCIE2+0x100 register semantics (if named).
-2. Update KEY_FINDINGS with T283 supersession + new CONFIRMED sched_ctx layout.
-3. Commit + push.
-4. Design T288: READ-ONLY probe of PCIE2 core at offsets 0x100/0x104/0x108/0x168 at every T278 stage (same macro pattern as T285). No writes, no refire pressure on substrate.
+1. ✓ Grep pcie.h: PCIE2+0x100 **not named** in brcmfmac (gap 0x4C→0x120). Upstream `bcma_driver_pcie2.h` calls it `RC_AXI_CONFIG`, but that is the ROOT-COMPLEX-side view, NOT the endpoint-side view the fw sees — so `RC_AXI_CONFIG` does NOT apply here. EP-side register at PCIE2+0x100 is unnamed in-tree.
+2. ✓ Fw blob primary-source grep for absolute `0x18100100` / `0x18100048` / `0x18100140` / `0x18100000` / `0x18000100` etc.: **ZERO hits for every PCIE2 absolute**. 2 hits for `0x18000000` only (literal pool). Fw uses base+offset pattern throughout; no absolute-address immediate grep will resolve this.
+3. ✓ T283 arithmetic re-verified (see `phase6/t283_mbm_register_resolution.md` §2): `ldr r3, [r0, #0x254]; ldr r0, [r3, #0x100]` at 0x2890 is solid. **The arithmetic chain holds — only T283's inference about WHAT POINTER lives at +0x258 was wrong.**
+4. Updated KEY_FINDINGS with supersessions.
+5. Committed + pushed `9c6dbb8`, `7aba816`.
+
+### Open static question for next session
+
+**Who writes sched_ctx+0x258 = 0x18100000 (PCIE2 base)?** T283 assumed fn@0x672e4's literal `0x18000000` (chipcommon) propagated through fn@0x670d8 (scheduler init helper) into sched_ctx+0x258. Runtime falsifies that; the actual store of PCIE2-base into +0x258 happens elsewhere in the chain. Candidates:
+- fn@0x670d8 receives MULTIPLE args (not just chipcommon base) and stores them at different sched_ctx offsets. +0x258 may be a different arg.
+- Or a different initializer (not fn@0x672e4) stores there.
+
+A quick str.w-wide scan for writes at `#0x258` offset to non-sp register was inconclusive in this session (only stack stores found). Need a fuller disasm pass through fn@0x670d8 and any function that takes sched_ctx as argument. **Task #39** in task list.
+
+### Secondary open question
+
+**Wedge-timing anomaly.** T287b wedged at t+0ms of the 2s poll (earlier than T276/T280/T284's t+90s–120s). No AER/NMI/MCE markers. Hypotheses recorded in task list as #40; diagnose via clean-substrate re-fire after 24h power-off (not today).
+
+### Next test: T288 design (deferred — not designed yet)
+
+Candidates per advisor guidance:
+- **T288a — read-only probe of PCIE2 core at {0x100,0x104,0x108,0x168} at each T278 stage.** Same macro pattern as T285 but core=PCIE2 instead of CHIPCOMMON. Purely diagnostic; tells us what BIT_alloc sees at runtime. Low substrate cost (read-only, fast).
+- **T288b — write probe: set PCIE2+0x100 bits 0-4 to non-zero during WFI dwell and watch MAILBOXINT/console for a scheduler-wake reaction.** Speculative and risky — do NOT design until T288a data lands.
+
+Do T288a design after a clean-substrate fresh-boot day, OR after the static "who writes +0x258" question is resolved. Either is progress.
+
+---
+
+
 
 ---
 
