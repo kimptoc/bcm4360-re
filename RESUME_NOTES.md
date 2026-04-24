@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 10:10 BST, POST-T273-FW — **All 3 T272-framed sub-calls cleared as bounded/non-polling; full wlc_bmac_attach sub-tree scan confirms NO unbounded HW-polling loops at first level. Strong negative result supports the "scheduler-callback waiting for event that never fires" reading.** Advisor-flagged additional lead: wlc-probe itself (fn@0x67614) calls `hndrte_add_isr` at 0x67774 to register `fn@0x1146C` as a scheduler callback with r0=NULL ctx. fn@0x1146C is small (10 insns) and does NOT read HW registers — it awaits a flag bit set by the RTE class-dispatcher pending-events word. Frozen-scheduler-state evidence (T255) rules out periodic timer tick as the trigger source; strong circumstantial case that fn@0x1146C's flag is host-driven, matching the observed WFI-freeze. Remaining uncertainty: which specific register/event fires its bit (requires tracing the pending-events word writers + 9-thunk vector's WLC-class slot). No hardware fires today since 08:01. Full T273 writeup at phase6/t273_subcall_triage.md.)
+## Current state (2026-04-24 11:00 BST, POST-T274-FW — **Architectural mismatch discovered. This fw is PCIE-CDC (per banner `RTE (PCIE-CDC) 6.30.223 (TOB)`), not msgbuf. Upstream brcmfmac's PCIe driver is msgbuf-only — our driver path may be architecturally wrong for this chip.** Evidence: (1) fw does NOT reference HOSTRDY_DB1 constant (0x10000000) anywhere in code — 5 byte-pattern matches are all data-region false positives; (2) pcidongle_probe DOES complete fully (T255/T256 show pciedngl_isr registered as scheduler node[0]), contradicting the earlier "pcidongle_probe never reached" reading; (3) pcidongle_probe's full body maps to: alloc devinfo → register ISR → init ISR_STATUS mirror → init msg queue → return — all clean, no hangs; (4) sharedram publish NOT inside pcidongle_probe — must happen in a later phase gated on an event that never fires. Fw expects wake via CDC protocol, not msgbuf doorbell. Next productive direction: **upstream audit** — is there any version of brcmfmac (past or present) that drove PCIe-CDC fw? If yes, that's our reference path. If no, the project reframes as port-or-write a CDC-PCIe driver. Full T274 writeup at phase6/t274_events_investigation.md. No hardware fires since 08:01.)
 
 ---
 
@@ -905,17 +905,20 @@ T257 evidence (WFI is DEFINITIVE): the scheduler reached a point where no callba
 
 Combined: **fw is stuck in WFI somewhere BEFORE pcidongle_probe's sharedram-publish point**. The scheduler is waiting on a pending-events bit that never fires — a bit that something else should have set during init.
 
-### Updated hang bracket (tighter than session start)
+### Updated hang bracket (tighter than session start — **REVISED by T274-FW**)
 
 | Point | Evidence |
 |---|---|
 | RTE boot banner | T250 ring-dump (`"RTE (PCIE-CDC) 6.30.223 (TOB)"`) |
 | si_attach completes | T252 decode of 0x92440 (si_info-class struct with CC base 0x18001000 cached) |
 | wlc attach / bmac attach entered | T251 saved-LR 0x68D2F / 0x68321 near those function bodies (α branch, now supported but not proven) |
+| **pcidongle_probe COMPLETED through hndrte_add_isr + fn@0x1E44 + fn@0x1DD4** | T274-FW: T255/T256 show pciedngl_isr IS registered as scheduler node[0] at 0x9627C; pcidongle_probe's body maps to alloc→register→init→return with no hangs |
 | **fw enters WFI** | T257 DEFINITIVE (host harness bypasses MSI setup; no IRQ ever arrives) |
-| **pcidongle_probe publish NOT reached** | T247 × T269-FW dovetail (ramsize-4 unchanged; fw-blob says publish happens inside pcidongle_probe) |
+| **sharedram publish NOT reached** | T247: TCM[ramsize-4] unchanged 23/23 dwells. T274-FW finding: sharedram publish is NOT inside pcidongle_probe — it must be in a LATER phase of fw init gated on an event that never fires. |
 
-Hang region: between wlc_bmac_attach completion and pcidongle_probe's publish step. Inside that region, fw runs its scheduler, dispatches enough init callbacks to reach some waiting point, then the scheduler's pending-events word has no bit set → scheduler goes to WFI.
+Hang location: AFTER pcidongle_probe returns to its caller (the device-probe-iterator). Fw enters a scheduler state with registered callbacks (pciedngl_isr + wlc's fn@0x1146C) but no runnable flag bits → WFI. Sharedram publish is gated behind an event fw expects but never receives.
+
+**Earlier reading "pcidongle_probe never reached" was WRONG and is superseded by T274-FW.**
 
 ### What this invalidates / moots / keeps
 
@@ -1068,3 +1071,92 @@ BUT: the separate "MSI subscription itself wedges host" issue (code audit §4) r
 - Substrate window is closed (boot 0 uptime ~2h+; drift reliable within 25 min of cold cycle).
 - No hardware action planned until static analysis identifies a specific register to target.
 - fw-blob side: T273 concluded. T274-FW would be the pending-events-word writer trace.
+
+---
+
+## POST-T274-FW (2026-04-24 11:00 BST — **Architectural mismatch discovered. Major reframe.**)
+
+Full writeup: `phase6/t274_events_investigation.md`. Scripts: `phase6/t274_*.py` + `/tmp/t274_*.py`.
+
+### What T274-FW settled
+
+1. **T255/T256 data reinterpreted**: pciedngl_isr IS registered (node[0] at TCM[0x9627C]: next=0x96F48, fn=0x1C99, arg=0x58CC4, flag=0x8). Therefore **pcidongle_probe ran PAST hndrte_add_isr successfully**. My earlier reading "pcidongle_probe never reached" was WRONG.
+
+2. **pcidongle_probe full body mapped** (0x1E90..0x1F78, 232 bytes):
+   - alloc devinfo(0x3c) → memset → 5 sub-call helpers populating struct
+   - `bl #0x63C24` (hndrte_add_isr) at 0x1F28 — registers pciedngl_isr
+   - `bl #0x1E44` at 0x1F38 — post-registration finalize
+   - return
+
+3. **fn@0x1E44 (post-reg finalize, 68 bytes)**:
+   - Initializes ISR_STATUS mirror at `[devinfo_substruct + 0x100]` with `(config & 0xfc000000) | 0xc`
+   - Calls `bl #0x2F18` (struct-init helper, ~116B clean) and `bl #0x2DF0` (1-insn `bx lr` no-op)
+   - Tail-calls `bl #0x1DD4`
+
+4. **fn@0x1DD4 (114 bytes, tail-called from fn@0x1E44)**:
+   - Allocates 196-byte msg buffer, stores at devinfo+0x20
+   - Calls `bl #0x66a60` (shared msg-queue init — T273 also considered via different path; verified bounded below)
+   - Returns
+
+5. **bl #0x66a60 is NOT a polling loop** (verified per advisor's 20-min cheap check):
+   - 208 bytes, 1 backward branch (a 30-iter bounded list-init loop)
+   - Allocates up to 30 descriptors via `bl #0x7d74` and links them into a message-queue list
+   - String reference `'bcmutils.c'` — a bcmutils init helper
+   - No waits, no HW register polls
+
+6. **pcidongle_probe completes fully with no hangs in its body or sub-tree**. Hang is AFTER it returns.
+
+7. **HOSTRDY_DB1 (0x10000000) is NOT referenced in fw code** (critical finding):
+   - 5 literal-pool-aligned byte matches exist in the blob.
+   - ZERO of them have direct LDR pc-rel references or MOVW/MOVT pairs encoded elsewhere in code.
+   - `movt r?, #0x1000` scan of entire blob: zero matches.
+   - **Therefore: this fw does NOT advertise HOSTRDY_DB1 as part of its shared.flags protocol.**
+
+8. **Implication — architectural mismatch**:
+   - Upstream brcmfmac `brcmf_pcie_hostready` (pcie.c:2044) is gated on `shared.flags & BRCMF_PCIE_SHARED_HOSTRDY_DB1`. If fw never sets that bit, upstream's normal probe would NEVER write H2D_MAILBOX_1.
+   - The fw banner literally says `"RTE (PCIE-CDC) 6.30.223 (TOB)"` — **CDC-PCIe**, not msgbuf.
+   - Upstream brcmfmac's PCIe driver path is **msgbuf-only**. BCM4360's CDC-PCIe fw may be architecturally incompatible with upstream's probe path.
+
+9. **Writers of pending-events word NOT found**:
+   - Zero stores at offset #0x100 with preceding ctx+0x358 load.
+   - Zero stores at offset #0x458 (flat).
+   - Zero stores at offset #0x358 (ctx setup).
+   - Strongly suggests the word at `*(ctx+0x358)+0x100` is **HW-mapped**, not software-maintained. T269's "software-maintained pending events" reading needs correction.
+
+10. **IRQ handler finding**:
+    - ARM vector at 0x18 → handler at 0xF8 → calls `[*0x224]` (ISR dispatcher).
+    - `[0x224]` = 0 in static blob; no code writes to 0x224 via direct lit-ref.
+    - Implies fw either runs with IRQs disabled, or uses a VBAR-remapped ARM vector path, or [0x224] is written via an addressing mode we missed. Non-blocking but notable.
+
+### Major reframe
+
+The scaffold investigation's whole premise (that fw would wake via a doorbell if the right host-side state is set) may be **architecturally mismatched** with this fw. The banner indicates CDC-PCIe. Upstream brcmfmac's PCIe path is msgbuf-only. We've been trying to drive CDC firmware with a msgbuf driver.
+
+### New productive direction (advisor-confirmed)
+
+**Upstream audit.** Specific question:
+
+- Is there any version of brcmfmac (past or present) that drove PCIe-CDC fw?
+- If YES: that path is our reference. We need to port/port-forward that driver path or re-enable it.
+- If NO: upstream brcmfmac was never designed for BCM4360's legacy fw. The project reframes as "port or write a CDC-PCIe driver," not "patch the existing msgbuf driver."
+
+Either answer unblocks. Continuing blob spelunking at this depth has diminishing returns.
+
+### What remains valid
+
+- T270-BASELINE substrate reproducibility (unaffected).
+- T257 WFI-DEFINITIVE observation (unaffected — fw IS in WFI).
+- The scaffold-line host-wedge modes (T258–T269) — those are host-side issues independent of fw protocol. Still need to be addressed if/when we have a wake sequence that matches the fw.
+- T253/T254's polling-loop-classification of wlc_phy_attach's subtree (unaffected — that was thorough and correct).
+
+### What is invalidated / needs updating
+
+- The "pcidongle_probe never reached" claim (from POST-FW-BLOB-DISS REFRAME) — WRONG. Reconciled in the bracket table above.
+- T269's "software-maintained pending events word" reading — probably HW-mapped based on the zero-writer finding. Noted in T274 §6.1.
+- The "host needs to ring the right mailbox to wake fw" framing for T273's fn@0x1146C analysis — possibly true, possibly architectural mismatch. We don't yet know what CDC-PCIe's wake protocol expects.
+
+### Session status
+
+- No hardware fires planned.
+- Static analysis at diminishing-return depth.
+- Next action: upstream audit for CDC-PCIe driver support (possibly in git history of brcmfmac, or in broadcom/brcmsmac, or in the out-of-tree broadcom drivers).
