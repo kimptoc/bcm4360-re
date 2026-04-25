@@ -1014,6 +1014,48 @@ MODULE_PARM_DESC(bcm4360_test287c_extended, "BCM4360 test.287c: extend T287 dump
 		} \
 	} \
 } while (0)
+/* BCM4360 test.288a: read AI-backplane wrapper agent registers
+ * (oobselina30 at +0x000, oobselouta30 at +0x100) for both
+ * chipcommon-wrap (0x18100000) AND PCIE2-wrap (0x18103000) at every
+ * T287 stage. T287c confirmed sched+0x254=0x18100000 (chipcommon-wrap)
+ * and sched+0x264=0x18103000 (PCIE2-wrap) — these are the runtime
+ * targets BIT_alloc dereferences via [sched+0x254]+0x100. T288a reads
+ * the actual register values to characterize OOB-routing state at
+ * each fw init point. Hardcoded wrapper bases (per T287c primary
+ * source). LESSON FROM T285: macro saves window for forensics AND
+ * ends with brcmf_pcie_select_core(PCIE2) so downstream T276/T284
+ * reads land on the expected PCIE2 page even if upstream code left
+ * window on a different core (e.g. ARM-CR4 wrapper after set_active).
+ * READ-ONLY w.r.t. wrapper registers; window is intentionally left on
+ * PCIE2 register-base at end. */
+static int bcm4360_test288a_wrap_read;
+module_param(bcm4360_test288a_wrap_read, int, 0644);
+MODULE_PARM_DESC(bcm4360_test288a_wrap_read, "BCM4360 test.288a: at each T287 stage, save BAR0_WINDOW, read CHIPCOMMON-wrap (0x18100000) +0x000 and +0x100, then PCIE2-wrap (0x18103000) +0x000 and +0x100, then select_core(PCIE2) to leave window in expected state. Reads what BIT_alloc sees. READ-ONLY. (1=enable, 0=off)");
+
+#define BCM4360_T288A_CC_WRAP_BASE	0x18100000
+#define BCM4360_T288A_PCIE2_WRAP_BASE	0x18103000
+
+#define BCM4360_T288A_READ_WRAPS(tag) do { \
+	if (bcm4360_test288a_wrap_read) { \
+		u32 _t288a_saved, _t288a_cc_in, _t288a_cc_out; \
+		u32 _t288a_pcie_in, _t288a_pcie_out; \
+		pci_read_config_dword(devinfo->pdev, \
+			BRCMF_PCIE_BAR0_WINDOW, &_t288a_saved); \
+		pci_write_config_dword(devinfo->pdev, \
+			BRCMF_PCIE_BAR0_WINDOW, BCM4360_T288A_CC_WRAP_BASE); \
+		_t288a_cc_in  = brcmf_pcie_read_reg32(devinfo, 0x000); \
+		_t288a_cc_out = brcmf_pcie_read_reg32(devinfo, 0x100); \
+		pci_write_config_dword(devinfo->pdev, \
+			BRCMF_PCIE_BAR0_WINDOW, BCM4360_T288A_PCIE2_WRAP_BASE); \
+		_t288a_pcie_in  = brcmf_pcie_read_reg32(devinfo, 0x000); \
+		_t288a_pcie_out = brcmf_pcie_read_reg32(devinfo, 0x100); \
+		brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2); \
+		pr_emerg("BCM4360 test.288a: %s CC.wrap[0x000]=0x%08x [0x100]=0x%08x PCIE2.wrap[0x000]=0x%08x [0x100]=0x%08x (saved_win=0x%08x)\n", \
+			 tag, _t288a_cc_in, _t288a_cc_out, \
+			 _t288a_pcie_in, _t288a_pcie_out, _t288a_saved); \
+	} \
+} while (0)
+
 /* T278 helper body is defined after brcmf_pcie_read_ram32 (needs it)
  * and after struct brcmf_pciedev_info. See bcm4360_t278_dump_console_delta
  * later in this file. */
@@ -1035,6 +1077,7 @@ MODULE_PARM_DESC(bcm4360_test287c_extended, "BCM4360 test.287c: extend T287 dump
 		BCM4360_T284_READ_MBM("stage " tag); \
 		BCM4360_T285_READ_CC("stage " tag); \
 		BCM4360_T287_READ_SCHED("stage " tag); \
+		BCM4360_T288A_READ_WRAPS("stage " tag); \
 	} \
 } while (0)
 
@@ -4173,11 +4216,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				 * pre-set_active MBM writes work. Open question:
 				 * does the pre-set mask survive fw init? */
 				if (bcm4360_test284_premask_enable) {
-					BCM4360_T284_READ_MBM("pre-write (pre-set_active)"); BCM4360_T285_READ_CC("pre-write (pre-set_active)"); BCM4360_T287_READ_SCHED("pre-write (pre-set_active)");
+					BCM4360_T284_READ_MBM("pre-write (pre-set_active)"); BCM4360_T285_READ_CC("pre-write (pre-set_active)"); BCM4360_T287_READ_SCHED("pre-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("pre-write (pre-set_active)");
 					pr_emerg("BCM4360 test.284: calling brcmf_pcie_intr_enable (pre-set_active — writes MBM = 0xFF0300)\n");
 					brcmf_pcie_intr_enable(devinfo);
 					pr_emerg("BCM4360 test.284: brcmf_pcie_intr_enable returned\n");
-					BCM4360_T284_READ_MBM("post-write (pre-set_active)"); BCM4360_T285_READ_CC("post-write (pre-set_active)"); BCM4360_T287_READ_SCHED("post-write (pre-set_active)");
+					BCM4360_T284_READ_MBM("post-write (pre-set_active)"); BCM4360_T285_READ_CC("post-write (pre-set_active)"); BCM4360_T287_READ_SCHED("post-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("post-write (pre-set_active)");
 				}
 
 				pr_emerg("BCM4360 test.238: calling brcmf_chip_set_active resetintr=0x%08x (ultra-extended ladder t+120s)\n",
@@ -4188,7 +4231,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				else
 					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned TRUE\n");
 
-				BCM4360_T284_READ_MBM("post-set_active (CRITICAL: does ARM release clear it?)"); BCM4360_T285_READ_CC("post-set_active"); BCM4360_T287_READ_SCHED("post-set_active");
+				BCM4360_T284_READ_MBM("post-set_active (CRITICAL: does ARM release clear it?)"); BCM4360_T285_READ_CC("post-set_active"); BCM4360_T287_READ_SCHED("post-set_active"); BCM4360_T288A_READ_WRAPS("post-set_active");
 
 				/* BCM4360 test.276: 2 s post-ARM-release poll of
 				 * shared_info response fields. Log on any change,
@@ -4237,7 +4280,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						 brcmf_pcie_read_reg32(devinfo,
 							BRCMF_PCIE_PCIE2REG_MAILBOXINT));
 
-					BCM4360_T284_READ_MBM("post-T276-poll"); BCM4360_T285_READ_CC("post-T276-poll"); BCM4360_T287_READ_SCHED("post-T276-poll");
+					BCM4360_T284_READ_MBM("post-T276-poll"); BCM4360_T285_READ_CC("post-T276-poll"); BCM4360_T287_READ_SCHED("post-T276-poll"); BCM4360_T288A_READ_WRAPS("post-T276-poll");
 
 					/* BCM4360 test.277: post-poll console decode.
 					 * Re-read the pointer fw published at si[+0x010]
@@ -4322,7 +4365,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							"POST-POLL (full)",
 							t278_ptr,
 							&devinfo->t278_prev_write_idx);
-						BCM4360_T284_READ_MBM("post-T278-initial-dump"); BCM4360_T285_READ_CC("post-T278-initial-dump"); BCM4360_T287_READ_SCHED("post-T278-initial-dump");
+						BCM4360_T284_READ_MBM("post-T278-initial-dump"); BCM4360_T285_READ_CC("post-T278-initial-dump"); BCM4360_T287_READ_SCHED("post-T278-initial-dump"); BCM4360_T288A_READ_WRAPS("post-T278-initial-dump");
 					} else if (bcm4360_test278_console_periodic) {
 						pr_emerg("BCM4360 test.278: requires bcm4360_test277_console_decode=1; skipping\n");
 					}

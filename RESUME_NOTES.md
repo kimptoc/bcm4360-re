@@ -5,7 +5,99 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 — **T287c FIRED — BOTH HYPOTHESES CONFIRMED. (1) Window-leak (#40): without T285, no t+0ms wedge — test reached t+90s baseline matching T276/T277/T278; fw wedged silently in late-ladder window as before, no AER/MCE/NMI. (2) Class-table layout: STRONGEST reading from design table — sched+0x254..0x268 holds per-core wrapper-base table indexed by class (post-set_active values: +0x254=+0x258=0x18100000 chipcommon, +0x25c=0x18101000 core[2], +0x260=0x18102000 ARM-CR4, +0x264=0x18103000 PCIE2, +0x268=0x18104000 core[5], +0x26c=0x270=0). Per-class wrapper table populated in EROM order. (3) BONUS — first runtime evidence of fw class-dispatch: between post-set_active and post-T276-poll, sched+0x254 shifted 0x18100000→0x18101000 and sched+0x88 shifted 0x18000000→0x18001000 (chipcommon→core[2]). Fw IS dispatching class thunks during post-set_active scheduler activity. KEY_FINDINGS updated. Next: design T288a (read-only probe of PCIE2+0x100 = sched+0x264-pointed, AND chipcommon-wrapper+0x100 once, both with proper saved_win restore).**)
+## Current state (2026-04-26 — **T288a IMPLEMENTED + BUILT, awaiting fire clearance. Reads chipcommon-wrap+0x000/+0x100 AND PCIE2-wrap+0x000/+0x100 at every T287 stage; ends macro with select_core(PCIE2) (closes the T287b window-leak class). Module compiled clean. PRE-TEST.288a plan committed; fire command in PRE-TEST block. Substrate: boot 0 (post-SMC-reset 23:45 BST), ~7h uptime, 0 fires this boot, PCIe Status flag clean. Fire requires user clearance.**)
+
+---
+
+## PRE-TEST.288a (2026-04-26 — **READY TO FIRE on user clearance. Reads chipcommon-wrap + PCIE2-wrap agent regs (oobselina30 +0x000 / oobselouta30 +0x100) at every T287 stage. End-of-macro select_core(PCIE2) — applies the lesson from T287b's window-leak.**)
+
+### Hypothesis
+
+BIT_alloc dereferences `[sched+0x254]+0x100` per T283 chain. T287c confirmed
+`sched+0x254` holds `0x18100000` (chipcommon-wrap) post-set_active and
+`0x18101000` (core[2]-wrap) after T276 poll. PCIE2-wrap is at sched+0x264.
+T288a reads `oobselouta30` (offset 0x100, the AI-backplane OOB-routing
+output register) and `oobselina30` (offset 0x000, OOB-routing input) at
+both chipcommon-wrap and PCIE2-wrap on every T287 stage.
+
+Expected primary readings:
+- **CC.wrap[0x100]** is what BIT_alloc reads at class=0. Will reveal what
+  routing-slot bits are set/free.
+- **PCIE2.wrap[0x100]** would be BIT_alloc's read at class=4 (PCIE2-class)
+  if active.
+- Comparing **+0x000 vs +0x100** at each wrap reveals input vs output
+  routing state.
+
+Discriminations:
+- All 4 reads = 0x00000000 → no OOB routing configured anywhere; BIT_alloc
+  finds 5-bit field=0 → "no slot allocated" interpretation; fw waiting on
+  a host-side action to populate routing.
+- Some bits set in CC.wrap[0x100] → routing IS configured; BIT_alloc would
+  return a non-zero slot index → fw potentially making progress past
+  BIT_alloc but waiting on the slot's destination.
+- Bits change between stages (pre-set_active vs post-set_active vs after
+  T276 poll) → fw is actively writing OOB routing state.
+- All 4 = 0xFFFFFFFF or readback artefact → wrong page selected; need to
+  verify BAR0_WINDOW state.
+
+### Substrate
+
+- Boot 0 (current) post-SMC-reset (23:45 BST 2026-04-25). Uptime now ~7h.
+- 1 fire on this boot (none — last fire was T287c on boot -1).
+- PCIe state: clean (Status flag empty, no MAbort/CommClk/LnkSta drift).
+- Build: brcmfmac.ko rebuilt 2026-04-26 with T288a wired (clean compile).
+
+### Fire command
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test284_premask_enable=1 \
+    bcm4360_test287_sched_ctx_read=1 \
+    bcm4360_test287c_extended=1 \
+    bcm4360_test288a_wrap_read=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.288a.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.288a.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.288a.journalctl.txt
+```
+
+**Diff vs T287c fire:** add `bcm4360_test288a_wrap_read=1` (one extra param).
+T285 stays disabled (chipcommon-target was wrong AND its window-leak burned T287b).
+
+### What T288a writes / reads
+
+Per stage (9 stages): save BAR0_WINDOW (1 config-space read), set window to
+chipcommon-wrap (1 config-space write), 2 BAR0 reads, set window to
+PCIE2-wrap (1 config-space write), 2 BAR0 reads, select_core(PCIE2) (1
+config-space read + up to 2 writes inside the helper). Total per stage:
+~9 config-space ops + 4 BAR0 reads. Across 9 stages: ~81 config ops + 36
+BAR0 reads. Substrate cost similar to T285 (which ran cleanly at every
+stage modulo the leak); the difference is the END-OF-MACRO select_core(PCIE2)
+that closes the leak window.
+
+### Expectations vs prior wedge pattern
+
+- t+0ms wedge expected: NO. Lesson from T287c: with clean BAR0 state at
+  poll start, no t+0ms wedge.
+- Late-ladder wedge expected: YES, ~t+90s..120s as in T276/T277/T278/T287c.
+  Orthogonal to readback; fw-side root cause.
+- If T288a wedges at t+0ms: T288a's window-restoration logic is broken.
+  Falsifies the design — diagnose before re-fire.
+- If T288a reaches t+90s and adds primary-source data: same baseline as
+  T287c. Compare wrapper register values across stages and against
+  pre-set_active baseline.
+
+### Pre-fire checklist (CLAUDE.md)
+
+1. ✓ Build (done 2026-04-26 — clean compile)
+2. (user) PCIe state check: `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'`
+3. ✓ Hypothesis stated above
+4. ✓ Plan committed and pushed BEFORE fire
+5. ✓ FS sync (will run after commit)
 
 ---
 
