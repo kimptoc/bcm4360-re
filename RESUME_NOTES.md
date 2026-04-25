@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 — **T288a FIRED at 00:11 BST (boot -1). HARD WEDGE before reaching set_active. Last log: test.156 (module_init returning) at 00:12:10 — no test.276/284/287/288a markers ever fired. No panic/Oops/AER markers; silent watchdog reboot. Setup callback was invoked at 00:12:01 (test.162) but produced no further logs in its body before hang. Working hypothesis: BAR0 reads of chipcommon-WRAPPER (0x18100000) at PRE-set_active — when ARM CR4 is HALTED — wedge the AI backplane. Wrapper-page reads while ARM is halted is novel territory; T287/T284/T276 only do register-base reads at this stage. NEXT: revise T288a to fire ONLY at post-set_active stages (skip the two pre-set_active calls). Substrate: current boot 0 (recovery boot), uptime 5 min, fresh.**)
+## Current state (2026-04-26 — **T288a FIRED at 00:11 BST (boot -1). HARD WEDGE before reaching set_active. Last log: test.156 (module_init thread, returning) at 00:12:10 — no test.276/284/287/288a markers from setup() body ever fired. No panic/Oops/AER markers; silent watchdog reboot. Per advisor: journal cutoff cannot discriminate H1 (T288a wrapper reads wedged) from H2 (wedge upstream of T288a), because journald may have buffered setup() body lines that were lost when kernel hard-hung. NEXT (T288a'): added 8 pr_emerg anchor lines inside `BCM4360_T288A_READ_WRAPS` macro to pinpoint sub-step at next fire. Module rebuilt clean. Substrate: current boot 0 is RECOVERY from watchdog reboot — NOT a cold cycle. Recommend SMC reset before next fire.**)
 
 ---
 
@@ -69,29 +69,43 @@ Possible: a race or hang AFTER the msleep but BEFORE the `brcmf_pcie_probe_armcr
 **H3: Substrate drift independent of T288a.**
 The substrate WAS post-SMC-reset 23:45 BST (boot -1 = boot post-SMC-reset). Uptime at fire was ~26 min. T287c ran at 23:39 on boot -2 (BEFORE SMC reset) reaching t+90s. Boot -1 was a **fresh** post-SMC-reset substrate — usually best-case. Substrate drift is a weak hypothesis given the fresh-boot context.
 
-### Leading hypothesis: H2 + H1 combination
+### Hypotheses are mutually exclusive — current data can't discriminate
 
-The wedge probably happens DURING the pre-attach `brcmf_pcie_probe_armcr4_state` call itself, OR slightly after but before reaching brcmf_pcie_attach. H1's wrapper-read concern is plausible but logically downstream of the actual silence point.
+H1 says T288a wrapper-base reads wedged the backplane (a real runtime difference: `bcm4360_test288a_wrap_read=1` was set). H2 says wedge was UPSTREAM of T288a. These can't both be true. Current journal cuts off at module_init's last marker (test.156) — but that's the synchronous thread, not setup() body. Setup() body could have run silently for tens of seconds with journald buffering output before the hard hang ate the buffered lines.
 
-### Why no `pre-attach` log fired — re-examination
+**Verdict: cannot tell from this fire whether T288a code was ever entered.** Need anchor pr_emerg lines to discriminate next time.
 
-Looking at the sequence:
-- Line 7046: `brcmf_pcie_probe_armcr4_state(devinfo, "setup-entry")` — fires test.188 log; LOGGED at 00:12:01
-- Line 7047: `msleep(300)` — 300ms sleep
-- Line 7053: `brcmf_pcie_probe_armcr4_state(devinfo, "pre-attach")` — should log test.188 with "pre-attach" tag
+### Diff vs T287c's working build (verified)
 
-But after `setup-entry`, the next log lines we see are `pci_register_driver returned ret=0` at 00:12:01 and beyond. Those are from a DIFFERENT thread (module_init). No other setup() body markers appear.
+`git diff 7cc6d76..c902c06 -- phase5/work/.../pcie.c` is purely additive:
+- New `bcm4360_test288a_wrap_read` module_param + `BCM4360_T288A_READ_WRAPS` macro definition
+- 5 new invocations of `BCM4360_T288A_READ_WRAPS(...)` appended to existing T287/T284 invocation lines (pre-write, post-write, post-set_active, post-T276-poll, post-T278-initial-dump)
+- 1 new invocation inside `BCM4360_T278_HOOK` (fires at t+500ms / t+5s / t+30s / t+90s)
 
-**Open question:** what happened during/after the `msleep(300)` between `setup-entry` log and `pre-attach` log? The setup callback thread is blocked or hung. If a backplane hang happened, it wouldn't be triggered by msleep itself — must be triggered by something T288a code added. But the only T288a additions are deep INSIDE `brcmf_pcie_attach`, not between `setup-entry` and `pre-attach`.
+**No changes between `setup-entry` and `pre-attach` log markers.** T288a code only runs inside `brcmf_pcie_download_fw_nvram` (deep inside attach). Either:
+- T288a code never ran AND the wedge is somewhere upstream (but that wedge wouldn't be caused by T288a-the-feature, it'd be a substrate or build-link side effect of adding the macro definitions — a long shot)
+- OR setup() body produced many log lines that journald buffered, and the wedge fired in T288a's macro body, eating the buffered lines
 
-Possible: a build/link issue where T288a's macro defines have an unintended side effect. Let me re-check the macro definition placement before assuming.
+### Next step (T288a' — anchored re-fire, after substrate clear)
 
-### Next step (no fire; static analysis first)
+1. ✓ Add `pr_emerg` anchor lines BEFORE each sub-step inside `BCM4360_T288A_READ_WRAPS` macro (8 anchors per invocation: BAR0_WINDOW save, set CC-wrap window, read +0x000, read +0x100, set PCIE2-wrap window, read +0x000, read +0x100, select_core(PCIE2)).
+2. ✓ Build clean (done 2026-04-26).
+3. (user) Cold cycle preferred — current boot is recovery from hard wedge, substrate uncertain. CLAUDE.md substrate rule: only cold cycle (shutdown + ≥60 s + SMC reset) buys clean ~20–25 min window.
+4. (user) Fire same command as PRE-TEST.288a (no param changes — new code is in macro body, gated on existing flag).
+5. Read anchor sequence from journal to pinpoint sub-step where wedge happens.
 
-1. Re-examine T288a code path for unintended early invocation (does the macro fire anywhere I missed?).
-2. Check git diff of pcie.c since T287c's working build to verify only the T288a additions are different.
-3. Compare T287c's last successful `setup-entry → pre-attach` timing vs T288a's silence.
-4. If no upstream-of-attach changes in T288a build, the wedge MUST be inside attach — but then we'd expect SOME attach-body marker before silence. Investigate.
+### Discriminator table for T288a' fire
+
+| Anchors that DO appear in journal | Reading |
+|---|---|
+| (none past T287c-baseline markers) | H2 wins: wedge is upstream of T288a; T288a code never ran. Disable T288a + re-fire baseline to confirm. |
+| `pre-write anchor-1` only | H1 confirmed at first sub-step (BAR0_WINDOW save fails — implausible, config-space read shouldn't wedge). |
+| Through `pre-write anchor-3` | Wedge on chipcommon-WRAPPER read at +0x000. |
+| Through `pre-write anchor-4` | Wedge on chipcommon-WRAPPER read at +0x100 (the BIT_alloc target). |
+| Through `pre-write anchor-6` | Wedge on PCIE2-WRAPPER read at +0x000. |
+| Through `pre-write anchor-8` | Wedge on `select_core(PCIE2)` (config-space write). |
+| Full pre-write sequence + `post-write anchor-N` | Wedge in second invocation (post-intr_enable). |
+| Full pre-set_active + post-set_active anchors | Wedge in T276 poll or later — back to baseline late-ladder behavior. |
 
 ### Substrate (current — recovery boot)
 
@@ -100,6 +114,60 @@ Possible: a build/link issue where T288a's macro defines have an unintended side
 - PCIe state: Status flag clean, no MAbort/CommClk drift visible
 - 0 fires this boot
 - Recommend: cold cycle before next fire — substrate is uncertain after a hard wedge
+
+---
+
+## PRE-TEST.288a' (2026-04-26 — **READY TO FIRE on user clearance + SMC reset. Same fire command as T288a. Code change: 8 pr_emerg anchor lines inside `BCM4360_T288A_READ_WRAPS` macro pinpoint which sub-step wedges. Module rebuilt clean. Need cold cycle first — current boot is recovery from T288a wedge.**)
+
+### Hypothesis
+
+Anchored re-fire of T288a. The journal cutoff from T288a's fire cannot tell us whether T288a code ran at all — journald may have lost buffered setup() body output when the kernel hard-hung. Anchors flush each sub-step BEFORE the potentially-wedging op, so the journal will retain a precise pinpoint.
+
+### Fire command (unchanged from T288a)
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test284_premask_enable=1 \
+    bcm4360_test287_sched_ctx_read=1 \
+    bcm4360_test287c_extended=1 \
+    bcm4360_test288a_wrap_read=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.288a-prime.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.288a-prime.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.288a-prime.journalctl.txt
+```
+
+### Substrate prerequisites
+
+- ⚠️ Current boot is recovery from T288a wedge — substrate uncertain.
+- Cold cycle (shutdown + ≥60 s + SMC reset) recommended before fire.
+- After cold cycle: PCIe state check `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'` (expect clean).
+
+### Expected anchor sequence per invocation site
+
+Per stage (at "pre-write (pre-set_active)", "post-write (pre-set_active)", "post-set_active", "post-T276-poll", "post-T278-initial-dump", and 4 T278_HOOK stages — 9 total invocations × 8 anchors = 72 anchor lines total if everything runs):
+
+1. `anchor-1 (about to save BAR0_WINDOW)` — before config-space read
+2. `anchor-2 (saved=0xXXXX; about to set CC-wrap window)` — before config-space write to chipcommon-wrap
+3. `anchor-3 (CC-wrap window set; about to read +0x000)` — before BAR0 read at chipcommon-wrap[0x000]
+4. `anchor-4 (CC.wrap[0x000]=0xXXXX; about to read +0x100)` — before BAR0 read at chipcommon-wrap[0x100]
+5. `anchor-5 (CC.wrap[0x100]=0xXXXX; about to set PCIE2-wrap window)` — before config-space write to PCIE2-wrap
+6. `anchor-6 (PCIE2-wrap window set; about to read +0x000)` — before BAR0 read at PCIE2-wrap[0x000]
+7. `anchor-7 (PCIE2.wrap[0x000]=0xXXXX; about to read +0x100)` — before BAR0 read at PCIE2-wrap[0x100]
+8. `anchor-8 (PCIE2.wrap[0x100]=0xXXXX; about to select_core(PCIE2))` — before final config-space write
+9. (then existing summary line: `test.288a: <stage> CC.wrap[0x000]=... PCIE2.wrap[0x000]=... saved_win=...`)
+
+### Pre-fire checklist
+
+1. ✓ Build (rebuilt 2026-04-26 with anchors — clean)
+2. (user) PCIe state check after SMC reset
+3. ✓ Hypothesis stated
+4. ✓ Plan committed and pushed BEFORE fire
+5. ✓ FS sync after push
 
 ---
 

@@ -1039,16 +1039,27 @@ MODULE_PARM_DESC(bcm4360_test288a_wrap_read, "BCM4360 test.288a: at each T287 st
 	if (bcm4360_test288a_wrap_read) { \
 		u32 _t288a_saved, _t288a_cc_in, _t288a_cc_out; \
 		u32 _t288a_pcie_in, _t288a_pcie_out; \
+		/* T288a' anchors: each pr_emerg fires BEFORE the next op. \
+		 * Lets us pinpoint wedge site at sub-step granularity even \
+		 * if journald doesn't flush before a hard hang. */ \
+		pr_emerg("BCM4360 test.288a': %s anchor-1 (about to save BAR0_WINDOW)\n", tag); \
 		pci_read_config_dword(devinfo->pdev, \
 			BRCMF_PCIE_BAR0_WINDOW, &_t288a_saved); \
+		pr_emerg("BCM4360 test.288a': %s anchor-2 (saved=0x%08x; about to set CC-wrap window)\n", tag, _t288a_saved); \
 		pci_write_config_dword(devinfo->pdev, \
 			BRCMF_PCIE_BAR0_WINDOW, BCM4360_T288A_CC_WRAP_BASE); \
+		pr_emerg("BCM4360 test.288a': %s anchor-3 (CC-wrap window set; about to read +0x000)\n", tag); \
 		_t288a_cc_in  = brcmf_pcie_read_reg32(devinfo, 0x000); \
+		pr_emerg("BCM4360 test.288a': %s anchor-4 (CC.wrap[0x000]=0x%08x; about to read +0x100)\n", tag, _t288a_cc_in); \
 		_t288a_cc_out = brcmf_pcie_read_reg32(devinfo, 0x100); \
+		pr_emerg("BCM4360 test.288a': %s anchor-5 (CC.wrap[0x100]=0x%08x; about to set PCIE2-wrap window)\n", tag, _t288a_cc_out); \
 		pci_write_config_dword(devinfo->pdev, \
 			BRCMF_PCIE_BAR0_WINDOW, BCM4360_T288A_PCIE2_WRAP_BASE); \
+		pr_emerg("BCM4360 test.288a': %s anchor-6 (PCIE2-wrap window set; about to read +0x000)\n", tag); \
 		_t288a_pcie_in  = brcmf_pcie_read_reg32(devinfo, 0x000); \
+		pr_emerg("BCM4360 test.288a': %s anchor-7 (PCIE2.wrap[0x000]=0x%08x; about to read +0x100)\n", tag, _t288a_pcie_in); \
 		_t288a_pcie_out = brcmf_pcie_read_reg32(devinfo, 0x100); \
+		pr_emerg("BCM4360 test.288a': %s anchor-8 (PCIE2.wrap[0x100]=0x%08x; about to select_core(PCIE2))\n", tag, _t288a_pcie_out); \
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2); \
 		pr_emerg("BCM4360 test.288a: %s CC.wrap[0x000]=0x%08x [0x100]=0x%08x PCIE2.wrap[0x000]=0x%08x [0x100]=0x%08x (saved_win=0x%08x)\n", \
 			 tag, _t288a_cc_in, _t288a_cc_out, \
