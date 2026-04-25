@@ -960,6 +960,19 @@ static int bcm4360_test287_sched_ctx_read;
 module_param(bcm4360_test287_sched_ctx_read, int, 0644);
 MODULE_PARM_DESC(bcm4360_test287_sched_ctx_read, "BCM4360 test.287: read scheduler ctx fields at TCM[0x62A98] {+0x010/+0x018/+0x088/+0x08c/+0x168/+0x254/+0x258} at each T284/T285 stage to resolve runtime pointer chain. READ-ONLY. Requires T276+T277+T278. (1=enable, 0=off)");
 
+/* T287c extension: dump 6 more class-table words at sched+0x25c..+0x270.
+ * Goal: characterize the class table layout. T287b confirmed +0x254/+0x258
+ * both = 0x18100000 (chipcommon-wrapper). If +0x25c..+0x270 hold the
+ * 5 other discovered cores' wrapper bases (0x18101000, 0x18102000,
+ * 0x18103000, 0x18104000, 0x18108000), the table is per-core wrapper
+ * indexed by class — strongest reading. Other layouts discriminate
+ * alternative interpretations. BAR2-only reads, no BAR0_WINDOW state.
+ * Independently gated so the extra 6 reads can be disabled if the
+ * wedge-timing anomaly returns. */
+static int bcm4360_test287c_extended;
+module_param(bcm4360_test287c_extended, int, 0644);
+MODULE_PARM_DESC(bcm4360_test287c_extended, "BCM4360 test.287c: extend T287 dump with sched+0x25c/+0x260/+0x264/+0x268/+0x26c/+0x270 to characterize class-table layout. Requires test287_sched_ctx_read=1. READ-ONLY. (1=enable, 0=off)");
+
 #define BCM4360_T287_SCHED_CTX_BASE	0x62A98
 
 /* BCM4360 test.287: scheduler-ctx field dump helper. */
@@ -982,6 +995,23 @@ MODULE_PARM_DESC(bcm4360_test287_sched_ctx_read, "BCM4360 test.287: read schedul
 		pr_emerg("BCM4360 test.287: %s sched[+0x10]=0x%08x +0x18=0x%08x +0x88=0x%08x +0x8c=0x%08x +0x168=0x%08x +0x254=0x%08x +0x258=0x%08x\n", \
 			 tag, _t287_10, _t287_18, _t287_88, _t287_8c, \
 			 _t287_168, _t287_254, _t287_258); \
+		if (bcm4360_test287c_extended) { \
+			u32 _t287c_25c = brcmf_pcie_read_ram32(devinfo, \
+				BCM4360_T287_SCHED_CTX_BASE + 0x25c); \
+			u32 _t287c_260 = brcmf_pcie_read_ram32(devinfo, \
+				BCM4360_T287_SCHED_CTX_BASE + 0x260); \
+			u32 _t287c_264 = brcmf_pcie_read_ram32(devinfo, \
+				BCM4360_T287_SCHED_CTX_BASE + 0x264); \
+			u32 _t287c_268 = brcmf_pcie_read_ram32(devinfo, \
+				BCM4360_T287_SCHED_CTX_BASE + 0x268); \
+			u32 _t287c_26c = brcmf_pcie_read_ram32(devinfo, \
+				BCM4360_T287_SCHED_CTX_BASE + 0x26c); \
+			u32 _t287c_270 = brcmf_pcie_read_ram32(devinfo, \
+				BCM4360_T287_SCHED_CTX_BASE + 0x270); \
+			pr_emerg("BCM4360 test.287c: %s sched[+0x25c]=0x%08x +0x260=0x%08x +0x264=0x%08x +0x268=0x%08x +0x26c=0x%08x +0x270=0x%08x\n", \
+				 tag, _t287c_25c, _t287c_260, _t287c_264, \
+				 _t287c_268, _t287c_26c, _t287c_270); \
+		} \
 	} \
 } while (0)
 /* T278 helper body is defined after brcmf_pcie_read_ram32 (needs it)
