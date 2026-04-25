@@ -5,7 +5,67 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-25 — **Static-only session. Settled the open writer-of-sched+0x258 question by NEGATION: 6 exhaustive disasm scans (literal pool / movw+movt / lsl#20 / orr+0x100000 / direct str+offset / strd / stm-twin / add+0x254-pointer-arith) ALL returned 0 hits across the entire 0x800–0x6bf78 code region. Wrapper base `0x18100000` is NOT a compile-time constant anywhere in the fw blob; only `0x18000000` (chipcommon-base) appears as a literal (1 hit, file-offset 0x328). KEY_FINDINGS: added "wrapper bases originate from runtime hardware reads of chipcommon's EROM table" as CONFIRMED (architectural). Bit-exact writer location is no longer load-bearing. Wedge-timing anomaly (#40) hypothesis: T285 macro left BAR0_WINDOW = 0x18102000 unrestored; subsequent T276 poll's PCIE2 reads then targeted the wrong window — fits the "silent wedge, no AER" signature. T287c designed: extends T287's class-table dump (BAR2-only) to characterize sched+0x254..0x270, while disabling T285 (chipcommon target now confirmed wrong AND its window-leak is the leading wedge cause). NO FIRES THIS BOOT — user-out window per 2026-04-24 close note; awaiting confirmation today.**)
+## Current state (2026-04-26 — **T287c FIRED — BOTH HYPOTHESES CONFIRMED. (1) Window-leak (#40): without T285, no t+0ms wedge — test reached t+90s baseline matching T276/T277/T278; fw wedged silently in late-ladder window as before, no AER/MCE/NMI. (2) Class-table layout: STRONGEST reading from design table — sched+0x254..0x268 holds per-core wrapper-base table indexed by class (post-set_active values: +0x254=+0x258=0x18100000 chipcommon, +0x25c=0x18101000 core[2], +0x260=0x18102000 ARM-CR4, +0x264=0x18103000 PCIE2, +0x268=0x18104000 core[5], +0x26c=0x270=0). Per-class wrapper table populated in EROM order. (3) BONUS — first runtime evidence of fw class-dispatch: between post-set_active and post-T276-poll, sched+0x254 shifted 0x18100000→0x18101000 and sched+0x88 shifted 0x18000000→0x18001000 (chipcommon→core[2]). Fw IS dispatching class thunks during post-set_active scheduler activity. KEY_FINDINGS updated. Next: design T288a (read-only probe of PCIE2+0x100 = sched+0x264-pointed, AND chipcommon-wrapper+0x100 once, both with proper saved_win restore).**)
+
+---
+
+## POST-TEST.287c (2026-04-25 23:39 BST fire, boot -1 — **BOTH HYPOTHESES CONFIRMED. T287c reached t+90s, matching T276/T277/T278 baseline. Class-table layout = strongest design reading. First runtime evidence of fw class-dispatch.**)
+
+### Timeline (from `phase5/logs/test.287c.journalctl.txt`, boot -1)
+
+- `23:39:47` insmod → normal probe path (FORCEHT, NVRAM, T276 shared_info written and readback PASS — all markers identical to prior fires through pre-set_active)
+- `23:40:17` T287 pre-write (pre-set_active): all 7 offsets = 0
+- `23:40:17` T287c pre-write (pre-set_active): all 6 extras = 0 (BSS-clear before ARM release — confirms expected)
+- `23:40:17` T284 pre-write MBM=0x318 (normal), INT=0
+- `23:40:17` `brcmf_pcie_intr_enable` called, returned cleanly; T284/T287/T287c post-write unchanged (intr_enable doesn't populate sched_ctx)
+- `23:40:17` `brcmf_chip_set_active returned TRUE`
+- `23:40:17` **T287 post-set_active** (matches T287b exactly):
+  - `+0x10 = 0x00000011` (flag-like)
+  - `+0x18 = 0x58680001` (chipc.caps — readback infra proven)
+  - `+0x88 = 0x18000000` (CHIPCOMMON register base)
+  - `+0x8c = 0x18000000` (twin)
+  - `+0x168 = 0x00000000`
+  - `+0x254 = 0x18100000` (CHIPCOMMON wrapper)
+  - `+0x258 = 0x18100000` (twin)
+- `23:40:17` **T287c post-set_active (NEW DATA — strongest layout reading):**
+  - `+0x25c = 0x18101000` (core[2] wrapper, id=0x812)
+  - `+0x260 = 0x18102000` (core[3] wrapper = ARM-CR4, id=0x83e)
+  - `+0x264 = 0x18103000` (core[4] wrapper = **PCIE2**, id=0x83c)
+  - `+0x268 = 0x18104000` (core[5] wrapper, id=0x81a)
+  - `+0x26c = 0x00000000` (core[6] id=0x135 has no register base; table truncates here)
+  - `+0x270 = 0x00000000` (beyond table)
+- `23:40:17` T276 2s poll entered; `t+0ms si[+0x010]=0x0009af88 fw_done=0 mbxint=0` — reproduces prior si[+0x010] response. **NO t+0ms wedge — poll completed cleanly to poll-end.**
+- `23:40:17` post-T276-poll: `+0x88 = 0x18001000` **(shifted from chipcommon-base → core[2]-base)**, `+0x254 = 0x18101000` **(shifted from chipcommon-wrap → core[2]-wrap)** — first runtime evidence of fw class-thunk dispatch
+- `23:40:17` T277 console struct decoded as before (587 B written: chipc dump, kattach, RTE banner, pciedngl_probe, wl_probe)
+- `23:40:17` T278 t+500ms / `23:40:17` t+5s / `23:40:17` t+30s / **`23:41:42` t+90s** — all stable, no new console content, all sched_ctx values frozen (matches T257 WFI reading)
+- `23:41:42` LAST log line — wedge silently sometime after t+90000ms dwell
+- `23:45` user SMC reset → boot 0
+
+### Hypotheses outcome
+
+**Primary (#40 wedge-timing): CONFIRMED.** Disabling T285 eliminated the t+0ms wedge. T287b's anomaly was the T285 macro leaking BAR0_WINDOW = 0x18102000, causing T276 PCIE2 reads to hit the wrong backplane address. With T285 off, baseline late-ladder wedge restored (~t+90s..120s), matching T276/T277/T278.
+
+**Secondary (class-table layout): STRONGEST reading CONFIRMED.** sched+0x254..+0x268 is a per-class wrapper-base table indexed by class, populated in EROM walk order. Chipcommon takes BOTH +0x254 (scratch per T283) AND +0x258 (table[0]) — they happen to start identical because class=0 was active. Cores 2..5 occupy +0x25c through +0x268 in EROM order. Core[6] (id=0x135, no register base) is excluded from the table.
+
+**Bonus — fw class-dispatch is active.** Between post-set_active and post-T276-poll (a ~2 s window), fw shifted scratch (+0x254 / +0x88) from chipcommon-context to core[2]-context. This is the first DIRECT evidence of fw class-thunk dispatching during post-set_active. Either (a) fw class-1 thunk runs spontaneously during scheduler init, or (b) the host's polling activity (BAR0_WINDOW switching during T276/T284 reads) somehow triggers a wake. (a) more likely given +0x88 also shifted (BAR0_WINDOW reads use a different mechanism that wouldn't touch scratch).
+
+### Address corrections in KEY_FINDINGS
+
+- **Sched+0x264 = 0x18103000 = PCIE2 wrapper.** This is the slot where BIT_alloc would land if class=4 (PCIE2-class) was active. Currently runtime shows class=1 (core[2]) active during/after T276 poll.
+- **Class table is per-WRAPPER, not per-register-base.** Aligns with T283's `[sched+0x254]+0x100` chain — +0x100 is the AI-backplane agent-register offset (`oobselouta30`), only valid on wrapper pages.
+- T287b's claim "+0x254 = 0x18100000 = PCIE2 base" was already corrected to "= chipcommon WRAPPER" in 2026-04-24 evening. T287c reinforces: the slot for PCIE2 wrapper is +0x264, not +0x254.
+
+### Next step
+
+**T288a — read-only probe of PCIE2-wrapper +0x100 AND chipcommon-wrapper +0x100, with proper saved_win restore.** Reads what BIT_alloc actually sees at runtime under whatever class is currently active. Fires alongside T287/T287c (no removal) and T284. Read-only, low substrate cost — but MUST restore BAR0_WINDOW after each read (lesson from T285).
+
+Open: design probe-stage placement. Best candidates: post-set_active + post-T276-poll (where +0x254 transitions). Skip pre-set_active (table empty).
+
+### Pre-fire substrate notes (for next fire)
+
+- Boot 0 (current) post-SMC-reset, fresh substrate.
+- 2 fires today (T287b + T287c) both wedged late-ladder; substrate burn moderate.
+- Wait for clean cold-power-cycle window before T288a fire if possible.
 
 ---
 
