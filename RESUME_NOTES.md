@@ -9,7 +9,63 @@
 
 ---
 
-## SESSION 2026-04-25 — static work + design (no fires)
+## PRE-TEST.287c (2026-04-25 23:30 BST — **FIRE: T287c extended class-table dump + T285 disabled. Tests both wedge-timing hypothesis (#40) AND class-table layout reading.**)
+
+### Hypothesis — dual
+
+**Primary (wedge-timing #40):** With T285 disabled, BAR0_WINDOW will not be left at 0x18102000 by any probe. T276's poll PCIE2 reads will land on the correct backplane window. Expected: NO t+0ms wedge; poll continues to t≥90 s as in T276/T277/T278 (which all reached late-ladder, not t+0ms). If wedge still occurs at t+0ms, hypothesis falsified — investigate readback-volume or substrate next.
+
+**Secondary (class-table layout):** T287c dumps sched+0x25c, 0x260, 0x264, 0x268, 0x26c, 0x270 at every T287 stage. At post-set_active stage, expected layouts:
+
+| Layout (post-set_active) | Reading |
+|---|---|
+| `+0x25c=0x18101000, +0x260=0x18102000, +0x264=0x18103000, +0x268=0x18104000, +0x26c=0x18108000, +0x270=0` | **Strongest:** class table is per-core wrapper, indexed by class. 6 cores → 6 entries (0x254 is scratch, 0x258..0x26c hold wrapper bases of cores 1..6). |
+| `+0x25c..+0x270` all zero | Only class-0 is populated; later classes unused. Wake-path investigation focused on chipcommon-wrapper alone. |
+| `+0x25c..+0x270` hold non-MMIO values (TCM addresses, function pointers, struct addresses) | Layout is NOT a wrapper-base table. Re-think class table interpretation. |
+| `+0x25c..+0x270` mix wrapper bases with other values | Partial table — class indices are sparse; need to dump more offsets. |
+
+### Substrate
+
+- Fresh boot, uptime 21 min at fire time
+- No brcmfmac modules loaded
+- PCIe state: D0, Gen1 x1, no Status flags (clean)
+- BAR0_WINDOW state: irrelevant pre-load (driver hasn't touched it)
+
+### Run sequence
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test284_premask_enable=1 \
+    bcm4360_test287_sched_ctx_read=1 \
+    bcm4360_test287c_extended=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.287c.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.287c.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.287c.journalctl.txt
+```
+
+**Crucial differences from T287b run:**
+- `bcm4360_test285_chipcommon_read=0` (omitted — default 0). Removes both the chipcommon target (now confirmed wrong) AND its window-leak.
+- `bcm4360_test287c_extended=1` (NEW). 6 extra BAR2 reads per T287 stage.
+- Everything else (T236/T238/T276/T277/T278/T284/T287) identical to T287b.
+
+### Fire expectations
+
+- Same probe-path entry markers as T287b (insmod, brcmf_pcie_register, buscore_reset, FORCEHT, NVRAM, etc.)
+- T287 pre-write (pre-set_active): all offsets = 0 (BSS-clear before ARM release)
+- T287c at same stage: all 6 extras = 0 (same BSS region)
+- T287 post-set_active: same values as T287b (+0x10=0x11, +0x18=0x58680001, +0x88/0x8c=0x18000000, +0x254/0x258=0x18100000)
+- T287c post-set_active: **NEW DATA** — first observation of these offsets
+- T276 poll: should reach t+10ms tick if window-leak hypothesis correct; probably reaches late-ladder (t+90s..120s) like T276/T277/T278 baseline
+- Wedge: probably late-ladder (chip wedges due to other root cause — orthogonal to readbacks). NOT at t+0ms if hypothesis correct.
+
+### Pre-fire sync
+
+Commit + push this PRE-TEST block before fire. fs sync after push.
 
 ### Static finding: writer-of-sched+0x258 settled by exhaustive negation
 
