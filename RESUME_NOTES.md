@@ -5,7 +5,104 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-24 22:40 BST, T287b + T288 static trace + MAJOR CORRECTION — **PCIE2 framing was wrong. `0x18100000` is CHIPCOMMON WRAPPER base, not PCIE2. Host-side test.218 enumeration (already logged in test.287b.journalctl.txt!) gives primary-source core table: chipcommon is core[1] base=0x18000000 wrap=0x18100000; PCIE2 is core[4] base=0x18003000 (NOT 0x18100000). BIT_alloc actually reads `chipcommon_wrapper+0x100` = `oobselouta30` — documented in asahi-linux `bcma_regs.h:28` and `brcmsmac/aiutils.c:338` as the AI-backplane Agent's "OOB select out A" interrupt-routing register. 5-bit mask width (`and #0x1f`) matches the register's packed-field layout exactly. Confirmed by Explore subagent research. T283's ORIGINAL chipcommon intuition was more correct than T287b's initial re-interpretation; just at the wrapper, not the register base. KEY_FINDINGS updated with 2 CONFIRMED rows + 3 SUPERSEDED. Slot=17 task #41 closed by negation (PCIE2 is core[4], not slot 17; offset arithmetic was coincidence). Writer of sched+0x258=chipcommon-wrapper-base still open (not via enumerator's slot-indexed stores). T288a redesigned for chipcommon-wrapper target. No fires today; user out tomorrow.**)
+## Current state (2026-04-25 — **Static-only session. Settled the open writer-of-sched+0x258 question by NEGATION: 6 exhaustive disasm scans (literal pool / movw+movt / lsl#20 / orr+0x100000 / direct str+offset / strd / stm-twin / add+0x254-pointer-arith) ALL returned 0 hits across the entire 0x800–0x6bf78 code region. Wrapper base `0x18100000` is NOT a compile-time constant anywhere in the fw blob; only `0x18000000` (chipcommon-base) appears as a literal (1 hit, file-offset 0x328). KEY_FINDINGS: added "wrapper bases originate from runtime hardware reads of chipcommon's EROM table" as CONFIRMED (architectural). Bit-exact writer location is no longer load-bearing. Wedge-timing anomaly (#40) hypothesis: T285 macro left BAR0_WINDOW = 0x18102000 unrestored; subsequent T276 poll's PCIE2 reads then targeted the wrong window — fits the "silent wedge, no AER" signature. T287c designed: extends T287's class-table dump (BAR2-only) to characterize sched+0x254..0x270, while disabling T285 (chipcommon target now confirmed wrong AND its window-leak is the leading wedge cause). NO FIRES THIS BOOT — user-out window per 2026-04-24 close note; awaiting confirmation today.**)
+
+---
+
+## SESSION 2026-04-25 — static work + design (no fires)
+
+### Static finding: writer-of-sched+0x258 settled by exhaustive negation
+
+Six scans across the full code region (0x800..0x6bf78) using per-2-byte-aligned
+Thumb decode (immune to capstone's linear-decode failures):
+
+| Pattern | Hits | Script |
+|---|---|---|
+| Literal pool entry = 0x18100000 (or any wrapper base) | 0 | t288_find_258_writers.py + t288_wrapper_origin.py |
+| Literal pool entry = 0x18000000 (chipcommon base, baseline) | 1 (at file-offset 0x328) | same |
+| `mov.w rN, #0x18100000` | 0 | t288_find_class_table_writer.py |
+| `movw rN, #imm; movt rN, #imm` constructing 0x18100000 | 0 | same |
+| `lsl rN, rM, #20` (bit-20 set) | 0 | t288_wrapper_origin.py |
+| `orr/add #0x100000` (chipcommon-base → wrapper-base conversion) | 0 | same + t288_wrapper_origin.py |
+| `str* rN, [rM, #0x258]` (direct store at offset 0x258) | 0 | t288_find_258_writers.py + t288_robust_offset_scan.py + t288_indirect_pointer_scan.py |
+| `str* rN, [rM, #0x254]` (direct store, includes the existing class-0 thunk write at 0x2880) | 2 (only 0x2880 + an unrelated `strh.w` at 0x284a4) | t288_robust_offset_scan.py |
+| `strd` paired writes anywhere | 28 (all in unrelated areas; none at 0x254/0x258 vicinity) | same |
+| `stm rN, {rX, rX}` (twin-write same value) | 0 | t288_stm_scan.py |
+| `add rN, rM, #imm` where imm in 0x240..0x280 (pointer arith into class-table region) | 14 (ALL `add rN, sp, #imm` — stack frame, NOT sched_ctx) | t288_indirect_pointer_scan.py |
+
+**Conclusion (now CONFIRMED in KEY_FINDINGS):**
+- The exact instruction that writes `sched+0x258 = 0x18100000` cannot be located by any of the patterns we'd expect a compile-time constant to use.
+- Only the chipcommon **register base** `0x18000000` appears as a literal — every other backplane address (5 other core bases, 5 other wrapper bases) is constructed at runtime from EROM walks.
+- Architecturally this is consistent with BCMA: each core's EROM section advertises register-base AND wrapper-base; the enumerator reads them via base-register addressing where the offset doesn't appear as a regex-matchable literal.
+- This is a **load-bearing finding** but NOT a blocker: the value at `sched+0x258` is what BIT_alloc dereferences, so the runtime value (T287b: 0x18100000) is what matters for the wake-path investigation, not the writer.
+
+Closes the "open static question" from POST-TEST.287b. Two new CONFIRMED rows added to KEY_FINDINGS (negative-result + architectural-origin).
+
+### Wedge-timing anomaly (#40) — leading hypothesis
+
+T287b wedged at t+0ms of the 2 s poll — earliest wedge in the test series, with no AER/NMI/MCE/Oops markers.
+
+**Leading hypothesis: T285 macro leaked BAR0_WINDOW.**
+
+Evidence from T287b log (RESUME_NOTES.md line 34):
+- `T285 post-set_active CC.INTSTATUS=0xFFFFFFFF INTMASK=0xFFFFFFFF saved_win=0x18102000`
+  — i.e. BAR0_WINDOW was at `0x18102000` (ARM-CR4 wrapper) when T285 finished, but never restored.
+- T276 poll then enters and tries to read `PCIE_MAILBOXINT` (a PCIE2-core register) via BAR0.
+- BAR0_WINDOW still on ARM-CR4 wrapper → the read goes to the wrong backplane address.
+- **PCIe transactions to non-responsive backplane targets can hang silently** without surfacing an AER UR (especially with `pci=noaer` in cmdline). Matches the "no crash markers, t+0ms wedge" signature exactly.
+
+Alternative hypotheses (lower-ranked):
+- **7 extra TCM reads/stage as load** — implausible. T245/T246/T277 all did multi-read TCM probes without wedge; BAR2 direct reads are routine.
+- **Substrate drift** — possible but non-discriminating; no specific signal differentiates this from #1.
+
+**Discriminator on next fire:** disable T285 entirely. If T287c (T287's BAR2-only sched_ctx dump) plus T284 (single PCIE2 read with proven restore-window pattern) plus T276 (poll) runs to t≥90s without wedge, the window-leak hypothesis is confirmed. If it still wedges at t+0ms, hypothesis falsified — investigate readback-volume next.
+
+### T287c — design (extends T287's class-table dump)
+
+**Goal:** characterize the class table at sched_ctx+0x254..0x270 to confirm the
+"per-class wrapper-base table" reading. Currently we only know +0x254/+0x258
+both = 0x18100000. Knowing +0x25c, +0x260, +0x264, +0x268 entries discriminates:
+
+| Layout in sched+0x254..0x270 | Reading |
+|---|---|
+| +0x254=0x18100000, +0x258=0x18100000, +0x25c=0x18101000, +0x260=0x18102000, +0x264=0x18103000, +0x268=0x18104000 | "Class table is per-core wrapper-base, indexed by class — class 0..N maps to discovered cores in EROM order." Strongest reading. |
+| +0x254 ≠ +0x258 (after a fresh class-N thunk run) | +0x254 IS the scratch (per T283); +0x258 onwards IS the table. |
+| +0x25c..+0x268 all zero | Only class-0 is populated; other classes' wrapper-base slots are unused. |
+| +0x25c..+0x268 hold non-wrapper values (e.g. function pointers, struct addrs) | Layout is NOT a wrapper-base table; the +0x254/+0x258 twin is coincidental — re-think. |
+
+**Implementation:**
+- Reuse existing T287 macro pattern (`brcmf_pcie_read_ram32` BAR2 direct, no
+  core-switching, no BAR0_WINDOW state).
+- Add 6 more offsets to the read list: `0x25c, 0x260, 0x264, 0x268, 0x26c, 0x270`.
+- Probe at the SAME 9 stages T287 currently probes (no new probe sites).
+- Total cost: 6 extra 32-bit BAR2 reads × 9 stages = 54 reads on top of T287's
+  63 reads (≈25 µs of bus time per stage; well under T276 poll cadence).
+- Module-param: rename existing `bcm4360_test287_sched_ctx_read` to
+  cover T287c automatically; or add `bcm4360_test287c_extended=1` gate for
+  surgical opt-in.
+
+**Disable for next fire:**
+- `bcm4360_test285_chipcommon_read=0` — removes chipcommon target (now
+  confirmed wrong) AND removes the window-leak.
+- T284 stays (single PCIE2 MBM read, proven restore pattern, 1 reg).
+- T287c on (extended sched ctx dump, BAR2-only).
+- T276/T277/T278 unchanged.
+
+**Pre-test checklist (when user clears for next fire):**
+1. ✓ Build (run `make -C phase5/work` after editing `bcm4360_test.c`).
+2. ✓ PCIe state check: `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'`.
+3. ✓ Hypothesis: "T287c will dump 6 more class-table words and reveal a per-core
+   wrapper-base layout. Disabling T285 will avoid the t+0ms wedge."
+4. ✓ Plan committed and pushed BEFORE fire.
+5. ✓ FS sync (`sync`).
+
+NOT YET BUILT — next session needs the code edit + build.
+
+### Discord/access notes
+
+User said "out tomorrow" on 2026-04-24 close. Today is 2026-04-25. Treat as
+no-fire window unless user confirms otherwise. Static + design committed and
+pushed; resumes ready for either continued static work or first fire of T287c.
 
 ---
 
