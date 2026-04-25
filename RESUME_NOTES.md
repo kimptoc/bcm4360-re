@@ -5,11 +5,105 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 — **T288a IMPLEMENTED + BUILT, awaiting fire clearance. Reads chipcommon-wrap+0x000/+0x100 AND PCIE2-wrap+0x000/+0x100 at every T287 stage; ends macro with select_core(PCIE2) (closes the T287b window-leak class). Module compiled clean. PRE-TEST.288a plan committed; fire command in PRE-TEST block. Substrate: boot 0 (post-SMC-reset 23:45 BST), ~7h uptime, 0 fires this boot, PCIe Status flag clean. Fire requires user clearance.**)
+## Current state (2026-04-26 — **T288a FIRED at 00:11 BST (boot -1). HARD WEDGE before reaching set_active. Last log: test.156 (module_init returning) at 00:12:10 — no test.276/284/287/288a markers ever fired. No panic/Oops/AER markers; silent watchdog reboot. Setup callback was invoked at 00:12:01 (test.162) but produced no further logs in its body before hang. Working hypothesis: BAR0 reads of chipcommon-WRAPPER (0x18100000) at PRE-set_active — when ARM CR4 is HALTED — wedge the AI backplane. Wrapper-page reads while ARM is halted is novel territory; T287/T284/T276 only do register-base reads at this stage. NEXT: revise T288a to fire ONLY at post-set_active stages (skip the two pre-set_active calls). Substrate: current boot 0 (recovery boot), uptime 5 min, fresh.**)
 
 ---
 
-## PRE-TEST.288a (2026-04-26 — **READY TO FIRE on user clearance. Reads chipcommon-wrap + PCIE2-wrap agent regs (oobselina30 +0x000 / oobselouta30 +0x100) at every T287 stage. End-of-macro select_core(PCIE2) — applies the lesson from T287b's window-leak.**)
+## POST-TEST.288a (2026-04-26 00:11 BST fire, boot -1 — **HARD WEDGE BEFORE set_active. Setup callback invoked, no markers from its body (T276/T284/T287/T288a all silent). Watchdog reboot, no crash markers. Hypothesis: BAR0 reads of chipcommon-WRAPPER (0x18100000) at PRE-set_active wedge the backplane.**)
+
+### Timeline (from `phase5/logs/test.288a.journalctl.txt`, boot -1)
+
+- `00:11:51` insmod entry (`test.188 module_init entry`)
+- `00:11:52` PROBE ENTRY → SBR → chip_attach → core enumeration (test.218 6 cores)
+- `00:11:53` buscore_reset, ARM CR4 halt, get_raminfo, PMU WARs (test.193/224)
+- `00:11:53..58` ASPM disable, root-port LnkCtl, settings/bus/msgbuf alloc
+- `00:12:00` brcmf_alloc, prepare_fw_request, brcmf_fw_get_firmwares
+- `00:12:01` Direct firmware load for clm_blob/txcap_blob failed -2 (normal)
+- `00:12:01` **`test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0`**
+- `00:12:01` `setup-entry ARM CR4 IOCTL=0x21 IOSTATUS=0 RESET_CTL=0 CPUHALT=YES`
+- `00:12:01` pci_register_driver returned ret=0 (sync — fw was preloaded)
+- `00:12:04` after brcmf_pcie_register() err=0
+- `00:12:10` post-PCI sync (skipping USB)
+- `00:12:10` **LAST LINE: `test.156: after brcmf_core_init() err=0`**
+- [no further log output; machine wedged silently]
+- `00:12:53` watchdog reboot to current boot 0 (uptime now 5 min)
+
+### What was missing (vs successful T287c run)
+
+T287c's first marker after `setup-entry` was `test.128: before brcmf_pcie_attach` (at +1 s post-callback). T288a never logged this. setup() body went silent immediately after the `msleep(300)` at line 7047 — i.e. somewhere between `setup-entry` and `pre-attach` log markers. Setup callback DID enter (line 7045) but NEVER reached `brcmf_pcie_probe_armcr4_state(devinfo, "pre-attach")` at line 7053.
+
+**No T276 shared_info written. No T284 MBM read. No T287 sched_ctx read. No T288a wrap read. No set_active.** The wedge is upstream of all probes.
+
+### Diagnostic markers — what's NOT present
+
+- ❌ No AER UR/CE markers
+- ❌ No NMI / hardlockup / softlockup
+- ❌ No Oops / BUG: / Call Trace
+- ❌ No PCIe link state events
+- ❌ No `brcmf_pcie_attach`-body markers (test.128, test.134, test.130)
+
+Pure silent backplane hang; consistent with prior wedges that aren't visible to AER under `pci=noaer`.
+
+### Hypotheses
+
+**H1 (leading): T288a's pre-set_active wrapper-base BAR0 reads wedge the AI backplane.**
+T287c successfully ran the same setup() body. Only addition in T288a is the two `BCM4360_T288A_READ_WRAPS` invocations at "pre-write" and "post-write" (pre-set_active). Both fire BEFORE `brcmf_chip_set_active`, when ARM CR4 is HALTED. The macro:
+1. config_dword save BAR0_WINDOW
+2. config_dword set BAR0_WINDOW = `0x18100000` (chipcommon WRAPPER)
+3. BAR0 read +0x000 (oobselina30)
+4. BAR0 read +0x100 (oobselouta30)
+5. config_dword set BAR0_WINDOW = `0x18103000` (PCIE2 WRAPPER)
+6. BAR0 read +0x000
+7. BAR0 read +0x100
+8. select_core(PCIE2) (config_dword write to 0x18003000)
+
+**Wrapper-page reads at PRE-set_active are novel.** All prior pre-set_active probes (T241, T280, T284, T285) read register-bases (`0x18000xxx` chipcommon, `0x18003xxx` PCIE2). T288a is the first to read wrapper pages (`0x181xxxxx`) at this stage. Wrapper register reads while ARM is halted may stall the backplane for the same reason post-set_active wrapper reads behave differently from register-base reads.
+
+But wait — but the setup callback's `pre-attach` log marker should fire BEFORE the T288a invocations (which are deep inside attach → cold-init → ramwrite → pre-set-active). If T288a wedged the backplane, we'd expect `pre-attach` and many more markers to fire FIRST. Yet `pre-attach` never logged. So H1 alone doesn't explain the silent gap from `setup-entry` to nothing.
+
+**H2 (alternative): The wedge is NOT in T288a's macro at all — it's in something setup() does between line 7045 (CALLBACK INVOKED) and line 7053 (pre-attach log).**
+Lines 7046-7052: `brcmf_pcie_probe_armcr4_state(devinfo, "setup-entry")` (ran — logged), `msleep(300)`, error check, then pre-attach log. The msleep(300) cannot itself wedge. The `setup-entry` log fired — so `brcmf_pcie_probe_armcr4_state` returned. Then msleep(300) → pre-attach log. Why doesn't pre-attach fire?
+
+Possible: a race or hang AFTER the msleep but BEFORE the `brcmf_pcie_probe_armcr4_state(devinfo, "pre-attach")` call. The next operation is `brcmf_pcie_probe_armcr4_state` itself (which probes ARM state via core-switching reads). On boot -1 (post-SMC-reset substrate, very fresh), this hasn't wedged before — and T287c on the same boot ran fine.
+
+**H3: Substrate drift independent of T288a.**
+The substrate WAS post-SMC-reset 23:45 BST (boot -1 = boot post-SMC-reset). Uptime at fire was ~26 min. T287c ran at 23:39 on boot -2 (BEFORE SMC reset) reaching t+90s. Boot -1 was a **fresh** post-SMC-reset substrate — usually best-case. Substrate drift is a weak hypothesis given the fresh-boot context.
+
+### Leading hypothesis: H2 + H1 combination
+
+The wedge probably happens DURING the pre-attach `brcmf_pcie_probe_armcr4_state` call itself, OR slightly after but before reaching brcmf_pcie_attach. H1's wrapper-read concern is plausible but logically downstream of the actual silence point.
+
+### Why no `pre-attach` log fired — re-examination
+
+Looking at the sequence:
+- Line 7046: `brcmf_pcie_probe_armcr4_state(devinfo, "setup-entry")` — fires test.188 log; LOGGED at 00:12:01
+- Line 7047: `msleep(300)` — 300ms sleep
+- Line 7053: `brcmf_pcie_probe_armcr4_state(devinfo, "pre-attach")` — should log test.188 with "pre-attach" tag
+
+But after `setup-entry`, the next log lines we see are `pci_register_driver returned ret=0` at 00:12:01 and beyond. Those are from a DIFFERENT thread (module_init). No other setup() body markers appear.
+
+**Open question:** what happened during/after the `msleep(300)` between `setup-entry` log and `pre-attach` log? The setup callback thread is blocked or hung. If a backplane hang happened, it wouldn't be triggered by msleep itself — must be triggered by something T288a code added. But the only T288a additions are deep INSIDE `brcmf_pcie_attach`, not between `setup-entry` and `pre-attach`.
+
+Possible: a build/link issue where T288a's macro defines have an unintended side effect. Let me re-check the macro definition placement before assuming.
+
+### Next step (no fire; static analysis first)
+
+1. Re-examine T288a code path for unintended early invocation (does the macro fire anywhere I missed?).
+2. Check git diff of pcie.c since T287c's working build to verify only the T288a additions are different.
+3. Compare T287c's last successful `setup-entry → pre-attach` timing vs T288a's silence.
+4. If no upstream-of-attach changes in T288a build, the wedge MUST be inside attach — but then we'd expect SOME attach-body marker before silence. Investigate.
+
+### Substrate (current — recovery boot)
+
+- Boot 0 (current) post-watchdog-reboot from T288a wedge (boot -1)
+- Uptime 5 min
+- PCIe state: Status flag clean, no MAbort/CommClk drift visible
+- 0 fires this boot
+- Recommend: cold cycle before next fire — substrate is uncertain after a hard wedge
+
+---
+
+## PRE-TEST.288a (2026-04-26 — **READY TO FIRE on user clearance. Reads chipcommon-wrap + PCIE2-wrap agent regs (oobselina30 +0x000 / oobselouta30 +0x100) at every T287 stage. End-of-macro select_core(PCIE2) — applies the lesson from T287b's window-leak.** [SUPERSEDED by POST-TEST.288a above — fire wedged the machine before set_active. Block kept here for diff context.])
 
 ### Hypothesis
 
