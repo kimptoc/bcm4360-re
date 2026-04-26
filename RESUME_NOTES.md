@@ -5,9 +5,105 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 23:14 BST — **POST-TEST.294 NULL FIRE recorded. T294 wedged at `test.158: LnkCtl read before=0x0143 — disabling ASPM` (line 1133, fire timestamp 23:02:25). UPSTREAM of any T294/T290B anchor — ZERO discriminator data captured. Same upstream-of-probe substrate-noise wedge pattern as T288a' (OTP-bypass) and T288c (fw download chunk-1). T293 firing-#4 `orig=0xffffffff` anomaly REMAINS UNRESOLVED — (a)/(b)/(c) discrimination still pending. User cold-cycled + SMC-reset; substrate clean (`<MAbort-`, `CommClk+`); boot 0 since 23:09:55 BST, uptime ~5 min at this writeup. KEY_FINDINGS row 85 to be updated with another within-clean-window null data point. Next move (T295) requires advisor consult — leading candidate is T294-minus-T290B-at-post-T276-poll to remove the known wedge confound from the discriminator fire.**)
+## Current state (2026-04-26 23:25 BST — **PRE-TEST.295 PLAN: re-fire T294 unchanged on tight-freshness substrate (≤2 min from cold cycle). Per advisor: T294 fires the read-only probe BEFORE T290B at the same site, so T290B-wedge confound is structurally absent — re-firing unchanged is the cheapest path to discriminator data. Per KEY_FINDINGS row 85: ~1/4 fires reach probe site → plan for 2-4 attempts. Each null costs a user SMC reset (n=5/5 cluster per row 84). Module binary unchanged from PRE-TEST.294 — 11 `t294 a*` anchors + SUMMARY string verified in built `brcmfmac.ko`. Awaiting user fire clearance.**)
 
-## Prior state (2026-04-26 21:25 BST — PRE-TEST.294 BUILT and READY; fired ~23:02 BST.)
+## Prior state (2026-04-26 23:14 BST — POST-TEST.294 NULL FIRE recorded; T294 wedged at LnkCtl/ASPM-disable, ZERO discriminator data.)
+
+---
+
+## PRE-TEST.295 (2026-04-26 23:25 BST — **PLAIN RE-FIRE of T294 on tight-freshness substrate. Same binary, same params, no rebuild. Goal: land the 11-anchor read-only chipcommon discriminator probe to resolve T293 firing-#4's `orig=0xffffffff` into (a)/(b)/(c). T290B-wedge confound is structurally absent — T294 fires BEFORE T290B at the same site. Advisor recommended path.**)
+
+### Goal — single bit of information
+
+Resolve T293 firing-#4 `orig=0xffffffff` anomaly per PRE-TEST.294's discriminator table:
+- (a) `select_core(CHIPCOMMON)` silently failed at post-T276-poll → window stayed at 0x18102000 (ARM-CR4 wrapper); read at "CC+0x54" hit the wrapper, write wedged ARM-CR4 wrapper
+- (b) Chipcommon BCAST_DATA genuinely went 0 → 0xffffffff during 2s poll (fw wrote it during init)
+- (c) Chipcommon access path itself degraded after fw scheduler dispatch (all-1s reads, write hangs)
+
+### Why re-fire instead of rebuild (advisor)
+
+T294 fires the read-only probe **BEFORE** T290B at the same post-T276-poll site (PRE-TEST.294 line 43). The SUMMARY values are captured first; the post-T294 T290B firing is just expected n-replication on the existing T293 wedge finding. It does NOT poison T294's read-only data. Building "T294 minus T290B" would burn time for zero information gain.
+
+### Substrate prerequisites — STRICT
+
+- ⚠️ **Tight freshness REQUIRED**: insmod within ≤2 min of cold-cycle boot. T294 fired at uptime ~1h53min and wedged.
+- ⚠️ T288c proved fresh substrate can still wedge — freshness shifts the probability, doesn't guarantee success.
+- ⚠️ Verify `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'` is clean immediately before insmod.
+- Per KEY_FINDINGS row 85: ~1/4 fires reach the probe site. Realistic plan: **2-4 attempts**, each requiring full cold cycle + likely SMC reset on null/wedge.
+- Per KEY_FINDINGS row 84: watchdog n=5/5 NOT auto-recovering recent fires; user SMC reset cost is fixed per attempt.
+
+### Discriminator outcomes
+
+Identical to PRE-TEST.294's table (lines 26-37 above). Re-stated for completeness:
+
+| `bar0_after_select` | `chipid` | `bcast1`/`bcast2` | Reading |
+|---|---|---|---|
+| ≠ `0x18000000` | (irrelevant) | (irrelevant) | **(a) CONFIRMED** — select_core silently failed |
+| `0x18000000` | valid | both `0xffffffff` | **(b) CONFIRMED** — BCAST_DATA genuinely flipped |
+| `0x18000000` | `0xffffffff` | `0xffffffff` | **(c) CONFIRMED** — chipcommon path degraded |
+| `0x18000000` | valid | both `0x00000000` | **NONE** — T293 was a one-off; need T296 re-fire |
+| Wedges before t294 a3 | — | — | select_core wedges at config_dword (distinct from (a)) |
+| Wedges between a4 and a5 | — | — | chipid READ wedges — (c)-strong |
+| Wedges between a6 and a7 | — | partial | First BCAST_DATA read wedges — (c)-strong |
+| Wedges UPSTREAM of T294 fire (test.158, etc.) | — | — | NULL — substrate noise; re-fire as T296 with same params |
+
+### Diff vs T294 fire
+
+ZERO. Same binary (anchors verified by `strings | grep 't294 '` — all 11 + SUMMARY present). Same insmod params:
+- `bcm4360_test236_force_seed=1`, `bcm4360_test238_ultra_dwells=1`
+- `bcm4360_test276_shared_info=1`, `bcm4360_test277_console_decode=1`, `bcm4360_test278_console_periodic=1`
+- `bcm4360_test284_premask_enable=1`
+- `bcm4360_test287_sched_ctx_read=1`, `bcm4360_test287c_extended=1`
+- `bcm4360_test290a_chain=0`, `bcm4360_test290b_cc_write=1`
+- `bcm4360_test294_cc_ro_probe=1`
+
+### Fire command (identical to T294)
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test284_premask_enable=1 \
+    bcm4360_test287_sched_ctx_read=1 \
+    bcm4360_test287c_extended=1 \
+    bcm4360_test290a_chain=0 \
+    bcm4360_test290b_cc_write=1 \
+    bcm4360_test294_cc_ro_probe=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.295.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.295.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.295.journalctl.txt
+```
+
+If wedged before journalctl: on next boot, `sudo journalctl -k -b -1 > phase5/logs/test.295.journalctl.txt`.
+
+### Pre-fire checklist (CLAUDE.md)
+
+1. ✓ NO REBUILD — same brcmfmac.ko binary as T294 (anchors verified via strings)
+2. ✓ Hypothesis stated above (resolve (a)/(b)/(c))
+3. (user) PCIe state check: `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'`
+4. ✓ Plan committed and pushed BEFORE fire (this commit)
+5. ✓ FS sync after push
+6. (user) Cold cycle done; insmod within ≤2 min of cold-cycle boot for tightest freshness
+
+### Risk and recovery
+
+- T295's READ-ONLY phase carries no wedge risk if it reaches a0..a10
+- T290B firing AFTER T294 at post-T276-poll is expected to wedge (T293 pattern). Cold cycle + SMC reset will be needed regardless of (a)/(b)/(c) outcome
+- Watchdog n=5/5 NOT auto-recovering — user SMC reset will be needed
+- Substrate-noise null is the realistic mode failure (~75% per row 85)
+
+### Stopping rule for T295 series
+
+If T295/T296/T297 all null at upstream wedges (3 consecutive substrate nulls at probe-block-1+ stages), per KEY_FINDINGS row 85 stopping rule: pivot to (γ-c) — pick a different MMIO surface for the wake-gate experiment (TCM-scribble at `[node+0xc]` per row 148 is the leading candidate). Don't burn 5+ SMC resets chasing one bit on a substrate-pathological week.
+
+### What this fire DOES NOT test
+
+- ❌ Whether removing T290B from post-T276-poll prevents the wedge (T290B left enabled — leave for downstream test if (a)/(b)/(c) settled)
+- ❌ Whether T290B at post-set_active wedges on multiple firings (n=1 clean so far)
+- ❌ Anything about the PCIe MAILBOXMASK confound from POST-TEST.293's side-observation
 
 ---
 
