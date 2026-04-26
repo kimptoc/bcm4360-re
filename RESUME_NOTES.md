@@ -5,7 +5,73 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 09:16 BST — **PRE-FIRE.288b ready. User completed cold cycle + SMC reset. Substrate verified clean: D0, Gen1 x1, CommClk+, Status flags empty, uptime 2 min — within widest clean window. About to fire T288b baseline (T288a flag=0) per PRE-TEST.288b plan to discriminate substrate vs T288a-binary as the wedge cause.**)
+## Current state (2026-04-26 09:30 BST — **POST-TEST.288b recorded. T288b reached t+90s with full T287c-style trace and wedged in the well-known T270-BASELINE late-ladder window (t+90..120s). Discriminator outcome row 1: substrate was the confound for T288a/T288a' wedges; T288a binary is INNOCENT; H1 (T288a runtime wrap-base BAR0 reads at PRE-set_active wedge the backplane) survives by exclusion. Currently on recovery boot (boot 0 since 09:24:50, uptime 5 min) — T288c re-fire of T288a anchored variant requires another cold cycle before next fire.**)
+
+---
+
+## POST-TEST.288b (2026-04-26 09:19 BST fire, boot -1 — **CLEAN BASELINE THROUGH T+90s. Discriminator outcome: substrate was the only confound for T288a/T288a' wedges. T288a binary innocent. H1 from POST-TEST.288a (T288a runtime wrapper-base BAR0 reads at PRE-set_active wedge the backplane) survives by exclusion. Wedge at ~t+95s = the known T270-BASELINE late-ladder fault, orthogonal to T288 work.**)
+
+### Timeline (from `phase5/logs/test.288b.journalctl.txt`, boot -1)
+
+- `09:13:48` boot start
+- `09:19:30..31` insmod entry → SBR → chip_attach → core enumeration (test.218 6 cores) → buscore_reset → ARM CR4 halt → get_raminfo → PMU WARs → ASPM/LnkCtl/settings/bus alloc → brcmf_alloc → fw_get_firmwares → setup callback INVOKED → setup-entry → pre-attach → cold-init → ramwrite → BusMaster on → FORCEHT
+- `09:19:31` **`test.276: shared_info written at TCM[0x9d0a4]`** + readback PASS (magic/dma/size/init_done/end all match)
+- `09:19:31` `test.284: pre-write (pre-set_active) MAILBOXMASK=0x00000318 MAILBOXINT=0x00000000` (matches T284 baseline)
+- `09:19:31` `test.287: pre-write (pre-set_active) sched[...]=0` (uninitialized — fw hasn't been released yet — matches T287b/c baseline)
+- `09:19:31` `test.287c: pre-write (pre-set_active) sched[+0x25c..+0x270]=0` (uninitialized — matches baseline)
+- `09:19:31` ZERO `anchor-N` lines (T288a flag=0 — gate held — confirms binary cleanliness)
+- `09:19:31` `test.238: calling brcmf_chip_set_active resetintr=0xb80ef000`
+- `09:19:31` `test.276: t+0ms si[+0x010]=0x0009af88 fw_done=0x00000000 mbxint=0x00000000` (T276 protocol anchor — exact match of T276/T277/T278/T287c)
+- `09:19:31` `test.276: poll-end si[+0x010]=0x0009af88 fw_done=0x00000000 mbxint=0x00000000` (matches T276 baseline)
+- `09:19:31` `test.277: POST-POLL struct@0x0009af88 buf_addr=0x00096f78 buf_size=0x00004000 write_idx=0x0000024b read_addr=0x00096f78` (exact T277 match — write_idx=587 bytes)
+- `09:19:31` test.278 POST-POLL full dump 587 B = exact T278 fw console (`Found chip type AI` … `wl_probe called`)
+- `09:19:31..32` test.238 dwell ladder: t+100ms..t+30000ms — all stage hooks fired (T284 MBM=0, T287 sched_ctx settled to post-set_active values, T287c class-table at +0x25c..+0x268 = 0x18101000..0x18104000, T278 wr_idx=587 unchanged at every stage)
+- `09:19:32` `t+45000ms`, `t+60000ms` dwells
+- `09:19:39` **`t+90000ms dwell` + T278/T284/T287/T287c stage hooks fired**
+- [no further log output; machine wedged silently]
+- `09:19:44` boot -1 ended (per journalctl --list-boots)
+- `09:24:50` boot 0 (current — recovery from watchdog reboot)
+
+### Discriminator outcome (per PRE-TEST.288b table)
+
+Row 1 of the discriminator table fired:
+> Reaches t+90s with full T287c-style trace → Substrate was the only confound. T288a binary innocent. → Re-fire with `bcm4360_test288a_wrap_read=1` on a cold-cycled substrate.
+
+Two facts crystallised:
+
+1. **Substrate was the confound for T288a (00:11 BST) and T288a' (08:53 BST) wedges.** Same binary, T288a runtime gated off, with a properly cold-cycled substrate → reaches t+90s. Substrate degradation explains both prior wedges' progressively-earlier failures.
+2. **T288a binary is INNOCENT.** Anchor strings are compiled in (verified via `strings ... | grep anchor-` = 8 hits) but the runtime gate held them silent. No anchor lines logged. The added macro definitions and module_param do not perturb the late-ladder trace.
+
+By exclusion (only one untested variable remains — the runtime wrapper-base BAR0 reads themselves):
+
+3. **H1 from POST-TEST.288a survives**: T288a's `BCM4360_T288A_READ_WRAPS` macro body — the actual BAR0 reads at chipcommon-WRAPPER (0x18100000) and PCIE2-WRAPPER (0x18103000) at PRE-set_active timing — wedges the backplane.
+
+### Crash characterisation (post-90s wedge)
+
+- Final journal line at 09:19:39, boot ended at 09:19:44 = ~5 s gap → wedge at ~09:19:44, well inside the **T270-BASELINE t+90..120s late-ladder window**
+- ZERO crash markers in journal (no AER UR/CE — `pci=noaer`; no NMI; no Oops; no Call Trace) — silent backplane hang, fw-side
+- Substrate at fire was 2 min uptime, post-cold-cycle; this is the same wedge T270-BASELINE/T276/T277/T278/T287c all hit
+- This is the known `late-ladder substrate-bound fault` (KEY_FINDINGS row "T276 did not alter the late-ladder crash window") — orthogonal to T288 series of probes
+
+### KEY_FINDINGS impact (load-bearing)
+
+ADD: **CONFIRMED — T288a runtime wrapper-base BAR0 reads at PRE-set_active wedge BCM4360 backplane.** Mechanism inferred by exclusion (T288b baseline reached t+90s with same binary, gate off; T288a/T288a' wedged with gate on). Sub-step (which of the 8 anchor lines fires last) NOT YET identified — that's T288c's job.
+
+The new fact removes a major candidate from the LIVE list: prior PRE-TEST.288a hypothesis "wrapper-page reads at PRE-set_active are novel and may stall the backplane" is upgraded from speculation to confirmed-by-exclusion.
+
+### Substrate (current — recovery boot)
+
+- Boot 0 since 09:24:50 BST, uptime ~5 min at this writeup
+- PCIe state: `Status` clean (no MAbort/etc.); `DevSta: UnsupReq+ CorrErr+ AuxPwr+` — leftovers from the wedge that DON'T clear without SMC reset
+- `LnkCtl: ASPM L0s L1 Enabled, CommClk+`; `LnkSta: Speed 2.5GT/s, Width x1` — link trained correctly
+- 0 brcmfmac modules loaded
+- 0 fires this boot
+- ⚠️ Per CLAUDE.md substrate rule: T288c REQUIRES a fresh cold cycle (shutdown ≥60 s + SMC reset). Recovery boot is not a clean substrate.
+
+### Build verification
+
+- `brcmfmac.ko`: 15 085 568 B, mtime 2026-04-26 00:24 — anchors compiled in (verified `strings ... | grep -i 'anchor-' | head -10` returns 8 format strings, gated on `bcm4360_test288a_wrap_read`)
+- T288c needs NO rebuild — flip flag from 0 to 1, identical fire command otherwise
 
 ---
 
@@ -192,7 +258,112 @@ H1 says T288a wrapper-base reads wedged the backplane (a real runtime difference
 
 ---
 
-## PRE-FIRE.288b (2026-04-26 09:16 BST — substrate ready)
+## PRE-TEST.288c (2026-04-26 09:30 BST — **READY ON USER COLD-CYCLE CLEARANCE. Re-fire of T288a anchored variant — same binary as T288b but with `bcm4360_test288a_wrap_read=1`. Identifies WHICH sub-step in the wrapper-read macro wedges the backplane. WILL CRASH THE MACHINE per H1; cold cycle required again afterwards.**)
+
+### Hypothesis
+
+H1 (CONFIRMED-BY-EXCLUSION via T288b): T288a's `BCM4360_T288A_READ_WRAPS` macro wedges the backplane at one specific sub-step. T288c uses the 8-anchor instrumentation already built into the macro to identify WHICH sub-step:
+
+| Last anchor seen | Sub-step that wedged |
+|---|---|
+| (none — wedge before macro) | upstream of T288a — implausible (T288b proved upstream is clean with this binary) |
+| `pre-write anchor-1` only | BAR0_WINDOW save (config-space read) — implausible |
+| `pre-write anchor-2` | set CC-wrap window (config-space write to BAR0_WINDOW reg) |
+| `pre-write anchor-3` | BAR0 read of `oobselina30` at chipcommon-wrap +0x000 |
+| `pre-write anchor-4` | BAR0 read of `oobselouta30` at chipcommon-wrap +0x100 (BIT_alloc's actual target) |
+| `pre-write anchor-5` | set PCIE2-wrap window (config-space write) |
+| `pre-write anchor-6` | BAR0 read of PCIE2-wrap +0x000 |
+| `pre-write anchor-7` | BAR0 read of PCIE2-wrap +0x100 |
+| `pre-write anchor-8` | `select_core(PCIE2)` end-of-macro (config-space writes) |
+| Full `pre-write` 1-8 + `post-write anchor-N` | wedge in 2nd invocation (post-intr_enable) |
+| Full pre-write + post-write + post-set_active anchors | wedge in T276 poll or later — back to baseline late-ladder |
+
+If the wedge happens at anchor-3 or anchor-4 (chipcommon-wrap reads while ARM CR4 is HALTED), that's the load-bearing finding: **wrapper-page reads pre-set_active stall the backplane on BCM4360**. This explains the T270-BASELINE late-ladder fault as a separate issue and reframes T288 work toward post-set_active wrapper reads only.
+
+### Discriminator outcomes
+
+| Result | Reading | Next step |
+|---|---|---|
+| Last anchor = `pre-write anchor-3` or `-4` | CC-wrap reads pre-set_active wedge backplane while ARM halted | T288d: skip pre-write invocation, only invoke post-set_active and later |
+| Last anchor = `pre-write anchor-6` or `-7` | PCIE2-wrap reads pre-set_active wedge backplane | Same as above |
+| Last anchor = `pre-write anchor-8` | end-of-macro `select_core(PCIE2)` is the wedger | Replace select_core with raw config-space restore of saved BAR0_WINDOW |
+| Reaches `post-set_active anchor-X` | wrapper reads safe pre-set_active; wedge happens later (likely post-set_active iteration 1) | Pursue post-set_active sub-step |
+| Reaches all anchors at all stages then late-ladder wedge | (unlikely given T288a/T288a' wedges) — implies prior wedges were also substrate. Re-evaluate. | Treat T288 instrumentation as production-safe; pursue late-ladder wedge as the live problem |
+
+### Diff vs T288b fire
+
+Identical command except `bcm4360_test288a_wrap_read=1` (was `=0`). Same .ko. No rebuild.
+
+### Substrate prerequisites — REQUIRED
+
+⚠️ Current boot (boot 0, since 09:24:50 BST) is recovery from T288b's late-ladder wedge. `DevSta: UnsupReq+ CorrErr+ AuxPwr+` are leftovers from the wedge that don't clear without SMC reset.
+
+- **REQUIRED**: full cold cycle = `shutdown -h now`, wait ≥60 s power-off, SMC reset, then power on.
+- After cold cycle: `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta|DevSta'` (expect `DevSta` flags clean OR at most `AuxPwr+`; no MAbort; LnkSta trained Gen1 x1).
+- Uptime should be ≤2 min at fire — clean window is widest right after cold cycle (per KEY_FINDINGS substrate row).
+- ⚠️ T288c WILL crash the machine again per H1. Another cold cycle will be required AFTER T288c fires before any further hardware test.
+
+### Fire command (T288a flag = 1)
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test284_premask_enable=1 \
+    bcm4360_test287_sched_ctx_read=1 \
+    bcm4360_test287c_extended=1 \
+    bcm4360_test288a_wrap_read=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.288c.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.288c.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.288c.journalctl.txt
+```
+
+If the machine wedges before journalctl runs (expected): on next boot, run `sudo journalctl -k -b -1 > phase5/logs/test.288c.journalctl.txt` to capture the wedged-boot log.
+
+### Anchor format (8 lines per macro invocation, all `pr_emerg` priority)
+
+The macro logs at `pr_emerg` (priority 0) which bypasses normal printk filtering and tries to flush eagerly to console — gives the best chance of surviving even a hard wedge:
+
+```
+brcmfmac: BCM4360 test.288a': <tag> anchor-1 (about to save BAR0_WINDOW)
+brcmfmac: BCM4360 test.288a': <tag> anchor-2 (saved=0x........; about to set CC-wrap window)
+brcmfmac: BCM4360 test.288a': <tag> anchor-3 (CC-wrap window set; about to read +0x000)
+brcmfmac: BCM4360 test.288a': <tag> anchor-4 (CC.wrap[0x000]=0x........; about to read +0x100)
+brcmfmac: BCM4360 test.288a': <tag> anchor-5 (CC.wrap[0x100]=0x........; about to set PCIE2-wrap window)
+brcmfmac: BCM4360 test.288a': <tag> anchor-6 (PCIE2-wrap window set; about to read +0x000)
+brcmfmac: BCM4360 test.288a': <tag> anchor-7 (PCIE2.wrap[0x000]=0x........; about to read +0x100)
+brcmfmac: BCM4360 test.288a': <tag> anchor-8 (PCIE2.wrap[0x100]=0x........; about to select_core(PCIE2))
+```
+
+Stage tags (in order):
+1. `pre-write (pre-set_active)` — BEFORE intr_enable, ARM CR4 halted
+2. `post-write (pre-set_active)` — AFTER intr_enable, ARM CR4 halted
+3. `post-set_active` — AFTER ARM CR4 release
+4. `post-T276-poll` — after 2 s post-set_active poll
+5. `post-T278-initial-dump` — after console dump
+6-9. `t+500ms`, `t+5s`, `t+30s`, `t+90s` (T287 dwell stages)
+
+### Pre-fire checklist (CLAUDE.md)
+
+1. ✓ Build verification: anchor strings present in .ko (`strings ... | grep anchor-` = 8 hits) — no rebuild needed
+2. (user) Cold cycle: shutdown ≥60 s + SMC reset
+3. (user) PCIe state check after cold cycle (per Substrate prerequisites above)
+4. ✓ Hypothesis stated above
+5. ✓ Plan committed and pushed BEFORE fire (this file)
+6. ✓ FS sync after push
+
+### Risk and recovery
+
+- Expected wedge per H1; recovery is watchdog reboot (~3 min) — no manual intervention historically required (KEY_FINDINGS substrate row: n>30 watchdog recoveries today)
+- Worst case: hard hang requiring user-initiated power cycle. Mitigate by NOT being mid-edit at fire time.
+- Anchor lines are written via `pr_emerg` (priority 0) — best-effort eager flush. Even with hard wedge, anchors LOGGED before the wedging instruction should make it to journal.
+
+---
+
+## PRE-FIRE.288b (2026-04-26 09:16 BST — substrate ready) [SUPERSEDED — fired and POST-TEST.288b recorded above]
 
 - User completed cold cycle (shutdown + ≥60 s) + SMC reset
 - Uptime at substrate verification: 2 min (within widest clean window per CLAUDE.md)
