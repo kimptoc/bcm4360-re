@@ -5,9 +5,9 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 21:25 BST — **PRE-TEST.294 BUILT and READY ON USER FIRE CLEARANCE. Read-only chipcommon discriminator probe at post-T276-poll with explicit BAR0_WINDOW readback after select_core. Discriminates T293 firing-#4's `orig=0xffffffff` anomaly into (a) select_core silent fail / (b) BCAST_DATA genuinely flipped during 2s poll / (c) chipcommon access path degraded. 11 anchors (a0..a10) verified in built module. T290B kept enabled at pre-set_active + post-set_active sites for continued n-replication. Substrate currently fresh (boot 0 since 21:08:58, ~17 min uptime at planned fire — within 20–25 min window per row 84 but past optimal ≤2 min freshness). Awaiting user fire clearance.**)
+## Current state (2026-04-26 23:14 BST — **POST-TEST.294 NULL FIRE recorded. T294 wedged at `test.158: LnkCtl read before=0x0143 — disabling ASPM` (line 1133, fire timestamp 23:02:25). UPSTREAM of any T294/T290B anchor — ZERO discriminator data captured. Same upstream-of-probe substrate-noise wedge pattern as T288a' (OTP-bypass) and T288c (fw download chunk-1). T293 firing-#4 `orig=0xffffffff` anomaly REMAINS UNRESOLVED — (a)/(b)/(c) discrimination still pending. User cold-cycled + SMC-reset; substrate clean (`<MAbort-`, `CommClk+`); boot 0 since 23:09:55 BST, uptime ~5 min at this writeup. KEY_FINDINGS row 85 to be updated with another within-clean-window null data point. Next move (T295) requires advisor consult — leading candidate is T294-minus-T290B-at-post-T276-poll to remove the known wedge confound from the discriminator fire.**)
 
-## Prior state (2026-04-26 21:10 BST — POST-TEST.293 RECORDED + KEY_FINDINGS row 159 updated.)
+## Prior state (2026-04-26 21:25 BST — PRE-TEST.294 BUILT and READY; fired ~23:02 BST.)
 
 ---
 
@@ -93,6 +93,86 @@ If wedged before journalctl: on next boot, `sudo journalctl -k -b -1 > phase5/lo
 
 - ❌ Whether removing T290B from post-T276-poll prevents the wedge (T290B left enabled — leave that for T295 if T294 picks (a)/(b)/(c))
 - ❌ Whether T290B at post-set_active wedges on second/third firing (n=1 clean at post-set_active so far — needs more samples eventually)
+
+---
+
+## POST-TEST.294 (2026-04-26 23:02:25 BST fire, boot -1 — **NULL FIRE. Wedged at `test.158: LnkCtl read before=0x0143 — disabling ASPM` (line 1133). UPSTREAM of any T294/T290B anchor — ZERO discriminator data captured. T293 firing-#4 `orig=0xffffffff` anomaly UNRESOLVED. Watchdog did NOT auto-recover; user SMC reset (n=5/5 such events for T288c/T290/T292/T293/T294).**)
+
+### Timeline (from `phase5/logs/test.294.journalctl.txt`, boot -1 — 21:08:58→23:02:25)
+
+- `21:08:58` boot -1 start (recovery from T293 cold-cycle)
+- [~1h53min idle uptime — fire NOT in PRE-TEST.294's recommended ≤2 min freshness window; near upper edge of KEY_FINDINGS row 84's 20–25 min window]
+- `23:02:05` insmod entry → SDIO module init → PCIe register → PROBE ENTRY
+- `23:02:09` SBR via bridge → chip_attach
+- `23:02:11` BAR0 probes alive (CC@0x18000000 returns `0x15034360` twice — chip alive)
+- `23:02:11`–`23:02:13` test.218 host-side core enum (6 cores, all expected — bit-identical to T293/T287c)
+- `23:02:15`–`23:02:17` buscore_reset → ARM CR4 halt → CPUHALT=YES
+- `23:02:17`–`23:02:18` get_raminfo (rambase=0x0 ramsize=0xa0000 srsize=0x0 — match)
+- `23:02:19`–`23:02:21` PMU WARs + max/min res_mask programming + post-settle (matches baseline)
+- `23:02:22` brcmf_chip_attach returned successfully
+- `23:02:23` ARM CR4 core->base=0x18002000 (no MMIO issued)
+- `23:02:23`–`23:02:24` pci_clear_master → BusMaster cleared
+- `23:02:24` test.158: about to read LnkCtl before ASPM disable
+- `23:02:25` test.158: LnkCtl read before=0x0143 — disabling ASPM ← **LAST LOG LINE**
+- [silent backplane hang — no `disabled` confirmation, no setup-entry, no T276/T284/T287/T290B/T294 anchor]
+- `23:09:55` boot 0 (recovery — only after user SMC reset; watchdog did NOT auto-recover, n=5/5 cumulative)
+
+### Critical primary-source findings
+
+**Finding 1 (LOAD-BEARING — substrate-null pattern continues): T294 wedged at LnkCtl/ASPM-disable, UPSTREAM of every T294 and T290B anchor.** ZERO `t294 a*` lines, ZERO `t290b ` lines in the journal. The wedge happened during the host's PCI config-space write to disable ASPM (test.158, between log line "about to read LnkCtl" and any subsequent "disabled" confirmation). This is bit-identical to the T288a'/T288c upstream-wedge pattern: both wedged at PCI config-space writes (OTP-bypass / fw chunk-1) before any probe code reached its instrumentation. Substrate flakiness (KEY_FINDINGS row 85) wedges at random points along the same code path even within the "clean window" — T294 confirms the row's claim n+1 times.
+
+**Finding 2 (UNRESOLVED): T293 firing-#4 `orig=0xffffffff` discriminator question (a)/(b)/(c) was NOT touched by this fire.** No T294 anchor (a0..a10) printed; no SUMMARY line. T294 read `chipid` and `bcast1`/`bcast2` were never sampled. The discrimination between (a) select_core silent-fail / (b) genuine BCAST_DATA flip during 2s poll / (c) chipcommon access path degraded remains LIVE.
+
+**Finding 3 (substrate observation): Fire at uptime ~1h53min (well past optimal ≤2 min freshness) preceded the wedge.** Cannot conclude staleness caused this fire's wedge — T288c wedged at uptime ~1.5 min on a fresh post-cold-cycle boot. But re-firing on tight-freshness substrate (≤5 min from cold cycle) is cheap insurance for any T295.
+
+**Finding 4 (negative — no new chipcommon information): KEY_FINDINGS row 159 (n=3 pre-set_active clean / n=1 post-set_active clean / n=1 post-T276-poll WEDGE) is unchanged.** T294 did not add to either positive or wedge counts.
+
+### Discriminator outcome (per PRE-TEST.294 table)
+
+The closest match in the discriminator table:
+> **Wedges before t294 a3 (no `BAR0_WINDOW after select` print)**: select_core itself wedges at config_dword write (rather than silently fail) — distinct from (a). Investigate config_dword path; possibly chip cannot tolerate window-switch-back-to-CC at this timing.
+
+**This row does NOT apply** — the wedge happened BEFORE the T294 macro could fire at all (BEFORE setup callback, BEFORE T276/T284/T287/T290B). The wedge is in the host's pre-setup ASPM-disable path, orthogonal to T294's probe target. Discriminator table simply did not get a chance to apply.
+
+### KEY_FINDINGS impact
+
+- **Row 85 (substrate flakiness wedges at random progress points)** — T294 adds another within-clean-window null data point. List grows: T288a (post-T276 wedge), T288a' (OTP-bypass wedge), T288c (fw chunk-1 wedge), T294 (LnkCtl/ASPM-disable wedge). Different upstream wedge points across same Phase 5 binary path. Row to be edited to include T294.
+- **Row 159 (chipcommon writes / orig=0xffffffff anomaly)** — UNCHANGED. T294 added zero data on either side.
+
+### What was NOT settled
+
+- ❌ The (a)/(b)/(c) discriminator for T293 firing-#4 `orig=0xffffffff` — STILL OPEN.
+- ❌ Whether removing T290B from post-T276-poll prevents the wedge — STILL OPEN.
+- ❌ Whether the wedge mechanism reproduces (n=1 post-T276-poll wedge from T293 alone).
+
+### Crash markers — what's NOT present
+
+- ❌ No AER UR/CE markers (`pci=noaer` blinds us)
+- ❌ No NMI / hardlockup / softlockup / panic / Oops / BUG / Call Trace
+- ❌ No PCIe link state events
+- ❌ No T294 anchor (a0..a10) — none of the discriminator lines printed
+- ❌ No T290B anchor — no `t290b ` lines printed at all
+Pure silent backplane hang at LnkCtl write — consistent with all prior pre-set_active wedges under `pci=noaer`.
+
+### Substrate (current — recovery boot)
+
+- Boot 0 since 23:09:55 BST, uptime ~5 min at this writeup
+- PCIe state: `Status` clean (`<MAbort-`), `LnkCtl: CommClk+` — cold cycle was effective
+- 0 brcmfmac modules loaded, 0 fires this boot
+- Per CLAUDE.md substrate rule: T295 will need cold cycle; user already done.
+
+### Build verification
+
+- T294 binary unchanged from PRE-TEST.294 build (no edits since fire). All 11 anchors + SUMMARY string still present in `phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko` per pre-fire verification (PRE-TEST.294 step 2).
+- For T295: depending on advisor decision, may rebuild (e.g. disable T290B at post-T276-poll site) or re-fire unchanged.
+
+### Next-fire candidates (ordered by information yield, advisor consult required)
+
+- **(α) T295 = T294 with T290B at post-T276-poll DISABLED** — cleanest discriminator. If read-only T294 probe still wedges at post-T276-poll with T290B off → strong (c) (chipcommon access degraded). If probe lands cleanly → unambiguous (a)/(b) discrimination via the SUMMARY values. Removes the known T290B-wedger confound. Requires rebuild + maybe a second module param.
+- **(β) Re-fire T294 unchanged on tight-freshness substrate** — cheaper but T290B at post-T276-poll is expected to wedge; discriminator only fires if substrate cooperates AND sequence reaches the post-T276-poll site. Lower yield per fire than (α).
+- **(γ) Pivot away from chipcommon path** — defer (a)/(b)/(c) and chase a different MMIO surface (e.g. TCM-scribble at `[node+0xc]` per row 148, or ARM-CR4 wrapper register exploration). Lowest yield right now if (a)/(b)/(c) is genuinely close to settling.
+
+Advisor consult before choosing.
 
 ---
 
