@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 — **T288a FIRED at 00:11 BST (boot -1). HARD WEDGE before reaching set_active. Last log: test.156 (module_init thread, returning) at 00:12:10 — no test.276/284/287/288a markers from setup() body ever fired. No panic/Oops/AER markers; silent watchdog reboot. Per advisor: journal cutoff cannot discriminate H1 (T288a wrapper reads wedged) from H2 (wedge upstream of T288a), because journald may have buffered setup() body lines that were lost when kernel hard-hung. NEXT (T288a'): added 8 pr_emerg anchor lines inside `BCM4360_T288A_READ_WRAPS` macro to pinpoint sub-step at next fire. Module rebuilt clean. Substrate: current boot 0 is RECOVERY from watchdog reboot — NOT a cold cycle. Recommend SMC reset before next fire.**)
+## Current state (2026-04-26 08:52 BST — **FIRING T288a'. User completed reboot + SMC reset. Substrate: fresh boot, uptime 2 min, PCIe Status clean (no MAbort/CommClk/LnkSta drift). Build: brcmfmac.ko = 15.1 MB, mtime newer than pcie.c. Plan committed (c6036b5) and pushed. Anchored T288a' (8 pr_emerg sub-step anchors per invocation) about to fire to discriminate H1 (wrapper read wedge) vs H2 (upstream wedge).**)
 
 ---
 
