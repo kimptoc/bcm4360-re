@@ -5,22 +5,107 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 12:00 BST — **STATIC LINE RETIRED per advisor reconcile #2. Two read-only piggyback probes queued for next substantive fire; no substantive fire currently planned.**
+## Current state (2026-04-26 14:20 BST — **PRE-TEST.290 READY. Module built, anchors verified. T290a + T290b are both substantive (answer load-bearing questions about the wake-gate base AND chipcommon-write survival). Per user decision: fire as a single unit since neither requires its own fire. Awaiting advisor sanity-check on fire design before user cold cycle.**)
 
-  **What stands (3 CONFIRMED structural facts, zero-fire derivation):**
-  - 9-thunk vector at 0x99AC = AI/SI library API (si_setcoreidx, ai_core_reset, etc.). NOT an unmask vector. KEY_FINDINGS row 118 falsified.
-  - hndrte_add_isr writes ZERO HW registers; only builds callback linked list.
-  - Fw blob has ZERO references to PCIE2 register space. Only backplane address fw constructs is chipcommon REG base 0x18000000 (at 2 inline `mov.w` sites). **PCIE2 MAILBOXMASK is structurally not the wake gate** — host writes drop AND fw never writes.
+---
 
-  **Static-deeper-trace LINE RETIRED (advisor #2):** continuing 4-deref trace from wlc_callback_ctx → flag_struct hits the wall T289b just exposed (+0x88 analogy doesn't propagate across struct types) at every level. Diminishing returns on the static side.
+## PRE-TEST.290 (2026-04-26 14:15 BST — **READY ON USER COLD-CYCLE CLEARANCE. Single fire combines two read-only-or-near-RO probes.** PROBE-A walks 4-deref chain from wlc_callback_ctx (TCM[0x96F48+8]) to resolve wake-gate BASE address. PROBE-B does RMW-and-restore on chipcommon GPIOPULLUP to test whether host-side chipcommon writes silently drop like PCIE2+0x4C does.)
 
-  **Cheaper resolution available — piggyback runtime probes:** per T255/T256, wlc ISR scheduler node lives at TCM[0x96F48]. Its arg field IS `wlc_callback_ctx` (an absolute TCM address). 5 sequential `brcmf_pcie_read_ram32` reads walk the chain `[arg+0x18][+8][+0x10][+0x88]` to resolve the wake-gate BASE address. Read-only; T287c-class infrastructure exists.
+### Hypotheses
 
-  **TWO PROBES QUEUED for next fire (read-only, marginal cost):**
-  - **PROBE-A**: 5-read TCM chain walk to resolve flag_struct[+0x88] base (Task #61).
-  - **PROBE-B**: chipcommon-write-and-readback test — verify whether host-side chipcommon writes silently drop like PCIE2+0x4C does (T241/T280/T284). If chipcommon writes also drop, the "find the wake-gate base" path becomes a partial answer (we'd know WHERE to write but not be ABLE to write). Untested premise. (Task #62).
+- **H1 (PROBE-A)**: `flag_struct[+0x88]` is the BASE address of the wake-gate register set. Per fn@0x2309c, the actual wake-gate is `[flag_struct+0x88]+0x168`. Resolving the BASE answers a long-standing LIVE question.
+- **H2 (PROBE-B)**: Host-side chipcommon writes work normally (i.e., DON'T silently drop the way PCIE2+0x4C MAILBOXMASK does per T241/T280/T284). Untested premise — gates whether finding the wake-gate base is actionable.
 
-  **No substantive fire planned.** PROBE-A/B are designed to ride along; need to decide what the next fire actually tests independently (Task #63 — candidates: KEY_FINDINGS row 151 MSI-subscription fix, different wake-trigger experiment, other LIVE rows).**)
+### Discriminator outcomes
+
+**PROBE-A** — possible BASE values:
+
+| BASE value | Reading | Next step |
+|---|---|---|
+| `0x18000000..0x18000FFF` | chipcommon REG base — wake gate is chipcommon-internal register at BASE+0x168 | Look up BCM4360 rev43 chipcommon offset 0x168 register identity (likely ECI/coex-related per upstream brcmsmac); plan a host-write test to it |
+| `0x18001000..0x18002FFF` | core[2] or ARM-CR4 register base — wake gate is in a non-chipcommon backplane core | Identify the core, look up its 0x168 register, plan a host-write test |
+| `0x18003000..0x18003FFF` | **PCIE2 register base** — wake gate IS in PCIE2 at offset 0x168 (NOT 0x4C as we'd been testing) | Reframe: T289 §3 (fw has 0 PCIE2 literals) was misleading — there's an alternative path that reaches PCIE2. Major implication. |
+| `0x18100000..0x18108FFF` | A wrapper-page base — unusual; would mean fn@0x2309c reads via wrapper-side (different from BIT_alloc) | Investigate which core's wrapper, what +0x168 there means |
+| `0x00000000..0x000A0000` | TCM offset — pending-events word is software-maintained, not HW-mapped | T274's negative writer scan was wrong; re-scan blob for store patterns we missed |
+| `0x00000000` | flag_struct[+0x88] not yet initialized at probe time | Stage didn't fire late enough — re-time PROBE-A to t+90s only |
+| `[stop=*-out-of-TCM]` | Chain broke at intermediate level — wlc_callback_ctx not yet populated | Stage too early, re-time later. Stop-name tells which level |
+| Other | Unexpected — surface to advisor | |
+
+**PROBE-B** — possible chipcommon-write outcomes:
+
+| `readback` value | Reading | Next step |
+|---|---|---|
+| `0xDEADBEEF` | Chipcommon writes work fine. The MAILBOXMASK silent-drop is PCIE2+0x4C-specific. | If H1 resolves to chipcommon, host-write to wake gate should work. Plan T291 wake-trigger fire. |
+| `_orig` (unchanged) | Chipcommon writes silently drop just like PCIE2+0x4C does. | Major problem: "find the BASE then write to it" path is structurally blocked at this chip's current state. Need to find a different path entirely. |
+| `0x00000000` | Register gets reset on read or write. | GPIOPULLUP may be RO on this rev. Re-pick a known-RW register for next fire. |
+| Other partial value | Some bits land, others don't (e.g., GPIOPULLUP has bit-write masks). | Indicates RMW-with-mask register; informative but not dispositive of "do writes work generally" |
+| `restored != _orig` | Restore failed — chip state may be perturbed | Cold cycle required after fire. Worth investigating why restore didn't take. |
+
+### Cross-probe outcomes (read together)
+
+- A=chipcommon AND B=`0xDEADBEEF` → **GREEN PATH**: identified the wake gate AND can write to it. T291 planned next.
+- A=chipcommon AND B=`_orig` → **RED PATH**: identified the wake gate but can't reach it. Need alternative trigger mechanism (TCM scribble? PMU manipulation? something else).
+- A=PCIE2 AND any B → reframe everything; the "fw doesn't touch PCIE2" finding has a hidden exception.
+- A=TCM AND any B → wake gate is software-maintained; need fw to write a bit somewhere, and that "somewhere" is now identified.
+- A chain-stop AND any B → re-time PROBE-A; B result still informative.
+
+### Diff vs T288c
+
+Identical fire path EXCEPT:
+- T288a flag DEFAULT OFF (was the wedger candidate; H1 weakened to LIKELY-FALSE; we keep it off this fire to minimize wedge risk)
+- T290a flag DEFAULT ON
+- T290b flag DEFAULT ON
+
+### Substrate prerequisites — REQUIRED
+
+⚠️ Current boot is recovery from T288c's late-ladder wedge. Cold cycle required.
+
+- **REQUIRED**: full cold cycle = `shutdown -h now`, wait ≥60 s power-off, SMC reset, then power on.
+- After cold cycle: `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta|DevSta'` (expect `DevSta` flags clean OR at most `AuxPwr+`; no MAbort; LnkSta trained Gen1 x1).
+- Uptime should be ≤2 min at fire — clean window is widest right after cold cycle.
+- ⚠️ T290 is read-mostly (one careful chipcommon write + restore), but the late-ladder wedge at t+90s WILL still happen per T270-BASELINE pattern. Another cold cycle required AFTER T290 fires before further hardware tests.
+
+### Fire command (T290a + T290b enabled, T288a disabled)
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test284_premask_enable=1 \
+    bcm4360_test287_sched_ctx_read=1 \
+    bcm4360_test287c_extended=1 \
+    bcm4360_test290a_chain=1 \
+    bcm4360_test290b_cc_write=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.290.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.290.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.290.journalctl.txt
+```
+
+If the machine wedges before journalctl runs (expected per T270-BASELINE late-ladder pattern): on next boot, run `sudo journalctl -k -b -1 > phase5/logs/test.290.journalctl.txt`.
+
+### Probe behavior summary
+
+- **PROBE-A** fires at all stages from `pre-write (pre-set_active)` through every T287/T278 stage hook (t+500ms / t+5s / t+30s / t+90s). Read-only. One pr_emerg line per fire showing `[stop=...]` flag and 5 chain values. Pre-set_active stages will likely show chain-stop at wcc level (scheduler node not yet populated by fw); post-set_active stages should show progressively populated chain.
+- **PROBE-B** fires at the same stages. RMW-and-restore on CC.GPIOPULLUP. Two pr_emerg lines per fire (one with values; the other is internal `select_core` noise). Each fire takes 5 BAR0 transactions plus 1 config-space save+restore.
+
+### Pre-fire checklist (CLAUDE.md)
+
+1. ✓ Build verification: `strings ... | grep test.290` shows both 290a and 290b format strings
+2. (user) Cold cycle: shutdown ≥60 s + SMC reset
+3. (user) PCIe state check after cold cycle
+4. ✓ Hypothesis stated above
+5. ✓ Plan committed and pushed BEFORE fire (this file — being committed now)
+6. ✓ FS sync after push
+7. ⚠ ADVISOR sanity check on fire design BEFORE user cold cycle (pending — Task #67)
+
+### Risk and recovery
+
+- T290a is pure read-only TCM; no wedge risk.
+- T290b does one chipcommon write to GPIOPULLUP (R/W per upstream chipcregs, no observable side effects on this chip without configured GPIOs) + immediate restore. Risk: minimal. Worst case: BAR0_WINDOW left in wrong state — restored explicitly at end of macro.
+- T270-BASELINE late-ladder wedge will still trigger at t+90s as before. Watchdog should auto-recover (T288c was an exception requiring user SMC; if it recurs, user SMC needed again).
 
 ---
 
