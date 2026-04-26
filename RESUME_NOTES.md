@@ -5,7 +5,82 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 08:52 BST — **FIRING T288a'. User completed reboot + SMC reset. Substrate: fresh boot, uptime 2 min, PCIe Status clean (no MAbort/CommClk/LnkSta drift). Build: brcmfmac.ko = 15.1 MB, mtime newer than pcie.c. Plan committed (c6036b5) and pushed. Anchored T288a' (8 pr_emerg sub-step anchors per invocation) about to fire to discriminate H1 (wrapper read wedge) vs H2 (upstream wedge).**)
+## Current state (2026-04-26 08:57 BST — **POST-TEST.288a' captured. T288a' wedged the host EARLIER than T288a (cutoff at `test.160 OTP-bypass`, BEFORE setup-callback fired; ZERO anchor- lines, ZERO `setup-entry`, ZERO `test.162`). The fire produced NO H1/H2 evidence — substrate is the strongest confound. Current substrate: fresh post-watchdog-reboot, uptime ~5 min, PCIe Status clean, but per CLAUDE.md only a full cold cycle (shutdown + ≥60 s + SMC reset) buys a clean ~20–25 min window. Revised plan: baseline-first (T288a flag=0) on cold-cycled substrate to discriminate substrate vs T288a-runtime as the wedge cause; only fire =1 after baseline reaches t+90s.**)
+
+---
+
+## POST-TEST.288a' (2026-04-26 08:53 BST fire, boot -1 — **HARD WEDGE EARLIER than T288a. Cutoff at `test.160 OTP-bypass` — BEFORE the firmware-loaded setup callback fired. Zero `anchor-` lines, zero `setup-entry`, zero `test.162`. T288a' macro body had no opportunity to run; this fire is NOT evidence about H1 (wrapper read wedge) vs H2 (upstream-of-T288a setup-body wedge). Substrate confound is the leading explanation. Watchdog reboot at ~08:56 BST after ~17-min unflushed-printk gap.**)
+
+### Timeline (from `phase5/logs/test.288a-prime.journalctl.txt`, boot -1)
+
+- `08:53:21` insmod entry (`test.188 module_init entry`)
+- `08:53:22..27` PROBE ENTRY → SBR → chip_attach → core enumeration (test.218 6 cores)
+- `08:53:29..32` buscore_reset, ARM CR4 halt, get_raminfo, PMU WARs (test.193/224)
+- `08:53:33..36` ASPM disable, root-port LnkCtl, settings/bus/msgbuf alloc
+- `08:53:37..38` brcmf_alloc complete, drvdata set
+- `08:53:39` **LAST LINE: `test.160: brcmf_alloc complete — wiphy allocated` then `OTP read bypassed — OTP not needed`**
+- [no further log output; machine wedged silently]
+- `08:53:53` (run.txt: INSMOD_RC=0 written — module_init's synchronous return chain completed)
+- `~08:56` watchdog reboot to current boot 0 (uptime now 5 min)
+
+### What was missing (vs T288a's already-broken fire)
+
+T288a's last journal line was `test.156: after brcmf_core_init() err=0` at 00:12:10 — AFTER `test.162 CALLBACK INVOKED` and `setup-entry` markers fired. T288a' cut off ~5 markers EARLIER, before:
+- `prepare_fw_request` / `brcmf_fw_get_firmwares` (async fw load kickoff)
+- `Direct firmware load for clm_blob/txcap_blob failed -2` (normal noise)
+- `test.162 brcmf_pcie_setup CALLBACK INVOKED ret=0`
+- `setup-entry ARM CR4 IOCTL=0x21 ...`
+- `test.156: after brcmf_core_init() err=0`
+
+**Crucially: zero anchor-N lines.** The T288a_READ_WRAPS macro is invoked from inside `brcmf_pcie_download_fw_nvram`, which runs INSIDE the setup callback. If the setup callback never fired, the macro never had a chance to fire either. The crash is upstream of T288a's runtime path entirely.
+
+### Diagnostic markers — what's NOT present
+
+- ❌ No AER UR/CE markers
+- ❌ No NMI / hardlockup / softlockup
+- ❌ No Oops / BUG: / Call Trace
+- ❌ No PCIe link state events
+- ❌ No `setup-entry` / `pre-attach` / `test.162` callback
+- ❌ No anchor-N lines from T288a's macro
+
+### Build verification (rules out T288a-binary corruption hypothesis)
+
+- `brcmfmac.ko` mtime 2026-04-26 00:24 (rebuilt with anchors) — 15.1 MB
+- `pcie.c` mtime 2026-04-26 00:23 — sources newer than build target's predecessor; module is fresh
+- `strings brcmfmac.ko | grep 'anchor-'` returns all 8 anchor format strings — code IS compiled in
+- INSMOD_RC=0 written to `test.288a-prime.run.txt` (module_init's synchronous return chain completed)
+
+### Why "substrate confound" leads
+
+1. T287c (immediate prior fire, 2026-04-25 23:39 BST, boot -2 of THAT timeline = pre-SMC-reset) ran cleanly to t+90s with the EXACT same setup() body and prior infrastructure
+2. T288a (2026-04-26 00:11 BST, post-SMC-reset substrate, ~26 min uptime) wedged AFTER setup-entry but BEFORE pre-attach
+3. T288a' (2026-04-26 08:53 BST, post-watchdog-reboot from T288a wedge, then user reboot + SMC reset, ~2 min uptime per Current state at fire time) wedged BEFORE setup-entry
+4. Each successive fire wedges progressively earlier — consistent with substrate degradation, not with a deterministic code-path issue
+5. Previous CLAUDE.md substrate rule: cold cycle (shutdown + ≥60 s + SMC reset) is required for clean window; user did "reboot + SMC reset" (no shutdown gap). May not have been fully effective.
+
+### Hypotheses (ordered by probability)
+
+**H1' (leading): Substrate degraded across the fire chain T287c → T288a → T288a'.** Each fire wedges earlier than the last. T288a's wedge poisoned the chip; the user's reboot+SMC-reset cleared the host kernel state but not enough chip-side state to recover the clean window.
+
+**H2' (alternative): A code-path between OTP-bypass and prepare_fw_request silently regressed.** Implausible — diff between T287c's working build and T288a/T288a' is purely additive (new module_param + new macro definition + new macro call sites inside `brcmf_pcie_download_fw_nvram`). None of those code paths run before OTP-bypass. The new pr_emerg anchor lines added in T288a' would also not run before OTP-bypass.
+
+**H3' (long shot): Linker layout regression.** The added macro/anchor strings shifted code addresses. Some prior fragile timing window now lands on a worse cycle. Quantifiable via `size brcmfmac.ko` comparison vs T287c-clean build.
+
+### Decision: revised plan
+
+Per advisor: T288a' is not evidence about H1/H2 (wrapper-read wedge vs setup-body-upstream wedge). The cheapest discriminator is to fire BASELINE with `bcm4360_test288a_wrap_read=0` on a cold-cycled substrate. Same binary, T288a runtime code disabled. If baseline reaches t+90s with normal T287c-style trace → substrate is the only variable, T288a binary is innocent, then re-fire with =1. If baseline still wedges early → T288a binary itself or substrate-only confound; investigate `size brcmfmac.ko` delta vs T287c-clean.
+
+### Substrate (current — recovery boot)
+
+- Boot 0 (current) post-watchdog-reboot from T288a' wedge
+- Uptime ~5 min at journal capture
+- PCIe state: Status flag clean, no MAbort/CommClk drift visible
+- 0 fires this boot
+- Per CLAUDE.md: cold cycle (shutdown + ≥60 s + SMC reset) is REQUIRED before next fire — recovery boot is not a clean substrate
+
+### KEY_FINDINGS impact
+
+None. Nothing load-bearing came out of T288a'. The fire produced no fw-state data, no register data, and no discrimination between H1/H2. Do NOT update KEY_FINDINGS based on this fire.
 
 ---
 
@@ -117,13 +192,24 @@ H1 says T288a wrapper-base reads wedged the backplane (a real runtime difference
 
 ---
 
-## PRE-TEST.288a' (2026-04-26 — **READY TO FIRE on user clearance + SMC reset. Same fire command as T288a. Code change: 8 pr_emerg anchor lines inside `BCM4360_T288A_READ_WRAPS` macro pinpoint which sub-step wedges. Module rebuilt clean. Need cold cycle first — current boot is recovery from T288a wedge.**)
+## PRE-TEST.288b (BASELINE-FIRST, 2026-04-26 — **READY TO FIRE on user cold-cycle clearance. Same module binary as T288a/T288a' — but T288a runtime code DISABLED (`bcm4360_test288a_wrap_read=0`). Discriminates substrate vs T288a-runtime as the wedge cause. Per advisor: cheapest single-fire test that can disprove either confound.**)
 
 ### Hypothesis
 
-Anchored re-fire of T288a. The journal cutoff from T288a's fire cannot tell us whether T288a code ran at all — journald may have lost buffered setup() body output when the kernel hard-hung. Anchors flush each sub-step BEFORE the potentially-wedging op, so the journal will retain a precise pinpoint.
+If T288a' wedge was caused by substrate degradation (H1' from POST-TEST.288a'): then firing the same binary with T288a runtime code OFF on a cold-cycled substrate should reach t+90s with normal T287c-style trace.
 
-### Fire command (unchanged from T288a)
+If T288a' wedge was caused by T288a binary changes (H3' linker layout regression, or some unforeseen build-state side effect): then this fire will ALSO wedge early, even with T288a flag off — implicating the build, not the runtime path.
+
+### Discriminator outcomes
+
+| Result | Reading | Next step |
+|---|---|---|
+| Reaches t+90s with full T287c-style trace | Substrate was the only confound. T288a binary innocent. | Re-fire with `bcm4360_test288a_wrap_read=1` (= original T288a' plan with anchors) on a cold-cycled substrate |
+| Wedges early like T288a' (cutoff at OTP-bypass or earlier) | T288a binary itself regresses something. NOT a runtime issue. | Compare `size brcmfmac.ko` and `git diff --stat 7cc6d76..HEAD -- phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c`. Consider rebuilding from a cleaner tree state. |
+| Wedges late (t+30s..t+120s) — like T287c-baseline late-ladder | Substrate clean, T288a binary innocent. Late-ladder fw wedge is the genuine recurring fault. | Re-fire with `=1` for the actual H1/H2 discrimination |
+| Wedges between OTP-bypass and setup-entry | Same upstream cutoff as T288a'. T288a binary suspect, but timing isolation needed (e.g., `dmesg --console-level 8`, or sysrq for a forced backtrace) | Build-state investigation |
+
+### Fire command (T288a flag = 0)
 
 ```bash
 sudo modprobe cfg80211 && sudo modprobe brcmutil && \
@@ -134,40 +220,48 @@ sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/b
     bcm4360_test284_premask_enable=1 \
     bcm4360_test287_sched_ctx_read=1 \
     bcm4360_test287c_extended=1 \
-    bcm4360_test288a_wrap_read=1 \
-    > /home/kimptoc/bcm4360-re/phase5/logs/test.288a-prime.run.txt 2>&1
+    bcm4360_test288a_wrap_read=0 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.288b.run.txt 2>&1
 sleep 150
-sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.288a-prime.run.txt || true
-sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.288a-prime.journalctl.txt
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.288b.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.288b.journalctl.txt
 ```
 
-### Substrate prerequisites
+**Diff vs T287c (last clean fire):** identical params; T287c didn't have `bcm4360_test288a_wrap_read` in its module. Same binary as T288a/T288a' but with T288a path inert.
 
-- ⚠️ Current boot is recovery from T288a wedge — substrate uncertain.
-- Cold cycle (shutdown + ≥60 s + SMC reset) recommended before fire.
-- After cold cycle: PCIe state check `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'` (expect clean).
+**Diff vs T288a':** flip `bcm4360_test288a_wrap_read` from 1 to 0. No code change; same module file (mtime 2026-04-26 00:24, 15.1 MB, anchors compiled in but gated off).
 
-### Expected anchor sequence per invocation site
+### Substrate prerequisites — REQUIRED
 
-Per stage (at "pre-write (pre-set_active)", "post-write (pre-set_active)", "post-set_active", "post-T276-poll", "post-T278-initial-dump", and 4 T278_HOOK stages — 9 total invocations × 8 anchors = 72 anchor lines total if everything runs):
+- ⚠️ Current boot is recovery from T288a' wedge — DO NOT fire on this substrate.
+- **REQUIRED**: full cold cycle = `shutdown -h now`, wait ≥60 s power-off, SMC reset, then power on.
+- After cold cycle: `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'` (expect Status flags empty, LnkSta showing trained Gen1 x1, no errors).
+- Uptime should be ≤2 min at fire — clean window is widest right after cold cycle.
 
-1. `anchor-1 (about to save BAR0_WINDOW)` — before config-space read
-2. `anchor-2 (saved=0xXXXX; about to set CC-wrap window)` — before config-space write to chipcommon-wrap
-3. `anchor-3 (CC-wrap window set; about to read +0x000)` — before BAR0 read at chipcommon-wrap[0x000]
-4. `anchor-4 (CC.wrap[0x000]=0xXXXX; about to read +0x100)` — before BAR0 read at chipcommon-wrap[0x100]
-5. `anchor-5 (CC.wrap[0x100]=0xXXXX; about to set PCIE2-wrap window)` — before config-space write to PCIE2-wrap
-6. `anchor-6 (PCIE2-wrap window set; about to read +0x000)` — before BAR0 read at PCIE2-wrap[0x000]
-7. `anchor-7 (PCIE2.wrap[0x000]=0xXXXX; about to read +0x100)` — before BAR0 read at PCIE2-wrap[0x100]
-8. `anchor-8 (PCIE2.wrap[0x100]=0xXXXX; about to select_core(PCIE2))` — before final config-space write
-9. (then existing summary line: `test.288a: <stage> CC.wrap[0x000]=... PCIE2.wrap[0x000]=... saved_win=...`)
+### Expected log sequence (if substrate clean & binary innocent)
 
-### Pre-fire checklist
+Same as T287c late-ladder baseline:
+- module_init through `test.156: after brcmf_core_init() err=0` (~10 s)
+- `test.162: brcmf_pcie_setup CALLBACK INVOKED ret=0` then `setup-entry`
+- `test.128: before brcmf_pcie_attach` (~+1 s post-callback)
+- T287/T276/T278 stage hooks at pre-write, post-write, post-set_active, post-T276-poll
+- T278_HOOK at t+500ms / t+5s / t+30s / t+90s (final = "final/dwell")
+- Late-ladder wedge at t+90..120s (orthogonal to readback)
 
-1. ✓ Build (rebuilt 2026-04-26 with anchors — clean)
-2. (user) PCIe state check after SMC reset
-3. ✓ Hypothesis stated
-4. ✓ Plan committed and pushed BEFORE fire
-5. ✓ FS sync after push
+**ZERO `anchor-N` lines expected** (T288a path is gated off). If any anchor- line appears, the gate is broken — diagnose code, don't trust the fire.
+
+### Pre-fire checklist (CLAUDE.md)
+
+1. ✓ Build (no rebuild needed — using existing 2026-04-26 00:24 binary with anchors compiled in)
+2. (user) Cold cycle: shutdown ≥60 s + SMC reset
+3. (user) PCIe state check after cold cycle
+4. ✓ Hypothesis stated
+5. ✓ Plan committed and pushed BEFORE fire (this document)
+6. ✓ FS sync after push
+
+### Why this fire instead of re-firing T288a' as planned
+
+T288a' produced ZERO discrimination: no anchor lines, no setup-entry, cutoff at OTP-bypass. The original anchor design assumes the macro body executes — but T288a' showed the macro is never reached because the wedge is upstream. Re-firing T288a' on another substrate could either (a) succeed and leave us guessing whether T288a' code is innocent, or (b) wedge again at varying upstream points and still leave us guessing. **The baseline fire is the only fire that uniquely discriminates substrate vs T288a binary.** Once that's known, the next fire (with the right configuration) is informative.
 
 ---
 
