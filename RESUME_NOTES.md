@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 09:30 BST — **POST-TEST.288b recorded. T288b reached t+90s with full T287c-style trace and wedged in the well-known T270-BASELINE late-ladder window (t+90..120s). Discriminator outcome row 1: substrate was the confound for T288a/T288a' wedges; T288a binary is INNOCENT; H1 (T288a runtime wrap-base BAR0 reads at PRE-set_active wedge the backplane) survives by exclusion. Currently on recovery boot (boot 0 since 09:24:50, uptime 5 min) — T288c re-fire of T288a anchored variant requires another cold cycle before next fire.**)
+## Current state (2026-04-26 09:55 BST — **PRE-FIRE.288c: substrate ready (cold cycle + SMC reset done by user; uptime 3 min; canonical PCIe markers clean — MAbort-, CommClk+, LnkSta Gen1 x1; sticky DevSta CorrErr+/UnsupReq+ from boot training, not wedge leftovers; 0 brcmfmac modules loaded; build has 8 anchor strings compiled in). About to fire T288c per PRE-TEST.288c block — re-fire of T288a anchored variant with `bcm4360_test288a_wrap_read=1`. Will identify which sub-step in BCM4360_T288A_READ_WRAPS macro wedges the backplane. Expected to wedge per H1.**)
 
 ---
 
@@ -255,6 +255,22 @@ H1 says T288a wrapper-base reads wedged the backplane (a real runtime difference
 - PCIe state: Status flag clean, no MAbort/CommClk drift visible
 - 0 fires this boot
 - Recommend: cold cycle before next fire — substrate is uncertain after a hard wedge
+
+---
+
+## PRE-FIRE.288c (2026-04-26 09:55 BST — substrate ready)
+
+- User completed cold cycle + SMC reset
+- Uptime at substrate verification: 3 min
+- PCIe state (sudo lspci -vvv -s 03:00.0):
+  - Status: Cap+ ... >TAbort- <TAbort- <MAbort- >SERR- <PERR- (no aborts)
+  - DevSta: CorrErr+ NonFatalErr- FatalErr- UnsupReq+ AuxPwr+ TransPend- (sticky bits from boot training; canonical wedge markers MAbort/CommClk- are clean)
+  - LnkCtl: ASPM L0s L1 Enabled, CommClk+ (clean clock)
+  - LnkSta: Speed 2.5GT/s, Width x1 (Gen1 x1 trained correctly)
+- 0 brcmfmac modules loaded (only mt76 stack on cfg80211)
+- Module: brcmfmac.ko 15 085 568 B, mtime 2026-04-26 00:24, 8 anchor strings compiled in
+- 0 fires this boot
+- About to fire per PRE-TEST.288c "Fire command" block below — `bcm4360_test288a_wrap_read=1`
 
 ---
 
