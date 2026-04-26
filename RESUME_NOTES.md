@@ -5,9 +5,89 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 16:31 BST — **POST-TEST.292 RECORDED. T292 fire was SUBSTANTIVE: first pre-set_active T290B firing completed all 8 anchors cleanly with chipcommon BCAST_DATA RMW landing — orig=0x00000000, wrote=0xDEADBEEF, readback=0xdeadbeef, restored=0x00000000. SECOND pre-set_active T290B firing wedged at brcmf_pcie_select_core(CHIPCOMMON) (between anchor-1 and anchor-2). Wedge before set_active. Post-set_active T290B never ran. KEY findings: (1) chipcommon writes at pre-set_active DO land — not silently dropped like PCIE2 MAILBOXMASK; (2) the second-firing wedge is anomalous (same code path, no-op same-value config_dword write) — substrate confound vs state-corruption open. Recovery: cold cycle done by user, current substrate clean. Next: advisor consult on whether single-fire data is enough, then choose between re-fire vs pivot to TCM-scribble.**)
+## Current state (2026-04-26 16:35 BST — **PRE-TEST.293 READY ON SUBSTRATE-FRESH CLEARANCE. Plain re-fire of T292 unchanged: same module binary, same params. Tests replication of T292's two key observations — (1) does chipcommon BCAST_DATA RMW land clean on first firing again? (2) does the second firing wedge again at select_core(CHIPCOMMON)? n=2 sample on both. Advisor-confirmed (A) over (B/C) because pivoting now would abandon fresh primary-source evidence (chipcommon writes land) before replication. KEY_FINDINGS row added (LIVE n=1, awaiting replication). Substrate currently fresh (boot 0 since 16:30:03, ~5 min uptime). NO REBUILD needed. Awaiting user fire clearance.**)
 
-## Prior state (2026-04-26 16:30 BST — PRE-TEST.292 BUILT and READY ON USER COLD-CYCLE CLEARANCE.)
+## Prior state (2026-04-26 16:31 BST — POST-TEST.292 RECORDED + KEY_FINDINGS row added for chipcommon-writes-land.)
+
+---
+
+## PRE-TEST.293 (2026-04-26 16:35 BST — **PLAIN RE-FIRE of T292. Same binary, same params, no rebuild. Goal: build n=2 on T292's two observations.**)
+
+### Hypotheses
+
+- **H1 (REPLICATION OF POSITIVE)**: First pre-set_active T290B firing's chipcommon BCAST_DATA RMW landed clean in T292 (n=1). T293 should reproduce — `wrote=0xDEADBEEF readback=0xdeadbeef restored=0x00000000`. If yes → n=2 → strong signal that chipcommon writes work; KEY_FINDINGS row promotion candidate after T294.
+- **H2 (REPLICATION OF WEDGE)**: Second pre-set_active T290B firing wedged at brcmf_pcie_select_core(CHIPCOMMON) in T292 (n=1). T293 should reveal:
+  - **If wedge at same point** (anchor-1→anchor-2 of second firing) → repeatable mechanism, not pure substrate noise → strong reason to add intr_enable-removed variant (B) as T294.
+  - **If wedge at different point or no wedge** → substrate noise dominant; row 85 reaffirmed; expand to post-set_active testing.
+- **H3 (POST-SET_ACTIVE T290B never tested)**: PRE-TEST.292's H_main is still untested if pre-set_active wedge happens again. Needs separate fire after H1/H2 settle.
+
+### Discriminator outcomes (single fire)
+
+| What we observe | Reading | Next action |
+|---|---|---|
+| Both pre-set_active firings clean + post-set_active T290B clean + ladder reaches t+90s | **GREEN — full replication + extension** (best case); n=2 chipcommon-writes-land | Promote KEY_FINDINGS row to CONFIRMED-narrow after T294 (n=3); pivot to write-side wake gate experiments. |
+| First pre-set_active firing clean, second wedges (T292 EXACT replay) | **H1 + H2 BOTH replicated** | Plan T294 = T293 with intr_enable removed between firings → tests H_B (intr_enable fragility). |
+| First pre-set_active firing clean, second clean, post-set_active wedges | **H1 replicated; pre-set_active multi-firing OK; post-set_active wedge replicates POST-TEST.290 H1** | KEY_FINDINGS finding "post-set_active chipcommon writes wedge" → LIVE n=1 → re-fire as T294. |
+| First pre-set_active firing wedges (any anchor 0–7) | **H1 NOT replicated; chipcommon writes don't reliably work** | Re-evaluate; T292's first firing was lucky. Pivot to (γ-c) TCM-scribble per stopping rule. |
+| Wedge upstream of pre-set_active probe block (test.159, test.225, test.160, etc.) | **3rd consecutive substrate null** | KEY_FINDINGS row 85 stopping rule fires; pivot to (γ-c) TCM-scribble. |
+| All probes drain through t+90s late-ladder wedge (T270-BASELINE pattern) | n=2 success on probes; substrate late-wedge is orthogonal | Same as GREEN — re-fire T294 same params. |
+
+### Diff vs T292 fire
+
+ZERO. Same binary (build verified by string scan; no source changes). Same insmod params:
+- `bcm4360_test236_force_seed=1`, `bcm4360_test238_ultra_dwells=1`
+- `bcm4360_test276_shared_info=1`, `bcm4360_test277_console_decode=1`, `bcm4360_test278_console_periodic=1`
+- `bcm4360_test284_premask_enable=1`
+- `bcm4360_test287_sched_ctx_read=1`, `bcm4360_test287c_extended=1`
+- `bcm4360_test290a_chain=0`, `bcm4360_test290b_cc_write=1`
+
+### Substrate prerequisites — REQUIRED
+
+- Boot 0 since 16:30:03 BST. Uptime ~5 min at this writeup. Within "fresh" window.
+- **Recommended**: fire NOW (<2 min from this writeup) for maximum substrate freshness — T292 fired at uptime ~13.5 min and produced partial data; T293 should aim earlier.
+- ⚠️ NO COLD-CYCLE NEEDED if firing on current boot 0 (already cold-cycled by user post-T292).
+- ⚠️ T293 may wedge per H_main. Another cold cycle will be required AFTER T293 fires if it wedges.
+
+### Fire command (identical to T292)
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test284_premask_enable=1 \
+    bcm4360_test287_sched_ctx_read=1 \
+    bcm4360_test287c_extended=1 \
+    bcm4360_test290a_chain=0 \
+    bcm4360_test290b_cc_write=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.293.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.293.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.293.journalctl.txt
+```
+
+If wedged before journalctl: on next boot, `sudo journalctl -k -b -1 > phase5/logs/test.293.journalctl.txt`.
+
+### Pre-fire checklist (CLAUDE.md)
+
+1. ✓ NO REBUILD — same brcmfmac.ko binary as T292
+2. ✓ Hypothesis stated above
+3. (user) PCIe state check: `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'`
+4. ✓ Plan committed and pushed BEFORE fire (this file)
+5. ✓ FS sync after push
+
+### Risk and recovery
+
+- T293 fire risk profile: identical to T292.
+- If watchdog fails to auto-recover (n=3/3 such events for T288c+T290+T292), user SMC reset will be needed.
+- Anchor lines are pr_emerg priority — best-effort eager flush.
+
+### Side-observation noted (not blocking T293)
+
+T292 analysis surfaced: `BCM4360_T284_READ_MBM` (line 895) and `brcmf_pcie_intr_enable` (line 2546) both call bare `brcmf_pcie_read_reg32`/`write_reg32(0x4C)` WITHOUT `select_core(PCIE2)` first. If BAR0_WINDOW happens to be at chipcommon (e.g. after a T290B restore-back-to-saved), those reads/writes target chipcommon+0x4C, not PCIE2+0x4C. T292's "MBM=0x318" reads on lines 1411 + 1425 may have been reading chipcommon+0x4C all along. This is a confound for KEY_FINDINGS row 125's "MBM silently drops" claim — needs separate review (T295+ design). NOT blocking T293's plain re-fire.
+
+---
 
 ---
 
