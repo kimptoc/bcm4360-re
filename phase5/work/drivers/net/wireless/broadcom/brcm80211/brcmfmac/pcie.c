@@ -1172,14 +1172,22 @@ MODULE_PARM_DESC(bcm4360_test290b_cc_write, "BCM4360 test.290b: chipcommon write
 #define BCM4360_T290B_CC_WRITE(tag) do { \
 	if (bcm4360_test290b_cc_write) { \
 		u32 _saved_win, _orig, _readback, _restore_check; \
+		pr_emerg("BCM4360 test.290b: %s t290b anchor-0 (entry; about to save BAR0_WINDOW)\n", tag); \
 		pci_read_config_dword(devinfo->pdev, \
 			BRCMF_PCIE_BAR0_WINDOW, &_saved_win); \
+		pr_emerg("BCM4360 test.290b: %s t290b anchor-1 (saved BAR0_WINDOW=0x%08x; about to select_core(CHIPCOMMON))\n", tag, _saved_win); \
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON); \
+		pr_emerg("BCM4360 test.290b: %s t290b anchor-2 (selected CHIPCOMMON; about to read 0x54)\n", tag); \
 		_orig = brcmf_pcie_read_reg32(devinfo, 0x54); \
+		pr_emerg("BCM4360 test.290b: %s t290b anchor-3 (orig=0x%08x; about to write 0xDEADBEEF)\n", tag, _orig); \
 		brcmf_pcie_write_reg32(devinfo, 0x54, 0xDEADBEEF); \
+		pr_emerg("BCM4360 test.290b: %s t290b anchor-4 (wrote 0xDEADBEEF; about to readback)\n", tag); \
 		_readback = brcmf_pcie_read_reg32(devinfo, 0x54); \
+		pr_emerg("BCM4360 test.290b: %s t290b anchor-5 (readback=0x%08x; about to restore orig)\n", tag, _readback); \
 		brcmf_pcie_write_reg32(devinfo, 0x54, _orig); \
+		pr_emerg("BCM4360 test.290b: %s t290b anchor-6 (restored orig; about to verify)\n", tag); \
 		_restore_check = brcmf_pcie_read_reg32(devinfo, 0x54); \
+		pr_emerg("BCM4360 test.290b: %s t290b anchor-7 (restore_check=0x%08x; about to restore BAR0_WINDOW)\n", tag, _restore_check); \
 		pci_write_config_dword(devinfo->pdev, \
 			BRCMF_PCIE_BAR0_WINDOW, _saved_win); \
 		pr_emerg("BCM4360 test.290b: %s CC.BCAST_DATA orig=0x%08x wrote=0xDEADBEEF readback=0x%08x restored=0x%08x (saved_win=0x%08x)\n", \

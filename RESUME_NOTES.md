@@ -5,7 +5,9 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 15:25 BST — **POST-TEST.290 RECORDED. T290 fire wedged the machine at t≈0–1s post-set_active — IMMEDIATELY after `test.284 post-set_active MAILBOXMASK=0x00000000` print, before any of T287/T287c/T290a/T290b post-set_active prints drained. NOT the t+90s late-ladder pattern; NEW wedge mechanism. Required user-initiated SMC reset (boot -1 ran 15:00:58→15:03:23 = 2.5 min). Pre-set_active T290a and T290b probes did NOT fire (T290b is gated to post-set_active only; T290a pre-set_active showed `[wrong-node-fn]` cleanly). Leading suspect: T290B (first host-side chipcommon write at post-set_active in test history). Need anchored T291 = T290B-only-with-anchors to discriminate which sub-step wedges.**)
+## Current state (2026-04-26 15:35 BST — **PRE-TEST.291 BUILT and READY ON USER COLD-CYCLE CLEARANCE. T290B macro now has 8 per-sub-step pr_emerg anchors (0..7). T290A disabled to remove confound. brcmfmac.ko rebuilt; anchors verified via strings. Awaiting user cold cycle (shutdown ≥60s + SMC reset) before fire.**)
+
+## Prior state (2026-04-26 15:25 BST — **POST-TEST.290 RECORDED. T290 fire wedged the machine at t≈0–1s post-set_active — IMMEDIATELY after `test.284 post-set_active MAILBOXMASK=0x00000000` print, before any of T287/T287c/T290a/T290b post-set_active prints drained. NOT the t+90s late-ladder pattern; NEW wedge mechanism. Required user-initiated SMC reset (boot -1 ran 15:00:58→15:03:23 = 2.5 min). Pre-set_active T290a and T290b probes did NOT fire (T290b is gated to post-set_active only; T290a pre-set_active showed `[wrong-node-fn]` cleanly). Leading suspect: T290B (first host-side chipcommon write at post-set_active in test history). Need anchored T291 = T290B-only-with-anchors to discriminate which sub-step wedges.**)
 
 ---
 
@@ -108,17 +110,19 @@ If confirmed, this would mean:
 
 ### Hypothesis
 
-H1 from POST-TEST.290 (LEADING): T290B's chipcommon RMW at post-set_active wedges the backplane at one specific sub-step. T291 adds per-sub-step pr_emerg anchors to identify WHICH:
+H1 from POST-TEST.290 (LEADING): T290B's chipcommon RMW at post-set_active wedges the backplane at one specific sub-step. T291 adds 8 per-sub-step pr_emerg anchors (0..7) to identify WHICH:
 
 | Last anchor seen | Sub-step that wedged | Reading |
 |---|---|---|
-| (none) | wedge before T290B macro entry | T290B not the wedger; suspect T287 or T290A — re-fire with T290B=0 to discriminate |
-| `t290b anchor-1 (saved BAR0_WINDOW)` | wedge in `select_core(CHIPCOMMON)` (BAR0_WINDOW write) | core-switch write at post-set_active is the wedger |
-| `t290b anchor-2 (selected CC, about to read 0x54)` | wedge in `read_reg32(0x54)` (BAR0 read of chipcommon BCAST_DATA) | chipcommon BAR0 reads at post-set_active wedge — even reads, not just writes |
-| `t290b anchor-3 (orig=0x........, about to write 0xDEADBEEF)` | wedge in `write_reg32(0x54, 0xDEADBEEF)` | chipcommon WRITES specifically wedge — H1 confirmed |
-| `t290b anchor-4 (wrote, about to readback)` | wedge in second `read_reg32(0x54)` | post-write read sees the wedged state |
-| `t290b anchor-5 (readback=0x........, about to restore)` | wedge in restore write | restore-write same pattern as initial write — confirms write-side mechanism |
-| `t290b anchor-6 (restored, about to restore BAR0_WINDOW)` | wedge in BAR0_WINDOW restore | core-switch back is the wedger (less specific to chipcommon) |
+| (none — wedge before T290B entry) | T290B not the wedger; suspect T287 or T290A | re-fire with T290B=0 to discriminate |
+| `anchor-0 (entry)` | wedge in `pci_read_config_dword(BAR0_WINDOW save)` | config-space read wedges — implausible unless PCI bus already hung |
+| `anchor-1 (saved BAR0_WINDOW=0x........)` | wedge in `select_core(CHIPCOMMON)` (BAR0_WINDOW config_dword write) | core-switch write at post-set_active is the wedger |
+| `anchor-2 (selected CHIPCOMMON)` | wedge in first `read_reg32(0x54)` (BAR0 read of chipcommon BCAST_DATA) | chipcommon BAR0 READS at post-set_active wedge — even reads, not just writes |
+| `anchor-3 (orig=0x........)` | wedge in `write_reg32(0x54, 0xDEADBEEF)` | chipcommon WRITES specifically wedge — H1 confirmed |
+| `anchor-4 (wrote 0xDEADBEEF)` | wedge in readback `read_reg32(0x54)` | post-write read sees the wedged state |
+| `anchor-5 (readback=0x........)` | wedge in restore write | restore-write same pattern as initial — confirms write-side mechanism |
+| `anchor-6 (restored orig)` | wedge in restore-verify read | post-restore read fails — chip state corrupted by write |
+| `anchor-7 (restore_check=0x........)` | wedge in BAR0_WINDOW restore (`pci_write_config_dword`) | core-switch BACK is the wedger (less specific to chipcommon) |
 | All anchors + final test.290b print | T290B safe; wedge in something AFTER (T276 t+0ms poll? T277? T278?) | reframe — late-ladder wedge or some other mechanism |
 
 ### Diff vs T290 fire
@@ -137,10 +141,31 @@ H1 from POST-TEST.290 (LEADING): T290B's chipcommon RMW at post-set_active wedge
 - Uptime should be ≤2 min at fire.
 - ⚠️ T291 WILL CRASH the machine again per H1 (anchored re-fire of an instruction known to wedge). Another cold cycle will be required AFTER T291 fires. Expect user SMC reset may again be needed (T290 + T288c are both watchdog-no-recover events).
 
+### Fire command (T290B with anchors enabled, T290A disabled)
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test284_premask_enable=1 \
+    bcm4360_test287_sched_ctx_read=1 \
+    bcm4360_test287c_extended=1 \
+    bcm4360_test290a_chain=0 \
+    bcm4360_test290b_cc_write=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.291.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.291.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.291.journalctl.txt
+```
+
+If the machine wedges before journalctl runs (expected per H1): on next boot, run `sudo journalctl -k -b -1 > phase5/logs/test.291.journalctl.txt`.
+
 ### Pre-fire checklist
 
-1. ⚠ REBUILD with per-sub-step anchors inside T290B macro body (not yet done)
-2. ✓ Verify anchors compiled in via `strings .../brcmfmac.ko | grep 't290b anchor-'` — expect 6 hits
+1. ✓ Module rebuilt with 8 per-sub-step anchors (anchor-0 through anchor-7)
+2. ✓ Anchors verified via `strings .../brcmfmac.ko | grep 't290b anchor-'` — 8 hits
 3. (user) Cold cycle: shutdown ≥60 s + SMC reset
 4. (user) PCIe state check after cold cycle
 5. ✓ Hypothesis stated above
