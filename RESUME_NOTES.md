@@ -5,7 +5,18 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 11:00 BST — **T289 STATIC-ANALYSIS PIVOT COMPLETE. Three structural findings (all NO fires): (1) "9-thunk vector" is the AI/SI library API (si_setcoreidx, ai_core_disable, ai_core_reset etc.), NOT an unmask vector — strings `'ai_core_disable'`/`'ai_core_reset'` referenced inside class-6/7 thunks confirm. (2) `hndrte_add_isr` writes ZERO HW registers — only manipulates linked-list of callbacks. (3) Fw blob has ZERO references to PCIE2 register space (no MAILBOXMASK lit, no PCIE2 base lit, no PCIE2 wrapper lit) — chipcommon REG base `0x18000000` at file-offset 0x328 is the ONLY backplane MMIO literal in the entire 442KB blob. Strongest reframe yet: fw waits on chipcommon-internal interrupts (chipcommon+0x168 ≈ ECI intmaskhi per upstream brcmsmac chipcregs), NOT host-PCIe doorbells. Path forward: identify how chipcommon+0x168 events get set on BCM4360 rev43 (upstream-doc + static analysis). Documented in phase6/t289_findings.md; KEY_FINDINGS row 118 falsified, 4 new structural rows added. No fires pending; advisor consultation queued before substantive next move.**)
+## Current state (2026-04-26 11:45 BST — **T289 + T289b STATIC ANALYSIS COMPLETE. Three CONFIRMED structural facts stand; the chipcommon-wake hypothesis weakened from "LIVE strong inference" to "LIVE structurally weaker" after deeper trace.**
+
+  **CONFIRMED (zero fires):**
+  - 9-thunk vector at 0x99AC = AI/SI library API (si_setcoreidx, ai_core_reset, etc.); strings confirm. NOT an unmask vector. KEY_FINDINGS row 118 falsified.
+  - hndrte_add_isr writes ZERO HW registers; only builds callback linked list.
+  - Fw blob has ZERO references to PCIE2 register space (no MAILBOXMASK lit, no PCIE2 base lit, no MOVW/MOVT for it). Only backplane address fw constructs is chipcommon REG base 0x18000000 — at exactly 2 sites (0x67156 in si_doattach + 0x67306 in scheduler-ctx allocator). PCIE2 MAILBOXMASK is structurally not the wake gate.
+
+  **WEAKENED (T289b):** Wake source = "chipcommon+0x168" — earlier inference was that `flag_struct[+0x88]` = chipcommon by analogy to sched_ctx. T289b's 8-store survey showed +0x88 has DIFFERENT semantics in 3 different structs (sched ctx, alloc'd back-pointer struct, per-class +0x114 holder). Analogy doesn't transfer. flag_struct is a 4-deref'd struct from wlc_callback_ctx (= wl_probe arg1, registered via the wlc handlers fn-ptr table at 0x58F1C); its allocation point and +0x88 writer not yet found.
+
+  **Next zero-fire step:** trace flag_struct's allocation point. wlc_callback_ctx → [+0x18] → wlc_pub → [+8] → dispatch_ctx → [+0x10] → flag_struct. Either trace these dereferences forward from wl_probe, or scan the blob for stores to wlc_callback_ctx[+0x18] / similar. Multi-step but pure static. No fires.
+
+  **No fire pending.** advisor consultation queued before next move (chain of weakening inferences merits another reconcile call).**)
 
 ---
 
