@@ -5,9 +5,9 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 16:35 BST — **PRE-TEST.293 READY ON SUBSTRATE-FRESH CLEARANCE. Plain re-fire of T292 unchanged: same module binary, same params. Tests replication of T292's two key observations — (1) does chipcommon BCAST_DATA RMW land clean on first firing again? (2) does the second firing wedge again at select_core(CHIPCOMMON)? n=2 sample on both. Advisor-confirmed (A) over (B/C) because pivoting now would abandon fresh primary-source evidence (chipcommon writes land) before replication. KEY_FINDINGS row added (LIVE n=1, awaiting replication). Substrate currently fresh (boot 0 since 16:30:03, ~5 min uptime). NO REBUILD needed. Awaiting user fire clearance.**)
+## Current state (2026-04-26 21:10 BST — **POST-TEST.293 RECORDED. Substantively rich fire — deepest T290B coverage to date. Pre-set_active T290B fired CLEAN x2 (replication of T292 firing #1 — n=2 on chipcommon-writes-land at pre-set_active). Post-set_active T290B fired CLEAN x1 (NEW; refutes a strict reading of POST-TEST.290's H1 "post-set_active T290B is the wedger"). Post-T276-poll T290B WEDGED at anchor-3→anchor-4 (during write of 0xDEADBEEF) WITH ANOMALOUS read `orig=0xffffffff` at anchor-3 — strongly suggests select_core(CHIPCOMMON) silently failed and the write landed on ARM-CR4 wrapper (saved_win=0x18102000) while ARM was running. T292's firing-#2 wedge at anchor-1 NOT replicated (substrate-noise interpretation favoured but n=1 negative — weak evidence). Machine wedged at 20:42:00; user cold-cycle/SMC reset; boot 0 up since 21:08:58, uptime ~1 min at writeup. KEY_FINDINGS row 159 needs update — pending. Next: T294 = read-only chipcommon probe at post-T276-poll with explicit BAR0_WINDOW readback after select_core to discriminate the (a)/(b)/(c) hypotheses for orig=0xffffffff. Advisor consulted before write-up.**)
 
-## Prior state (2026-04-26 16:31 BST — POST-TEST.292 RECORDED + KEY_FINDINGS row added for chipcommon-writes-land.)
+## Prior state (2026-04-26 16:35 BST — PRE-TEST.293 READY; plain re-fire of T292 awaiting clearance. POST-TEST.293 supersedes.)
 
 ---
 
@@ -88,6 +88,115 @@ If wedged before journalctl: on next boot, `sudo journalctl -k -b -1 > phase5/lo
 T292 analysis surfaced: `BCM4360_T284_READ_MBM` (line 895) and `brcmf_pcie_intr_enable` (line 2546) both call bare `brcmf_pcie_read_reg32`/`write_reg32(0x4C)` WITHOUT `select_core(PCIE2)` first. If BAR0_WINDOW happens to be at chipcommon (e.g. after a T290B restore-back-to-saved), those reads/writes target chipcommon+0x4C, not PCIE2+0x4C. T292's "MBM=0x318" reads on lines 1411 + 1425 may have been reading chipcommon+0x4C all along. This is a confound for KEY_FINDINGS row 125's "MBM silently drops" claim — needs separate review (T295+ design). NOT blocking T293's plain re-fire.
 
 ---
+
+## POST-TEST.293 (2026-04-26 20:41:58 BST fire, boot -1 — **SUBSTANTIVE FIRE — deepest T290B coverage to date. 4 T290B firings: pre-set_active CLEAN x2 + post-set_active CLEAN x1 + post-T276-poll WEDGE at anchor-3→anchor-4 with anomalous `orig=0xffffffff` at anchor-3. Watchdog did NOT auto-recover; user SMC reset (n=4/4 such events for T288c+T290+T292+T293).**)
+
+### Timeline (from `phase5/logs/test.293.journalctl.txt`, boot -1 — 16:30:03→20:42:00)
+
+- `16:30:03` boot -1 start (recovery from T292 cold-cycle)
+- [~4 hours of idle uptime — fire NOT in PRE-TEST.293's recommended ≤2 min freshness window; far past the 20–25 min general window]
+- `20:41:58` insmod entry → SBR → chip_attach → core enum → buscore_reset → ARM CR4 halt → fw download (110558 words, all OK) → ASPM/LnkCtl/setup callback → setup-entry → cold-init → BusMaster on → FORCEHT
+- `20:41:58` (line 1393–1395) **test.276 PRE-WRITE shared_info written + readback PASS** (matches T287c/T288b/T292 baseline)
+- `20:41:58` (line 1396) test.284 pre-write MBM=0x00000318 (matches baseline)
+- `20:41:58` (line 1397–1398) test.287/T287c pre-write sched=0 (uninitialized expected)
+- `20:41:58` (line 1399–1407) **TEST.290B FIRING #1 (pre-write, pre-set_active) — ALL 8 ANCHORS CLEAN**:
+  - anchor-1: saved BAR0_WINDOW=0x18000000
+  - anchor-3: orig=0x00000000
+  - anchor-5: readback=0xdeadbeef ← write LANDED
+  - anchor-7: restore_check=0x00000000 ← restore LANDED
+  - summary: `CC.BCAST_DATA orig=0x00000000 wrote=0xDEADBEEF readback=0xdeadbeef restored=0x00000000 (saved_win=0x18000000)`
+- `20:41:58` (line 1408–1410) test.284 brcmf_pcie_intr_enable returned → MBM=0x00000318 (silent-drop baseline)
+- `20:41:58` (line 1411–1412) T287/T287c post-write sched=0 (still uninitialized)
+- `20:41:58` (line 1413–1421) **TEST.290B FIRING #2 (post-write, pre-set_active) — ALL 8 ANCHORS CLEAN, identical pattern to firing #1**:
+  - saved_win=0x18000000, orig=0x00000000, readback=0xdeadbeef, restored=0x00000000
+  - **REPLICATION ACHIEVED for pre-set_active T290B firing.** T292's firing-#2 wedge at anchor-1 did NOT recur.
+- `20:41:58` (line 1422–1424) test.238 brcmf_chip_set_active called → returned TRUE → CMD=0x0006 (BusMaster preserved)
+- `20:41:58` (line 1425–1427) test.284 post-set_active MBM=0 (matches T284 baseline — set_active clears 0x318→0); T287/T287c post-set_active sched=0 still
+- `20:41:58` (line 1428–1436) **TEST.290B FIRING #3 (post-set_active) — ALL 8 ANCHORS CLEAN**:
+  - anchor-1: **saved BAR0_WINDOW=0x18102000** (ARM-CR4 wrapper — note class-table is now populated post-EROM walk)
+  - anchor-3: orig=0x00000000
+  - anchor-5: readback=0xdeadbeef ← write LANDED
+  - anchor-7: restore_check=0x00000000 ← restore LANDED
+  - summary: `CC.BCAST_DATA orig=0x00000000 wrote=0xDEADBEEF readback=0xdeadbeef restored=0x00000000 (saved_win=0x18102000)`
+  - **NOVEL DATA POINT — first time T290B has run cleanly at post-set_active. Refutes a strict reading of POST-TEST.290's H1 ("T290B's chipcommon RMW at post-set_active wedges").**
+- `20:41:58` (line 1437–1440) test.276 entering 2s poll → t+0ms si[+0x010]=0; t+10ms si[+0x010]=0x0009af88 (Phase 4B fw response reproduced — KEY_FINDINGS row 40); poll-end same
+- `20:42:00` (line 1441) test.284 post-T276-poll MBM=0
+- `20:42:00` (line 1442–1443) **test.287/T287c post-T276-poll sched_ctx FULLY POPULATED** matching KEY_FINDINGS row 132 EXACTLY:
+  - `+0x10=0x00000011 +0x18=0x58680001 +0x88=0x18001000 +0x8c=0x18000000`
+  - `+0x254=0x18101000 +0x258=0x18100000 +0x25c=0x18101000 +0x260=0x18102000 +0x264=0x18103000 +0x268=0x18104000 +0x26c=0x00000000 +0x270=0x00000000`
+  - **Class-table replication — independent reproduction of KEY_FINDINGS row 132's class-dispatch finding.**
+- `20:42:00` (line 1444–1447) **TEST.290B FIRING #4 (post-T276-poll) — WEDGED at anchor-3→anchor-4** (during write of 0xDEADBEEF):
+  - anchor-1: saved BAR0_WINDOW=0x18102000 (ARM-CR4 wrapper — same as firing #3)
+  - anchor-2: selected CHIPCOMMON; about to read 0x54
+  - anchor-3: **orig=0xffffffff** ← ANOMALOUS — prior firings read 0x00000000
+  - [no anchor-4; backplane wedged silently during write]
+- `20:42:00` boot -1 ended (silent backplane hang — no AER under `pci=noaer`, no NMI/Oops/Call Trace)
+- `21:08:58` boot 0 (recovery — only after user SMC reset; watchdog did NOT auto-recover, n=4/4 such wedges since T288c)
+
+### Critical primary-source findings
+
+**Finding 1 (LOAD-BEARING — replication): Pre-set_active T290B chipcommon BCAST_DATA RMW lands cleanly on consecutive firings.** T293 fired 2 RMWs back-to-back (firing #1 + firing #2) — both clean; orig=0 → wrote 0xDEADBEEF → readback=0xdeadbeef → restored=0 → restore_check=0. This is **n=2** for "host-side chipcommon writes land at pre-set_active". Combined with T292's firing #1 → **n=3 cumulative** clean pre-set_active chipcommon writes. KEY_FINDINGS row 159 should be promoted to a stronger LIVE/CONFIRMED-narrow status.
+
+**Finding 2 (LOAD-BEARING — refutes strict reading of T290's H1): Post-set_active T290B fired cleanly.** Firing #3 (saved_win=0x18102000 = ARM-CR4 wrapper at this timing) executed all 8 anchors with the same clean RMW result. **The wedge in T290 is not "any post-set_active chipcommon write wedges"**; it must be more specific. Per advisor reconcile: T290's wedge timing maps to the post-T276-poll slot in T293's lens, not to the post-set_active slot. Reframe as "host chipcommon writes during fw scheduler dispatch wedge" rather than "post-set_active wedge".
+
+**Finding 3 (LOAD-BEARING — new wedge mechanism): Post-T276-poll T290B wedges with anomalous `orig=0xffffffff` read at anchor-3.** All prior firings read orig=0x00000000. After the 2s poll (during which fw scheduler-ctx populated per KEY_FINDINGS row 132), select_core(CHIPCOMMON) was called, then read 0x54 returned 0xffffffff (canonical "PCI read failed" pattern under `pci=noaer`), then the write of 0xDEADBEEF wedged. Three live hypotheses (advisor):
+- **(a) `select_core(CHIPCOMMON)` silently failed at firing #4** — the config_dword write didn't take, BAR0_WINDOW stayed at 0x18102000 (ARM-CR4 wrapper); read at anchor-2→3 actually hit `0x18102000+0x54` (ARM-CR4 wrapper offset) which returned 0xffffffff because that wrapper-page word is unmapped or read-as-0xff; the subsequent write went to ARM-CR4 wrapper while ARM was running → wedge.
+- **(b) Chipcommon BCAST_DATA genuinely went 0 → 0xffffffff during the 2s poll** (fw wrote it during init).
+- **(c) Chipcommon access path itself is degraded after fw scheduler dispatch** — reads return all-1s, writes hang; chipcommon as a backplane core is structurally compromised after fw becomes active.
+
+These have very different next-step implications. (a) means the "post-T276-poll chipcommon writes wedge" headline is wrong — it's "select_core silently fails after T276 poll, write went elsewhere". Need a discriminator probe (T294).
+
+**Finding 4 (independent replication): KEY_FINDINGS row 132 class-table fully reproduced.** sched_ctx +0x254..+0x268 read at post-T276-poll stage matches T287c findings BIT-EXACT. Confirms the runtime layout claim across two independent fires.
+
+**Finding 5 (negative — T292 wedge not replicated): T292's firing-#2 wedge at anchor-1→anchor-2 did NOT recur in T293.** T293 firing #2 (immediately following firing #1, identical conditions) was clean. Per advisor: framed as "did not reproduce", not "ruled out" — n=1 negative is weak evidence. Substrate-noise interpretation (T292 H_A) is now favoured over intr_enable-fragility (T292 H_B) and config-space-write-fragility (T292 H_C), but neither H_B nor H_C is excluded.
+
+### Discriminator outcome (per PRE-TEST.293 table)
+
+The closest match in the discriminator table:
+> **GREEN — full replication + extension**: Both pre-set_active firings clean + post-set_active T290B clean + ladder reaches t+90s → Promote KEY_FINDINGS row to CONFIRMED-narrow after T294 (n=3); pivot to write-side wake gate experiments.
+
+**PARTIAL GREEN**: All firings except #4 clean. Firing #4 wedge is not in the table — it's a NEW data point. But the pre-set_active replication AND the post-set_active clean AND the class-table replication all hit the GREEN row's preconditions. Promotion-eligible after T294 once orig=0xffffffff is explained.
+
+### KEY_FINDINGS impact
+
+- **Row 159 (chipcommon-writes-land at pre-set_active)** — n=3 cumulative now. Promote LIVE → CONFIRMED-narrow at pre-set_active timing. Add `+ post-set_active n=1 clean` as new sub-claim. Add `post-T276-poll wedge at anchor-3→anchor-4 with orig=0xffffffff` as new sub-claim with the (a)/(b)/(c) hypotheses noted.
+- **Row 132 (sched_ctx class-table)** — independently replicated by T293 line 1442–1443. Already CONFIRMED; T293 strengthens.
+- **Row 85 (substrate flakiness)** — T292's firing-#2 wedge looking more substrate-shaped after T293's clean replication. No row update needed yet; the row is already CONFIRMED.
+- **POST-TEST.290 H1 ("post-set_active T290B is the wedger")** — falsified at strict reading. Reframed as "host chipcommon writes during fw scheduler dispatch" — maps T290's wedge to firing-#4-equivalent timing. Note in row 159.
+
+### What was NOT settled
+
+- ❌ Whether `orig=0xffffffff` at firing #4 reflects (a) select_core silent-fail, (b) genuine chipcommon BCAST_DATA shift during 2s poll, or (c) chipcommon access path degradation. **T294 must discriminate.**
+- ❌ Whether the wedge mechanism reproduces (n=1).
+- ❌ Whether intr_enable's silent-drop write is implicated in any wedge (T292 H_B still untested).
+
+### Crash markers — what's NOT present
+
+- ❌ No AER UR/CE markers (`pci=noaer` blinds us)
+- ❌ No NMI / hardlockup / softlockup / panic / Oops / BUG / Call Trace
+- ❌ No PCIe link state events
+Pure silent backplane hang — consistent with all prior wedges under `pci=noaer`.
+
+### Substrate (current — recovery boot)
+
+- Boot 0 since 21:08:58 BST, uptime ~1 min at this writeup
+- PCIe state: `Status` clean (`<MAbort-`) — cold cycle was effective
+- 0 brcmfmac modules loaded
+- 0 fires this boot
+- Per CLAUDE.md substrate rule: T294 REQUIRES fresh cold cycle (already done by user). Currently within 20–25 min fresh window.
+
+### Build verification
+
+- `brcmfmac.ko` was the unchanged T292/T293 binary. T293 fire executed all 8 anchors of T290B in 4 distinct slots — macro mechanism well-validated.
+- For T294: NEEDS REBUILD to add an explicit BAR0_WINDOW readback line after select_core inside T290B macro (and a dedicated read-only T290B variant for surgical post-T276-poll discrimination).
+
+### Next-fire candidates (ordered by information yield)
+
+- **(α) T294 = read-only chipcommon probe at post-T276-poll with explicit BAR0_WINDOW readback after select_core** — discriminator for (a)/(b)/(c). Single-fire, surgical. ENABLES promotion of row 159 once orig=0xffffffff is explained.
+- **(β) Re-fire T293 unchanged** — builds n further on each slot; cheap if (α) is delayed by build time.
+- **(γ) Pivot to TCM-scribble at `[node+0xc]`** per KEY_FINDINGS row 148 — defers chipcommon path. Lower yield than (α) right now.
+
+Advisor consult before choosing.
 
 ---
 
@@ -183,469 +292,6 @@ Pure silent backplane hang — consistent with all prior wedges under `pci=noaer
 - **(C) Pivot to TCM-scribble at `[node+0xc]`** per KEY_FINDINGS row 148 — defers chipcommon path; tests software wake-gate write via TCM (different mechanism, different surface).
 
 Advisor consult before choosing.
-
----
-
-## POST-TEST.290 (2026-04-26 15:00:58 BST fire, boot -1 — **NOVEL EARLY WEDGE at t≈0–1s post-set_active. Journal cuts off EXACTLY after `test.284 post-set_active MAILBOXMASK=0x00000000` print (line 1413 of test.290.journalctl.txt). Pre-set_active probes ALL fired cleanly (T276/T277/T284/T287/T287c/T290a). Post-set_active probes NONE fired beyond T284. Required user SMC reset; watchdog did NOT auto-recover. Three candidate wedge points: T287/T287c sched_ctx read, T290a chain walk, T290b chipcommon BCAST_DATA RMW. T290b is leading suspect — first time it ever ran (gated to post-set_active only) AND only host-side chipcommon write at post-set_active in any fire to date.**)
-
-### Timeline (from `phase5/logs/test.290.journalctl.txt`, boot -1 — 15:00:58→15:03:23)
-
-- `15:00:58` boot start (recovery from prior cold cycle)
-- `15:03:23` insmod entry → SBR → chip_attach → core enumeration → buscore_reset → ARM CR4 halt → get_raminfo → PMU WARs → ASPM/LnkCtl/settings/bus alloc → brcmf_alloc → fw_get_firmwares → setup callback INVOKED → setup-entry → pre-attach → cold-init → ramwrite (110558 words, all OK) → BusMaster on → FORCEHT
-- `15:03:23` **`test.276: shared_info written at TCM[0x9d0a4]`** + readback PASS (line 1397-1399, identical to T287c/T288b baseline)
-- `15:03:23` `test.284 pre-write MBM=0x00000318` (line 1400 — same baseline)
-- `15:03:23` `test.287 pre-write sched[...]=0` (line 1401 — uninitialized, expected pre-ARM-release)
-- `15:03:23` `test.287c pre-write sched[+0x25c..+0x270]=0` (line 1402)
-- `15:03:23` **`test.290a pre-write [wrong-node-fn-not-wlc-isr] node_fn=0xae8f1edb wcc=0 wpub=0 dc=0 fs=0 base=0`** (line 1403 — T290A macro mechanism CONFIRMED working; `node_fn=0xae8f1edb` is uninitialized garbage, expected pre-ARM-release)
-- `15:03:23` `test.284 calling brcmf_pcie_intr_enable` → returned (lines 1404-1405)
-- `15:03:23` `test.284 post-write MBM=0x00000318` (line 1406 — write silently dropped per T284 baseline)
-- `15:03:23` `test.287 post-write sched=0` (line 1407)
-- `15:03:23` `test.287c post-write sched=0` (line 1408)
-- `15:03:23` `test.290a post-write [wrong-node-fn-not-wlc-isr] node_fn=0xae8f1edb` (line 1409 — second clean fire of T290A)
-- `15:03:23` `test.238 calling brcmf_chip_set_active resetintr=0xb80ef000` (line 1410)
-- `15:03:23` `test.65 activate: rstvec=0xb80ef000 to TCM[0]; CMD=0x0006 (BusMaster preserved)` (line 1411)
-- `15:03:23` `test.238 brcmf_chip_set_active returned TRUE` (line 1412)
-- `15:03:23` **LAST LINE (1413): `test.284: post-set_active (CRITICAL: does ARM release clear it?) MAILBOXMASK=0x00000000 MAILBOXINT=0x00000000`** (matches T284 baseline — ARM release clears MBM 0x318→0)
-- [no further log output; machine wedged silently — boot ended same second]
-- `15:03:23` boot -1 ended (per journalctl --list-boots)
-- `~15:18` boot 0 (recovery — but only after user-initiated SMC reset; watchdog did NOT auto-recover)
-
-### Critical observation: this is NOT the t+90s late-ladder wedge
-
-Boot lifetime was ~2.5 min total. Insmod+set_active happened at 15:03:23 and the journal cuts off in the SAME SECOND. That's t≈0–1s post-set_active, not the T270-BASELINE t+90..120s late-ladder pattern. **This is a new mechanism, not a known wedge.**
-
-The wedge happened between `test.284 post-set_active` print and the next expected print. Per pcie.c line 4364, the post-set_active probe sequence is:
-```
-T284 → T285(disabled) → T287 → T287c → T288A(disabled) → T290A → T290B
-```
-
-T287/T287c at post-set_active have fired cleanly across T287b/T287c/T288b/T288c — well-trodden. T290A was the first NEW probe to potentially run successfully at post-set_active (pre-set_active showed wrong-node-fn so it stopped at the first read; post-set_active might have walked further and hit invalid TCM). **T290B was its first runtime ever** — gated post-set_active only — and is the only host-side chipcommon WRITE at this timing in any fire to date.
-
-### Discriminator outcome (per PRE-TEST.290 table)
-
-PROBE-A's discriminator table for outcomes assumed the chain walk would print. It did print at pre-set_active (twice, both `[wrong-node-fn]`). At post-set_active it never got to print — wedged before. So neither table entry maps cleanly.
-
-PROBE-B's discriminator table listed: `0xDEADBEEF`, `_orig` (unchanged), `0x00000000`, partial value, `restored != _orig`. **It did NOT list "wedges the machine."** That outcome is effectively a stronger inversion of `_orig` (silent drop): chipcommon writes at post-set_active not merely silent-drop but synchronously hang the backplane. **Worth recording as a candidate load-bearing finding (LIVE, n=1) — chipcommon host writes at post-set_active are not safely tolerated.**
-
-### Hypotheses (ordered by probability)
-
-**H1 (LEADING): T290B's chipcommon RMW at post-set_active wedges the AI backplane.** 
-- T290B is the only post-set_active host-side chipcommon write in test history.
-- KEY_FINDINGS row 132 confirms fw scheduler is actively dispatching on the backplane at this timing (sched_ctx scratch shifted between post-set_active and post-T276-poll). Host write into that activity is a credible collision point.
-- T290B macro body: `select_core(CHIPCOMMON)` (config_dword to BAR0_WINDOW) + read 0x54 + write 0xDEADBEEF + read + restore + restore BAR0_WINDOW. Multiple potential wedge points.
-- The wedge point coincides EXACTLY with the new-code boundary (the only NEW post-set_active code). Substrate noise from T288 series wedged at random progress points; this wedge is precisely where the new write lands. The asymmetry is evidence against pure substrate.
-
-**H2: T290A chain walk at post-set_active reads an invalid pointer that crashes BAR2.** 
-- At post-set_active, scheduler may have populated `0x96F48`. T290A would dereference further. If `node_fn != 0x1146D` at post-set_active (still wrong garbage), it stops at first read like pre-set_active and prints. So if T290A wedges, it must be because `node_fn == 0x1146D` and the chain walk proceeded into bad TCM. But the macro's defensive checks bound each pointer to `< 0xA0000` before dereferencing, so an invalid intermediate would print `xx-out-of-TCM` cleanly. Unlikely to wedge.
-
-**H3: T287/T287c sched_ctx read at post-set_active wedges.** 
-- T287 has run cleanly at post-set_active in T287b/T287c/T288b/T288c. Well-trodden. Unlikely.
-- Unless the new T290A pre-set_active reads (which hit `0x96F48+4` two times) corrupted the chip in some subtle way. But T290A reads TCM via brcmf_pcie_read_ram32 — same path as T287. No reason it would differ.
-
-**H4: Substrate-only confound, wedge unrelated to new code.** 
-- T288 series proved substrate can wedge at random progress points. But T290's wedge is EXACTLY at the new-code boundary, not random. Substrate noise would pick a random earlier wedge point (chip_attach, OTP-bypass, fw chunk-N, etc.). Possible but unlikely given the precision.
-- Watchdog did NOT auto-recover (n=1 of 2 such events today; T288c was the other). New observation that this wedge style may be different from late-ladder substrate wedges.
-
-### Diagnostic markers — what's NOT present
-
-- ❌ No AER UR/CE markers (`pci=noaer`)
-- ❌ No NMI / hardlockup / softlockup
-- ❌ No Oops / BUG: / Call Trace
-- ❌ No PCIe link state events
-- ❌ No t+0ms T276 protocol-anchor line (would be next print after T290B if T290B printed)
-- ❌ No T287 post-set_active sched_ctx read
-
-Pure silent backplane hang; consistent with prior wedges that aren't visible to AER under `pci=noaer`.
-
-### KEY_FINDINGS impact (load-bearing)
-
-**Candidate new finding (LIVE, n=1):** Host-side chipcommon MMIO writes at post-set_active timing on BCM4360 are not safely tolerated — synchronously wedge the backplane. Mechanism inferred (not yet proven via anchor isolation). Do NOT promote to CONFIRMED until T291 anchored re-fire isolates the sub-step.
-
-If confirmed, this would mean:
-- The "find the wake-gate base via T290A then write to it" path (H1 from PRE-TEST.290) is structurally **doubly blocked**: not just silent-drop (the predicted PROBE-B `_orig` outcome) but actively hangs.
-- Future fire designs MUST avoid host-side chipcommon writes at post-set_active. Read-only probes only (per T287/T287c pattern), OR find a path that uses fw-side writes.
-- Reframes the "find wake gate then poke it" research direction toward "convince fw to do its own poke" or "use a non-chipcommon trigger surface."
-
-### Substrate (current — recovery boot)
-
-- Boot 0 since 15:18:00 BST, uptime ~3 min at this writeup
-- PCIe state: `Status` clean (no MAbort/CommClk drift visible — cold cycle was effective)
-- 0 brcmfmac modules loaded
-- 0 fires this boot
-- Per CLAUDE.md substrate rule: T291 REQUIRES a fresh cold cycle (shutdown ≥60 s + SMC reset). Recovery boot is not a clean substrate.
-
-### Build verification
-
-- `brcmfmac.ko` from PRE-TEST.290 build: anchors verified pre-fire (per task #67 advisor sanity-check). T290A pre-set_active prints fired clean — macro mechanism works. T290B never executed.
-- For T291: rebuild needed to add per-sub-step anchors INSIDE T290B body (currently T290B has only one final pr_emerg line; that's why we got no progress info during the wedge).
-
----
-
-## PRE-TEST.291 (2026-04-26 15:30 BST — **PLAN STAGE. Anchored T290B-only re-fire to isolate which sub-step of the chipcommon RMW wedges. T290A also disabled to remove confound. Same baseline params as T290 otherwise. NEEDS REBUILD with per-sub-step pr_emerg anchors inside T290B macro body.**)
-
-### Hypothesis
-
-H1 from POST-TEST.290 (LEADING): T290B's chipcommon RMW at post-set_active wedges the backplane at one specific sub-step. T291 adds 8 per-sub-step pr_emerg anchors (0..7) to identify WHICH:
-
-| Last anchor seen | Sub-step that wedged | Reading |
-|---|---|---|
-| (none — wedge before T290B entry) | T290B not the wedger; suspect T287 or T290A | re-fire with T290B=0 to discriminate |
-| `anchor-0 (entry)` | wedge in `pci_read_config_dword(BAR0_WINDOW save)` | config-space read wedges — implausible unless PCI bus already hung |
-| `anchor-1 (saved BAR0_WINDOW=0x........)` | wedge in `select_core(CHIPCOMMON)` (BAR0_WINDOW config_dword write) | core-switch write at post-set_active is the wedger |
-| `anchor-2 (selected CHIPCOMMON)` | wedge in first `read_reg32(0x54)` (BAR0 read of chipcommon BCAST_DATA) | chipcommon BAR0 READS at post-set_active wedge — even reads, not just writes |
-| `anchor-3 (orig=0x........)` | wedge in `write_reg32(0x54, 0xDEADBEEF)` | chipcommon WRITES specifically wedge — H1 confirmed |
-| `anchor-4 (wrote 0xDEADBEEF)` | wedge in readback `read_reg32(0x54)` | post-write read sees the wedged state |
-| `anchor-5 (readback=0x........)` | wedge in restore write | restore-write same pattern as initial — confirms write-side mechanism |
-| `anchor-6 (restored orig)` | wedge in restore-verify read | post-restore read fails — chip state corrupted by write |
-| `anchor-7 (restore_check=0x........)` | wedge in BAR0_WINDOW restore (`pci_write_config_dword`) | core-switch BACK is the wedger (less specific to chipcommon) |
-| All anchors + final test.290b print | T290B safe; wedge in something AFTER (T276 t+0ms poll? T277? T278?) | reframe — late-ladder wedge or some other mechanism |
-
-### Diff vs T290 fire
-
-- `bcm4360_test290a_chain=0` (was 1) — remove T290A confound
-- `bcm4360_test290b_cc_write=1` (unchanged)
-- T290B macro body: ADD 6 pr_emerg anchors at sub-step boundaries (rebuild required)
-- All other params unchanged (T276/T277/T278/T284/T287/T287c)
-
-### Substrate prerequisites — REQUIRED
-
-⚠️ Current boot is recovery from T290 wedge. Cold cycle required.
-
-- **REQUIRED**: full cold cycle = `shutdown -h now`, wait ≥60 s power-off, SMC reset, then power on.
-- After cold cycle: `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta|DevSta'` (expect clean).
-- Uptime should be ≤2 min at fire.
-- ⚠️ T291 WILL CRASH the machine again per H1 (anchored re-fire of an instruction known to wedge). Another cold cycle will be required AFTER T291 fires. Expect user SMC reset may again be needed (T290 + T288c are both watchdog-no-recover events).
-
-### Fire command (T290B with anchors enabled, T290A disabled)
-
-```bash
-sudo modprobe cfg80211 && sudo modprobe brcmutil && \
-sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
-    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
-    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
-    bcm4360_test278_console_periodic=1 \
-    bcm4360_test284_premask_enable=1 \
-    bcm4360_test287_sched_ctx_read=1 \
-    bcm4360_test287c_extended=1 \
-    bcm4360_test290a_chain=0 \
-    bcm4360_test290b_cc_write=1 \
-    > /home/kimptoc/bcm4360-re/phase5/logs/test.291.run.txt 2>&1
-sleep 150
-sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.291.run.txt || true
-sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.291.journalctl.txt
-```
-
-If the machine wedges before journalctl runs (expected per H1): on next boot, run `sudo journalctl -k -b -1 > phase5/logs/test.291.journalctl.txt`.
-
-### Pre-fire checklist
-
-1. ✓ Module rebuilt with 8 per-sub-step anchors (anchor-0 through anchor-7)
-2. ✓ Anchors verified via `strings .../brcmfmac.ko | grep 't290b anchor-'` — 8 hits
-3. (user) Cold cycle: shutdown ≥60 s + SMC reset
-4. (user) PCIe state check after cold cycle
-5. ✓ Hypothesis stated above
-6. ✓ Plan committed and pushed BEFORE fire (this file)
-7. ✓ FS sync after push
-
-### Risk and recovery
-
-- T291 is expected to wedge per H1 — same mechanism as T290.
-- If watchdog fails to auto-recover (n=2/2 such events today), user SMC reset needed.
-- Anchor lines are pr_emerg priority — best-effort eager flush, should survive even hard wedge per the "instruction immediately before wedge has its print delivered" pattern observed in T288c.
-
-### Alternative path consideration (advisor #2)
-
-Before firing T291, worth flagging: if T290B is confirmed as wedger, the "find wake gate then poke it" research direction is structurally blocked at post-set_active. Cheaper alternatives that don't require chipcommon writes:
-- (a) Pre-set_active chipcommon write (different timing, ARM still halted) — does the wedge depend on fw being live?
-- (b) Different MMIO surface (SBMBX = sideband mailbox at PCIe core wrapper, distinct from MAILBOXMASK)
-- (c) TCM scribble at suspected wake-flag offset (KEY_FINDINGS row 148 — software wake gate identified statically as `[node+0xc]`)
-
-These are queued as PRE-TEST.292+ candidates after T291 settles.
-
----
-
-## POST-TEST.291 (2026-04-26 15:51:59 BST fire, boot -1 — **NULL FIRE. Substrate wedged the machine at `test.159: reginfo selected (pcie2 rev=1)` — between chip_attach completion and setup callback invocation. ZERO anchor lines, ZERO T276/T284/T287/T290a/T290b markers. T290B macro (under investigation per PRE-TEST.291 H1) never executed; discriminator table inapplicable. Same pattern as T288c (substrate noise, novel wedge point). KEY_FINDINGS row 85 substrate-flakiness pattern reaffirmed for the second consecutive fire.**)
-
-### Timeline (from `phase5/logs/test.291.journalctl.txt`, boot -1 — 15:42:15→15:52:08, fire window 15:51:59–15:52:08)
-
-- `15:42:15` boot start (post-T290 cold-cycle clean substrate)
-- `~15:51:59` insmod entry → test.218 host-side core enumeration (6 cores logged)
-- `15:51:59` test.125 buscore_reset entry → test.122 reset_device bypass → test.145 ARM CR4 halt OK → test.121 PMU/RAM info → test.193 chip_attach probe complete → test.224 max/min_res_mask writes → **test.119 brcmf_chip_attach returned successfully** (15:52:05)
-- `15:52:05` test.158 ARM CR4 base 0x18002000 → BusMaster cleared → ASPM disable → root-port LnkCtl
-- `15:52:07` test.159 **before PCIE2 core/reginfo setup**
-- `15:52:08` test.159 **reginfo selected (pcie2 rev=1)** ← LAST LINE; line 1101 of journalctl
-- [no further log; backplane silently hung; boot ended same second]
-- `~15:42:15→16:12:40` watchdog auto-recovered ~30 min later, but user did SMC reset to compress recovery window per CLAUDE.md guidance
-
-### What was missing (proves the discriminator-table precondition was unmet)
-
-- ❌ `setup-entry` (firmware-loaded callback boundary) — fw blob never reached the setup hand-off
-- ❌ `test.276 shared_info written at TCM[0x9d0a4]` — no shared_info write, no shared-state in chip
-- ❌ `test.284 pre-write MBM=` — no MAILBOXMASK probe
-- ❌ `test.287` / `test.287c` — no scheduler ctx reads
-- ❌ `test.290a [...] node_fn=` — no chain walk
-- ❌ `test.290b anchor-0 (entry)` through `anchor-7` — T290B macro body never entered
-- ❌ `set_active resetintr=` — ARM never released
-
-The wedge point is fully upstream of T290B's gating condition (setup-callback invocation). T291 cannot speak to PRE-TEST.291's H1.
-
-### Wedge-point analysis
-
-`test.159: reginfo selected (pcie2 rev=1)` is in pcie.c around `brcmf_pcie_init_share_ram_info` — between `brcmf_chip_attach` returning and the setup callback being called. The print "reginfo selected" comes from after `brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2)` succeeded, returning a non-NULL core. The next expected work is BAR0_WINDOW switch + reginfo population. The wedge happens **between print and next code**; this is a novel wedge point not previously catalogued.
-
-This is similar in shape to T288c (wedge at fw-download chunk-1) and T288a' (wedge at OTP-bypass): all three are SUBSTRATE wedges at random progress points along a known-clean code path, well-explained by KEY_FINDINGS row 85.
-
-### Crash markers — what's NOT present
-
-- ❌ No AER UR/CE markers (`pci=noaer`)
-- ❌ No NMI / hardlockup / softlockup / panic / Oops / BUG / Call Trace
-- ❌ No PCIe link state events
-- ❌ No retry/timeout messages from kernel pcie subsystem
-
-Pure silent backplane hang — the standard signature for `pci=noaer` BCM4360 wedges.
-
-### Discriminator outcome (per PRE-TEST.291 table)
-
-PRE-TEST.291's discriminator table assumed T290B macro would execute and one of the 8 anchors would be the last visible. With ZERO anchors visible, none of the table rows applies. The table's failure mode "(none — wedge before T290B entry)" → "T290B not the wedger; suspect T287 or T290A" is misleading here, because the wedge is so far upstream that it can't even speak to T290B-vs-T287-vs-T290A. T291 is uninformative about H1.
-
-### Hypotheses (post-T291)
-
-**H1 (LIKELIEST): Substrate noise wedged this fire upstream of any probe.** Same n=1 confound as T288 series. KEY_FINDINGS row 85 explicitly warns about this; this is the predicted failure mode of single-fire-per-condition test design. T291 = the second consecutive fire to manifest this pattern (after T290).
-
-**H2 (UNLIKELY): A latent change between T290 and T291 builds caused regression at PCIE2 reginfo.** Diff between fires: T290A=0 (was 1), T290B macro now has 8 pr_emerg anchors (was 1 final print). Both changes are in code paths that have NOT executed yet at the wedge point. Strings/builds verified pre-fire. Mechanism for upstream regression is implausible.
-
-**H3 (POSSIBLE BUT WEAK): T290 wedge left chip in a state SMC reset didn't fully clear.** T290 wedged at post-set_active and required user SMC reset; T291 ran on the cold-cycled substrate after that reset. Per KEY_FINDINGS row 84, full cold cycle should clear chip state. But the n=1 nature of T290's wedge (watchdog-no-recover) is itself unusual; we don't know if the SMC reset gave a fully clean substrate compared to a fresh power-on without prior wedge history. No way to test this directly without a second SMC-reset-after-wedge cycle.
-
-### KEY_FINDINGS impact (load-bearing)
-
-- **Row 85 (substrate flakiness, n≥3)**: REAFFIRMED. Two consecutive fires both wedged before reaching their probe target. Updated success rate: T288 series 1/4, T290 series 1/2 (T290 reached post-set_active probes and printed informative data; T291 didn't reach setup callback). New combined rate across recent T288+T290+T291 fires: 2 useful fires of 7 (~28%). The "20–25 min clean window" is starting to look like a rough indicator at best — within-window noise dominates.
-- **Candidate finding (rejected): "T290B chipcommon write wedges at post-set_active"**. Was H1 from POST-TEST.290; T291 can NOT confirm it. Still LIVE, n=1.
-- **No new finding promoted from this fire.** T291 is a null-fire that contributes one more substrate-noise data point.
-
-### Substrate (current — recovery boot)
-
-- Boot 0 since ~16:12:40 BST (per `journalctl --list-boots`); `uptime` shows ~1 min at log capture
-- PCIe state at probe: `Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-` (clean; no MAbort drift)
-- 0 brcmfmac modules loaded
-- 0 fires this boot
-- Substrate window is ~25 min if the row-85 pattern holds for THIS boot
-
-### Build verification
-
-- `brcmfmac.ko` from PRE-TEST.291 build is intact; anchors verified pre-fire (`strings ... | grep 't290b anchor-'` → 8 hits)
-- No changes to module since T291 fire
-- The build is REUSABLE for T292+ if config flags don't change
-
-### Strategic question
-
-Two consecutive null fires with novel wedge points is enough evidence that single-fire substrate trials don't work for this test campaign. Before next fire, need to choose between:
-
-- **(α) BASELINE-FIRST**: Re-fire with T290A=0 + T290B=0 (matching T288b's known-clean baseline, except with T290B's anchors compiled but disabled). Goal: prove the build itself is not the regression. Same fire risk profile as T288b (which reached t+90s).
-- **(β) RE-FIRE T291 unchanged**: hope substrate cooperates this time. If it works → tests T290B; if it wedges → second null fire of T291 specifically, n=2 confound.
-- **(γ) PIVOT to alternative paths** (PRE-TEST.290 §"Alternative path consideration"): pre-set_active chipcommon write (different timing, ARM still halted), SBMBX, or TCM scribble at suspected wake-flag offset. Avoids the post-set_active timing where T290B might have wedged.
-
-Per advisor reconcile in KEY_FINDINGS row 85, the cheapest discriminator is **(α)** — one fire that, if it lands, settles whether the build is OK; if it wedges, simply confirms substrate noise. **(β)** has the same risk and lower information yield. **(γ)** is the right second move IF (α) shows the build is fine.
-
-### Next-fire plan (advisor-confirmed — see PRE-TEST.292 below)
-
-Advisor sharpened (α) at 2026-04-26 16:18 BST. Plain (α) baseline-only is asymmetric (success → "substrate cooperated"; failure → uninterpretable). Better: pack a real hypothesis into the same cold-cycle by adding a **pre-set_active T290B variant** alongside the post-set_active one. Single fire then tests both build verification (T288b pattern) AND ARM-live-state dependency of T290B's wedge.
-
-Stopping rule (set explicitly per advisor): if T292 wedges upstream of pre-set_active T290B (3rd consecutive null), STOP discriminating T290B with single fires; pivot directly to (γ-c) TCM-scribble at `[node+0xc]` per KEY_FINDINGS row 148 — software wake gate, structural address known, TCM writes are reliable (T276 pattern), avoids chipcommon-MMIO problem entirely.
-
-Caveat (per advisor): even a clean T292 fire is n=1; do NOT promote to KEY_FINDINGS as CONFIRMED. Treat single-fire claims as LIVE until n≥3.
-
----
-
-## PRE-TEST.292 (2026-04-26 16:30 BST — **BUILT and READY ON USER COLD-CYCLE CLEARANCE. Advisor-sharpened α: T290B added to pre-set_active probe block. Single fire tests build verification + ARM-live-state-dependency hypothesis. T290A=0. Otherwise identical params to T291.**)
-
-### Hypotheses
-
-- **H_α (build-verify)**: After T291's null wedge, the brcmfmac.ko binary may be regressed (unlikely — anchors compile in cleanly, post-pre-set_active block was the only edit). T292 reaches `set_active` → builds verified.
-- **H_main (ARM-live-state dependency of T290B wedge)**: T290's wedge mechanism IS the chipcommon RMW, but only when the ARM is live (post-set_active). If T290B fires cleanly at pre-set_active (ARM halted) and wedges at post-set_active, the wedge is fw-state-dependent and H1 from POST-TEST.290 strengthens significantly.
-- **H_alt1 (chipcommon writes globally bad)**: If T290B wedges at pre-set_active (ARM halted), then chipcommon writes are wrong at any timing — this generalises H1 and structurally blocks the write-side of the wake-gate hypothesis. Pivot to (γ-b) SBMBX or (γ-c) TCM-scribble.
-- **H_alt2 (substrate ate the fire again)**: If T292 wedges upstream of pre-set_active probe block (e.g., test.159 reginfo or test.225 chunk), 3rd consecutive null fire — substrate noise dominates and T290B cannot be discriminated this way. Stopping rule fires: pivot to (γ-c) TCM-scribble.
-
-### Discriminator outcomes
-
-| Last anchor / wedge point | Reading | Next action |
-|---|---|---|
-| All probes through `t+90s LAST MARKER` reach OK; both pre-set_active T290B firings AND post-set_active T290B firing show `restored=orig` summary line | **GREEN PATH (build OK + chipcommon writes work + T290's wedge was substrate noise)** | n=1; do NOT promote to KEY_FINDINGS. Re-fire as T293/T294 to build n≥3. |
-| Both pre-set_active T290B fire clean; post-set_active T290B wedges (some `anchor-N` is last visible) | **H_main confirmed (ARM-live-state-dependent)**; row 85 promotion candidate after n≥3 | Plan T293 = TCM-scribble at `[node+0xc]` per KEY_FINDINGS row 148, since chipcommon-MMIO write-side is now confirmed-blocked at the timing we need. |
-| Pre-set_active T290B wedges at some `anchor-N` (one of 0..7) | **H_alt1 (chipcommon writes globally bad on this chip)** | Same pivot as previous row, but H1's "fw-state-dependent" framing is rejected — chipcommon writes are bad at any timing. |
-| pre-write (pre-set_active) probes fire (T287/T290A) but NO T290B anchor visible | T290B macro skipped or failed silently — investigate gate logic. Build issue likely. | Re-check binary; rebuild if needed. |
-| Wedge BEFORE pre-set_active probe block (e.g., test.159 / test.225 / test.160) | **H_alt2 (3rd substrate-noise null)** — stopping rule fires | STOP T290B campaign. Pivot to (γ-c) TCM-scribble at `[node+0xc]` per KEY_FINDINGS row 148 + 158. |
-| Late-ladder t+90s+ wedge (T270-BASELINE pattern) AFTER all probes drained | All probes informative; substrate late-wedge is orthogonal | Same as GREEN PATH — n=1, re-fire to build n≥3. |
-
-### Diff vs T291 fire
-
-- pcie.c:4357 + 4361: `BCM4360_T290B_CC_WRITE("pre-write (pre-set_active)")` and `BCM4360_T290B_CC_WRITE("post-write (pre-set_active)")` added inline at end of existing T284-gated probe lines.
-- MODULE_PARM_DESC of `bcm4360_test290b_cc_write` updated to reflect new wiring.
-- All other params identical: `test236=1 test238=1 test276=1 test277=1 test278=1 test284=1 test287=1 test287c=1 test290a=0 test290b=1`.
-- Rebuilt clean; same warning set as T291 (unused-variable warnings on legacy probes).
-
-### Substrate prerequisites — REQUIRED
-
-⚠️ Current boot is recovery from T291 wedge (boot 0 since 16:12:40 BST). Cold cycle required.
-
-- **REQUIRED**: full cold cycle = `shutdown -h now`, wait ≥60 s power-off, SMC reset, then power on.
-- After cold cycle: `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta|DevSta'` (expect clean).
-- Uptime should be ≤2 min at fire — clean window is widest right after cold cycle.
-- ⚠️ T292 may wedge per H_main (post-set_active T290B). Another cold cycle will be required AFTER T292 fires if H_main holds.
-
-### Fire command (T290B at pre-set_active + post-set_active; T290A disabled)
-
-```bash
-sudo modprobe cfg80211 && sudo modprobe brcmutil && \
-sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
-    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
-    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
-    bcm4360_test278_console_periodic=1 \
-    bcm4360_test284_premask_enable=1 \
-    bcm4360_test287_sched_ctx_read=1 \
-    bcm4360_test287c_extended=1 \
-    bcm4360_test290a_chain=0 \
-    bcm4360_test290b_cc_write=1 \
-    > /home/kimptoc/bcm4360-re/phase5/logs/test.292.run.txt 2>&1
-sleep 150
-sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.292.run.txt || true
-sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.292.journalctl.txt
-```
-
-If the machine wedges before journalctl runs (expected per H_main): on next boot, run `sudo journalctl -k -b -1 > phase5/logs/test.292.journalctl.txt`.
-
-### Pre-fire checklist (CLAUDE.md)
-
-1. ✓ Module rebuilt clean — `make` output: `LD [M] brcmfmac.ko`, no errors
-2. ✓ T290B anchors verified — 8 anchors strings-visible (anchor-0 through anchor-7)
-3. ✓ pre-set_active T290B integration — by code inspection of pcie.c:4357 + 4361 (the same line that already drives T287/T290A pre-set_active probes; T290B added at end of both lines)
-4. ✓ MODULE_PARM_DESC updated to match new wiring
-5. (user) Cold cycle: shutdown ≥60 s + SMC reset
-6. (user) PCIe state check after cold cycle
-7. ✓ Hypothesis stated above; advisor-validated framing
-8. ✓ Stopping rule set explicitly above
-9. ✓ Plan committed and pushed BEFORE fire (this file)
-10. ✓ FS sync after push
-
-### Risk and recovery
-
-- T292 fire risk profile: similar to T291 but with extra T290B firings at pre-set_active (2 extra firings before set_active; both are ARM-halted timing). Worst case = same as T290 (post-set_active wedge requiring SMC reset).
-- If watchdog fails to auto-recover, user SMC reset needed (n=2/2 such events for T290+T288c; T291 substrate wedge auto-recovered to a viable boot but user-SMC was used to compress recovery).
-- Anchor lines are pr_emerg priority — best-effort eager flush, should survive even hard wedge per the "instruction immediately before wedge has its print delivered" pattern.
-
-### After-fire plan (per outcome)
-
-- GREEN PATH or late-ladder: write POST-TEST.292; queue T293 = re-fire same config for n=2 sample; do NOT update KEY_FINDINGS without n≥3.
-- H_main confirmed: write POST-TEST.292; queue T293 = TCM-scribble at `[node+0xc]` per KEY_FINDINGS row 148.
-- H_alt1: write POST-TEST.292; same TCM-scribble pivot; note H1 reframed.
-- H_alt2 (3rd null upstream): write POST-TEST.292; STOP T290B work; queue T293 = TCM-scribble pivot per stopping rule.
-
----
-
-## PRE-TEST.290 (2026-04-26 14:25 BST [SUPERSEDED — fired 15:00:58 BST and POST-TEST.290 recorded above; wedge at t≈0–1s post-set_active before any post-set_active probe-line drained] — **READY ON USER COLD-CYCLE CLEARANCE. Single fire combines two read-only-or-near-RO probes — REVISED per advisor sanity-check.** PROBE-A walks 4-deref chain from wlc_callback_ctx (TCM[0x96F48+8]) to resolve wake-gate BASE address; first verifies node_fn at TCM[0x96F48+4]==0x1146D to confirm we're reading the wlc ISR node (not just T274's inferred next-pointer). PROBE-B does RMW-and-restore on chipcommon BCAST_DATA (0x54 — pure scratch register; advisor swap from GPIOPULLUP to eliminate side-effect inference) to test whether host-side chipcommon writes silently drop like PCIE2+0x4C does. PROBE-B fires at post-set_active + post-T276-poll only (2 samples sufficient).)
-
-### Hypotheses
-
-- **H1 (PROBE-A)**: `flag_struct[+0x88]` is the BASE address of the wake-gate register set. Per fn@0x2309c, the actual wake-gate is `[flag_struct+0x88]+0x168`. Resolving the BASE answers a long-standing LIVE question.
-- **H2 (PROBE-B)**: Host-side chipcommon writes work normally (i.e., DON'T silently drop the way PCIE2+0x4C MAILBOXMASK does per T241/T280/T284). Untested premise — gates whether finding the wake-gate base is actionable.
-
-### Discriminator outcomes
-
-**PROBE-A** — first checks `node_fn` at TCM[0x96F48+4]:
-
-| node_fn value | Reading | Action |
-|---|---|---|
-| `0x1146D` (= fn@0x1146C wlc ISR with thumb bit) | Confirms 0x96F48 IS the wlc ISR node — proceed with chain walk | Continue chain reads |
-| Other non-zero | 0x96F48 is a DIFFERENT scheduler node (T274's inference wrong) | Log fn value; T291 follow-up to identify node and walk linked list |
-| 0 | Node not yet populated at this stage | Re-time PROBE-A later |
-
-If node_fn check passes, possible BASE values from chain walk:
-
-| BASE value | Reading | Next step |
-|---|---|---|
-| `0x18000000..0x18000FFF` | chipcommon REG base — wake gate is chipcommon-internal register at BASE+0x168 | Look up BCM4360 rev43 chipcommon offset 0x168 register identity (likely ECI/coex-related per upstream brcmsmac); plan a host-write test to it |
-| `0x18001000..0x18002FFF` | core[2] or ARM-CR4 register base — wake gate is in a non-chipcommon backplane core | Identify the core, look up its 0x168 register, plan a host-write test |
-| `0x18003000..0x18003FFF` | **PCIE2 register base** — wake gate IS in PCIE2 at offset 0x168 (NOT 0x4C as we'd been testing) | Reframe: T289 §3 (fw has 0 PCIE2 literals) was misleading — there's an alternative path that reaches PCIE2. Major implication. |
-| `0x18100000..0x18108FFF` | A wrapper-page base — unusual; would mean fn@0x2309c reads via wrapper-side (different from BIT_alloc) | Investigate which core's wrapper, what +0x168 there means |
-| `0x00000000..0x000A0000` | TCM offset — pending-events word is software-maintained, not HW-mapped | T274's negative writer scan was wrong; re-scan blob for store patterns we missed |
-| `0x00000000` | flag_struct[+0x88] not yet initialized at probe time | Stage didn't fire late enough — re-time PROBE-A to t+90s only |
-| `[stop=*-out-of-TCM]` | Chain broke at intermediate level — wlc_callback_ctx not yet populated | Stage too early, re-time later. Stop-name tells which level |
-| Other | Unexpected — surface to advisor | |
-
-**PROBE-B** — possible chipcommon-write outcomes (CC.BCAST_DATA at 0x54):
-
-| `readback` value | Reading | Next step |
-|---|---|---|
-| `0xDEADBEEF` | Chipcommon writes work fine. The MAILBOXMASK silent-drop is PCIE2+0x4C-specific. | If H1 resolves to chipcommon, host-write to wake gate should work. Plan T291 wake-trigger fire. |
-| `_orig` (unchanged) | Chipcommon writes silently drop just like PCIE2+0x4C does. | Major problem: "find the BASE then write to it" path is structurally blocked at this chip's current state. Need to find a different path entirely. |
-| `0x00000000` | Register gets reset on read or write. | BCAST_DATA may be cleared by reads or have implicit-clear semantics. Re-pick a known-RW register for next fire. |
-| Other partial value | Some bits land, others don't (e.g., GPIOPULLUP has bit-write masks). | Indicates RMW-with-mask register; informative but not dispositive of "do writes work generally" |
-| `restored != _orig` | Restore failed — chip state may be perturbed | Cold cycle required after fire. Worth investigating why restore didn't take. |
-
-### Cross-probe outcomes (read together)
-
-- A=chipcommon AND B=`0xDEADBEEF` → **GREEN PATH**: identified the wake gate AND can write to it. T291 planned next.
-- A=chipcommon AND B=`_orig` → **RED PATH**: identified the wake gate but can't reach it. Need alternative trigger mechanism (TCM scribble? PMU manipulation? something else).
-- A=PCIE2 AND any B → reframe everything; the "fw doesn't touch PCIE2" finding has a hidden exception.
-- A=TCM AND any B → wake gate is software-maintained; need fw to write a bit somewhere, and that "somewhere" is now identified.
-- A chain-stop AND any B → re-time PROBE-A; B result still informative.
-
-### Diff vs T288c
-
-Identical fire path EXCEPT:
-- T288a flag DEFAULT OFF (was the wedger candidate; H1 weakened to LIKELY-FALSE; we keep it off this fire to minimize wedge risk)
-- T290a flag DEFAULT ON
-- T290b flag DEFAULT ON
-
-### Substrate prerequisites — REQUIRED
-
-⚠️ Current boot is recovery from T288c's late-ladder wedge. Cold cycle required.
-
-- **REQUIRED**: full cold cycle = `shutdown -h now`, wait ≥60 s power-off, SMC reset, then power on.
-- After cold cycle: `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta|DevSta'` (expect `DevSta` flags clean OR at most `AuxPwr+`; no MAbort; LnkSta trained Gen1 x1).
-- Uptime should be ≤2 min at fire — clean window is widest right after cold cycle.
-- ⚠️ T290 is read-mostly (one careful chipcommon write + restore), but the late-ladder wedge at t+90s WILL still happen per T270-BASELINE pattern. Another cold cycle required AFTER T290 fires before further hardware tests.
-
-### Fire command (T290a + T290b enabled, T288a disabled)
-
-```bash
-sudo modprobe cfg80211 && sudo modprobe brcmutil && \
-sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
-    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
-    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
-    bcm4360_test278_console_periodic=1 \
-    bcm4360_test284_premask_enable=1 \
-    bcm4360_test287_sched_ctx_read=1 \
-    bcm4360_test287c_extended=1 \
-    bcm4360_test290a_chain=1 \
-    bcm4360_test290b_cc_write=1 \
-    > /home/kimptoc/bcm4360-re/phase5/logs/test.290.run.txt 2>&1
-sleep 150
-sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.290.run.txt || true
-sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.290.journalctl.txt
-```
-
-If the machine wedges before journalctl runs (expected per T270-BASELINE late-ladder pattern): on next boot, run `sudo journalctl -k -b -1 > phase5/logs/test.290.journalctl.txt`.
-
-### Probe behavior summary
-
-- **PROBE-A** fires at every stage where the existing T287/T288A macros fire — `pre-write (pre-set_active)` / `post-write (pre-set_active)` / `post-set_active` / `post-T276-poll` / `post-T278-initial-dump` / and every T278 stage hook (t+500ms / t+5s / t+30s / t+90s). Read-only. One pr_emerg line per fire with `[stop=...]` flag, `node_fn`, and 5 chain values. Pre-set_active stages will likely show `[wrong-node-fn]` or `[wcc-out-of-TCM]` (scheduler node not yet populated); post-set_active stages should show progressively populated chain.
-- **PROBE-B** fires at **2 stages only**: `post-set_active` and `post-T276-poll` (advisor #3 — 2 samples sufficient to discriminate; halves printk volume from B). RMW-and-restore on CC.BCAST_DATA. One pr_emerg line per fire. Each fire takes 5 BAR0 transactions plus 1 config-space save+restore.
-
-### Pre-fire checklist (CLAUDE.md)
-
-1. ✓ Build verification: `strings ... | grep test.290` shows both 290a and 290b format strings
-2. (user) Cold cycle: shutdown ≥60 s + SMC reset
-3. (user) PCIe state check after cold cycle
-4. ✓ Hypothesis stated above
-5. ✓ Plan committed and pushed BEFORE fire (this file — being committed now)
-6. ✓ FS sync after push
-7. ⚠ ADVISOR sanity check on fire design BEFORE user cold cycle (pending — Task #67)
-
-### Risk and recovery
-
-- T290a is pure read-only TCM; no wedge risk.
-- T290b does one chipcommon write to GPIOPULLUP (R/W per upstream chipcregs, no observable side effects on this chip without configured GPIOs) + immediate restore. Risk: minimal. Worst case: BAR0_WINDOW left in wrong state — restored explicitly at end of macro.
-- T270-BASELINE late-ladder wedge will still trigger at t+90s as before. Watchdog should auto-recover (T288c was an exception requiring user SMC; if it recurs, user SMC needed again).
 
 ---
 
