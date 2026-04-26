@@ -1039,7 +1039,7 @@ MODULE_PARM_DESC(bcm4360_test290a_chain, "BCM4360 test.290a: walk wlc_callback_c
 
 static int bcm4360_test290b_cc_write;
 module_param(bcm4360_test290b_cc_write, int, 0644);
-MODULE_PARM_DESC(bcm4360_test290b_cc_write, "BCM4360 test.290b: chipcommon write-and-readback test. Saves BAR0_WINDOW, selects CHIPCOMMON, RMW-and-restore on CC.BCAST_DATA (0x54 — pure scratch) with sentinel 0xDEADBEEF. Tests whether host-side chipcommon writes silently drop like PCIE2+0x4C MAILBOXMASK does (T241/T280/T284). Wired at post-set_active + post-T276-poll only. (1=enable, 0=off)");
+MODULE_PARM_DESC(bcm4360_test290b_cc_write, "BCM4360 test.290b: chipcommon write-and-readback test. Saves BAR0_WINDOW, selects CHIPCOMMON, RMW-and-restore on CC.BCAST_DATA (0x54 — pure scratch) with sentinel 0xDEADBEEF. Tests whether host-side chipcommon writes silently drop like PCIE2+0x4C MAILBOXMASK does (T241/T280/T284) AND whether the wedge in T290 is fw-state-dependent (pre-set_active = ARM halted). Wired at pre-set_active (pre+post-write), post-set_active, post-T276-poll. Pre-set_active sites gated by test284_premask_enable. (1=enable, 0=off)");
 
 #define BCM4360_T288A_CC_WRAP_BASE	0x18100000
 #define BCM4360_T288A_PCIE2_WRAP_BASE	0x18103000
@@ -4354,11 +4354,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				 * pre-set_active MBM writes work. Open question:
 				 * does the pre-set mask survive fw init? */
 				if (bcm4360_test284_premask_enable) {
-					BCM4360_T284_READ_MBM("pre-write (pre-set_active)"); BCM4360_T285_READ_CC("pre-write (pre-set_active)"); BCM4360_T287_READ_SCHED("pre-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("pre-write (pre-set_active)"); BCM4360_T290A_CHAIN("pre-write (pre-set_active)");
+					BCM4360_T284_READ_MBM("pre-write (pre-set_active)"); BCM4360_T285_READ_CC("pre-write (pre-set_active)"); BCM4360_T287_READ_SCHED("pre-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("pre-write (pre-set_active)"); BCM4360_T290A_CHAIN("pre-write (pre-set_active)"); BCM4360_T290B_CC_WRITE("pre-write (pre-set_active)");
 					pr_emerg("BCM4360 test.284: calling brcmf_pcie_intr_enable (pre-set_active — writes MBM = 0xFF0300)\n");
 					brcmf_pcie_intr_enable(devinfo);
 					pr_emerg("BCM4360 test.284: brcmf_pcie_intr_enable returned\n");
-					BCM4360_T284_READ_MBM("post-write (pre-set_active)"); BCM4360_T285_READ_CC("post-write (pre-set_active)"); BCM4360_T287_READ_SCHED("post-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("post-write (pre-set_active)"); BCM4360_T290A_CHAIN("post-write (pre-set_active)");
+					BCM4360_T284_READ_MBM("post-write (pre-set_active)"); BCM4360_T285_READ_CC("post-write (pre-set_active)"); BCM4360_T287_READ_SCHED("post-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("post-write (pre-set_active)"); BCM4360_T290A_CHAIN("post-write (pre-set_active)"); BCM4360_T290B_CC_WRITE("post-write (pre-set_active)");
 				}
 
 				pr_emerg("BCM4360 test.238: calling brcmf_chip_set_active resetintr=0x%08x (ultra-extended ladder t+120s)\n",
