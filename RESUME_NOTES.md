@@ -5,9 +5,104 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 16:30 BST — **PRE-TEST.292 BUILT and READY ON USER COLD-CYCLE CLEARANCE. Advisor-sharpened α: T290B added to pre-set_active probe block (gated by test284_premask_enable=1, on in T291 params); same fire tests both build verification AND ARM-live-state dependency hypothesis. T290A=0 (still removed as confound). Stopping rule set: if T292 wedges upstream of pre-set_active T290B (3rd consecutive null), STOP discriminating T290B and pivot to (γ-c) TCM-scribble at [node+0xc] per KEY_FINDINGS row 148. brcmfmac.ko rebuilt clean (warnings only on unused vars from older tests); pre+post-write (pre-set_active) tags + 8 T290B anchors verified via strings. MODULE_PARM_DESC of test290b_cc_write updated. Awaiting user cold cycle (shutdown ≥60s + SMC reset).**)
+## Current state (2026-04-26 16:31 BST — **POST-TEST.292 RECORDED. T292 fire was SUBSTANTIVE: first pre-set_active T290B firing completed all 8 anchors cleanly with chipcommon BCAST_DATA RMW landing — orig=0x00000000, wrote=0xDEADBEEF, readback=0xdeadbeef, restored=0x00000000. SECOND pre-set_active T290B firing wedged at brcmf_pcie_select_core(CHIPCOMMON) (between anchor-1 and anchor-2). Wedge before set_active. Post-set_active T290B never ran. KEY findings: (1) chipcommon writes at pre-set_active DO land — not silently dropped like PCIE2 MAILBOXMASK; (2) the second-firing wedge is anomalous (same code path, no-op same-value config_dword write) — substrate confound vs state-corruption open. Recovery: cold cycle done by user, current substrate clean. Next: advisor consult on whether single-fire data is enough, then choose between re-fire vs pivot to TCM-scribble.**)
 
-## Prior state (2026-04-26 16:14 BST — **POST-TEST.291 RECORDED. T291 fire wedged at test.159 reginfo, upstream of any probe. Substrate noise, second consecutive null fire. KEY_FINDINGS row 85 reaffirmed.**)
+## Prior state (2026-04-26 16:30 BST — PRE-TEST.292 BUILT and READY ON USER COLD-CYCLE CLEARANCE.)
+
+---
+
+## POST-TEST.292 (2026-04-26 16:26 BST fire, boot -1 — **SUBSTANTIVE FIRE. First pre-set_active T290B firing landed a CLEAN chipcommon BCAST_DATA RMW: orig=0, wrote=0xDEADBEEF, readback=0xdeadbeef, restored=0. SECOND pre-set_active T290B firing wedged at anchor-1→anchor-2 inside brcmf_pcie_select_core(CHIPCOMMON). Post-set_active T290B never ran (wedge upstream). Watchdog did NOT auto-recover; user SMC reset.**)
+
+### Timeline (from `phase5/logs/test.292.journalctl.txt`, boot -1 — 16:12:40→16:26:12)
+
+- `16:12:40` boot start (post-T291 cold-cycle clean substrate)
+- `~16:26:12` insmod entry (uptime ~13.5 min — past PRE-TEST.292's recommended ≤2 min freshness window; within KEY_FINDINGS row 84's 20–25 min window)
+- `16:26:12` test.218 host-side core enum → buscore_reset → ARM CR4 halt → get_raminfo → PMU/RAM probes → ASPM/LnkCtl/setup callback → setup-entry → fw download (ramwrite, all OK) → INTERNAL_MEM core not-found (expected) → pre-set-active probes: ARM CR4 IOCTL/IOSTATUS/RESET_CTL/CPUHALT=YES; D11 IN_RESET=YES; CR4 clk_ctl_st=0x07030040; pre-BM mailboxint guard=0; pci_set_master → BM=ON → FORCEHT write applied
+- `16:26:12` (line 1407-1413) **PRE-WRITE (pre-set_active) probe drain BEGAN**:
+  - test.277 PRE-WRITE struct@0x9af88 = uninitialized garbage (expected — fw not yet running)
+  - test.276 shared_info written + readback PASS (magic_start, dma_lo/hi, buf_size, fw_init_done=0, magic_end — all match expected)
+  - test.284 pre-write MBM=0x00000318 MBI=0x00000000 (matches T284 baseline)
+  - test.287/T287c pre-write sched=0 (uninitialized expected)
+- `16:26:12` (line 1414-1422) **TEST.290B FIRST FIRING — CLEAN COMPLETION** (all 8 anchors + summary):
+  - anchor-0: entry; about to save BAR0_WINDOW
+  - anchor-1: saved BAR0_WINDOW=0x18000000; about to select_core(CHIPCOMMON)
+  - anchor-2: selected CHIPCOMMON; about to read 0x54
+  - anchor-3: orig=0x00000000; about to write 0xDEADBEEF
+  - anchor-4: wrote 0xDEADBEEF; about to readback
+  - anchor-5: **readback=0xdeadbeef** ← write LANDED on chipcommon BCAST_DATA
+  - anchor-6: restored orig; about to verify
+  - anchor-7: **restore_check=0x00000000** ← restore LANDED
+  - summary: `CC.BCAST_DATA orig=0x00000000 wrote=0xDEADBEEF readback=0xdeadbeef restored=0x00000000 (saved_win=0x18000000)`
+- `16:26:12` (line 1423-1425) test.284 calling brcmf_pcie_intr_enable → returned → post-write MBM=0x00000318 (still 0x318 — matches T284 silent-drop baseline at PCIE2+0x4C)
+- `16:26:12` (line 1426-1427) test.287/T287c post-write sched=0 (still uninitialized)
+- `16:26:12` (line 1428-1429) **TEST.290B SECOND FIRING — WEDGED at anchor-1→anchor-2**:
+  - anchor-0: entry
+  - anchor-1: saved BAR0_WINDOW=0x18000000; about to select_core(CHIPCOMMON)
+  - [NO anchor-2; backplane wedged silently]
+- boot -1 ended same second
+- `~16:30:03` boot 0 (recovery — after user SMC reset; watchdog did NOT auto-recover, n=3/3 such events for T288c+T290+T292)
+
+### Critical primary-source findings
+
+**Finding 1 (LOAD-BEARING NEW): Host-side chipcommon BAR0+0x54 write at pre-set_active (ARM halted) DOES land.** First T290B firing wrote 0xDEADBEEF and read back 0xDEADBEEF cleanly, then restored to 0 with verified readback. This is a structurally different behaviour from KEY_FINDINGS row 125 (PCIE2 MAILBOXMASK at BAR0+0x4C silently drops). **Chipcommon MMIO writes are NOT universally write-locked on this chip.** First positive evidence that host-side writes to chip MMIO can land at all.
+
+**Finding 2 (anomalous, n=1): Second T290B firing in immediate succession wedged at brcmf_pcie_select_core(CHIPCOMMON).** Same code path, second invocation. saved_win was 0x18000000 (i.e. BAR0_WINDOW already pointed at chipcommon — would-be no-op write). Wedge happens inside select_core which does pci_write_config_dword(BAR0_WINDOW, core->base) followed by pci_read_config_dword + conditional re-write (pcie.c:1985–1996). The wedge is at config-space access, NOT at the chipcommon MMIO read/write itself.
+
+**Finding 3 (gating): Post-set_active T290B never ran.** Wedge happened in pre-set_active phase (line 1429 / log truncation). The post-set_active T290B firing scheduled at pcie.c:4372 was never reached. This means H_main from PRE-TEST.292 ("post-set_active T290B wedges; pre-set_active works") is NOT directly tested by this fire.
+
+**Finding 4 (uptime context):** Fire happened at uptime ~13.5 min, past the recommended ≤2 min "fresh" window but within the 20–25 min general window. Not a freshness-violation, but not an optimal-fresh fire either.
+
+### Discriminator outcome (per PRE-TEST.292 table)
+
+| Row hit | Reading |
+|---|---|
+| Row 3: "Pre-set_active T290B wedges at some `anchor-N` (one of 0..7)" → H_alt1 | **PARTIAL**: it IS pre-set_active, but it's the SECOND firing of the same probe; the FIRST firing succeeded. H_alt1 ("chipcommon writes globally bad on this chip") is contradicted by the first firing's success. |
+
+The discriminator table did not anticipate "pre-set_active T290B works on first firing, wedges on identical second firing in same insmod". This is novel.
+
+### Hypotheses (post-T292)
+
+**H_A (LEADING — substrate noise of the same flavour as KEY_FINDINGS row 85, but landing at a non-random point):** The first firing was substrate-cooperative and produced load-bearing data; the second firing hit substrate noise that happened to manifest at the next config_dword write. Supports row 85 — single-fire trials don't replicate. Implies T293 should re-fire to gather n>1 on chipcommon RMW (and try to land it twice cleanly).
+
+**H_B (state-corruption from intermediate intr_enable):** Between firings 1 and 2, brcmf_pcie_intr_enable wrote MAILBOXMASK = 0xFF0300 via select_core(PCIE2)+write_reg32(0x4C). KEY_FINDINGS row 125 says this write silently drops. But the act of "select PCIE2 → attempt write → reselect chipcommon (in helper)" may leave the AI backplane in a transient state that cannot tolerate the next config_dword. Plausible mechanism but no direct evidence. Implies T293 should disable intr_enable between firings to test.
+
+**H_C (cumulative config-space-write fragility):** PCI config-space writes themselves degrade after some number of accesses (n=4 BAR0_WINDOW writes happened during the first firing's run, plus 1 in intr_enable's select_core, plus 1 in the second firing's anchor-2 = 6 cumulative). Less plausible — config-space access is well-trodden in many probes.
+
+**H_D (fw-state-dependent — not yet ruled out):** Even though ARM is halted, fw_data has been ramwritten to TCM. Some chipcommon side-channel may "see" fw payload in TCM and react. Hard to test.
+
+### KEY_FINDINGS impact
+
+- **Candidate new row (CONFIRMED, n=1 — must be replicated to promote): "Host-side chipcommon BAR0+0x54 (BCAST_DATA) RMW at pre-set_active timing DOES land cleanly. Wrote 0xDEADBEEF, read back 0xDEADBEEF, restored 0, verified."** First positive primary-source evidence that chipcommon MMIO writes can land — sharply distinguished from PCIE2 MAILBOXMASK at BAR0+0x4C (KEY_FINDINGS row 125, write-locked at all timings). Direction: **chipcommon-wrapper offsets and chipcommon-register offsets are different from PCIE2 in writeability**. Promotes "find wake gate then poke chipcommon-side" as still-viable. Defer KEY_FINDINGS update until n≥3.
+- **Row 85 (substrate flakiness)**: REAFFIRMED for the third consecutive fire. T288c, T291, T292-second-firing all wedged at semi-random points. T292 still scored partial information (the first firing).
+- **Row 88 (POST-TEST.290 H1 candidate "T290B's chipcommon RMW at post-set_active wedges"):** NOT directly addressable by T292 — post-set_active T290B never ran. Still LIVE n=1.
+
+### What was NOT settled
+
+- ❌ Whether post-set_active T290B wedges (PRE-TEST.292's H_main) — wedge happened pre-set_active before that probe could run.
+- ❌ Whether the second-firing wedge is reproducible (n=1).
+- ❌ Whether intr_enable's select_core(PCIE2)+silent-drop leaves chip in a fragile state.
+
+### Crash markers — what's NOT present
+
+- ❌ No AER UR/CE markers (`pci=noaer`)
+- ❌ No NMI / hardlockup / softlockup / panic / Oops / BUG / Call Trace
+- ❌ No PCIe link state events
+Pure silent backplane hang — consistent with all prior wedges under `pci=noaer`.
+
+### Substrate (current — recovery boot)
+
+- Boot 0 since 16:30:03 BST, uptime ~1 min at this writeup
+- PCIe state: Status clean (`<MAbort-`)
+- 0 brcmfmac modules loaded
+- 0 fires this boot
+
+### Next-fire candidates (ordered by information yield)
+
+- **(A) Re-fire T292 unchanged** — tests whether T290B-first-firing-clean reproduces; tests whether second-firing-wedge reproduces. n=2 builds quickly.
+- **(B) T293 = T292 with intr_enable removed between firings** — tests H_B (intr_enable's silent-drop fragility hypothesis). If second firing now succeeds, intr_enable is implicated.
+- **(C) Pivot to TCM-scribble at `[node+0xc]`** per KEY_FINDINGS row 148 — defers chipcommon path; tests software wake-gate write via TCM (different mechanism, different surface).
+
+Advisor consult before choosing.
 
 ---
 
