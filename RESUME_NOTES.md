@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 10:05 BST — **POST-TEST.288c: NULL FIRE. T288c wedged at fw-download chunk-1 (`test.225` line 1 of ~108) — well upstream of the T288a anchored macro's first invocation site. Zero `anchor-` lines logged. Zero `test.276` markers. The discriminator table's "implausible" row (wedge before macro) FIRED. With 1/4 cold-cycle fires reaching t+90s and 3/4 wedging at three different upstream points (T288a after T276, T288a' at OTP-bypass, T288c at fw chunk-1), the T288b-based "T288a binary innocent" inference rests on n=1 and is now too thin to support the H1 confirmation. KEY_FINDINGS row downgraded from CONFIRMED-by-exclusion → LIVE. SMC reset done; substrate is recovering. Need to reconcile design before next fire — substrate noise floor is drowning the wrap-read signal.**)
+## Current state (2026-04-26 10:15 BST — **NO FIRE PENDING. Two changes since user's "continue" prompt: POST-TEST.288c written (NULL FIRE; wedge at fw chunk-1, upstream of macro) AND advisor reconcile call surfaced a stronger reading — within flag=1 fires alone, 2 of 3 (T288a' at OTP-bypass, T288c at fw chunk-1) wedged BEFORE the macro could fire, which is direct positive evidence the macro is NOT the wedger. KEY_FINDINGS row "T288a wrapper-read wedges backplane" downgraded twice today: CONFIRMED-by-exclusion → LIVE → LIKELY-FALSE. Substrate recovering after user SMC reset. Next session must decide between (a) spending 3-fire baseline budget to characterize noise OR (b) pivoting to static-analysis paths (per-class unmask thunk disasm; scheduler software-mask offset) that need zero fires. Advisor recommends checking (b) cheaper before committing (a). See "Decision needed before next fire" at end of POST-TEST.288c block.**)
 
 ---
 
@@ -68,14 +68,29 @@ ADD: New finding — substrate flakiness on cold-cycled BCM4360 produces wedges 
 - `brcmfmac.ko`: 15 085 568 B, mtime 2026-04-26 00:24, identical to T288b/T288c — anchors compiled in
 - No rebuild needed for next fire IF design stays compatible
 
-### Decision needed before next fire
+### Decision needed before next fire — advisor reconcile (2026-04-26)
 
-**The single-fire-per-condition design is broken for this substrate.** Three options on the table for advisor consultation:
-- (a) Run N flag=0 baselines to characterize noise floor (e.g. N=5 fires at flag=0); only then re-fire flag=1
-- (b) Move the wrap-read probe EARLIER in the path so it fires before the fragile section (e.g. inside `brcmf_pcie_attach` immediately after BAR0/BAR2 verified)
-- (c) Decouple T288 wrap-read instrumentation from the T276 stage chain entirely — fire it at one fixed point, not at multiple stages, so a single anchor-N reading is unambiguous
+**Two findings from advisor's reconcile call:**
 
-Advisor consultation pending — see end of this section.
+1. **H1 is more falsified than my downgrade implied.** Within flag=1 fires alone:
+   - T288a' (08:53 BST) wedged at OTP-bypass (test.160) — BEFORE the macro's earliest invocation site
+   - T288c (09:57 BST) wedged at fw chunk-1 (test.225) — BEFORE the macro's earliest invocation site
+   - T288a (00:11 BST) wedged after T276 markers — AFTER the macro fires
+   2 of 3 flag=1 fires wedged at points where the flag's effect could not have been the cause. That's direct positive evidence the macro is NOT the wedger (it never ran in those 2 fires). Only T288a is consistent with macro-as-wedger, and one data point can't distinguish that from substrate. **H1 should be treated as LIKELY-FALSE, not just LIVE.**
+
+2. **Sanity-check whether T288 wrap-read line is still highest-leverage** before spending the substrate budget. Three flag=0 baselines = 3 cold cycles + 3 crashes (T288c took user SMC reset, watchdog exception). KEY_FINDINGS has cheaper open questions:
+   - **MSI-subscription wedge fix** (KEY_FINDINGS row 151, LIVE): "known fix via `pci=noaspm` or different MSI setup. Phase6/t269 §Candidates B/C — not tested." Would require fire but not necessarily a crash if approach works.
+   - **`hndrte_add_isr` per-class unmask thunk** (row 118, LIVE): "Either the thunk writes to a different register, was not invoked, or its effect is gated on a condition we haven't satisfied." Pure static-analysis question — disasm only, ZERO fires needed. Could identify the actual register that controls fw's wake gate.
+   - **Software wake gate** (row 148): "the mask in fn@0x1146C's dispatch is scheduler-side software flag mask `[node+0xc] & pending_events`, NOT the PCIE2 MAILBOXMASK." If we can identify which TCM offset `[node+0xc]` lands at, a TCM scribble might wake fw — no register-write contortions needed.
+
+**Decision (next session):**
+- (a) Spend 3 fires on N=3 flag=0 baselines with stop rule: 3/3 reach t+90s → re-fire flag=1 with meaningful S/N; 2/3 or worse → abandon T288 wrap-read line entirely
+- (b) Pivot to static-analysis paths (per-class unmask thunk disasm + scheduler software-mask offset identification) — ZERO fires, may identify the actual wake gate
+- (c) Try MSI-subscription fix candidates (different fragility surface, but at least new information)
+
+Advisor recommends (a) only after sanity-checking that (b) isn't cheaper. Strong leaning: **start with (b)** — disasm the per-class unmask thunk before spending substrate budget on a hypothesis that timing already partially falsifies.
+
+**Status:** No fire pending. Next session should read KEY_FINDINGS row "T288a wrapper-read" (LIKELY-FALSE) and decide design before any hardware work.
 
 ---
 
