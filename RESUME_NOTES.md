@@ -9,7 +9,7 @@
 
 ---
 
-## PRE-TEST.290 (2026-04-26 14:15 BST — **READY ON USER COLD-CYCLE CLEARANCE. Single fire combines two read-only-or-near-RO probes.** PROBE-A walks 4-deref chain from wlc_callback_ctx (TCM[0x96F48+8]) to resolve wake-gate BASE address. PROBE-B does RMW-and-restore on chipcommon GPIOPULLUP to test whether host-side chipcommon writes silently drop like PCIE2+0x4C does.)
+## PRE-TEST.290 (2026-04-26 14:25 BST — **READY ON USER COLD-CYCLE CLEARANCE. Single fire combines two read-only-or-near-RO probes — REVISED per advisor sanity-check.** PROBE-A walks 4-deref chain from wlc_callback_ctx (TCM[0x96F48+8]) to resolve wake-gate BASE address; first verifies node_fn at TCM[0x96F48+4]==0x1146D to confirm we're reading the wlc ISR node (not just T274's inferred next-pointer). PROBE-B does RMW-and-restore on chipcommon BCAST_DATA (0x54 — pure scratch register; advisor swap from GPIOPULLUP to eliminate side-effect inference) to test whether host-side chipcommon writes silently drop like PCIE2+0x4C does. PROBE-B fires at post-set_active + post-T276-poll only (2 samples sufficient).)
 
 ### Hypotheses
 
@@ -18,7 +18,15 @@
 
 ### Discriminator outcomes
 
-**PROBE-A** — possible BASE values:
+**PROBE-A** — first checks `node_fn` at TCM[0x96F48+4]:
+
+| node_fn value | Reading | Action |
+|---|---|---|
+| `0x1146D` (= fn@0x1146C wlc ISR with thumb bit) | Confirms 0x96F48 IS the wlc ISR node — proceed with chain walk | Continue chain reads |
+| Other non-zero | 0x96F48 is a DIFFERENT scheduler node (T274's inference wrong) | Log fn value; T291 follow-up to identify node and walk linked list |
+| 0 | Node not yet populated at this stage | Re-time PROBE-A later |
+
+If node_fn check passes, possible BASE values from chain walk:
 
 | BASE value | Reading | Next step |
 |---|---|---|
@@ -31,13 +39,13 @@
 | `[stop=*-out-of-TCM]` | Chain broke at intermediate level — wlc_callback_ctx not yet populated | Stage too early, re-time later. Stop-name tells which level |
 | Other | Unexpected — surface to advisor | |
 
-**PROBE-B** — possible chipcommon-write outcomes:
+**PROBE-B** — possible chipcommon-write outcomes (CC.BCAST_DATA at 0x54):
 
 | `readback` value | Reading | Next step |
 |---|---|---|
 | `0xDEADBEEF` | Chipcommon writes work fine. The MAILBOXMASK silent-drop is PCIE2+0x4C-specific. | If H1 resolves to chipcommon, host-write to wake gate should work. Plan T291 wake-trigger fire. |
 | `_orig` (unchanged) | Chipcommon writes silently drop just like PCIE2+0x4C does. | Major problem: "find the BASE then write to it" path is structurally blocked at this chip's current state. Need to find a different path entirely. |
-| `0x00000000` | Register gets reset on read or write. | GPIOPULLUP may be RO on this rev. Re-pick a known-RW register for next fire. |
+| `0x00000000` | Register gets reset on read or write. | BCAST_DATA may be cleared by reads or have implicit-clear semantics. Re-pick a known-RW register for next fire. |
 | Other partial value | Some bits land, others don't (e.g., GPIOPULLUP has bit-write masks). | Indicates RMW-with-mask register; informative but not dispositive of "do writes work generally" |
 | `restored != _orig` | Restore failed — chip state may be perturbed | Cold cycle required after fire. Worth investigating why restore didn't take. |
 
@@ -88,8 +96,8 @@ If the machine wedges before journalctl runs (expected per T270-BASELINE late-la
 
 ### Probe behavior summary
 
-- **PROBE-A** fires at all stages from `pre-write (pre-set_active)` through every T287/T278 stage hook (t+500ms / t+5s / t+30s / t+90s). Read-only. One pr_emerg line per fire showing `[stop=...]` flag and 5 chain values. Pre-set_active stages will likely show chain-stop at wcc level (scheduler node not yet populated by fw); post-set_active stages should show progressively populated chain.
-- **PROBE-B** fires at the same stages. RMW-and-restore on CC.GPIOPULLUP. Two pr_emerg lines per fire (one with values; the other is internal `select_core` noise). Each fire takes 5 BAR0 transactions plus 1 config-space save+restore.
+- **PROBE-A** fires at every stage where the existing T287/T288A macros fire — `pre-write (pre-set_active)` / `post-write (pre-set_active)` / `post-set_active` / `post-T276-poll` / `post-T278-initial-dump` / and every T278 stage hook (t+500ms / t+5s / t+30s / t+90s). Read-only. One pr_emerg line per fire with `[stop=...]` flag, `node_fn`, and 5 chain values. Pre-set_active stages will likely show `[wrong-node-fn]` or `[wcc-out-of-TCM]` (scheduler node not yet populated); post-set_active stages should show progressively populated chain.
+- **PROBE-B** fires at **2 stages only**: `post-set_active` and `post-T276-poll` (advisor #3 — 2 samples sufficient to discriminate; halves printk volume from B). RMW-and-restore on CC.BCAST_DATA. One pr_emerg line per fire. Each fire takes 5 BAR0 transactions plus 1 config-space save+restore.
 
 ### Pre-fire checklist (CLAUDE.md)
 

@@ -1035,11 +1035,11 @@ MODULE_PARM_DESC(bcm4360_test288a_wrap_read, "BCM4360 test.288a: at each T287 st
 /* T290 module params — both gated separately so either can run alone. */
 static int bcm4360_test290a_chain;
 module_param(bcm4360_test290a_chain, int, 0644);
-MODULE_PARM_DESC(bcm4360_test290a_chain, "BCM4360 test.290a: walk wlc_callback_ctx chain via 5 TCM reads — TCM[0x96F48+8] then [+0x18][+8][+0x10][+0x88] — to resolve wake-gate BASE. Defensive TCM-range checks at each level. READ-ONLY. (1=enable, 0=off)");
+MODULE_PARM_DESC(bcm4360_test290a_chain, "BCM4360 test.290a: walk wlc_callback_ctx chain — confirm node_fn at TCM[0x96F48+4] is 0x1146D (wlc ISR), then TCM[+8][+0x18][+8][+0x10][+0x88] to resolve wake-gate BASE. Defensive TCM-range checks at each level. READ-ONLY. (1=enable, 0=off)");
 
 static int bcm4360_test290b_cc_write;
 module_param(bcm4360_test290b_cc_write, int, 0644);
-MODULE_PARM_DESC(bcm4360_test290b_cc_write, "BCM4360 test.290b: chipcommon write-and-readback test. Saves BAR0_WINDOW, selects CHIPCOMMON, RMW-and-restore on CC.GPIOPULLUP (0x58) with sentinel 0xDEADBEEF. Tests whether host-side chipcommon writes silently drop like PCIE2+0x4C MAILBOXMASK does (T241/T280/T284). (1=enable, 0=off)");
+MODULE_PARM_DESC(bcm4360_test290b_cc_write, "BCM4360 test.290b: chipcommon write-and-readback test. Saves BAR0_WINDOW, selects CHIPCOMMON, RMW-and-restore on CC.BCAST_DATA (0x54 — pure scratch) with sentinel 0xDEADBEEF. Tests whether host-side chipcommon writes silently drop like PCIE2+0x4C MAILBOXMASK does (T241/T280/T284). Wired at post-set_active + post-T276-poll only. (1=enable, 0=off)");
 
 #define BCM4360_T288A_CC_WRAP_BASE	0x18100000
 #define BCM4360_T288A_PCIE2_WRAP_BASE	0x18103000
@@ -1081,61 +1081,78 @@ MODULE_PARM_DESC(bcm4360_test290b_cc_write, "BCM4360 test.290b: chipcommon write
  * later in this file. */
 
 /* BCM4360 test.290a: walk wlc_callback_ctx chain to resolve wake-gate
- * BASE address (= flag_struct[+0x88] per fn@0x2309c). Per T255/T256, the
- * wlc ISR scheduler node lives at TCM[0x96F48]; its arg field
- * (TCM[0x96F48+8]) IS wlc_callback_ctx. From there, walk:
- *   wlc_callback_ctx[+0x18] → wlc_pub
- *   wlc_pub[+8]            → dispatch_ctx
- *   dispatch_ctx[+0x10]    → flag_struct
- *   flag_struct[+0x88]     → BASE (the wake-gate register-set base)
+ * BASE address (= flag_struct[+0x88] per fn@0x2309c).
+ *
+ * Per T255/T256, the pciedngl_isr scheduler node had next=0x96F48
+ * (pointing to the NEXT linked-list entry — inferred to be the wlc ISR
+ * node per T274 but NOT verified at runtime). PROBE-A reads the fn
+ * field at TCM[0x96F48+4] FIRST: if it equals 0x1146D (fn@0x1146C with
+ * thumb bit set) the inference holds and we proceed to walk the chain.
+ * Otherwise we log the actual fn value so a follow-up can identify what
+ * the node IS or follow the next pointer.
+ *
+ * Chain (after fn confirmation):
+ *   wlc_callback_ctx = TCM[0x96F48 + 8]
+ *   wlc_pub          = TCM[wlc_callback_ctx + 0x18]
+ *   dispatch_ctx     = TCM[wlc_pub + 8]
+ *   flag_struct      = TCM[dispatch_ctx + 0x10]
+ *   BASE             = TCM[flag_struct + 0x88]
  * Then [BASE + 0x168] is the pending-events register fw waits on.
  *
  * Defensive: each intermediate ptr range-checked against TCM size
- * (0..0xA0000). If out of range, log progress so far and stop — bad
- * intermediate ptr means scheduler node not yet populated (pre-set_active
- * stages) or chain layout is different from expected.
+ * (0..0xA0000). If out of range, log progress so far and stop. Causes:
+ *   - bad fn at 0x96F48+4 → wrong node (advisor concern #2)
+ *   - chain-stop at any intermediate → scheduler node not yet
+ *     populated (pre-set_active stages) OR layout differs from expected
  *
  * READ-ONLY. T287c-class infrastructure. */
 #define BCM4360_T290A_CHAIN(tag) do { \
 	if (bcm4360_test290a_chain) { \
-		u32 _wcc, _wpub = 0, _dc = 0, _fs = 0, _base = 0; \
+		u32 _node_fn, _wcc = 0, _wpub = 0, _dc = 0, _fs = 0, _base = 0; \
 		const char *_stop = "complete"; \
-		_wcc = brcmf_pcie_read_ram32(devinfo, 0x96F48 + 8); \
-		if (_wcc == 0 || _wcc >= 0xA0000) { \
-			_stop = "wcc-out-of-TCM"; \
+		_node_fn = brcmf_pcie_read_ram32(devinfo, 0x96F48 + 4); \
+		if (_node_fn != 0x1146D) { \
+			_stop = "wrong-node-fn-not-wlc-isr"; \
 		} else { \
-			_wpub = brcmf_pcie_read_ram32(devinfo, _wcc + 0x18); \
-			if (_wpub == 0 || _wpub >= 0xA0000) { \
-				_stop = "wpub-out-of-TCM"; \
+			_wcc = brcmf_pcie_read_ram32(devinfo, 0x96F48 + 8); \
+			if (_wcc == 0 || _wcc >= 0xA0000) { \
+				_stop = "wcc-out-of-TCM"; \
 			} else { \
-				_dc = brcmf_pcie_read_ram32(devinfo, _wpub + 8); \
-				if (_dc == 0 || _dc >= 0xA0000) { \
-					_stop = "dc-out-of-TCM"; \
+				_wpub = brcmf_pcie_read_ram32(devinfo, _wcc + 0x18); \
+				if (_wpub == 0 || _wpub >= 0xA0000) { \
+					_stop = "wpub-out-of-TCM"; \
 				} else { \
-					_fs = brcmf_pcie_read_ram32(devinfo, \
-								    _dc + 0x10); \
-					if (_fs == 0 || _fs >= 0xA0000) { \
-						_stop = "fs-out-of-TCM"; \
+					_dc = brcmf_pcie_read_ram32(devinfo, _wpub + 8); \
+					if (_dc == 0 || _dc >= 0xA0000) { \
+						_stop = "dc-out-of-TCM"; \
 					} else { \
-						_base = brcmf_pcie_read_ram32(devinfo, \
-									      _fs + 0x88); \
+						_fs = brcmf_pcie_read_ram32(devinfo, \
+									    _dc + 0x10); \
+						if (_fs == 0 || _fs >= 0xA0000) { \
+							_stop = "fs-out-of-TCM"; \
+						} else { \
+							_base = brcmf_pcie_read_ram32(devinfo, \
+										      _fs + 0x88); \
+						} \
 					} \
 				} \
 			} \
 		} \
-		pr_emerg("BCM4360 test.290a: %s [%s] wcc=0x%08x wpub=0x%08x dc=0x%08x fs=0x%08x base=0x%08x\n", \
-			 tag, _stop, _wcc, _wpub, _dc, _fs, _base); \
+		pr_emerg("BCM4360 test.290a: %s [%s] node_fn=0x%08x wcc=0x%08x wpub=0x%08x dc=0x%08x fs=0x%08x base=0x%08x\n", \
+			 tag, _stop, _node_fn, _wcc, _wpub, _dc, _fs, _base); \
 	} \
 } while (0)
 
 /* BCM4360 test.290b: chipcommon write-and-readback test. Sanity-check
  * whether host-side chipcommon MMIO writes silently drop like PCIE2+0x4C
- * MAILBOXMASK does (T241/T280/T284). Picks BCMA_CC_GPIOPULLUP at +0x58
- * (R/W per upstream chipcregs struct, no observable side effects on this
- * chip with no GPIOs configured). Pattern:
+ * MAILBOXMASK does (T241/T280/T284). Picks BCMA_CC_BCAST_DATA at +0x54
+ * (broadcast-data scratch register; no broadcast occurs without setting
+ * BCMA_CC_BCAST_ADDR at +0x50 first, so writes are pure scratch with no
+ * observable side effect — advisor-recommended swap from GPIOPULLUP to
+ * eliminate the "no side effects" inference). Pattern:
  *   1. Save BAR0_WINDOW
  *   2. select_core(CHIPCOMMON)
- *   3. Read original GPIOPULLUP value
+ *   3. Read original BCAST_DATA value
  *   4. Write 0xDEADBEEF
  *   5. Read back — verifies whether write landed
  *   6. Restore original
@@ -1149,21 +1166,23 @@ MODULE_PARM_DESC(bcm4360_test290b_cc_write, "BCM4360 test.290b: chipcommon write
  *   readback == 0          → register reset behavior
  *   readback != orig|DEADBEEF → partial / RMW-with-bit-mask
  *
- * READ-MOSTLY (one careful write + restore). */
+ * READ-MOSTLY (one careful write + restore). Wired only at
+ * post-set_active and post-T276-poll stages — 2 samples sufficient to
+ * answer the discriminator (advisor's #3 concern about printk volume). */
 #define BCM4360_T290B_CC_WRITE(tag) do { \
 	if (bcm4360_test290b_cc_write) { \
 		u32 _saved_win, _orig, _readback, _restore_check; \
 		pci_read_config_dword(devinfo->pdev, \
 			BRCMF_PCIE_BAR0_WINDOW, &_saved_win); \
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON); \
-		_orig = brcmf_pcie_read_reg32(devinfo, 0x58); \
-		brcmf_pcie_write_reg32(devinfo, 0x58, 0xDEADBEEF); \
-		_readback = brcmf_pcie_read_reg32(devinfo, 0x58); \
-		brcmf_pcie_write_reg32(devinfo, 0x58, _orig); \
-		_restore_check = brcmf_pcie_read_reg32(devinfo, 0x58); \
+		_orig = brcmf_pcie_read_reg32(devinfo, 0x54); \
+		brcmf_pcie_write_reg32(devinfo, 0x54, 0xDEADBEEF); \
+		_readback = brcmf_pcie_read_reg32(devinfo, 0x54); \
+		brcmf_pcie_write_reg32(devinfo, 0x54, _orig); \
+		_restore_check = brcmf_pcie_read_reg32(devinfo, 0x54); \
 		pci_write_config_dword(devinfo->pdev, \
 			BRCMF_PCIE_BAR0_WINDOW, _saved_win); \
-		pr_emerg("BCM4360 test.290b: %s CC.GPIOPULLUP orig=0x%08x wrote=0xDEADBEEF readback=0x%08x restored=0x%08x (saved_win=0x%08x)\n", \
+		pr_emerg("BCM4360 test.290b: %s CC.BCAST_DATA orig=0x%08x wrote=0xDEADBEEF readback=0x%08x restored=0x%08x (saved_win=0x%08x)\n", \
 			 tag, _orig, _readback, _restore_check, _saved_win); \
 	} \
 } while (0)
@@ -1187,7 +1206,8 @@ MODULE_PARM_DESC(bcm4360_test290b_cc_write, "BCM4360 test.290b: chipcommon write
 		BCM4360_T287_READ_SCHED("stage " tag); \
 		BCM4360_T288A_READ_WRAPS("stage " tag); \
 		BCM4360_T290A_CHAIN("stage " tag); \
-		BCM4360_T290B_CC_WRITE("stage " tag); \
+		/* T290B excluded from T278 stage hook per advisor #3 — \
+		 * 2 samples (post-set_active + post-T276-poll) sufficient */ \
 	} \
 } while (0)
 
@@ -4326,11 +4346,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				 * pre-set_active MBM writes work. Open question:
 				 * does the pre-set mask survive fw init? */
 				if (bcm4360_test284_premask_enable) {
-					BCM4360_T284_READ_MBM("pre-write (pre-set_active)"); BCM4360_T285_READ_CC("pre-write (pre-set_active)"); BCM4360_T287_READ_SCHED("pre-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("pre-write (pre-set_active)"); BCM4360_T290A_CHAIN("pre-write (pre-set_active)"); BCM4360_T290B_CC_WRITE("pre-write (pre-set_active)");
+					BCM4360_T284_READ_MBM("pre-write (pre-set_active)"); BCM4360_T285_READ_CC("pre-write (pre-set_active)"); BCM4360_T287_READ_SCHED("pre-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("pre-write (pre-set_active)"); BCM4360_T290A_CHAIN("pre-write (pre-set_active)");
 					pr_emerg("BCM4360 test.284: calling brcmf_pcie_intr_enable (pre-set_active — writes MBM = 0xFF0300)\n");
 					brcmf_pcie_intr_enable(devinfo);
 					pr_emerg("BCM4360 test.284: brcmf_pcie_intr_enable returned\n");
-					BCM4360_T284_READ_MBM("post-write (pre-set_active)"); BCM4360_T285_READ_CC("post-write (pre-set_active)"); BCM4360_T287_READ_SCHED("post-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("post-write (pre-set_active)"); BCM4360_T290A_CHAIN("post-write (pre-set_active)"); BCM4360_T290B_CC_WRITE("post-write (pre-set_active)");
+					BCM4360_T284_READ_MBM("post-write (pre-set_active)"); BCM4360_T285_READ_CC("post-write (pre-set_active)"); BCM4360_T287_READ_SCHED("post-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("post-write (pre-set_active)"); BCM4360_T290A_CHAIN("post-write (pre-set_active)");
 				}
 
 				pr_emerg("BCM4360 test.238: calling brcmf_chip_set_active resetintr=0x%08x (ultra-extended ladder t+120s)\n",
@@ -4475,7 +4495,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							"POST-POLL (full)",
 							t278_ptr,
 							&devinfo->t278_prev_write_idx);
-						BCM4360_T284_READ_MBM("post-T278-initial-dump"); BCM4360_T285_READ_CC("post-T278-initial-dump"); BCM4360_T287_READ_SCHED("post-T278-initial-dump"); BCM4360_T288A_READ_WRAPS("post-T278-initial-dump"); BCM4360_T290A_CHAIN("post-T278-initial-dump"); BCM4360_T290B_CC_WRITE("post-T278-initial-dump");
+						BCM4360_T284_READ_MBM("post-T278-initial-dump"); BCM4360_T285_READ_CC("post-T278-initial-dump"); BCM4360_T287_READ_SCHED("post-T278-initial-dump"); BCM4360_T288A_READ_WRAPS("post-T278-initial-dump"); BCM4360_T290A_CHAIN("post-T278-initial-dump");
 					} else if (bcm4360_test278_console_periodic) {
 						pr_emerg("BCM4360 test.278: requires bcm4360_test277_console_decode=1; skipping\n");
 					}
