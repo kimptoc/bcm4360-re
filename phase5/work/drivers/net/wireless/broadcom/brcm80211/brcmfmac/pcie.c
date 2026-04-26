@@ -1041,6 +1041,10 @@ static int bcm4360_test290b_cc_write;
 module_param(bcm4360_test290b_cc_write, int, 0644);
 MODULE_PARM_DESC(bcm4360_test290b_cc_write, "BCM4360 test.290b: chipcommon write-and-readback test. Saves BAR0_WINDOW, selects CHIPCOMMON, RMW-and-restore on CC.BCAST_DATA (0x54 — pure scratch) with sentinel 0xDEADBEEF. Tests whether host-side chipcommon writes silently drop like PCIE2+0x4C MAILBOXMASK does (T241/T280/T284) AND whether the wedge in T290 is fw-state-dependent (pre-set_active = ARM halted). Wired at pre-set_active (pre+post-write), post-set_active, post-T276-poll. Pre-set_active sites gated by test284_premask_enable. (1=enable, 0=off)");
 
+static int bcm4360_test294_cc_ro_probe;
+module_param(bcm4360_test294_cc_ro_probe, int, 0644);
+MODULE_PARM_DESC(bcm4360_test294_cc_ro_probe, "BCM4360 test.294: READ-ONLY chipcommon discriminator probe at post-T276-poll. Saves BAR0_WINDOW, selects CHIPCOMMON, READS BAR0_WINDOW BACK to verify select_core landed, reads chipid (CC+0x00 — known-stable), reads BCAST_DATA (CC+0x54) twice for stability. NO writes to chipcommon. Discriminates T293 firing-#4's orig=0xffffffff anomaly: (a) select_core silently failed → window stays at saved value; (b) BCAST_DATA genuinely went 0→0xffffffff during 2s poll → chipid reads valid (0x15034360 or similar with 0x4360 low bits) but BCAST_DATA=0xffffffff; (c) chipcommon access path degraded → all reads return 0xffffffff. Wired at post-T276-poll only. (1=enable, 0=off)");
+
 #define BCM4360_T288A_CC_WRAP_BASE	0x18100000
 #define BCM4360_T288A_PCIE2_WRAP_BASE	0x18103000
 
@@ -1192,6 +1196,65 @@ MODULE_PARM_DESC(bcm4360_test290b_cc_write, "BCM4360 test.290b: chipcommon write
 			BRCMF_PCIE_BAR0_WINDOW, _saved_win); \
 		pr_emerg("BCM4360 test.290b: %s CC.BCAST_DATA orig=0x%08x wrote=0xDEADBEEF readback=0x%08x restored=0x%08x (saved_win=0x%08x)\n", \
 			 tag, _orig, _readback, _restore_check, _saved_win); \
+	} \
+} while (0)
+
+/* BCM4360 test.294: READ-ONLY chipcommon discriminator probe.
+ *
+ * Designed in response to T293 firing #4 (post-T276-poll): T290B wedged at
+ * anchor-3→anchor-4 (during write of 0xDEADBEEF) with anomalous orig=0xffffffff
+ * at anchor-3 (prior firings read 0x00000000). Three live hypotheses for
+ * orig=0xffffffff:
+ *   (a) select_core(CHIPCOMMON) silently failed; BAR0_WINDOW stayed at
+ *       saved value (0x18102000 = ARM-CR4 wrapper at this timing); read+
+ *       write hit ARM-CR4 wrapper while ARM was running → wedge
+ *   (b) Chipcommon BCAST_DATA genuinely went 0→0xffffffff during 2s poll
+ *   (c) Chipcommon access path degraded after fw scheduler dispatch
+ *
+ * This macro is the surgical discriminator: zero writes to chipcommon
+ * (only PCI config_dword writes for save+restore of BAR0_WINDOW), captures
+ * the BAR0_WINDOW readback after select_core, and reads a known-stable
+ * register (chipid at +0x00) to verify chipcommon access works at all.
+ *
+ * Discriminator outcomes:
+ *   bar0_after = saved (NOT 0x18000000) → (a) select_core silently failed
+ *   bar0_after = 0x18000000 + chipid valid (~0x15034360) + bcast=0xffffffff
+ *     → (b) BCAST_DATA genuinely went 0→0xffffffff during 2s poll
+ *   bar0_after = 0x18000000 + chipid=0xffffffff
+ *     → (c) chipcommon access path degraded; all reads return all-1s
+ *   bar0_after = 0x18000000 + chipid valid + bcast=0x00000000
+ *     → unexpected: T293 firing #4 was a one-off; rerun T290B to reproduce
+ *
+ * 11 anchors (a0..a10) bracket each step so a wedge anywhere in the
+ * macro pinpoints the failing access. */
+#define BCM4360_T294_CC_RO_PROBE(tag) do { \
+	if (bcm4360_test294_cc_ro_probe) { \
+		u32 _t294_saved_win, _t294_bar0_after, _t294_chipid; \
+		u32 _t294_bcast1, _t294_bcast2, _t294_restore_check; \
+		pr_emerg("BCM4360 test.294: %s t294 a0 (entry; about to save BAR0_WINDOW)\n", tag); \
+		pci_read_config_dword(devinfo->pdev, \
+			BRCMF_PCIE_BAR0_WINDOW, &_t294_saved_win); \
+		pr_emerg("BCM4360 test.294: %s t294 a1 (saved BAR0_WINDOW=0x%08x; about to select_core(CHIPCOMMON))\n", tag, _t294_saved_win); \
+		brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON); \
+		pr_emerg("BCM4360 test.294: %s t294 a2 (selected CHIPCOMMON; about to read BAR0_WINDOW back)\n", tag); \
+		pci_read_config_dword(devinfo->pdev, \
+			BRCMF_PCIE_BAR0_WINDOW, &_t294_bar0_after); \
+		pr_emerg("BCM4360 test.294: %s t294 a3 (BAR0_WINDOW after select=0x%08x; expected 0x18000000)\n", tag, _t294_bar0_after); \
+		pr_emerg("BCM4360 test.294: %s t294 a4 (about to read chipid at CC+0x00)\n", tag); \
+		_t294_chipid = brcmf_pcie_read_reg32(devinfo, 0x00); \
+		pr_emerg("BCM4360 test.294: %s t294 a5 (chipid=0x%08x; expected ~0x15034360 with 0x4360 low bits)\n", tag, _t294_chipid); \
+		pr_emerg("BCM4360 test.294: %s t294 a6 (about to read BCAST_DATA #1 at CC+0x54)\n", tag); \
+		_t294_bcast1 = brcmf_pcie_read_reg32(devinfo, 0x54); \
+		pr_emerg("BCM4360 test.294: %s t294 a7 (BCAST_DATA #1=0x%08x)\n", tag, _t294_bcast1); \
+		pr_emerg("BCM4360 test.294: %s t294 a8 (about to read BCAST_DATA #2 — stability check)\n", tag); \
+		_t294_bcast2 = brcmf_pcie_read_reg32(devinfo, 0x54); \
+		pr_emerg("BCM4360 test.294: %s t294 a9 (BCAST_DATA #2=0x%08x)\n", tag, _t294_bcast2); \
+		_t294_restore_check = _t294_saved_win; \
+		pci_write_config_dword(devinfo->pdev, \
+			BRCMF_PCIE_BAR0_WINDOW, _t294_restore_check); \
+		pr_emerg("BCM4360 test.294: %s t294 a10 (restored BAR0_WINDOW=0x%08x)\n", tag, _t294_restore_check); \
+		pr_emerg("BCM4360 test.294: %s SUMMARY saved_win=0x%08x bar0_after_select=0x%08x chipid=0x%08x bcast1=0x%08x bcast2=0x%08x\n", \
+			 tag, _t294_saved_win, _t294_bar0_after, _t294_chipid, _t294_bcast1, _t294_bcast2); \
 	} \
 } while (0)
 
@@ -4418,7 +4481,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						 brcmf_pcie_read_reg32(devinfo,
 							BRCMF_PCIE_PCIE2REG_MAILBOXINT));
 
-					BCM4360_T284_READ_MBM("post-T276-poll"); BCM4360_T285_READ_CC("post-T276-poll"); BCM4360_T287_READ_SCHED("post-T276-poll"); BCM4360_T288A_READ_WRAPS("post-T276-poll"); BCM4360_T290A_CHAIN("post-T276-poll"); BCM4360_T290B_CC_WRITE("post-T276-poll");
+					BCM4360_T284_READ_MBM("post-T276-poll"); BCM4360_T285_READ_CC("post-T276-poll"); BCM4360_T287_READ_SCHED("post-T276-poll"); BCM4360_T288A_READ_WRAPS("post-T276-poll"); BCM4360_T290A_CHAIN("post-T276-poll"); BCM4360_T294_CC_RO_PROBE("post-T276-poll"); BCM4360_T290B_CC_WRITE("post-T276-poll");
 
 					/* BCM4360 test.277: post-poll console decode.
 					 * Re-read the pointer fw published at si[+0x010]
