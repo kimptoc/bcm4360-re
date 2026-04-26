@@ -5,7 +5,77 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 09:55 BST — **PRE-FIRE.288c: substrate ready (cold cycle + SMC reset done by user; uptime 3 min; canonical PCIe markers clean — MAbort-, CommClk+, LnkSta Gen1 x1; sticky DevSta CorrErr+/UnsupReq+ from boot training, not wedge leftovers; 0 brcmfmac modules loaded; build has 8 anchor strings compiled in). About to fire T288c per PRE-TEST.288c block — re-fire of T288a anchored variant with `bcm4360_test288a_wrap_read=1`. Will identify which sub-step in BCM4360_T288A_READ_WRAPS macro wedges the backplane. Expected to wedge per H1.**)
+## Current state (2026-04-26 10:05 BST — **POST-TEST.288c: NULL FIRE. T288c wedged at fw-download chunk-1 (`test.225` line 1 of ~108) — well upstream of the T288a anchored macro's first invocation site. Zero `anchor-` lines logged. Zero `test.276` markers. The discriminator table's "implausible" row (wedge before macro) FIRED. With 1/4 cold-cycle fires reaching t+90s and 3/4 wedging at three different upstream points (T288a after T276, T288a' at OTP-bypass, T288c at fw chunk-1), the T288b-based "T288a binary innocent" inference rests on n=1 and is now too thin to support the H1 confirmation. KEY_FINDINGS row downgraded from CONFIRMED-by-exclusion → LIVE. SMC reset done; substrate is recovering. Need to reconcile design before next fire — substrate noise floor is drowning the wrap-read signal.**)
+
+---
+
+## POST-TEST.288c (2026-04-26 09:57 BST fire, boot -1 — **NULL FIRE. Wedge at `test.225: wrote 1024 words` — chunk-1 of fw download (~108 chunks total). ZERO anchor lines. ZERO T276/T284/T287/T288a markers. Macro never reached. Cannot test H1 (which sub-step in wrap-read macro wedges) because wrap-read macro never fires. The discriminator table's "implausible — T288b proved upstream is clean" row materialized; T288b's clean upstream is now provably an n=1 sample, not a property of the path.**)
+
+### Timeline (from `phase5/logs/test.288c.journalctl.txt`, boot -1)
+
+- `09:52:17` boot start (fresh after user cold cycle + SMC reset)
+- `09:57:09` insmod entry (`test.188 module_init entry`) — 5 min uptime, well within widest-clean-window
+- `09:57:09..16` chip_attach → core enumeration (test.218 6 cores) → buscore_reset → ARM CR4 halt → get_raminfo → PMU WARs → ASPM/LnkCtl/settings/bus alloc → brcmf_alloc → fw_get_firmwares (NORMAL — same trajectory as T288b)
+- `09:57:16..17` `test.162 brcmf_pcie_setup CALLBACK INVOKED ret=0` → setup-entry → pre-attach → test.128 brcmf_pcie_attach ENTRY/RETURN → CLK_CONTROL/SBMBX/PMCR_REFUP (test.194)
+- `09:57:18..20` post-attach → fw-ptr-extract → get_raminfo → adjust_ramsize → pre-download
+- `09:57:21..22` test.218 pre-download CR4 clk_ctl_st=`0x07030040` → D11 IN_RESET=YES (clock-control verified)
+- `09:57:22..23` `test.163 before brcmf_pcie_download_fw_nvram (442KB BAR2 write)` → test.142 enter_download_state → debug rambase=0x0 ramsize=0xa0000
+- `09:57:24` `test.138 pre-BAR2-ioread32 = 0x02dd4384 (real value — BAR2 accessible)`
+- `09:57:25` test.233 PRE-READ TCM[0x90000]=`0xa42709e1` TCM[0x90004]=`0xb0dd4512` (uninitialized noise — not preserved markers, normal post-cold-cycle)
+- `09:57:25` test.218 pre-halt CR4 clk_ctl_st unchanged → D11 IN_RESET=YES
+- `09:57:25` `test.188 re-halting ARM CR4 via brcmf_chip_set_passive` → post-halt CPUHALT=YES (chip ready for ramwrite)
+- `09:57:25` `test.188 starting chunked fw write, total_words=110558 (442233 bytes)` (~108 chunks @ 4096 bytes each expected)
+- `09:57:26` **LAST LINE: `test.225: wrote 1024 words (4096 bytes) last=0xb19c6018 readback=0xb19c6018 OK`** (chunk 1 of ~108)
+- [no further log output; machine wedged silently — boot ended same second]
+- `09:57:26` boot -1 ended (per journalctl --list-boots)
+- `10:02:22` boot 0 (recovery — but only after user-initiated SMC reset; watchdog did not auto-recover here)
+
+### Discriminator outcome (per PRE-TEST.288c table)
+
+The "Last anchor seen" column has NO match — zero anchors fired. The fallback row "(none — wedge before macro) → upstream of T288a — implausible (T288b proved upstream is clean with this binary)" is the row that fired. **The "implausible" classification was based on n=1; primary source has now contradicted it.**
+
+Three crystallised facts that SUPERSEDE / WEAKEN POST-TEST.288b's inferences:
+
+1. **The path upstream of the T288a macro is NOT reliably clean even on cold-cycled substrate.** T288c shows wedge at fw-download chunk-1 — the same chunked-write path T288b traversed cleanly through ~108 chunks. Same binary, same flag-0/flag-1 difference (which only affects code AFTER chunk write completes), same substrate-pre-fire markers. **Substrate flakiness wedges at random points along the same code path.**
+
+2. **The "T288a binary innocent" claim from POST-TEST.288b rested on n=1 success.** With 4 fires (T288a, T288a', T288b, T288c) all using the same binary and 3 of 4 wedging at three different upstream points (after T276; at OTP-bypass; at fw chunk-1), the success rate is 25% under "cold-cycle substrate" conditions. n=1 is not sufficient evidence to declare the macro the cause of T288a's wedge.
+
+3. **The "T288a wrapper-read wedges backplane" (H1) confirmation-by-exclusion is FALSIFIED at the inference level.** The exclusion required a clean baseline + a wedging variant; the baseline has been shown not to be reliable. H1 may still be true, but T288b alone cannot prove it. Need either (a) multiple flag=0 baselines to characterize substrate noise floor, or (b) a probe earlier in the path to fire before the fragile section.
+
+### Crash characterisation (chunk-1 wedge)
+
+- Final journal line at 09:57:26 (test.225 chunk-1 OK), boot ended same second → wedge essentially instant after chunk-1 logged
+- ZERO crash markers in journal (no AER UR/CE — `pci=noaer`; no NMI; no Oops; no Call Trace) — silent backplane hang
+- BAR2 ramwrite path ran chunk-1 successfully with valid readback (`0xb19c6018` matches) — chunk-1 ITSELF is not the trigger; the wedge happens between chunk-1 logged and chunk-2 starting
+- This is structurally similar to T288a' (silent wedge before macro fires); progress point is different (T288a' at OTP-bypass test.160, T288c at chunk-1 test.225)
+- Watchdog did NOT auto-recover this fire; user had to SMC-reset. New observation — prior wedges had auto-recovery (KEY_FINDINGS substrate row says "n>30 watchdog recoveries today"). This wedge style may be different.
+
+### KEY_FINDINGS impact (load-bearing)
+
+DOWNGRADE: KEY_FINDINGS row "T288a runtime wrapper-base BAR0 reads at PRE-set_active wedge BCM4360 backplane" from **CONFIRMED (by exclusion)** → **LIVE / UNDER-EVIDENCED**. Current evidence base is n=1 baseline (T288b) vs n=3 wedges with no anchor-discrimination. Substrate noise dominates. Rewrite will be done in this session.
+
+ADD: New finding — substrate flakiness on cold-cycled BCM4360 produces wedges at random progress points along the same code path. T288 series under same binary: 1/4 fires reach t+90s. The "20–25 minute clean-window" claim in KEY_FINDINGS is too coarse — even within that window, wedges can hit at chip_attach, OTP-bypass, fw-download, post-T276, or only at the late-ladder.
+
+### Substrate (current — recovery boot)
+
+- Boot 0 since 10:02:22 BST, uptime ~3 min at this writeup
+- 0 brcmfmac modules loaded
+- 0 fires this boot
+- ⚠️ Per CLAUDE.md substrate rule: any next hardware test REQUIRES a fresh cold cycle (shutdown ≥60 s + SMC reset). User just did one for T288c; would need another. **But the substrate-noise problem can't be solved with another cold cycle alone — design needs reconciliation first.**
+
+### Build verification
+
+- `brcmfmac.ko`: 15 085 568 B, mtime 2026-04-26 00:24, identical to T288b/T288c — anchors compiled in
+- No rebuild needed for next fire IF design stays compatible
+
+### Decision needed before next fire
+
+**The single-fire-per-condition design is broken for this substrate.** Three options on the table for advisor consultation:
+- (a) Run N flag=0 baselines to characterize noise floor (e.g. N=5 fires at flag=0); only then re-fire flag=1
+- (b) Move the wrap-read probe EARLIER in the path so it fires before the fragile section (e.g. inside `brcmf_pcie_attach` immediately after BAR0/BAR2 verified)
+- (c) Decouple T288 wrap-read instrumentation from the T276 stage chain entirely — fire it at one fixed point, not at multiple stages, so a single anchor-N reading is unambiguous
+
+Advisor consultation pending — see end of this section.
 
 ---
 
@@ -258,7 +328,7 @@ H1 says T288a wrapper-base reads wedged the backplane (a real runtime difference
 
 ---
 
-## PRE-FIRE.288c (2026-04-26 09:55 BST — substrate ready)
+## PRE-FIRE.288c (2026-04-26 09:55 BST — substrate ready) [SUPERSEDED — fired and POST-TEST.288c recorded above; the "expected wedge per H1" did not materialize at H1's predicted site — wedge happened upstream of macro at fw chunk-1]
 
 - User completed cold cycle + SMC reset
 - Uptime at substrate verification: 3 min
@@ -274,7 +344,7 @@ H1 says T288a wrapper-base reads wedged the backplane (a real runtime difference
 
 ---
 
-## PRE-TEST.288c (2026-04-26 09:30 BST — **READY ON USER COLD-CYCLE CLEARANCE. Re-fire of T288a anchored variant — same binary as T288b but with `bcm4360_test288a_wrap_read=1`. Identifies WHICH sub-step in the wrapper-read macro wedges the backplane. WILL CRASH THE MACHINE per H1; cold cycle required again afterwards.**)
+## PRE-TEST.288c (2026-04-26 09:30 BST — **READY ON USER COLD-CYCLE CLEARANCE. Re-fire of T288a anchored variant — same binary as T288b but with `bcm4360_test288a_wrap_read=1`. Identifies WHICH sub-step in the wrapper-read macro wedges the backplane. WILL CRASH THE MACHINE per H1; cold cycle required again afterwards.**) [SUPERSEDED — fire wedged upstream of macro at fw chunk-1; discriminator table did not apply. POST-TEST.288c above.]
 
 ### Hypothesis
 
