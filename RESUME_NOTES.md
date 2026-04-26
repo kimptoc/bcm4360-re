@@ -5,7 +5,7 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 08:57 BST — **POST-TEST.288a' captured. T288a' wedged the host EARLIER than T288a (cutoff at `test.160 OTP-bypass`, BEFORE setup-callback fired; ZERO anchor- lines, ZERO `setup-entry`, ZERO `test.162`). The fire produced NO H1/H2 evidence — substrate is the strongest confound. Current substrate: fresh post-watchdog-reboot, uptime ~5 min, PCIe Status clean, but per CLAUDE.md only a full cold cycle (shutdown + ≥60 s + SMC reset) buys a clean ~20–25 min window. Revised plan: baseline-first (T288a flag=0) on cold-cycled substrate to discriminate substrate vs T288a-runtime as the wedge cause; only fire =1 after baseline reaches t+90s.**)
+## Current state (2026-04-26 09:16 BST — **PRE-FIRE.288b ready. User completed cold cycle + SMC reset. Substrate verified clean: D0, Gen1 x1, CommClk+, Status flags empty, uptime 2 min — within widest clean window. About to fire T288b baseline (T288a flag=0) per PRE-TEST.288b plan to discriminate substrate vs T288a-binary as the wedge cause.**)
 
 ---
 
@@ -189,6 +189,22 @@ H1 says T288a wrapper-base reads wedged the backplane (a real runtime difference
 - PCIe state: Status flag clean, no MAbort/CommClk drift visible
 - 0 fires this boot
 - Recommend: cold cycle before next fire — substrate is uncertain after a hard wedge
+
+---
+
+## PRE-FIRE.288b (2026-04-26 09:16 BST — substrate ready)
+
+- User completed cold cycle (shutdown + ≥60 s) + SMC reset
+- Uptime at substrate verification: 2 min (within widest clean window per CLAUDE.md)
+- PCIe state (sudo lspci -vvv -s 03:00.0):
+  - Status: no aborts (>TAbort- <TAbort- <MAbort- >SERR- <PERR-)
+  - D0 NoSoftRst+
+  - LnkCtl: ASPM L0s L1 Enabled, CommClk+ (clean clock)
+  - LnkSta: Speed 2.5GT/s, Width x1 (Gen1 x1 trained correctly)
+- No brcmfmac modules loaded; cfg80211 already loaded (mt76 stack — irrelevant to BCM4360 path)
+- Module: brcmfmac.ko 15.1 MB, mtime 2026-04-26 00:24 (anchors compiled in but T288a flag will be 0)
+- 0 fires this boot
+- About to fire per PRE-TEST.288b "Fire command" block below
 
 ---
 
