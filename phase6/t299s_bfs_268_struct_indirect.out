@@ -1,0 +1,167 @@
+=== (1) BFS from fn@0x268 (true bootstrap entry) ===
+Reached fns from fn@0x268 BFS: 311
+
+Key targets reached:
+  ★ 0x440 (fn@0x440)
+      path: bootstrap → fn@0x440 (bootstrap pre-main)
+  ★ 0x11d0 (fn@0x11d0)
+      path: bootstrap → real C main → fn@0x11d0 (tail from main)
+  ✗ NOT reached: 0x1c98 (pciedngl_isr)
+  ✗ NOT reached: 0x1e90 (pciedngl_probe)
+  ✗ NOT reached: 0x2f18 (bcm_olmsg_init)
+  ✗ NOT reached: 0x4718 (set_callback)
+  ✗ NOT reached: 0x113b4 (ACTION dispatcher)
+  ✗ NOT reached: 0x11648 (wl_open)
+  ✗ NOT reached: 0x11704 (init-shim → 142E0)
+  ✗ NOT reached: 0x11790 (wrap_ARM)
+  ✗ NOT reached: 0x142e0 (0x48080-writer)
+  ✗ NOT reached: 0x17ed6 (wlc_bmac_up_finish)
+  ✗ NOT reached: 0x18ffc (wlc_up)
+  ✗ NOT reached: 0x2312c (wlc_dpc)
+  ✗ NOT reached: 0x233e8 (wake-mask ARM impl)
+  ★ 0x63c24 (fn@0x63c24 (ISR register?))
+      path: bootstrap → real C main → fn@0x642fc → fn@0x63d9c → fn@0x63cc0 → fn@0x63c24
+  ✗ NOT reached: 0x64248 (fn@0x64248)
+  ★ 0x66e64 (fn@0x66e64 (alloc?))
+      path: bootstrap → real C main → fn@0x642fc → fn@0x63d9c → fn@0x66e64
+  ✗ NOT reached: 0x67358 (si_doattach_wrapper)
+  ✗ NOT reached: 0x67614 (wl_probe)
+  ✗ NOT reached: 0x6820c (wlc_bmac_attach)
+  ✗ NOT reached: 0x68a68 (wlc_attach)
+
+
+=== (2) Indirect 'blx rX' calls where rX loaded from [rN, #imm] (struct field) ===
+  Total indirect-struct call sites (in live BFS): 25
+  Unique sites: 15
+
+  First 30 indirect call sites:
+    in fn@0x642fc: blx r3  (loaded from [r3, #0x4]) at 0x644dc
+    in fn@0x642fc: blx r3  (loaded from [r3, #0x4]) at 0x644fc
+    in fn@0x642fc: blx r3  (loaded from [r3, #0x4]) at 0x6451a
+    in fn@0x250: blx r1  (loaded from [r0, #0x0]) at 0x25c
+    in fn@0x99d0: blx r5  (loaded from [r0, #0x68]) at 0x99ec
+    in fn@0x99d0: blx r3  (loaded from [r4, #0x6c]) at 0x9a18
+    in fn@0x63b38: blx r6  (loaded from [r3, #0x0]) at 0x63b54
+    in fn@0x63b38: blx r6  (loaded from [r3, #0x0]) at 0x63b78
+    in fn@0x7dc4: blx r3  (loaded from [r0, #0x8]) at 0x7dd4
+    in fn@0x27ec: blx r3  (loaded from [r0, #0x70]) at 0x2816
+    in fn@0x1878: blx r3  (loaded from [r5, #0x4]) at 0x1902
+    in fn@0x4db0: blx r3  (loaded from [r5, #0x0]) at 0x4dca
+    in fn@0x4db0: blx r3  (loaded from [r4, #0x0]) at 0x4e06
+    in fn@0x34b0: blx r3  (loaded from [r4, #0x14]) at 0x34e8
+    in fn@0x3b74: blx r3  (loaded from [r4, #0x4c]) at 0x3bba
+
+
+=== (3) Dump fn@0x11d0 (tail from main) and fn@0x440 (bootstrap pre-main) ===
+
+=========== fn@0x11d0 (tail from main) @ 0x11d0 ===========
+   0x11d0  push     {r4, lr}
+   0x11d2  mov      r4, r0
+   0x11d4  bl       #0x1c10  → fn@0x1c10
+   0x11d8  mov      r0, r4
+   0x11da  bl       #0x1c1c  → fn@0x1c1c
+   0x11de  mov      r0, r4
+   0x11e0  bl       #0x11cc  → fn@0x11cc
+   0x11e4  b        #0x11de  → tail-fn@0x11de
+   0x11e6  movs     r0, r0
+   0x11e8  push     {r4, r7, lr}
+   0x11ea  sub      sp, #0xc
+   0x11ec  mov      r3, r0
+   0x11ee  add      r7, sp, #8
+   0x11f0  mov      r4, r1
+   0x11f2  mov      r2, r4
+   0x11f4  mov      r1, r3
+   0x11f6  ldr      r0, [pc, #0x1c]  ; lit=0x40301 → fn@0x40300
+   0x11f8  mov      r3, lr
+   0x11fa  str      r7, [sp]
+   0x11fc  bl       #0xa30  → fn@0xa30
+   0x1200  svc      #0
+   0x1202  mov      r0, r4
+   0x1204  add.w    r7, r7, #4
+   0x1208  mov      sp, r7
+   0x120a  pop.w    {r4, r7, lr}
+   0x120e  b.w      #0x250  → tail-fn@0x250
+   0x1212  nop      
+   0x1214  lsls     r1, r0, #0xc
+   0x1216  movs     r4, r0
+   0x1218  push     {r4, lr}
+   0x121a  mov      r4, r0
+   0x121c  cbz      r0, #0x1248
+   0x121e  ldr      r3, [r0, #0x28]
+   0x1220  cbz      r3, #0x123e
+   0x1222  ldr      r0, [pc, #0x28]  ; lit=0x4032b → fn@0x4032a
+   0x1224  bl       #0xa30  → fn@0xa30
+   0x1228  mov      r1, r4
+   0x122a  ldr      r0, [pc, #0x24]  ; lit=0x40344
+   0x122c  ldr      r2, [r4, #0x18]
+   0x122e  ldr      r3, [r4, #0x1c]
+   0x1230  bl       #0xa30  → fn@0xa30
+   0x1234  ldr      r0, [pc, #0x1c]  ; "hndrte.c"
+   0x1236  mov.w    r1, #0x5d8
+   0x123a  bl       #0x11e8  → fn@0x11e8
+   0x123e  mov      r0, r4
+   0x1240  pop.w    {r4, lr}
+   0x1244  b.w      #0xb18  → tail-fn@0xb18
+   0x1248  pop      {r4, pc}
+    [end]
+
+=========== fn@0x440 (bootstrap, called before main) @ 0x440 ===========
+    0x440  ldr      r0, [pc, #0x88]  ; lit=0x1
+    0x442  ldr      r1, [pc, #0x8c]  ; lit=0x21c
+    0x444  str      r0, [r1]
+    0x446  mov      r1, r8
+    0x448  ldr      r2, [r1, #4]
+    0x44a  mov      r3, r2
+    0x44c  ldr      r4, [pc, #0x84]  ; lit=0xf0
+    0x44e  and.w    r3, r3, r4
+    0x452  lsr.w    r3, r3, #4
+    0x456  ldr      r4, [pc, #0x80]  ; lit=0xf
+    0x458  and.w    r2, r2, r4
+    0x45c  mov      r6, r2
+    0x45e  add      r2, r3
+    0x460  ldr      r0, [pc, #0x78]  ; lit=0x0
+    0x462  mov.w    r5, #0
+    0x466  str      r0, [r1, #0x40]
+    0x468  ldr      r3, [r1, #0x44]
+    0x46a  ldr      r4, [pc, #0x74]  ; lit=0x3f
+    0x46c  and.w    r3, r3, r4
+    0x470  add.w    r3, r3, #1
+    0x474  ldr      r4, [pc, #0x6c]  ; lit=0x2000
+    0x476  mov      r3, r3
+    0x478  mul      r3, r3, r4
+    0x47c  add      r5, r3
+    0x47e  add.w    r0, r0, #1
+    0x482  cmp      r0, r2
+    0x484  blt      #0x466
+    0x486  cmp      r5, #0
+    0x488  beq.w    #0x290
+    0x48c  mov      r1, r8
+    0x48e  mov      r2, r6
+    0x490  mov.w    r6, #0
+    0x494  ldr      r0, [pc, #0x44]  ; lit=0x0
+    0x496  str      r0, [r1, #0x40]
+    0x498  ldr      r3, [r1, #0x44]
+    0x49a  ldr      r4, [pc, #0x44]  ; lit=0x3f
+    0x49c  and.w    r3, r3, r4
+    0x4a0  add.w    r3, r3, #1
+    0x4a4  ldr      r4, [pc, #0x3c]  ; lit=0x2000
+    0x4a6  mov      r3, r3
+    0x4a8  mul      r3, r3, r4
+    0x4ac  add      r6, r3
+    0x4ae  add.w    r0, r0, #1
+    0x4b2  cmp      r0, r2
+    0x4b4  blt      #0x496
+    0x4b6  mrc      p15, #0, r2, c9, c1, #0
+    0x4ba  ldr      r1, [pc, #0x2c]  ; lit=0xfffff000
+    0x4bc  and.w    r2, r2, r1
+    0x4c0  sub.w    r2, r2, r6
+    0x4c4  add.w    r7, r5, r2
+    0x4c8  mov      r6, r2
+    0x4ca  bx       lr
+    [end]
+
+
+=== (4) Live-set discriminators ===
+  fn@0x4718 (set_callback) reached by BFS? no
+  Live set size: 311
+  Live set written to phase6/t299s_live_set.txt
