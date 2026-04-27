@@ -8,7 +8,40 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 20:48 BST — User picked DEFER fire. Three static surfaces resolved: A2-extension (gap writers, commit 49c3c35), sched+0xCC writer (commit 5465446), OOB pending-read schedule (commit 0cf433b). Headline: **OOB pending read on-dispatch ONLY** — no poller, fw needs an actual ARM exception to wake. B-variant choice now constrained by gate-stack between OOB pending bit set and fn@0x115c — kicking off 4th static subagent before any fire.
+## Current state (2026-04-27 21:00 BST — Four static surfaces resolved: gap writers (49c3c35), sched+0xCC writer (5465446), OOB pending-read schedule (0cf433b), OOB gate stack (4adaa81). Headline: **defer cycles have hit boundary**. Gate stack found 1 known-open + 1 plausibly-open + 4 unknown; Gate 1 (write semantics) is **empirical-only by agent admission**. Proposed fire: PRE-TEST.304 = gate-1 empirical probe (BAR0 read-write-readback at 0x18109100), T300-sample-1-equivalent risk profile. AWAITING USER GO/NO-GO.
+
+**Gate-stack result (commit 4adaa81, phase6/t303e_oob_gate_stack.md).** 6 gates between host writing OOB Router pending and fn@0x115c executing on ARM:
+
+| Gate | Status | Evidence |
+|---|---|---|
+| 1: Write semantics (RW1S/W1C/RO) of 0x18109100 | UNKNOWN — empirical only | Agent acknowledges "cannot be done statically". Note: agent's "Linux bcma drivers don't write OOBSELOUTA30" argument was wrong-target — OOBSELOUTA30 is at chipcommon-wrap +0x100, NOT OOB Router (0x367) +0x100. Different agents, doesn't transfer. |
+| 2: oobselouta30/74 routing enable bits | UNKNOWN | T298 confirms slots allocated but not whether they're enabled for output |
+| 3: ARM CR4 IRQ controller mask | UNKNOWN (plausibly open) | T303d's "fallthrough from exception vectors" is *thin inference* — could be missed indirect dispatch. **No empirical evidence any ISR has fired in live offload runtime** (n=8 fires across T276/T287c/T298/T299/T300/T301/T302b/T303 all show console wr_idx=587 frozen post-init; T279 H2D_MBX_0 positive control returned MAILBOXINT=0). |
+| 4: SiliconBackplane upstream path | UNKNOWN | No public docs for ARM 0x367 routing |
+| 5: fn@0x115c reachability | KNOWN-OPEN | Per T303d unconditional fallthrough |
+| 6: BAR0 accessibility to 0x18109000 | PARTIALLY-OPEN | Clean at post-set_active n=2 (T300/T301); T301 t+60s wedge open question |
+
+**Gate-1 fire decision rationale.** Cycle of static surfaces yielded all bookkeeping (gap writers + sched+0xCC) plus one decisive structural finding (on-dispatch only). No further static surface can resolve Gate 1 — the agent that found the gap admits it's empirical-only. Continuing the defer cycle is sunk cost. Proposed move:
+
+**PRE-TEST.304 — Gate-1 empirical probe.** Single BAR0 transaction sequence at post-set_active timing:
+1. Save BAR0_WINDOW
+2. `pci_write_config_dword(BAR0_WINDOW, 0x18109000)` (point at OOB Router agent — proven safe in T300/T301 sample 1 n=2)
+3. Read BAR0+0x100 (baseline pending) — expect 0x0
+4. Write BAR0+0x100 = 0xFFFFFFFF (the test write)
+5. Read BAR0+0x100 (post-write) — discriminator
+6. Restore BAR0_WINDOW
+
+Outcomes:
+- post-write read = 0xFFFFFFFF → **RW1S** → Gate 1 is RW1S; host CAN set bits → potentially fire-able B
+- post-write read = 0x0 → **W1C** OR **RO**; the bit semantics is "write-1-clears" or "ignored". Either way host cannot set bits via this register → option B via OOB Router pending is dead; need to find another wake-trigger surface
+- post-write read = 0xFF... AND console wr_idx advances OR follow-up scan shows fw state change → BONUS: partial Gate 3 evidence (downstream dispatch must have happened)
+
+Risk: identical to T300 sample 1 — single BAR0 transaction at post-set_active, OOB Router agent, no wedge in T300/T301 sample 1 (n=2 clean). Code edit needed: new test304 macro modeled after test300 with the write+readback step added. One extra BAR0 write vs T300; risk delta negligible.
+
+**Awaiting user steer.** Three options:
+1. **Approve PRE-TEST.304 as proposed** — code edit, rebuild, fire when substrate in clean window.
+2. **Modify the probe** — e.g. write specifically `0x9` (just bits 0+3) instead of `0xFFFFFFFF` to test bit-set-with-routed-bits-only, or run two separate writes.
+3. **Defer further** — request additional static work (e.g. one more pass on Gate 3 looking for explicit ARM IRQ enable code, or PMU GPIO investigation).
 
 **A2-extension result (commit 49c3c35, phase6/t303b_gap_writers.md).** Subagent identified `fn@0x64590` (core enumerator, called from si_doattach at fn@0x670d8) as the writer of all 6 populated dwords at sched+0x318..+0x32c via indexed store at address 0x6466e (`str.w r0, [r4, r3, lsl #2]` where r3 = slot+0xc6). Values come from `fn@0x2728` (EROM core-descriptor parser) — per-core revision + wrapper capability fields cached at init from EROM. One entry per host-enumerated core, slot order matches T218 exactly. **Why static scan missed it:** writer location WAS documented in phase6/t288_pcie2_reg_map.md:90 — the gap was a documentation/cross-reference miss, not an analysis miss. **Wake-question impact: zero** — these are initialization-time metadata, no runtime readers identified in BFS scan. Gap resolved.
 
