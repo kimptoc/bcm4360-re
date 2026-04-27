@@ -489,13 +489,27 @@ Awaiting user steer on direction. The advisor flagged a cheaper precursor: re-fi
 
 Boot 0 started 17:43:23, uptime ~2 min. PCIe clean: 03:00.0 ASPM L0s L1 Enabled (default), 02:00.0 ASPM L1 Enabled (default), MAbort- everywhere, CommClk+ on bridge. No leftover dirt.
 
-### Next direction (3 candidates)
+### Next direction (recommended — option 1, after advisor consult)
 
-1. **Re-fire T300 unchanged for sample 2.** Cheapest. If sample 2 reads cleanly (0 or non-zero) we pick up the missing data. If wedge again at ~t+45s → confirms wedge-bracket is wider than [t+90s, t+120s] and probably narrows to the dwell-period window. Risk: another silent wedge; cost is low (sample 1 already proven safe).
-2. **Move sample 2 earlier in the dwell ladder** — e.g., place at t+30s instead of t+60s. Captures useful information *before* the wedge bracket. One-line code edit + rebuild + re-fire.
-3. **A2 — BAR2 sched_ctx mapping** (sched+0xD0 slot counter, +0xD4 per-slot core-id). Cheap, no BAR0 risk, but speculative yield (per row 137/138 these are reads of internal scheduler state).
+**Recommendation: re-fire T300 UNCHANGED with stricter substrate-window discipline.** Advisor pushed back on the earlier "move sample-2 to t+30s" inclination, on these grounds:
 
-Awaiting user steer. Recommend option 2 (move sample to t+30s) — it gives us a known-clean window for sample 2 at minimum cost.
+- The early wedge at ~t+45s is **n=1**. Five prior bracket reproductions all hit at t+90s+. Treating t+45s as a confirmed bracket-widening on n=1 means redesigning around a possibly-phantom signal.
+- Re-fire unchanged is the **discriminator**: 3 distinguishable outcomes (a) wedge again at t+45s → bracket really widened; (b) wedge at t+90s+ AND sample 2 fires → got the missing data + n=2 on sample 1; (c) wedge at t+90s+ AND sample 2 wedges → narrows the wedge bracket to the t+60s..t+90s region.
+- Moving sample 2 earlier doesn't add **content** information (fw is silent — `pending` should stay 0 at any sample point absent an externally-injected event), only sample-collection-reliability. We don't yet know we need that reliability.
+
+**Pre-fire constraint:** target the MIDDLE of row 83's 20-25 min clean window (insmod ~10-15 min after cold-boot), not the edge. T300 fired at ~2 min uptime, on the boundary — that removes one of the four candidate explanations (cold-boot timing) for the early wedge.
+
+### Other candidates (held)
+
+- **Move sample 2 earlier in the dwell ladder** — held until option 1 produces n=2 on the wedge timing. Then make the call with data.
+- **A2 — BAR2 sched_ctx mapping** (sched+0xD0 slot counter, +0xD4 per-slot core-id) — held; cheap and no BAR0 risk, but speculative yield. Better discriminator value comes from option 1.
+
+Awaiting user **GO/NO-GO on T301 (T300 re-fire, no code change)**. If GO, the fire steps are:
+1. User cold cycle (or this boot, but row 83 says cleanest is post-cold-boot)
+2. lspci verify (this Claude can do)
+3. Wait until ~10-15 min uptime
+4. Same fire command as PRE-TEST.300 (no rebuild, no params changed)
+5. Auto-capture journalctl post-recovery
 
 ## Archived detail
 
