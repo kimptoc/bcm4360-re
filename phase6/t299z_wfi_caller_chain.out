@@ -1,0 +1,40 @@
+Disasm pass...
+Total: 183,411
+
+=== (1) Direct callers/jumpers to 0x1c0c (wfi tail-wrapper) ===
+  Direct: 1
+    0x11cc: b.w → 0x1c0c
+  fn-ptr (0x1c0d) byte hits: 0
+
+
+=== (2) Climb caller chain from 0x1c0c (or wfi 0x1c1e) ===
+  Building reverse callgraph (callee -> direct callers)...
+  fn@0x1c0c ← fn@0x115c
+    fn@0x115c ← fn@0x1950
+      fn@0x1950: NO callers (root)
+
+
+=== (3) ALL bl/b targets in [0x1c00, 0x1c30] ===
+  Total: 10
+    0x11cc: b.w → 0x1c0c  inside fn@0x115c
+    0x11d4: bl → 0x1c10  inside fn@0x11d0
+    0x11da: bl → 0x1c1c  inside fn@0x11d0
+    0x1c0c: b.w → 0x1c1e  inside fn@0x1ba6
+    0x63dd8: bl → 0x1c16  inside fn@0x63d9e
+    0x63ef6: bl → 0x1c22  inside fn@0x63ee4
+    0x63f58: bl → 0x1c22  inside fn@0x63ee4
+    0x643a6: bl → 0x1c22  inside fn@0x642fc
+    0x643b2: bl → 0x1c22  inside fn@0x642fc
+    0x643ba: bl → 0x1c22  inside fn@0x642fc
+
+
+=== (4) Verify cpsie ai at 0x4356e — fn-boundary check ===
+  push-lr in [0x43500, 0x43600]: 2
+    0x4350c: push {r0, r1, r3, r5, r6, lr}
+    0x43584: push {r0, r1, r2, r3, r4, lr}
+  pop-pc / bx-lr in [0x43500, 0x43600]: 0
+
+
+=== (5) Bytes 0x43500..0x43600 — find any printable string spans ===
+  Printable spans (len >= 4):
+    @ 0x435b1: "Qkkbal"
