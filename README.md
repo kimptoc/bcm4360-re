@@ -2,6 +2,9 @@
 
 An effort to bring open-source Linux driver support to the Broadcom BCM4360 802.11ac wireless chipset, which currently requires an unmaintained proprietary driver (`wl`/broadcom-sta) with known unpatched security vulnerabilities.
 
+Documentation map: see [DOCS.md](DOCS.md) for where high-level summaries,
+pinned findings, live session notes, phase analysis, and raw logs belong.
+
 ## Motivation
 
 The Broadcom BCM4360 is found in many MacBook Air/Pro models (2013-2015) and some PCIe WiFi cards (e.g., ASUS PCE-AC68). It is currently the only 802.11ac Broadcom chip with **no open-source driver support**.

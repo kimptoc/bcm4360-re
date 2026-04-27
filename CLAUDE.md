@@ -5,6 +5,9 @@ Rules:
 - You have sudo permissions; run tests yourself (insmod, rmmod, journalctl, scripts)
 - **Read KEY_FINDINGS.md FIRST** — cross-phase load-bearing facts, pinned. Cheap to read, expensive to skip.
 - Then read RESUME_NOTES.md for recent tests and current state.
+- Use `DOCS.md` as the file-role contract. Keep `RESUME_NOTES.md` as a live
+  handoff only; put durable cross-phase facts in `KEY_FINDINGS.md`, broader
+  strategy in `PLAN.md`, and medium-term synthesis in phase notes/results.
 - **Before declaring a "new finding"**: grep prior phases. Run `git log --all --grep '<keyword>'` and `grep -rn '<keyword>' phase*/notes/ *.md`. Cite prior work rather than rediscovering.
 - **When closing the session** (before the user ends it or compaction hits): review this session's work and assess whether any load-bearing fact needs adding, updating, or superseding in KEY_FINDINGS.md. See the last section of that file for the schema.
 
@@ -27,7 +30,9 @@ Immediately after a test completes or the machine recovers from a crash:
 
 1. Capture `journalctl -k` / dmesg output to the appropriate log file in `phase5/logs/`
 2. Update RESUME_NOTES.md with what was observed (match against hypothesis)
-3. Commit and push before doing anything else
+3. If the result is load-bearing, update `KEY_FINDINGS.md`; if it closes a
+   broader question, update the relevant phase note
+4. Commit and push before doing anything else
 
 ## Legal & Licensing Rules
 
@@ -63,4 +68,3 @@ Tasks:
 1a. regularly review PLAN.md against progress and adjust PLAN based on findings.
 2. Ensure all work is documented, committed, and pushed
 3. Continue with the next phase of development
-
