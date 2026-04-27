@@ -8,447 +8,90 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 23:38 BST — POST-CYCLE.1b. **wl bind FAILED a second time, host-side, mitigations=off does NOT silence the fault.** Three options on table (A/B/C); awaiting user steer.
+## Current state (2026-04-28 ~00:30 BST — wl path closed; PRE-PATH(a)/T305 staged + built; awaiting user reboot + fire decision)
 
-**Cycle 1 + 1b summary:** removed wl from blacklist (cycle 1) → wl_module_init aborts at `getvar+0x20` with "Unpatched return thunk in use" WARN + `code 1`. Added `mitigations=off` (cycle 1b) → WARN STILL fires, code 1 unchanged. wl never reached the chip in either cycle; **decisive question (does wr_idx advance under wl?) has not been answered.** Path B (live wl trace) blocked by host-side wl driver init failure.
+**Headline.** Cycle 1+1b (live wl trace attempt) closed: wl_module_init aborts at `getvar+0x20` with `code 1`; under Option-A static disasm of wl.ko the real failure is `wlc_attach` returning 1 inside the closed Broadcom blob (the WARN is a structurally-noisy retpoline-fallback printk, not the failure). Module-param sweep (`passivemode`, `oneonly`, `nompc`, `piomode`) all fail identically. **wl path dead** — full migration of cycle1/1b detail in [RESUME_NOTES_HISTORY.md](RESUME_NOTES_HISTORY.md). **Pivot to Path (a)** per advisor steer; reframed with explicit `select_core(PCIE2)` per KEY_FINDINGS row-171 confound flag.
 
-**Three options now (per POST-CYCLE.1b §):** A=inspect getvar source/strace; B=live USB+older kernel; C=cleanup + pivot to brcmfmac-only Path (a) MAILBOXMASK timing experiment. Recommendation: A → C → B in that order of cost.
+**System state as of header:**
+- `/etc/nixos/configuration.nix` restored from `.preWlCycle1` backup (wl back in blacklist; mitigations=off removed).
+- `sudo nixos-rebuild boot` ran cleanly — boot config staged for next reboot.
+- wl module unloaded; chip back to "Kernel modules: bcma, wl" (no driver bound).
+- New T305 code added to `phase5/work/.../pcie.c` and module BUILT (`brcmfmac.ko` ready). Module change does NOT take effect until user reboots + reloads brcmfmac per `phase5/work/test-brcmfmac.sh`.
 
-**Earlier in session (kept for context — POST-TEST.304 + 7 STATIC RECCES T304b/c/d/e/f/g/h):**
+**Required AFTER user reboots:**
+1. Verify clean substrate: `lspci -k -s 03:00.0` should show `Kernel driver in use: brcmfmac` (or be unbound; brcmfmac may not auto-load — that's fine, test-brcmfmac.sh will handle it). `mitigations=off` should NOT be in `/proc/cmdline`.
+2. Verify PCIe state pre-fire: `sudo lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'` → expect MAbort-, CommClk+.
+3. Fire decision belongs to user. See PRE-PATH(a) section below.
 
-**Three closed surfaces (from earlier in session):**
+**Still-relevant earlier-session context** (kept for handoff continuity):
+- KEY_FINDINGS gained 7 new rows in T304b–T304h+T304i sweep (PMU/GPIO/D11/ISR/H2D closures + WL diff caveats). Three host-driveable wake-injection candidates closed (PMU, DMA-via-olmsg, H2D_MAILBOX_1). D11 dormant in offload runtime. Two-ISR wake surface (bits 0+3) empirically confirmed. **wl comparison was the highest-value remaining direction PRE-cycle1 — now closed by host-side wl init failure**, leaving Path (a) and HW-internal-event injection as remaining angles.
+- **PATTERN CAVEAT (n=4):** subagents repeatedly fabricate runtime / cross-driver behavior from static identification cites when they hit a complexity wall (T304c/e/f/h). Compensation: tight prompts demanding "show bytes or report missing", OR direct disasm. Applied successfully in Option-A wl.ko investigation (direct disasm + reloc lookup, no subagent).
 
-- **PMU + GPIO** (T304c): host-reachable but no registered fw ISR.
-- **DMA-via-olmsg via pciedngl_isr** (T304d): pciedngl_isr is a single-bit mailbox-doorbell handler that NEVER touches the olmsg ring at TCM[0x9d0a4]; reads from a bus_info-local ring at `bus_info+0x24`.
-- **H2D_MAILBOX_1 doorbell** (T304e): two independent strands close this. (1) **Empirical:** pciedngl_isr has NEVER fired across n=8 hardware fires — `wr_idx=587` frozen at every probe stage; its first action is `printf("pciedngl_isr called\n")` which would advance wr_idx. (2) **Protocol:** fw blob has ZERO references to HOSTRDY_DB1 (0x10000000); upstream brcmfmac's `brcmf_pcie_hostready()` gates H2D_MAILBOX_1 writes on this flag.
+## PRE-PATH(a) — T305: pre-set_active MAILBOXMASK enable WITH explicit select_core(PCIE2)
 
-**Option 2 (HW-internal events) static passes — T304f + T304g, just completed:**
+**Code staged 2026-04-28 ~00:25 BST. NOT YET FIRED. Awaiting user reboot + decision.**
 
-- **T304f** (`phase6/t304f_d11_init_offload.md`): **Offload runtime does NOT initialize D11 MAC.** Zero D11 register writes in live code (T300 enumeration of all 8 D11+0x16C INTMASK writers confirmed every one is in dead FullMAC code: fn@0x142b8/0x181ec/0x2309e/0x233e8/0x2340c). Zero D11-base literals in 442 KB blob (T297j). Zero `si_setcoreidx(0x812)` calls in live BFS. fw obtains D11 base via si_doattach EROM walk (stored at sched_ctx[+0x88] per T287c) but never writes any D11 register. **Implication:** offload runtime never enables D11 RX/TX/TSF wake events; D11 surface is closed by design. Likely intentional — data-plane ops would happen over olmsg DMA, not D11 MAC events.
+### What's new
 
-- **T304g** (`phase6/t304g_isr_registration_audit.md`): **T298's 2-node ISR enumeration (bits 0+3) is the empirically-confirmed wake surface — but the static audit found a real BFS gap that does NOT change the strategic verdict.** Static enumeration of all 3 direct-BL `hndrte_add_isr` (0x63C24) call sites: fn@0x63CF0 (RTE init, in live BFS, accounts for bit 0); fn@0x1F28 (pcidongle_probe, accounts for bit 3 registration); fn@0x67774 (FullMAC wl_attach, dead). **Crucial caveat advisor catch:** T304g claimed pcidongle_probe is "dead code" and the pciedngl_isr registration is "stale TCM persists across boots". This is empirically dead — TCM is volatile across cold boot, and T298/T303 observed the ISR list count CHANGE 1→2 during the T276 poll window (count=1 at post-set_active = only chipcommon-class; count=2 from post-T276-poll onwards = pciedngl_isr added). **pcidongle_probe IS being reached at runtime via a path the BFS missed** — the indirect-dispatch coverage gap row 161 flagged is REAL and unresolved. This does NOT contradict the strategic verdict (still 2 ISRs, bits 0+3) because T298 directly observed the linked list — the empirical observation is primary-source. But the BFS-based "no other ISRs could exist" inference cannot be made strongly.
+New module param `bcm4360_test305_premask_with_select` (default 0) added to `phase5/work/.../pcie.c`. When set, at pre-set_active timing (parallel to T284's existing block, but separate `if`):
 
-**DO-NOT-PROPAGATE multiple agent overreaches in T304f/T304g** (advisor-flagged):
-- T304g's "stale TCM" hypothesis (TCM is volatile + count changes during run)
-- T304g's "Coverage Complete; BFS gap closed" verdict in its strong form
-- T304f's §"OOB Router Architecture" again lists wlc_isr in registered ISRs (T298 found 2 nodes, no wlc_isr — same error T304c made)
-- T304f's "pciedngl_isr ... Yes (T256: fires every second at t+90s..t+120s)" is fabricated — T256 was static disasm correlation, not runtime observation; empirical record is wr_idx=587 frozen across n=8
+1. Read BAR0_WINDOW (`_t305_win_before`) — captures whatever core was selected on entry.
+2. Call `brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2)`.
+3. Read BAR0_WINDOW again (`_t305_win_after`) — verify select succeeded; expect `0x18102000` (PCIE2 base).
+4. Read MBM (`_t305_mbm_pre`) — sanity check; expect `0x318` per row 122 if PCIE2 reachable.
+5. Call `brcmf_pcie_intr_enable(devinfo)` — writes MBM = `0xFF0300` (its standard payload).
+6. Read MBM again (`_t305_mbm_post`) — discriminator.
+7. Log SUMMARY line with verdict tag (`WRITE_LANDED` / `WRITE_DROPPED` / `UNEXPECTED_VALUE`).
 
-**PATTERN CAVEAT (n=3+ now: T304c, T304e, T304f):** subagents have repeatedly invented runtime ISR-firing claims from static identification cites. When a static report says "fires" or "executes", cross-check against the wr_idx=587 frozen record before propagating. **Static reach ≠ runtime execution.** Logged in KEY_FINDINGS as a cross-cutting note.
+### Hypothesis (single bit answered)
 
-**Strategic state — UNCHANGED by T304f/T304g:**
+**H0 (null):** KEY_FINDINGS row 124 stands as written — pre-set_active MBM writes drop regardless of which core BAR0_WINDOW points at. T284 verdict is correct.
 
-- Option 1 (`wl` driver comparison): **HIGHEST-VALUE REMAINING DIRECTION**. The vendor `wl` driver successfully drives this chip — capturing its register-write sequence and diffing against brcmfmac is the cleanest path forward.
-- Option 2 (HW-internal events): T304f confirms D11 dormant; T304g confirms 2-ISR wake surface. The "synthetic injection via D11/PHY config" angle is closed by D11 dormancy. Other HW-internal events (chipcommon, PMU, GCI) have no registered handler. Option 2 is effectively closed without firmware modification.
-- **No fire warranted.** No hypothesis sharp enough.
+**H1 (the row-171/197 confound is real):** T284's silent-drop verdict was a routing artefact. `brcmf_pcie_intr_enable` calls `brcmf_pcie_write_reg32(devinfo, mailboxmask=0x4C, ...)` WITHOUT first selecting PCIE2 (verified at the function definition; row 197 in-source comment also flags this). If at the moment of the T284 write BAR0_WINDOW happened to be at chipcommon (or wherever else), the write hit `core_X+0x4C`, NOT PCIE2+0x4C. T305 forces the select, so the write is guaranteed to land at the intended target.
 
-**Stage 1 of `wl` comparison (T304h) ATTEMPTED 2026-04-27 22:25 BST — FAILED to deliver core deliverable.**
+### Outcome decoder
 
-Subagent task: disasm wl.ko's PCIe init and identify what wl does that brcmfmac doesn't. Agent CAPTURED wl.ko symbol map (real, useful: `wl_pci_probe`, `pcicore_attach`, `pcicore_up`, `osl_pci_write_config`, `si_pcie_*`) and provided brcmfmac walkthrough — but **DID NOT actually disasm wl.ko functions**. Agent's own Open Questions §1+§2 admit: "Does wl.ko write MAILBOXMASK before fw download? Currently unknown." and "Does wl.ko write H2D_MAILBOX_1 unconditionally? Current hypothesis: yes." The "Modification 1: Pre-set_active MAILBOXMASK Write — Highest Confidence" recommendation is justified by "wl.ko likely does this (all major init before ARM release)" — that's INFERENCE, not OBSERVATION.
-
-**PATTERN CAVEAT NOW n=4** (T304c, T304e, T304f, T304h): subagents hit a complexity wall (here: x86-64 disasm of proprietary closed-source kernel module is harder than ARM Thumb fw blob disasm — more inlining, PLT/GOT indirection, kernel-API wrappers) and INVENT findings rather than report incomplete work. Pattern is stable enough to plan around: tighter prompts demanding "show disasm offsets + instructions for the specific claim, or report 'could not locate'", OR do high-stakes disasm directly.
-
-**Reframing (advisor catch):** T304h conflated TWO SEPARATE hypotheses that should be evaluated independently:
-- **(a) "Move brcmfmac MAILBOXMASK write to pre-set_active"** — a brcmfmac-internal hypothesis worth testing on its own merits. T241/T280/T284 established post-set_active MAILBOXMASK writes silently fail; pre-set_active writes might succeed. **Stands regardless of what wl does** — low-confidence but cheap to test (single brcmfmac code-only modification + single-shot fire).
-- **(b) "wl.ko writes H2D_MAILBOX_1 unconditionally"** — an unverified wl claim. Needs wl.ko verification before it's actionable.
-
-Don't let them ride together.
-
-**Three paths forward — needs user steer:**
-
-- **Path A — Tighter static retry on wl.ko.** Re-prompt a subagent with a NARROW target (single function: `pcicore_attach`'s MAILBOXMASK write site only) with explicit "show disasm bytes for the specific claim, or report 'could not locate'" requirement. Lower budget, sharper deliverable. ~15-20 min. Risk: subagent could hit the same wall; this would tell us static is genuinely too hard for x86-64 wl.ko and we should switch to Path B.
-- **Path B — Skip to live wl trace.** Edit `/etc/nixos/configuration.nix` to un-blacklist wl, `nixos-rebuild boot`, reboot, let wl bind to the chip + bring it up. Capture register/MMIO writes via bpftrace/kprobes on `pci_*_config_*` + `iowrite32`. Then revert + reboot to return to brcmfmac dev mode. Real system-state change but bounded; ~30 min round-trip including reboot cycles. **Empirical observation, no static inference needed.**
-- **Path (a) — Independent test of "MAILBOXMASK timing" hypothesis.** Cheap brcmfmac-only modification: move the MAILBOXMASK write to pre-set_active timing, fire and observe whether mask persists + whether wr_idx advances. **Doesn't depend on what wl does.** Tests the timing-failure-mode hypothesis directly. Single-shot probe; substrate cost only. Could run in parallel with A or B.
-
-**Recommendation:** Path B is probably the cleanest — empirical capture of what wl actually does is more valuable than another static gamble. Path (a) is a parallel-able cheap experiment if user wants to maximize information per session. Path A is the most conservative but risks burning more time on the same failure mode.
-
-**Three host-driveable wake-injection candidates closed (T304b–T304e):** PMU/GPIO, DMA-via-olmsg, H2D_MAILBOX_1. Option 2 (HW-internal events) effectively closed without fw mod (T304f D11 dormant; T304g 2-ISR confirmation with BFS gap caveat). Strategic state UNCHANGED — wl comparison still highest-value remaining direction; just harder than expected to extract via static analysis alone.
-
-**User chose Path B (live wl trace) 2026-04-27 23:20 BST. Cycle 1 in progress.**
-
-## PRE-CYCLE.1 (live wl trace — does wl wake the fw?)
-
-**Hypothesis:** vendor `wl` driver (broadcom-sta-6.30.223.271-59, version-matched to fw RTE 6.30.223 banner) successfully wakes this fw under normal driver init. Empirical observation under wl will tell us:
-- whether the fw is in fact wakeable at all in this hardware/SROM/NVRAM configuration
-- if yes, the chip-side state under wl (TCM[0x9af88] console wr_idx, TCM[0x629A4] ISR list count, sched_ctx, lspci config) — comparable to the n=8 brcmfmac wedge baselines
-- the gap between wl-driven and brcmfmac-driven chip state
-
-**Decisive question (cycle 1):** does TCM[0x9af88] console wr_idx advance past 587 under wl?
-
-If YES → wl knows the right protocol; cycle 2 captures the PCI config sequence wl uses.
-If NO → either wl can't drive this fw build either (different problem entirely — SROM/NVRAM/fw-version mismatch we missed) OR wl uses a different mechanism that doesn't write to console. Either is informative.
-
-**State change executed:**
-- `/etc/nixos/configuration.nix.preWlCycle1` — backup of pre-edit state (copied via sudo)
-- `/etc/nixos/configuration.nix` line 21 — `wl` removed from blacklist (kept `b43 bcma ssb` blacklisted; comment added cross-referencing this cycle)
-- `sudo nixos-rebuild boot` — IN PROGRESS at writeup time (background bash bzg217kcs, log at /tmp/nixos-rebuild-boot-cycle1.log)
-
-**Required AFTER nixos-rebuild boot completes:**
-1. Verify rebuild succeeded: `tail /tmp/nixos-rebuild-boot-cycle1.log` — look for "activated" not error
-2. **Commit + push + sync** (this RESUME_NOTES + the .preWlCycle1 reference; nixos config itself is in /etc/nixos not in this repo — note that)
-3. **User reboot:** `sudo reboot`
-
-**POST-REBOOT capture sequence (run in cycle 1 by post-reboot Claude):**
-
-1. **PCIe state check:** `sudo lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta|LnkCtl'` → expect MAbort-, CommClk+
-2. **Verify wl bound:** `lspci -k -s 03:00.0` should show "Kernel driver in use: wl"
-3. **Check wl probe in dmesg:** `sudo dmesg | grep -iE 'wl|broadcom|bcma|brcm' | head -50` (look for wl_pci_probe success, fw load, interface up)
-4. **Check WiFi interface:** `ip link show` — should show new wlanX or eth0 interface
-5. **DECISIVE READ — TCM[0x9af88] (console wr_idx) via /dev/mem mmap of BAR2:**
-   - BAR2 base = 0xb0400000 (per lspci pre-cycle reconnaissance — verify post-cycle)
-   - wr_idx field is at TCM[0x9af88] + offset within console_ctx struct (per T276/T278 — wr_idx is a u32 within the struct that si[+0x010] points to). Need to read the struct ptr first.
-   - Alternative: read BAR2[0x9af88+offset] directly. Per T277/T278 instrumentation: si[+0x010] = console_struct_ptr; struct@console_struct_ptr has buf_addr at +0, buf_size at +4, write_idx at +8 (or near).
-   - Pragmatic approach: write a small Python script using mmap + struct to read BAR2 directly. Code sketch:
-     ```python
-     import mmap, struct
-     with open('/sys/bus/pci/devices/0000:03:00.0/resource2', 'rb') as f:
-         mm = mmap.mmap(f.fileno(), 0x100000, prot=mmap.PROT_READ)
-         # Read si[+0x010] = console_struct_ptr (relative to TCM start)
-         console_ptr = struct.unpack('<I', mm[0x9af88+0x10:0x9af88+0x14])[0] & 0xfffff
-         # Read wr_idx within console struct
-         buf_addr = struct.unpack('<I', mm[console_ptr:console_ptr+4])[0]
-         buf_size = struct.unpack('<I', mm[console_ptr+4:console_ptr+8])[0]
-         wr_idx = struct.unpack('<I', mm[console_ptr+8:console_ptr+12])[0]
-         print(f'console_ptr=0x{console_ptr:08x} buf_addr=0x{buf_addr:08x} buf_size=0x{buf_size:08x} wr_idx={wr_idx}')
-     ```
-   - **Decisive comparison:** if wr_idx > 587 → wl is advancing the console; **wl HAS WOKEN THE FW**. If wr_idx == 587 (or whatever wl init writes — could be different baseline if wl uses a different shared_info) → no advancement during wl init.
-6. **Read TCM[0x629A4] ISR list head + count:** walk linked list (each node = 16 bytes: next, fn, arg, mask) — count nodes. Compare against T298's 2 nodes. If >2, wl has registered additional ISRs.
-7. **Snapshot lspci** for config-space deltas: `sudo lspci -vvv -s 03:00.0 > /home/kimptoc/bcm4360-re/phase6/cycle1_lspci.txt`
-8. **Snapshot dmesg** (full wl-side messages): `sudo dmesg > /home/kimptoc/bcm4360-re/phase6/cycle1_dmesg.txt`
-9. **Document POST-CYCLE.1 in RESUME_NOTES** with all readings.
-
-**Privacy note:** wl will probably broadcast probe requests to scan for networks. May try to auto-associate if any saved network config exists (unlikely in clean nixos but possible). User confirmed OK with this.
-
-**Cleanup cycle (after capture):**
-1. `sudo cp /etc/nixos/configuration.nix.preWlCycle1 /etc/nixos/configuration.nix` — restore blacklist
-2. `sudo nixos-rebuild boot`
-3. Commit + push + sync
-4. User reboots
-5. Verify back to dev mode (brcmfmac usable, wl blacklisted)
-
-**Substrate note:** the chip is going through 2 reboot cycles + actual wl init. The "fresh substrate" baselines from earlier in this session no longer apply post-cleanup — would need new baselines if any further brcmfmac fires happen. For wl-discriminator purposes this is fine.
-
-**POST-CYCLE.1 (2026-04-27 ~22:55 BST) — wl FAILED to bind; failure is host-side, not chip-side.**
-
-Observed after user reboot into wl-unblacklisted boot:
-- `wl driver 6.30.223.271 (r587334) failed with code 1` then `ERROR @wl_cfg80211_detach : NULL ndev->ieee80211ptr, unable to deref wl`
-- Stack: `__warn_thunk` ("Unpatched return thunk in use") → `warn_thunk_thunk` → `getvar+0x20/0x70 [wl]` → `wl_module_init+0x27/0xb0 [wl]` → `do_one_initcall`. Aborts at `wl_module_init`, BEFORE `wl_pci_probe` is registered.
-- `lspci -k -s 03:00.0` → `Kernel modules: bcma, wl` with NO "Kernel driver in use" line. Chip is unbound; wl never reached the chip.
-- The `wlp0s20u2` interface is the USB MT76 dongle (`mt76x2u 2-2:1.0`), NOT the BCM4360.
-- `rmmod wl ; modprobe -v wl` reproduces deterministically.
-- Decisive question (does wr_idx advance under wl?) **cannot be answered as planned** — wl_module_init aborts in driver-internal init, never gets to PCI probe.
-- Likely root cause: NixOS broadcom-sta-6.30.223.271-59 ↔ kernel-6.12.80 mitigation/build mismatch. modinfo claims `retpoline: Y` but runtime warns "Unpatched return thunk in use" inside getvar.
-
-**Strategic implication:** Path B as originally framed is blocked by host-side packaging, not by chip behavior. Doesn't tell us anything about the chip yet — wl never touched it. To salvage Path B we need wl to actually load and bind.
-
-## PRE-CYCLE.1b (mitigations=off attempt to unblock wl init)
-
-**Hypothesis:** `mitigations=off` boot param disables retpoline/SRSO/etc enforcement, silencing/skipping the unpatched-return-thunk WARN inside `getvar`. If the WARN itself was the failure path (e.g., panic_on_warn-equivalent or early-abort), wl_module_init may now complete and wl will bind to the chip.
-
-**Risk acknowledged:** the WARN macro doesn't return a value, so `code 1` may originate elsewhere inside `getvar`/`wl_module_init` and this attempt may not change anything. Cheap test (one rebuild + one reboot); we'll know fast.
-
-**State change executed (2026-04-27 ~22:58 BST):**
-- `/etc/nixos/configuration.nix.preWlCycle1b` — backup of pre-edit state (pre-mitigations-off)
-- `/etc/nixos/configuration.nix` line 22 — added `"mitigations=off"` to `boot.kernelParams`
-- `sudo nixos-rebuild boot` — DONE (built `/nix/store/g854l90djjbq2vnsgxf40c779dhzmdpx-...`)
-
-**Required next:** user reboots; post-reboot Claude re-runs the cycle 1 capture sequence.
-
-**POST-REBOOT capture (cycle 1b):**
-1. `dmesg | grep -E 'mitigations|Spectre|retbleed' | head -10` — confirm mitigations=off active
-2. `dmesg | grep -E 'wl driver|@wl_cfg80211' | head -10` — has `failed with code 1` gone?
-3. `lspci -k -s 03:00.0` — does `Kernel driver in use: wl` now appear?
-4. If wl bound → proceed with the original cycle 1 capture (steps 5-9 above: TCM[0x9af88] wr_idx, TCM[0x629A4] ISR list, lspci snapshot, dmesg snapshot)
-5. If wl still failed → the failure is NOT mitigations-related; pivot per `Three options` below
-
-**Three options if cycle 1b also fails:**
-- Cleanup wl, restore both backups, return to brcmfmac dev mode, then Path A (narrow-prompt static retry on wl.ko) or Path (a) (MAILBOXMASK timing test — chip-side experiment that's independent of wl)
-- Live USB / older kernel — bigger detour
-- Strace modprobe / inspect wl getvar source from broadcom-sta-src — moderate effort
-
-**Cleanup cycle (after capture, EITHER outcome):**
-1. `sudo cp /etc/nixos/configuration.nix.preWlCycle1 /etc/nixos/configuration.nix` — restore the ORIGINAL backup (predates BOTH cycle1 and cycle1b changes; restores wl blacklist AND removes mitigations=off)
-2. `sudo nixos-rebuild boot` ; commit + push + sync ; user reboots
-3. Verify back to dev mode (brcmfmac usable, wl blacklisted, mitigations restored)
-
-**Awaiting user reboot for cycle 1b.**
-
-## POST-CYCLE.1b (2026-04-27 23:37 BST — wl bind FAILED again under mitigations=off; failure path is NOT mitigations-related)
-
-**Hypothesis FALSIFIED.** `mitigations=off` is in `/proc/cmdline` (verified) but the WARN at `__warn_thunk+0x2c/0x40` still fires from `getvar+0x20/0x70 [wl]` and `wl driver 6.30.223.271 (r587334) failed with code 1` is identical to cycle 1a. wl is unbound (`Kernel modules: bcma, wl` with no `Kernel driver in use:` line).
-
-**Boot history** (`journalctl --list-boots`): boot -2 = cycle 1a wl-unblacklisted; boot -1 = brief 41s; boot 0 = current cycle 1b @ 23:36:22, uptime ~1 min at writeup. Substrate clean (LnkSta 2.5GT/s x1, MAbort-, CommClk+).
-
-**dmesg snapshot:** `phase6/cycle1b_dmesg.txt` (1086 lines, full boot).
-
-**Decisive observations:**
-1. `mitigations=off loglevel=4` confirmed in `/proc/cmdline` — kernel param applied.
-2. `__warn_thunk` (arch/x86/kernel/cpu/bugs.c:3484) WARN STILL fires regardless. The check is unconditional in this kernel build — `mitigations=off` does not silence the runtime detection that wl's getvar built-in trampoline is non-retpoline.
-3. Same exact failure code 1 → the WARN is a separate signal; it doesn't gate `code 1`. The `code 1` originates inside `getvar` or `wl_module_init` for an independent reason. Per RESUME_NOTES PRE-CYCLE.1b risk acknowledgment, "the WARN macro doesn't return a value, so `code 1` may originate elsewhere" — confirmed.
-4. wlp0s20u2 USB MT76 dongle is up + associated as before (orthogonal to wl/BCM4360).
-
-**Strategic implication:** Path B (live wl trace) is blocked by wl driver init failure that mitigations=off cannot fix. To proceed via wl we need to either understand what `getvar+0x20` is failing on (source inspection / strace) or use a different kernel + matching wl build (live USB / older kernel detour).
-
-**Three options remain (per cycle 1b PRE plan):**
-
-- **Option A — Inspect broadcom-sta source / strace modprobe.** Find what `getvar` is being called with and why it returns nonzero. broadcom-sta-6.30.223.271-59 source is available in nixpkgs (`/nix/store/*-broadcom-sta-*` or `nix-build -E ... .src`). `getvar` is wl's NVRAM variable getter — typically called with a var-name string. May be hitting a missing kernel API (e.g. removed `kallsyms_lookup_name` or similar) inlined into getvar's setup. Moderate effort; cheap test.
-- **Option B — Live USB / older kernel.** Boot a Linux distro with kernel ~6.6 or earlier (where retpoline detection was different) + the matched wl build. Real detour but unambiguous. Mac firmware boot constraints + UEFI Secure Boot may complicate.
-- **Option C — Skip wl entirely; pivot to brcmfmac-only experiment.** Cleanup wl backups (restore ORIGINAL `/etc/nixos/configuration.nix.preWlCycle1` which removes both wl-unblacklist AND mitigations=off), reboot back to dev mode, then run **Path (a)** (MAILBOXMASK timing test): cheap brcmfmac-only modification to move MAILBOXMASK write to pre-set_active timing. Tests one specific failure-mode hypothesis directly. Independent of what wl does.
-
-**Recommendation:** Option A first (cheap, may unblock wl) → if A fails after ~30 min, fall through to Option C. Option B is high-cost/high-friction and worth deferring until A and C are exhausted.
-
-**Required cleanup BEFORE Option C** (or before declaring wl direction dead):
-1. `sudo cp /etc/nixos/configuration.nix.preWlCycle1 /etc/nixos/configuration.nix` — restore the ORIGINAL backup (predates BOTH cycle1 and cycle1b changes; restores wl blacklist AND removes mitigations=off)
-2. `sudo nixos-rebuild boot` ; commit + push + sync ; user reboots
-3. Verify back to dev mode (`Kernel driver in use: brcmfmac` after dev modprobe; mitigations restored)
-
-**Awaiting user steer on A vs B vs C.**
-
-## OPTION-A INVESTIGATION (2026-04-27 ~23:50 BST — wl.ko static disasm)
-
-User picked A; investigation findings (read-only, no state changes):
-
-**wl.ko inspected:** `/run/booted-system/kernel-modules/lib/modules/6.12.80/kernel/net/wireless/wl.ko` (broadcom-sta 6.30.223.271-59, built for kernel 6.12.80; `modinfo` claims `retpoline:Y`).
-
-**Key disasm + relocation findings:**
-
-1. **`getvar+0x20` → `osl_strlen`.** Confirmed via `.rela.text`: relocation at file offset 0xb823 → `R_X86_64_PC32 osl_strlen - 4`. So the WARN's caller chain is `getvar → osl_strlen`. osl_strlen at .text+0x181d60 is a 0x1a-byte stub: `endbr64 / call <fentry> / push rbp / call <inner> / pop rbp / xor edi,edi / jmp <tail>` — Broadcom blob shape that the kernel's RET-rewriter falls back to `warn_thunk_thunk` on.
-
-2. **`wl_module_init` (init_module) is short — only 0xb0 bytes.** Reading `.rela.init.text`: prints banner via `_printk` (the "Broadcom STA … incompatible with Linux kernel security mitigations" line — `.rodata.str1.8 + 0x60`), calls `getvar(NULL, "wl_dispatch_mode")` and `getvar(NULL, "wl_txq_thresh")` to populate two module variables, then `jmp __pci_register_driver`. **There is NO branch in wl_module_init that returns 1.**
-
-3. **The "failed with code %d" printk lives in `wl_pci_probe`, NOT wl_module_init.** Format string at `.rodata.str1.8 + 0x150` ("wl driver %s failed with code %d"). Per `.rela.init.text`, `_printk` call site is at `.init.text + 0x408`. wl_pci_probe is at `.init.text + 0xc0`, size 1491 bytes — covers +0x408. The `wlc_attach` call is at `.init.text + 0x3e2`, just before the failure printk. **The "code 1" is `wlc_attach`'s return value.**
-
-4. **WARN is structurally a noisy printk, not the failure.** WARN_ONCE doesn't return an error. mitigations=off didn't silence it (apply_returns RET-patch fallback is unconditional in 6.12), AND the WARN doesn't cause `code 1`. If we silenced the WARN, we'd still see `wl driver 6.30.223.271 failed with code 1` because wlc_attach is what fails.
-
-**Implication.** Fixing the WARN is irrelevant. The real failure is wlc_attach returning 1 — which is inside Broadcom's precompiled blob (6639 bytes of x86-64 closed-source code). No public source. Diagnosing this would require either:
-- Disassembling wlc_attach (6639 bytes of closed-source x86-64; same complexity wall T304h hit on wl.ko)
-- ftrace/kprobes around wlc_attach return paths to identify the failing sub-call
-- Trying alternate wl variants (broadcom-sta-6.30.223.271-57 for kernel 6.12.40 in nix store; semantic differences unknown)
-- Trying module params (`passivemode=1`, `oneonly`, etc.)
-
-**Cost-vs-value reframe.** The wl trace was meant to ANSWER ONE QUESTION ("does wr_idx advance under wl?"). Spending hours+ disassembling Broadcom's wlc_attach blob to make wl bind is investment in a TOOL, not the actual BCM4360 RE goal. Path (a) (Option C) is one cheap brcmfmac-only experiment that directly tests a hypothesis from the actual research; the wl path is starting to look like sunk-cost territory. Calling advisor for steer per user's "handle decisions in my absence".
-
-**Substrate is fresh** (boot 0 @ 21:16:01). PCIe lspci clean. No code changes outstanding. T304 macro is empirically validated. Docs cleaned up per DOCS.md §3 (T299/T300/T301 pairs migrated). PLAN.md, RESUME_NOTES, KEY_FINDINGS all current as of this writeup.
-
-**Earlier in session (2026-04-27):** T304 fire result + POST-TEST.304 + KEY_FINDINGS gate-1 row + row 104 extension. T304b (no-pollers) + T304c (PMU/GPIO dormant) static recces. T304d (pciedngl_isr disasm — mailbox-only). T304e (bus_info+0x18 trace — HOSTRDY_DB1 absence). T304f + T304g (D11 dormant + ISR coverage audit; this commit). **KEY_FINDINGS gained 7 new rows total this session.**
-
-**Earlier session work (kept for context):**
-
-- POST-TEST.303 written up + committed (commit 3c85608); KEY_FINDINGS rows 104/162/163 updated
-
-**Gate-stack result (commit 4adaa81, phase6/t303e_oob_gate_stack.md).** 6 gates between host writing OOB Router pending and fn@0x115c executing on ARM:
-
-| Gate | Status | Evidence |
+| `_t305_win_before` | `_t305_mbm_post` | Interpretation |
 |---|---|---|
-| 1: Write semantics (RW1S/W1C/RO) of 0x18109100 | UNKNOWN — empirical only | Agent acknowledges "cannot be done statically". Note: agent's "Linux bcma drivers don't write OOBSELOUTA30" argument was wrong-target — OOBSELOUTA30 is at chipcommon-wrap +0x100, NOT OOB Router (0x367) +0x100. Different agents, doesn't transfer. |
-| 2: oobselouta30/74 routing enable bits | UNKNOWN | T298 confirms slots allocated but not whether they're enabled for output |
-| 3: ARM CR4 IRQ controller mask | UNKNOWN (plausibly open) | T303d's "fallthrough from exception vectors" is *thin inference* — could be missed indirect dispatch. **No empirical evidence any ISR has fired in live offload runtime** (n=8 fires across T276/T287c/T298/T299/T300/T301/T302b/T303 all show console wr_idx=587 frozen post-init; T279 H2D_MBX_0 positive control returned MAILBOXINT=0). |
-| 4: SiliconBackplane upstream path | UNKNOWN | No public docs for ARM 0x367 routing |
-| 5: fn@0x115c reachability | KNOWN-OPEN | Per T303d unconditional fallthrough |
-| 6: BAR0 accessibility to 0x18109000 | PARTIALLY-OPEN | Clean at post-set_active n=2 (T300/T301); T301 t+60s wedge open question |
+| Already at PCIE2 base (0x18102000) | unchanged from `_t305_mbm_pre` (0x318 or 0) | **H0 confirmed.** Row 124 stands. MBM is genuinely write-locked at this register/timing. Not a routing issue. |
+| Not at PCIE2 base | `0xFF0300` | **H1 confirmed.** Row 124 was a routing confound. T241/T280/T284 verdict needs revising — they may have been writing to `core_X+0x4C` instead. |
+| Not at PCIE2 base | unchanged (0x318 or 0) | **Window-at-PCIE2 isn't the missing piece.** Deeper structural issue. Row 124's verdict effectively still holds; need to look elsewhere for what gates MBM writes. |
 
-**Gate-1 fire decision rationale.** Cycle of static surfaces yielded all bookkeeping (gap writers + sched+0xCC) plus one decisive structural finding (on-dispatch only). No further static surface can resolve Gate 1 — the agent that found the gap admits it's empirical-only. Continuing the defer cycle is sunk cost. Proposed move:
+### Cross-cutting flag (advisor catch — not a contradiction the test must resolve)
 
-**PRE-TEST.304 — Gate-1 empirical probe.** Single BAR0 transaction sequence at post-set_active timing:
-1. Save BAR0_WINDOW
-2. `pci_write_config_dword(BAR0_WINDOW, 0x18109000)` (point at OOB Router agent — proven safe in T300/T301 sample 1 n=2)
-3. Read BAR0+0x100 (baseline pending) — expect 0x0
-4. Write BAR0+0x100 = 0xFFFFFFFF (the test write)
-5. Read BAR0+0x100 (post-write) — discriminator
-6. Restore BAR0_WINDOW
+KEY_FINDINGS shows tension between row 117 ("MBM=0 explains why fw stays in WFI") and row 157 ("fw blob has ZERO refs to PCIE2 register space → MBM structurally not the wake gate"). **If T305 lands the write (H1) BUT fw still does not wake** (no console wr_idx advance from 587, no MAILBOXINT, no behavior change), that's CLEAN CLOSURE of the MBM-as-wake-gate question — not a contradiction. It means MBM-write-lock is the wrong concern; row 157 is correct and MBM is structurally irrelevant. Either outcome (write lands / write drops) is information.
 
-Outcomes:
-- post-write read = 0xFFFFFFFF → **RW1S** → Gate 1 is RW1S; host CAN set bits → potentially fire-able B
-- post-write read = 0x0 → **W1C** OR **RO**; the bit semantics is "write-1-clears" or "ignored". Either way host cannot set bits via this register → option B via OOB Router pending is dead; need to find another wake-trigger surface
-- post-write read = 0xFF... AND console wr_idx advances OR follow-up scan shows fw state change → BONUS: partial Gate 3 evidence (downstream dispatch must have happened)
+### Run sequence (after user reboots into the new boot config)
 
-Risk: identical to T300 sample 1 — single BAR0 transaction at post-set_active, OOB Router agent, no wedge in T300/T301 sample 1 (n=2 clean). Code edit needed: new test304 macro modeled after test300 with the write+readback step added. One extra BAR0 write vs T300; risk delta negligible.
+```bash
+# 1. Substrate check (per CLAUDE.md pre-test checklist)
+sudo lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'
+cat /proc/cmdline   # mitigations=off should NOT be present
 
-**Awaiting user steer.** Three options:
-1. **Approve PRE-TEST.304 as proposed** — code edit, rebuild, fire when substrate in clean window.
-2. **Modify the probe** — e.g. write specifically `0x9` (just bits 0+3) instead of `0xFFFFFFFF` to test bit-set-with-routed-bits-only, or run two separate writes.
-3. **Defer further** — request additional static work (e.g. one more pass on Gate 3 looking for explicit ARM IRQ enable code, or PMU GPIO investigation).
+# 2. Verify built module is current
+ls -la phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko
+# (rebuild if needed: KDIR=/nix/store/7nnvjff5glbhh2mygq08l2h6dw7f0cjz-linux-6.12.80-dev/lib/modules/6.12.80/build ; make -C "$KDIR" M=$PWD/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac modules)
 
-**A2-extension result (commit 49c3c35, phase6/t303b_gap_writers.md).** Subagent identified `fn@0x64590` (core enumerator, called from si_doattach at fn@0x670d8) as the writer of all 6 populated dwords at sched+0x318..+0x32c via indexed store at address 0x6466e (`str.w r0, [r4, r3, lsl #2]` where r3 = slot+0xc6). Values come from `fn@0x2728` (EROM core-descriptor parser) — per-core revision + wrapper capability fields cached at init from EROM. One entry per host-enumerated core, slot order matches T218 exactly. **Why static scan missed it:** writer location WAS documented in phase6/t288_pcie2_reg_map.md:90 — the gap was a documentation/cross-reference miss, not an analysis miss. **Wake-question impact: zero** — these are initialization-time metadata, no runtime readers identified in BFS scan. Gap resolved.
+# 3. Edit phase5/work/test-brcmfmac.sh modprobe args to add: bcm4360_test305_premask_with_select=1
+#    (single-purpose run; do NOT also set bcm4360_test284_premask_enable=1 — they would write MBM twice and confound)
+#    Keep T276 + T277 + T278 enabled per usual baseline.
 
-**sched+0xCC writer result (commit 5465446, phase6/t303c_cc_writer.md).** Subagent identified `fn@0x27EC` (si_setcoreidx class-0 thunk) as the writer at address 0x02878 via `str.w r5, [r4, #0xcc]`. The value written is the active class index. The 0x0 → 0x1 transition during T276 poll = class switch from chipcommon (class 0) to core[2] (class 1) — **independently corroborates** the sched+0x88 shift from 0x18000000 → 0x18001000 already documented in row 132/137 (caught by T287/T298 at later stages). sched+0xCC is per-class context bookkeeping, not a wake gate. **Wake-question impact: minimal** — confirms fw is alive and progressing through class switches as expected, doesn't identify what fw waits for.
+# 4. Fire
+sudo phase5/work/test-brcmfmac.sh
 
-**EMPIRICAL REFRAME (advisor catch, primary-source).** T303 console wr_idx=587 frozen from t+500ms through t+90s (no new console output across 4 sample stages). fw IS quiescent at console-logging resolution — "fw waiting for wake event" is no longer assumption, it's primary-source evidence. Worth checking T287c/T298/T299 for cross-fire confirmation but the n=1 in T303 is unambiguous.
+# 5. Inspect log for "BCM4360 test.305: SUMMARY" line in latest phase5/logs/test.N
+```
 
-**Option 4 result (commit 0cf433b, phase6/t303d_oob_reader_schedule.md).** **OOB pending-events is read ON-DISPATCH ONLY** (90% confidence). The 3-insn leaf reader fn@0x9936 has exactly ONE caller: fn@0x115c (synchronous ISR dispatcher at fw addr 0x001162). fn@0x115c is **not registered as a timer callback** and has **no direct BL/BLX callers** — reached only via fallthrough from the exception-vector chain (fn@0x138 + continuation per row 161). Read-dispatch-return pattern, single read per invocation, no loop/sleep/poll. fw IS in WFI; only an ARM exception (HW IRQ assert) can wake it.
+### Substrate / cost expectations
 
-**Advisor reframe 2026-04-27 20:48 BST after option-4 result.** Original "draft B (DMA-via-olmsg)" framing was wrong — DMA-via-ring depends on a poller that doesn't exist. **The actual decision is downstream of two unverified facts:**
+- One full experiment fire (CLAUDE.md "Full experiment" tier) on substrate that's been through 3 reboots this session (cycle1, cycle1b, post-cleanup). Substrate freshness adequate for a single-shot probe but not for n>1 statistics.
+- Crash risk: comparable to T284 (pre-set_active MBM write attempt). T284 fired without wedge — T305 just adds explicit select_core(PCIE2) before the same write, so risk delta is negligible.
+- Wedge expectation per row 104: t+90s..t+120s bracket likely. T305 SUMMARY line prints AT pre-set_active timing (well before set_active completes), so even if wedge happens later, the SUMMARY should be in the log.
 
-1. **OOB Router +0x100 register write semantics.** The option-4 agent recommended "host writes 0x18109100 to set bits 0/3" assuming RW1S (write-1-to-set). Could be W1C (write-1-to-clear, common HW pattern — `0x9` would CLEAR bits, not set them) or read-only-by-host (status of upstream OOB lines, host writes ignored). RW1S is one of three plausible behaviors picked without evidence.
+### Awaiting user steer post-reboot
 
-2. **Full gate stack between OOB pending bit being set and fn@0x115c executing.** T279 found MAILBOXMASK=0 — gates the **PCIE2 mailbox path** (H2D_MAILBOX_0/1 → mailbox interrupt → ARM). The OOB Router is a **different upstream-line aggregator** — bits 0/3 of OOB pending route to ARM via different selector registers (`oobselouta30` per row 144). MAILBOXMASK=0 does NOT necessarily gate OOB-Router-driven IRQs. But there may be other masks: a second OOB-side enable register (e.g. `oobselouta74` at agent +0x104), or an ARM-side interrupt controller mask. **Unmapped.** Whether B is even possible rides on this stack.
+Path (a) reframed as T305 is the live test. Decision belongs to user. Code is staged + built but not fired in user's absence (substrate has wl-tainted reboot history this session, and per CLAUDE.md full-experiment tier requires user awareness for crash recovery).
 
-**Next move:** kick off third static subagent to MAP THE GATE STACK between OOB pending bit set and fn@0x115c execution. Identify each gate as known-open / known-closed / unknown. Cheap (no fire). Then advisor consult on whether B is fire-able or whether more work needed. ~~Draft B PRE-TEST~~ deferred — premature until gate stack mapped. T303 FIRED at 20:10:56 BST (boot -1 uptime ~21 min — late but within row 83 clean window per row 83). All probe stages CLEAN through `t+90s SUMMARY count=2 sched_cc=0x1 events_p=0x18109000 pending=0x0` plus T303 readouts at every stage. **Boot -1 ended at 20:13:11** — silent kernel death right after t+90s SUMMARY, exact same [t+90s, t+120s] T270-BASELINE pattern (now n=7 without test300). Auto-recovery, NO SMC reset (boot 0 started 20:14:43). Current uptime ~2 min, lspci clean (MAbort-, CommClk+).
-
-**Headline T303 results (all BAR2-only sched_ctx field reads, modeled after T287c):**
-
-1. **`sched+0xD0` (count) = 0x5 stable** across all 6 stages.
-2. **`slots[+0xD4..+0xF0]` = `0x800 0x812 0x83e 0x83c 0x81a 0x135 0x0 0x0`** stable across all stages — first 6 entries match host-side `brcmf_pcie_select_core` enumeration (T218) EXACTLY in order; slots 6-7 zero. **OOB Router (0x367) is NOT in the slot table** → confirms KEY_FINDINGS row 162 framing: OOB Router is accessed via the separate `sched+0x358 = 0x18109000` pointer, outside the indexed slot model.
-3. **`sched+0xCC` is NOT stable across stages** — `0x0` at post-set_active, `0x1` from post-T276-poll onwards. T287/T298 framed this as "0x1 stable" but never sampled at post-set_active — prior framing was **stage-incomplete, not wrong**. Transition window = the ~2s T276 poll. NEW signal worth a row 163 update.
-4. **`gap +0x300..+0x354`** (22 dwords) is **NOT all zero** as t300_static_prep §65 expected. 6 populated dwords at `+0x318..+0x32c`: `2b084411 2a004211 02084411 01084411 11004211 00080201`, stable across all stages. Rest zero. **Note: populated entries are at gap indices 6..11 (offsets +0x18..+0x2c into the gap), NOT 0..5** — so these are NOT trivially 1:1 with the 6 populated slots at +0xD4..+0xE8. Structure unclear; record-bytes-defer-interpretation. Static analysis (t288_pcie2_reg_map enumerator) found no writers — fw populates this region at runtime via a path the static scan missed.
-
-**count semantics — open between two readings:**
-- (a) `count` = last allocated *index* (0-indexed): count=5 means slots 0..5 valid → matches host enum exactly.
-- (b) `count` excludes the I/O hub core (0x135 has base=0): fw counts 5 "real" backplane cores.
-
-(a) is the boring/likely answer. Don't pick (b) just because it's tidier. Either way the load-bearing claim is the same: **slot table = host enum exactly; OOB Router 0x367 NOT in slot table** — primary-source confirmation that fw uses the separate `sched+0x358` pointer for OOB Router access.
-
-**Wedge timing caveat.** All probe printks are bunched at 20:13:10/11 in journalctl, but insmod was 20:10:56 and `test.158: ASPM disabled` printed at 20:11:00 normally. The 2-minute gap = fw boot/wait. The 20:13:10/11 bunching is journald draining the printk buffer as the kernel dies — i.e., **journalctl timestamps cannot extract precise stage timing for this run.** Wedge bracket [t+90s, t+120s] is inferred from script-level fact (insmod returned, `sleep 150` was wedged inside), not from printk timestamps.
-
-**Hypothesis matrix outcome.** Closest match to row 2 of PRE-TEST.303 matrix ("sched+0xD0 = 6 AND slot table = host enum") with the count=5/6-IDs split as a footnote. OOB Router accessed via separate fw-internal pointer outside slot model — **CONFIRMED**.
-
-**Wake-trigger source: NO ADVANCE.** T303 was BAR2-only by design; it does not read OOB Router pending. Sample 2 question (does pending ever transition to non-zero) is still unanswered across T300/T301/T302b/T303.
-
-**Headline result.** Dropping `test300_oob_pending` MOVED wedge BACK to [t+90s, t+120s] — outcome row 1 of PRE-TEST.302b matrix. **Strong causal inference:** test300 BAR0 OOB Router read at post-set_active IS shifting the wedge bracket forward (n=6 without test300: T270-BASELINE/T276/T287c/T298/T299/T302b → wedge at [t+90s, t+120s]; n=2 with test300: T300 (~t+45s) / T301 (t+60s)). Also: T302b also dropped `test284_premask_enable` (the only other module-param diff vs T298/T299) but wedge bracket UNCHANGED — **eliminates the test284 confound from row 104.** test284 is NOT the wedge-shifting factor.
-
-**Secondary confirmation (n=3).** `count=1` at post-set_active (only RTE-CC ISR registered) → `count=2` at post-T276-poll (pciedngl_isr added) reproduces in T302b — same as T300/T301. Likely correlated with `test284_premask` being DROPPED (n=3 for both). T298/T299 with `test284_premask=1` saw count=2 at post-set_active. Not load-bearing for the wake question; possibly indicates test284 reorders pciedngl_isr registration earlier.
-
-**Wake-trigger source: NO ADVANCE.** test300 dropped means no OOB Router pending sample at all in T302b. The "is `pending` ever non-zero" question is unanswered — sample 2 has now never been read across T300/T301/T302b. Strong inference says test300 must be redesigned (single-shot at post-set_active only, or much earlier sample 2) to ever read pending at a different timing without destabilizing the bracket.
-
-Prior fire (T301, 19:24:49 BST): sample 1 BAR0 OOB Router read at post-set_active SUCCEEDED (n=2 with T300, `pending=0x00000000`). **Wedge at t+60s, AT sample 2's BAR0 OOB Router window-write** — anchor-2 ("saved=0x18102000; about to set OOB Router window") flushed, anchor-3 never logged. Auto-recovery, no SMC reset. T302b discriminator now answers the test300-causal question (CAUSAL).
-
-T299 FIRED 15:29:00 BST on boot -1 with full ASPM-disabled chain (cmdline `pcie_aspm.policy=performance` parsed, runtime sysfs flip applied at 15:27:57 before insmod; 03:00.0+02:00.0+root all `ASPM Disabled`). Probe ran clean through all 9 stages — IDENTICAL 2-node ISR readout to T298. Wedged at end-of-t+90s probe (boot -1 ended 15:31:05, ~7s after t+90s SUMMARY). User cold-boot/SMC reset; current uptime now ~30+ min, ASPM back to default. **H1 (ASPM = wedge cause) FALSIFIED.** **Wedge is the known [t+90s, t+120s] bracket** (KEY_FINDINGS row 104, T270-BASELINE pattern, reproduced T276/T287c/T298/T299) — NOT a "rmmod wedge" as POST-TEST.298 mistakenly claimed.
-
-**T300 step 1 — static prep result.** Explore agent pass found: fw reads OOB Router pending-events at `0x18109100` LIVE via `fn@0x9936` (3-insn leaf: `ldr [sched+0x358]; ldr [+0x100]; bx lr`). Zero writers of this register into TCM exist anywhere reached from the live BFS. The ISR-list at `TCM[0x629A4]` (already enumerated by T298/T299) is the only OOB-bit→callback cache in TCM. Per-slot core-ID table at `sched+0xd0..` IS BAR2-readable and would cross-validate against host-side enumeration but does not advance the wake question. Per `t299_next_steps.md` §3, next move is A3 — single-purpose BAR0 OOB Router read with strict scope and exit before t+90s. Full report: `phase6/t300_static_prep.md`.
-
-**Advisor catches that corrected the framing.** Two errors caught in T298/T299 post-test interpretation:
-1. **"rmmod wedge" was always wrong.** `journalctl --list-boots` shows boot -5 ended `14:21:34` (T298) and boot -1 ended `15:31:05` (T299). Script `sleep 150` puts rmmod ~150s after insmod return — both boot-ends are well before that. Wedge is at end-of-t+90s probe (~7s after t+90s SUMMARY in T299; same in T298). rmmod never executed. **POST-TEST.298 incorrectly attributed the wedge to rmmod; it was actually the [t+90s, t+120s] bracket per row 104.** Update KEY_FINDINGS row 163 accordingly.
-2. **T299 t+90s readout latency rose mid-stage.** T298 t+90s: all 4 readout lines at `14:21:34` (single second). T299 t+90s: `15:30:55→15:30:58` (3-second spread, 1s+ between consecutive prints). Each `printk` taking ~1s is anomalous — TCM read latency was rising for several seconds before silent kernel death. NEW signal vs T298 (which printed instantly then died). Could be the ASPM-disabled chain causing different bus-state behaviour, or could be substrate variation. n=1 fire with this latency pattern; not yet load-bearing.
-
-**Result of T299.** ASPM-disabled chain (full: 03:00.0 + 02:00.0 + root port 00:1c.2) made ZERO difference to either the noise belt (T299 was the second clean fire in a row, BAR2-only path holding) OR to the [t+90s, t+120s] wedge bracket (T299 wedged at the same point T298/T287c/T276/T270-BASELINE did). Per row 104 + row 163 update: this wedge has been observed under 5 different module-param + cmdline combinations now and is fw-side, not host-side ASPM management.
-
-**Cmdline correction history.** Four attempts at the same intent (force ASPM Disabled on the link):
-1. v1: `pci=noaspm` — passive, cannot disable BIOS-enabled ASPM. Post-reboot LnkCtl showed L0s L1 still Enabled.
-2. v2: `pcie_aspm=off` — *also* passive. Disables the kernel ASPM management subsystem ("PCIe ASPM is disabled" in dmesg) but BIOS-written LnkCtl bits remain. Post-reboot 2026-04-27 evening: 03:00.0 still `ASPM L0s L1 Enabled`, 02:00.0 still `ASPM L1 Enabled`. Per-device `link/` sysfs not created (subsystem disabled), policy knob locked at runtime.
-3. v3: `pcie_aspm.policy=performance` — added to cmdline, `nixos-rebuild boot` ran cleanly, /proc/cmdline confirms it post-reboot — but kernel ignored the param. Sysfs `policy` still showed `[default]`, LnkCtl on 03:00.0 still `ASPM L0s L1 Enabled`, 02:00.0 still `ASPM L1 Enabled`. Subsystem WAS live this time (sysfs writable, `link/` dir present), so the param was at least parsed enough to keep the subsystem alive — just not applied. Likely cause: kernel-internal early default committed before `pcie_aspm` saw its module param.
-4. **v4: runtime sysfs flip.** `echo performance | sudo tee /sys/module/pcie_aspm/parameters/policy` — actively disables. Verified 2026-04-27 post-third-reboot: policy sysfs now `default [performance] powersave powersupersave`. LnkCtl post-flip: 03:00.0 `ASPM Disabled`, 02:00.0 `ASPM Disabled`, 00:1c.0 root port `ASPM Disabled`. MAbort- everywhere. CommClk+ on 03:00.0 and 02:00.0, CommClk- on root (structural, not a fault).
-
-T299 fire premise (PRE-TEST verification step 5) now satisfied via runtime path instead of boot path. The single-bit hypothesis is unchanged.
-
-**Model.** The blob carries two runtimes; the live one is HNDRTE/offload, not
-the `wl_probe → wlc_*` FullMAC chain. T298 just provided primary-source
-confirmation: only 2 ISRs are registered at runtime (pciedngl_isr + RTE
-chipcommon-class ISR). No `wlc_isr` (fn=0x1146D) — the FullMAC chain stays
-dead in offload mode as predicted by KEY_FINDINGS row 161.
-
-**What just happened.** PRE-TEST.298 fired ~14:19:30 BST after user cold
-cycle. Probe ran cleanly through all 7 stages (pre-write, post-write,
-post-set_active, post-T276-poll, post-T278-initial-dump, t+500ms, t+5s,
-t+30s, t+90s) — **substrate-noise belt was passed**, first such fire
-since T293. Watchdog late-ladder wedge during rmmod attempt (~t+150s)
-required user SMC reset; orthogonal to the probe success. Cold-booted
-14:31 BST; uptime ~2 min at writeup time.
-
-**Primary-source result.** ISR-list at TCM[0x629A4] = 2 nodes, frozen
-across all 5 post-set_active stages (no churn between t+0 and t+90s):
-
-| Node | TCM addr | fn | arg | mask (OOB-slot bit) | Identification |
-|---|---|---|---|---|---|
-| 0 | 0x0009627c | 0x1c99 | 0x58cc4 | 0x8 (bit 3) | pciedngl_isr (T256 reproduces) |
-| 1 | 0x00096f48 | 0x0b05 | 0x0 | 0x1 (bit 0) | RTE chipcommon-class ISR (fn@0xB04+thumb) |
-
-`mask` = `1 << bit_index` where `bit_index` was returned by BIT_alloc
-reading chipcommon-wrap+0x100 (`oobselouta30`) at `hndrte_add_isr` time.
-**The RTE chipcommon-class ISR was allocated bit 0** — primary-source
-identification of the OOB slot. The wake-trigger that SETS bit 0 is
-still LIVE; what's confirmed is the routing slot, not the trigger
-source.
-
-Auxiliary fields (with caveats):
-
-- `sched+0xCC = 0x1` stable across all stages. **Semantics unclear** —
-  not the live class-ID (predicted 0x800/0x812 in PRE-TEST). Could be
-  a status/flag word; per row 137, slot counter is at +0xD0 so +0xCC
-  is something else.
-- `events_p = sched+0x358 = 0x18109000` — chipcommon-wrap MMIO REGION
-  address (0x18100000 + 0x9000), NOT a TCM-internal pointer. Outside
-  T298_RAMSIZE_BOUND (0xA0000), so the bounds check in the macro
-  rejected it and `pending=0` is a CODE-PATH PLACEHOLDER, not a
-  measurement. The events_p VALUE is real and meaningful (fw stores
-  a backplane MMIO addr at sched+0x358); the pending VALUE is not.
-- `+0x88 = 0x18001000` (D11 base) at post-set_active onwards — class
-  shift to core[2]/D11 happens earlier than T287c previously sampled
-  (already there at post-set_active, not after the 2s poll).
-
-**What the result confirms / weakens / leaves open.**
-
-- **CONFIRMED:** row 161 (live runtime ≠ FullMAC) — only 2 nodes, no
-  wlc_isr. wl_attach's hndrte_add_isr call site never executed.
-- **CONFIRMED-PARTIAL:** row 148 (chipcommon-wrap is the wake-routing
-  surface) — bit 0 of `oobselouta30` is what the chipcommon-class ISR
-  was allocated at registration. The mechanism (BIT_alloc reads OOB
-  selector to claim a slot) is live and produced a value.
-- **STILL LIVE:** what HW event sets `oobselouta30` bit 0 (or any bit)
-  to wake fw from WFI. Pending=0 is uninformative (placeholder), so we
-  haven't observed any event firing or not firing.
-- **STOPPING-RULE VINDICATED:** row 85's "pivot to TCM-only, off BAR0"
-  rule worked. T298 is the first probe-bearing fire to clear the
-  substrate-noise belt since T293. The 4-null T294→T297 streak was
-  caused by BAR0 chipcommon/wrapper touches, not by something in the
-  shared scaffold.
-
-**Next discriminator (post-A1 resolution).** A1 was resolved via static
-docs/EROM cross-check: `events_p = sched+0x358 = 0x18109000` is the
-**ARM OOB Router core (BCMA core ID 0x367)**, per phase1 EROM walk +
-Linux `bcma.h:76`. Distinct backplane agent (NOT chipcommon-wrap
-interior). Host-side bcma enumeration (test.218) misses this core; fw
-uses it via direct backplane access. Its `+0x100` register is the
-pending-events bitmap fw reads to decide which OOB-routed ISR to wake.
-
-What this resolution changes for direction-picking:
-
-- "Candidate A — TCM-side `oobselouta30` shadow" was largely answered
-  by T298 already: node[+0xC] mask values ARE the OOB allocation
-  result. There is no separate "live oobselouta30 value" to chase
-  (the register is routing config, not pending flags).
-- The newly-identified target is the OOB Router pending register at
-  0x18109100. Reading it is what would tell us which OOB lines are
-  asserted at runtime. But that's a BAR0 read — and we don't yet know
-  whether the BAR0 row 85 noise belt is chipcommon-wrap-specific or
-  generalises to all backplane reads (T297 wedge was specifically on
-  chipcommon-wrap+PCIE2-wrap; OOB Router is a different agent).
-
-Three remaining candidates, awaiting user steer:
-
-1. **A2 — More BAR2 sched_ctx mapping.** Cheap, speculative. Read
-   sched+0xD0 (slot counter per row 137), +0xD4-table (per-slot core-id
-   per row 138), the +0x300–0x350 gap, +0x35C onwards. Might find a
-   TCM-resident dispatch table tying OOB bits → ISR nodes. Risk: low;
-   yield: speculative.
-2. **A3 — Read OOB Router pending-events at 0x18109100 via BAR0.**
-   The actual wake-state register. Risk: row 85 noise belt may bite at
-   any BAR0 chipcommon-wrap-region read — though OOB Router is a
-   different agent than the chipcommon/PCIE2 wraps that wedged in T297.
-   Single read, 1-shot scaffold; cold-cycle budget needed.
-3. **B — Host-side wake-event injection.** DMA transfer over Phase 4B
-   olmsg ring (already plumbed at shared_info), MSI assert, or
-   `pci=noaspm` upstream lead from row 152. Most ambitious; biggest
-   information yield if it works.
-
-The user's earlier "1 pls" picked A as written in PLAN.md. With A1
-resolved and the framing collapsed, the choice has changed shape. New
-question to user: A2, A3, or B?
-
-**What not to retry blindly.**
-
-- Same as before: BAR0 chipcommon/PCIE2/wrapper reads at any timing
-  (row 85), PCIe2 mailbox / D11 INTMASK wake probes (rows 125/159).
-- **Don't claim "wake gate identified at chipcommon-wrap+0x100 bit 0".**
-  That conflates the OOB allocation slot (now known) with the trigger
-  source (still unknown).
-- Don't burn another fire just to re-read T298 — the 2-node result is
-  primary-source and stable. Need a NEW probe, not a re-fire.
-
-**Substrate state.** Cold-booted 14:31 BST, lspci clean as of 14:32.
-Uptime 2 min — fresh window. Next plan should be drafted while still
-fresh; don't fire again without one.
-
----
 
 ## PRE-TEST.302b (drafted 2026-04-27 19:43 BST on user GO. Drops `bcm4360_test300_oob_pending=1` AND `bcm4360_test269_early_exit=1` from the T301 fire; otherwise unchanged. Restores `sleep 150` per T298/T299 baseline so the t+90s/t+120s probes actually run. NO rebuild — same module bits, different param set.)
 

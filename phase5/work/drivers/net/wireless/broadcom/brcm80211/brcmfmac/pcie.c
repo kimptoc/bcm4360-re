@@ -903,6 +903,38 @@ MODULE_PARM_DESC(bcm4360_test284_premask_enable, "BCM4360 test.284: call brcmf_p
 	} \
 } while (0)
 
+/* BCM4360 test.305: PRE-set_active MAILBOXMASK enable WITH explicit
+ * select_core(PCIE2) before the write. Discriminator for KEY_FINDINGS
+ * row 171's confound flag: brcmf_pcie_intr_enable calls
+ * brcmf_pcie_write_reg32(devinfo, mailboxmask=0x4C, ...) WITHOUT first
+ * selecting PCIE2 core (verified at pcie.c brcmf_pcie_intr_enable
+ * definition; row 197 in-source comment also flagged this); so prior
+ * T241/T280/T284 may have written to chipcommon+0x4C if BAR0_WINDOW
+ * happened to be at chipcommon (or wherever) instead of PCIE2 at the
+ * write site — making the "MAILBOXMASK silently drops" verdict
+ * (KEY_FINDINGS rows 124, 126) potentially a routing artefact rather
+ * than a true write-lock. Logs BAR0_WINDOW BEFORE and AFTER
+ * select_core(PCIE2), and MBM BEFORE and AFTER intr_enable, so the
+ * outcome is interpretable regardless of which way it goes:
+ *   (i)  win_before==PCIE2 base AND mbm_post still 0  → row 124 stands;
+ *        MBM is genuinely write-locked
+ *   (ii) win_before!=PCIE2 base AND mbm_post == 0xFF0300 → row 124 was
+ *        a routing confound; T241/T280/T284 verdict needs revising
+ *   (iii) win_before!=PCIE2 AND mbm_post still 0 → window-at-PCIE2 isn't
+ *        the missing piece; deeper structural issue
+ * NOTE on row-117/157 tension (advisor flag): even if (ii) and the
+ * write lands cleanly, fw may STILL not wake — row 157 says the fw
+ * blob has zero refs to PCIE2 register space, so MBM is structurally
+ * not the wake gate. (ii) without subsequent fw wake = clean closure
+ * of the MBM-as-wake-gate question, not a contradiction.
+ * Single-purpose: pre-set_active timing only. Set THIS or test284, not
+ * both — they both write MBM at pre-set_active and would confound each
+ * other. Default off. Fire decision belongs to user; this is a code
+ * stage only. */
+static int bcm4360_test305_premask_with_select;
+module_param(bcm4360_test305_premask_with_select, int, 0644);
+MODULE_PARM_DESC(bcm4360_test305_premask_with_select, "BCM4360 test.305: pre-set_active MAILBOXMASK enable WITH explicit select_core(PCIE2) before the write. Discriminator for the row-171 confound: was T284's silent-drop verdict a routing artefact (write hit chipcommon+0x4C instead of PCIE2+0x4C) or a true write-lock? Logs BAR0_WINDOW before+after select_core, MBM before+after intr_enable. Set THIS or test284, not both. (1=enable, 0=off)");
+
 /* BCM4360 test.285: read-only probe of chipcommon registers via
  * BAR0_WINDOW switch. T283 static analysis inferred that fw's
  * scheduler wake-path is chipcommon-side (BIT_alloc reads chipcommon
@@ -4681,6 +4713,47 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					brcmf_pcie_intr_enable(devinfo);
 					pr_emerg("BCM4360 test.284: brcmf_pcie_intr_enable returned\n");
 					BCM4360_T284_READ_MBM("post-write (pre-set_active)"); BCM4360_T285_READ_CC("post-write (pre-set_active)"); BCM4360_T287_READ_SCHED("post-write (pre-set_active)"); BCM4360_T303_READ_EXTRAS("post-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("post-write (pre-set_active)"); BCM4360_T298_ISR_WALK("post-write (pre-set_active)"); BCM4360_T290A_CHAIN("post-write (pre-set_active)"); BCM4360_T290B_CC_WRITE("post-write (pre-set_active)");
+				}
+
+				/* BCM4360 test.305: pre-set_active MBM enable with
+				 * explicit select_core(PCIE2). Row-171 confound
+				 * discriminator (see header comment). Set test305
+				 * OR test284, not both. */
+				if (bcm4360_test305_premask_with_select) {
+					u32 _t305_win_before = 0xdeadbeef;
+					u32 _t305_win_after  = 0xdeadbeef;
+					u32 _t305_mbm_pre    = 0xdeadbeef;
+					u32 _t305_mbm_post   = 0xdeadbeef;
+
+					pci_read_config_dword(devinfo->pdev,
+						BRCMF_PCIE_BAR0_WINDOW, &_t305_win_before);
+					pr_emerg("BCM4360 test.305: pre-select BAR0_WINDOW=0x%08x (PCIE2 base 0x18102000 expected if already there)\n",
+						 _t305_win_before);
+
+					brcmf_pcie_select_core(devinfo,
+						BCMA_CORE_PCIE2);
+
+					pci_read_config_dword(devinfo->pdev,
+						BRCMF_PCIE_BAR0_WINDOW, &_t305_win_after);
+					_t305_mbm_pre = brcmf_pcie_read_reg32(devinfo,
+						BRCMF_PCIE_PCIE2REG_MAILBOXMASK);
+					pr_emerg("BCM4360 test.305: post-select BAR0_WINDOW=0x%08x MBM_pre=0x%08x (expect win=0x18102000; MBM=0x318 if PCIE2 reachable)\n",
+						 _t305_win_after, _t305_mbm_pre);
+
+					pr_emerg("BCM4360 test.305: calling brcmf_pcie_intr_enable (PCIE2 selected; writes MBM = 0xFF0300)\n");
+					brcmf_pcie_intr_enable(devinfo);
+
+					_t305_mbm_post = brcmf_pcie_read_reg32(devinfo,
+						BRCMF_PCIE_PCIE2REG_MAILBOXMASK);
+					pr_emerg("BCM4360 test.305: post-write MBM=0x%08x (expect 0xFF0300 if write landed; 0x318/0x000 if dropped)\n",
+						 _t305_mbm_post);
+
+					pr_emerg("BCM4360 test.305: SUMMARY win_before=0x%08x win_after=0x%08x mbm_pre=0x%08x mbm_post=0x%08x verdict=%s\n",
+						 _t305_win_before, _t305_win_after,
+						 _t305_mbm_pre, _t305_mbm_post,
+						 (_t305_mbm_post == 0xFF0300) ? "WRITE_LANDED" :
+						 (_t305_mbm_post == _t305_mbm_pre) ? "WRITE_DROPPED" :
+						 "UNEXPECTED_VALUE");
 				}
 
 				pr_emerg("BCM4360 test.238: calling brcmf_chip_set_active resetintr=0x%08x (ultra-extended ladder t+120s)\n",
