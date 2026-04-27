@@ -58,7 +58,71 @@ Don't let them ride together.
 
 **Three host-driveable wake-injection candidates closed (T304b–T304e):** PMU/GPIO, DMA-via-olmsg, H2D_MAILBOX_1. Option 2 (HW-internal events) effectively closed without fw mod (T304f D11 dormant; T304g 2-ISR confirmation with BFS gap caveat). Strategic state UNCHANGED — wl comparison still highest-value remaining direction; just harder than expected to extract via static analysis alone.
 
-**Awaiting user steer on Path A / B / (a).**
+**User chose Path B (live wl trace) 2026-04-27 23:20 BST. Cycle 1 in progress.**
+
+## PRE-CYCLE.1 (live wl trace — does wl wake the fw?)
+
+**Hypothesis:** vendor `wl` driver (broadcom-sta-6.30.223.271-59, version-matched to fw RTE 6.30.223 banner) successfully wakes this fw under normal driver init. Empirical observation under wl will tell us:
+- whether the fw is in fact wakeable at all in this hardware/SROM/NVRAM configuration
+- if yes, the chip-side state under wl (TCM[0x9af88] console wr_idx, TCM[0x629A4] ISR list count, sched_ctx, lspci config) — comparable to the n=8 brcmfmac wedge baselines
+- the gap between wl-driven and brcmfmac-driven chip state
+
+**Decisive question (cycle 1):** does TCM[0x9af88] console wr_idx advance past 587 under wl?
+
+If YES → wl knows the right protocol; cycle 2 captures the PCI config sequence wl uses.
+If NO → either wl can't drive this fw build either (different problem entirely — SROM/NVRAM/fw-version mismatch we missed) OR wl uses a different mechanism that doesn't write to console. Either is informative.
+
+**State change executed:**
+- `/etc/nixos/configuration.nix.preWlCycle1` — backup of pre-edit state (copied via sudo)
+- `/etc/nixos/configuration.nix` line 21 — `wl` removed from blacklist (kept `b43 bcma ssb` blacklisted; comment added cross-referencing this cycle)
+- `sudo nixos-rebuild boot` — IN PROGRESS at writeup time (background bash bzg217kcs, log at /tmp/nixos-rebuild-boot-cycle1.log)
+
+**Required AFTER nixos-rebuild boot completes:**
+1. Verify rebuild succeeded: `tail /tmp/nixos-rebuild-boot-cycle1.log` — look for "activated" not error
+2. **Commit + push + sync** (this RESUME_NOTES + the .preWlCycle1 reference; nixos config itself is in /etc/nixos not in this repo — note that)
+3. **User reboot:** `sudo reboot`
+
+**POST-REBOOT capture sequence (run in cycle 1 by post-reboot Claude):**
+
+1. **PCIe state check:** `sudo lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta|LnkCtl'` → expect MAbort-, CommClk+
+2. **Verify wl bound:** `lspci -k -s 03:00.0` should show "Kernel driver in use: wl"
+3. **Check wl probe in dmesg:** `sudo dmesg | grep -iE 'wl|broadcom|bcma|brcm' | head -50` (look for wl_pci_probe success, fw load, interface up)
+4. **Check WiFi interface:** `ip link show` — should show new wlanX or eth0 interface
+5. **DECISIVE READ — TCM[0x9af88] (console wr_idx) via /dev/mem mmap of BAR2:**
+   - BAR2 base = 0xb0400000 (per lspci pre-cycle reconnaissance — verify post-cycle)
+   - wr_idx field is at TCM[0x9af88] + offset within console_ctx struct (per T276/T278 — wr_idx is a u32 within the struct that si[+0x010] points to). Need to read the struct ptr first.
+   - Alternative: read BAR2[0x9af88+offset] directly. Per T277/T278 instrumentation: si[+0x010] = console_struct_ptr; struct@console_struct_ptr has buf_addr at +0, buf_size at +4, write_idx at +8 (or near).
+   - Pragmatic approach: write a small Python script using mmap + struct to read BAR2 directly. Code sketch:
+     ```python
+     import mmap, struct
+     with open('/sys/bus/pci/devices/0000:03:00.0/resource2', 'rb') as f:
+         mm = mmap.mmap(f.fileno(), 0x100000, prot=mmap.PROT_READ)
+         # Read si[+0x010] = console_struct_ptr (relative to TCM start)
+         console_ptr = struct.unpack('<I', mm[0x9af88+0x10:0x9af88+0x14])[0] & 0xfffff
+         # Read wr_idx within console struct
+         buf_addr = struct.unpack('<I', mm[console_ptr:console_ptr+4])[0]
+         buf_size = struct.unpack('<I', mm[console_ptr+4:console_ptr+8])[0]
+         wr_idx = struct.unpack('<I', mm[console_ptr+8:console_ptr+12])[0]
+         print(f'console_ptr=0x{console_ptr:08x} buf_addr=0x{buf_addr:08x} buf_size=0x{buf_size:08x} wr_idx={wr_idx}')
+     ```
+   - **Decisive comparison:** if wr_idx > 587 → wl is advancing the console; **wl HAS WOKEN THE FW**. If wr_idx == 587 (or whatever wl init writes — could be different baseline if wl uses a different shared_info) → no advancement during wl init.
+6. **Read TCM[0x629A4] ISR list head + count:** walk linked list (each node = 16 bytes: next, fn, arg, mask) — count nodes. Compare against T298's 2 nodes. If >2, wl has registered additional ISRs.
+7. **Snapshot lspci** for config-space deltas: `sudo lspci -vvv -s 03:00.0 > /home/kimptoc/bcm4360-re/phase6/cycle1_lspci.txt`
+8. **Snapshot dmesg** (full wl-side messages): `sudo dmesg > /home/kimptoc/bcm4360-re/phase6/cycle1_dmesg.txt`
+9. **Document POST-CYCLE.1 in RESUME_NOTES** with all readings.
+
+**Privacy note:** wl will probably broadcast probe requests to scan for networks. May try to auto-associate if any saved network config exists (unlikely in clean nixos but possible). User confirmed OK with this.
+
+**Cleanup cycle (after capture):**
+1. `sudo cp /etc/nixos/configuration.nix.preWlCycle1 /etc/nixos/configuration.nix` — restore blacklist
+2. `sudo nixos-rebuild boot`
+3. Commit + push + sync
+4. User reboots
+5. Verify back to dev mode (brcmfmac usable, wl blacklisted)
+
+**Substrate note:** the chip is going through 2 reboot cycles + actual wl init. The "fresh substrate" baselines from earlier in this session no longer apply post-cleanup — would need new baselines if any further brcmfmac fires happen. For wl-discriminator purposes this is fine.
+
+**Awaiting nixos-rebuild boot completion to commit + push + reboot.**
 
 **Substrate is fresh** (boot 0 @ 21:16:01). PCIe lspci clean. No code changes outstanding. T304 macro is empirically validated. Docs cleaned up per DOCS.md §3 (T299/T300/T301 pairs migrated). PLAN.md, RESUME_NOTES, KEY_FINDINGS all current as of this writeup.
 
