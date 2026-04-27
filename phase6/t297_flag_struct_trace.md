@@ -325,6 +325,50 @@ To wake fw, the host needs to cause REAL HW events:
 
 The most natural host-side path is **(1) DMA**: post a buffer to fw's H2D ring + write the host→fw doorbell, the DMA engine completes the transfer, MI_DMAINT fires, fw wakes, wlc_dpc processes the FIFO event. This is the standard PCI-CDC / msgbuf flow, and it explains why Phase 4B's olmsg-ring-prep alone wasn't enough — the trigger to initiate the transfer was missing.
 
+## T298g/h/i/j/k/l/m/n/o/p — caller-chain mapping + INTMASK arming question
+
+### Caller chain to flag_struct allocator
+
+Confirmed (T298g/j/l/m/n):
+- **wl_probe (fn@0x67614)** → fn@0x68A68 at site 0x67700 → fn@0x6820C at site 0x68B90 → flag_struct allocated
+- fn@0x6820C ITSELF calls fn@0x142E0 at site 0x6827C (the wake-mask init: writes flag_struct[+0x64]=0x48080, [+0x180]=0, plus other bytes)
+- fn@0x68A68 has only ONE caller (wl_probe at 0x67700)
+- fn@0x6820C has only ONE caller (fn@0x68A68 at 0x68B90)
+
+**Implication:** flag_struct is allocated during wl_probe execution. By the time fn@0x6820C returns, flag_struct[+0x88] = D11 REG base = 0x18001000, and flag_struct[+0x64] = 0x48080 (saved wake mask). T287c's runtime observation shows wl_probe completes before fw enters WFI, so flag_struct exists at the WFI freeze point.
+
+### Wake-mask values: canonical 0x48080, only ONE writer
+
+T298f/h confirmed: only ONE site (0x142E2) writes the value 0x48080 to a [reg, +0x64] in the entire blob. Wake mask is canonically 0x48080 — no dynamic per-state values. Only fn@0x142E0 sets it, called only from fn@0x6820C.
+
+### D11+0x16C INTMASK writers — the chicken-and-egg
+
+Only TWO 32-bit writers of D11+0x16C with identifiable values:
+- **0x23402 (fn@0x233E8):** writes flag_struct[+0x64]=0x48080 to D11+0x16C — the **ARM** function
+- **0x23420 (fn@0x2340C):** writes 0 to D11+0x16C — the **DISARM** function
+
+**Caller analysis:**
+- fn@0x233E8 has ONE direct caller: fn@0x113B4 at site 0x11456 — but fn@0x113B4 is the POST-DISPATCH ACTION fn (called only AFTER fn@0x2309C returns matched bits). So fn@0x233E8 is the **post-DPC RE-ARM** path.
+- fn@0x2340C has ZERO direct callers (presumably indirect via fn-ptr or unreachable from current code).
+
+**Chicken-and-egg problem:** if fn@0x233E8 is the only path that arms D11+0x16C, and it's only called after the first event fires through the dispatch chain — then how does the FIRST event ever fire?
+
+Possible explanations:
+1. **HW INTMASK has a non-zero default** — maybe D11 chip resets to some default INTMASK that allows MI_DMAINT etc. through, and fw's init writes 0x48080 only AFTER the first wake to refine it.
+2. **Indirect arm via fn-ptr** — fn@0x2340C or another fn might be reached through a fn-ptr table I haven't enumerated. (T298o's fn-ptr search returned 0 for fn@0x233E9 and 0x2340D — already checked.)
+3. **Another arm path** — fn@0x2333C is a sibling that calls fn@0x2309C with r1=0 (uses [+0x64] mask directly). It's a "secondary entry point" for event polling. Its caller chain might include init-time.
+4. **The wake mask isn't armed in current Phase 5 state** — fw is in "events disabled" mode at WFI, and CAN'T be woken by HW events under current conditions. This would explain why all our previous probes (mailbox writes, etc.) failed silently — the wake gate was structurally closed.
+
+This last possibility is the most concerning interpretation: fw is in WFI WITH INTMASK=0, ignoring all HW events, waiting for some software trigger that we haven't identified to call fn@0x233E8 (or equivalent) and arm the wake.
+
+### Strategic re-frame (provisional)
+
+If interpretation (4) holds: the missing piece is whatever calls fn@0x233E8 (or its equivalent) the FIRST time. wlc init must complete enough machinery to either (a) directly call fn@0x233E8 or (b) cause fn@0x113B4 to fire via some non-mask path.
+
+The first-wake mechanism is now the open question — not "what specific HW event wakes fw" but "what code path arms the wake mask in the first place".
+
+Need to: (a) find caller of fn@0x2333C (the secondary-entry-point), (b) check if HW D11 INTMASK has a non-zero default at chip reset, (c) look for fn@0x2340C indirect callers (fn-ptr through structs).
+
 ## Clean-room posture
 
 All findings are disassembled mnemonics + literal-pool resolution + offset-pattern matching, plus open-source cross-reference (brcmsmac/d11.h via Explore). No reconstructed function bodies. Scripts in `phase6/t297*.py` and `phase6/t298*.py`. Zero hardware fires.
