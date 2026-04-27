@@ -279,6 +279,52 @@ To trigger fw to wake without real wireless activity:
 
 The first option is the most surgical and the cheapest to test. Caveat: untested in upstream; one runtime fire required (post-set_active to land after fw's wlc-attach completes).
 
+## T298: deeper static analysis — what fw actually waits for
+
+### T298a/b: fn@0x113B4 → fn@0x2312C is `wlc_dpc`
+
+fn@0x113B4's "ACTION" call (per T281 interpretation) goes to fn@0x2312C, which is **`wlc_dpc`** — confirmed by printf string at lit@0x2331c. The DPC body:
+
+1. Reads events from `flag_struct[+0x5c]` (NOT macintstatus directly — see bridge below)
+2. Clears `flag_struct[+0x5c] = 0`
+3. Dispatches by bit-test: bits 0x800000, 0x80, 0x20000000, 0x20, 0x800, 0x8000, 0x40000 each have a specific handler. Catch-all mask `0xddf9571f` calls fn@0x22f78.
+
+### T298c: macintstatus → flag_struct[+0x5c] BRIDGE
+
+`fn@0x23374` is the bridge:
+- Calls `fn@0x2309C` which reads `r6 = macintstatus[+0x168]`, computes `matched = (flag_struct[+0x60] | flag_struct[+0x180]) & r6`, W1C-clears macintstatus, returns `matched`
+- **`fn@0x23374` then stores `matched` into `flag_struct[+0x5c]`** at line 0x233D0
+- Returns 1, sets *byte_out=1 → fn@0x1146C calls fn@0x113B4 → wlc_dpc
+
+### T298e/f: wake masks are 0x48080 — NOT MI_GP1
+
+Found 3 writers of `flag_struct[+0x180]`. Most informative: a fn body starting at 0x142E0 writes:
+- `flag_struct[+0x64] = 0x48080` (saved alternate mask)
+- `flag_struct[+0x180] = 0` (additional mask cleared)
+- `flag_struct[+0xa2] = 0` (byte flag)
+
+Found `fn@0x233E8` (an "enable" function): copies `flag_struct[+0x64]` → `flag_struct[+0x60]` AND writes the same value to `D11+0x16C` (the INTMASK register — companion to macintstatus). This ARMS fw to wake on bits in 0x48080.
+
+### T298 — Explore agent identification of bits
+
+Per upstream brcmsmac/d11.h:
+- **bit 7 = MI_NSPECGEN_0** (PSM generic status — fw-defined meaning)
+- **bit 15 = MI_DMAINT** (DMA interrupt summary; RX/TX FIFO events)
+- **bit 18 = MI_BG_NOISE** (background noise measurement complete)
+
+NOT MI_GP1, NOT MI_TO. Fw waits for **DMA** activity (bit 15 = MI_DMAINT) primarily, plus PSM generic events and background-noise samples.
+
+### Strategic re-frame — MI_GP1 host-write was wrong path
+
+**macintstatus is W1C (write-one-to-CLEAR), not write-to-SET.** Host writes to D11+0x168 CANNOT inject bits — they only clear pending ones. The earlier "MI_GP1 host-write" plan is structurally impossible.
+
+To wake fw, the host needs to cause REAL HW events:
+1. **DMA transfer** → fires MI_DMAINT (bit 15). This matches Phase 4B's olmsg ring setup that prepared a 64KB DMA buffer but never triggered a transfer.
+2. **MCMD_BG_NOISE** trigger → fires MI_BG_NOISE (bit 18). MAC command from a register write.
+3. **PSM action** → fires MI_NSPECGEN_0 (bit 7). Indirect via MAC state.
+
+The most natural host-side path is **(1) DMA**: post a buffer to fw's H2D ring + write the host→fw doorbell, the DMA engine completes the transfer, MI_DMAINT fires, fw wakes, wlc_dpc processes the FIFO event. This is the standard PCI-CDC / msgbuf flow, and it explains why Phase 4B's olmsg-ring-prep alone wasn't enough — the trigger to initiate the transfer was missing.
+
 ## Clean-room posture
 
-All findings are disassembled mnemonics + literal-pool resolution + offset-pattern matching, plus open-source cross-reference (brcmsmac/d11.h via Explore). No reconstructed function bodies. Scripts in `phase6/t297*.py`. Zero hardware fires.
+All findings are disassembled mnemonics + literal-pool resolution + offset-pattern matching, plus open-source cross-reference (brcmsmac/d11.h via Explore). No reconstructed function bodies. Scripts in `phase6/t297*.py` and `phase6/t298*.py`. Zero hardware fires.
