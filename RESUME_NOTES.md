@@ -8,7 +8,7 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 17:50 BST — POST-TEST.300 written up. T300 FIRED 17:41 BST and crashed the machine; auto-recovered (no SMC reset). Sample 1 (post-set_active) read **`pending=0x00000000` cleanly** via BAR0 OOB Router window — first primary-source read of OOB Router pending-events. Sample 2 (t+60s) NEVER RAN — silent wedge at ~t+45s, EARLIER than the prior [t+90s, t+120s] bracket. Key implication: **KEY_FINDINGS row 85 narrows — BAR0 noise belt does NOT extend to OOB Router agent (0x18109000)**. Awaiting user steer on next step (re-fire / move sample-2 earlier / A2 BAR2 mapping). See POST-TEST.300 below.
+## Current state (2026-04-27 19:16 BST — PRE-TEST.301 drafted. User cold-cycled at ~19:14 BST; uptime 1 min, lspci clean (03:00.0 ASPM L0s L1 Enabled / 02:00.0 ASPM L1 Enabled / no MAbort / CommClk+). T301 = T300 re-fire UNCHANGED, with insmod targeted at uptime ~10-15 min (middle of row 83's 20-25 min clean window) instead of T300's ~2-min boundary. Discriminator: 3 outcomes per the advisor-blessed plan — wedge again at t+45s (bracket widened) vs wedge at t+90s+ AND sample 2 fires (T300 was n=1 outlier) vs wedge at t+90s+ AND sample 2 wedges (bracket is t+45s..t+90s). Plan committed below; fire scheduled for ~19:25-19:30 BST.
 
 T299 FIRED 15:29:00 BST on boot -1 with full ASPM-disabled chain (cmdline `pcie_aspm.policy=performance` parsed, runtime sysfs flip applied at 15:27:57 before insmod; 03:00.0+02:00.0+root all `ASPM Disabled`). Probe ran clean through all 9 stages — IDENTICAL 2-node ISR readout to T298. Wedged at end-of-t+90s probe (boot -1 ended 15:31:05, ~7s after t+90s SUMMARY). User cold-boot/SMC reset; current uptime now ~30+ min, ASPM back to default. **H1 (ASPM = wedge cause) FALSIFIED.** **Wedge is the known [t+90s, t+120s] bracket** (KEY_FINDINGS row 104, T270-BASELINE pattern, reproduced T276/T287c/T298/T299) — NOT a "rmmod wedge" as POST-TEST.298 mistakenly claimed.
 
@@ -510,6 +510,79 @@ Awaiting user **GO/NO-GO on T301 (T300 re-fire, no code change)**. If GO, the fi
 3. Wait until ~10-15 min uptime
 4. Same fire command as PRE-TEST.300 (no rebuild, no params changed)
 5. Auto-capture journalctl post-recovery
+
+## PRE-TEST.301 (drafted 2026-04-27 19:16 BST — T300 re-fire UNCHANGED, with stricter substrate-window discipline. Cold cycle done by user at ~19:14 BST; insmod targeted for ~19:25-19:30 (uptime ~10-15 min, middle of row 83's 20-25 min clean window). NO code changes, NO param changes vs T300. Tests whether T300's t+45s wedge was n=1 substrate variance vs a real bracket-widening.)
+
+### Goal — single bit of information
+
+Three distinguishable outcomes (per advisor consult preserved in POST-TEST.300):
+
+| Outcome | Interpretation | Next step |
+|---|---|---|
+| Wedge again at ~t+45s, sample 2 still missing | **Bracket widened to t+45s.** T300 result was not an outlier; substrate wedge bracket is wider than [t+90s, t+120s] | Move sample 2 earlier (t+30s) on T302 |
+| Wedge at t+90s+ AND sample 2 fires cleanly | T300 wedge was n=1 substrate variance. Got the missing data + n=2 on sample 1 = 0 | If sample 2 also = 0, project pivots back to wake-injection (B); if non-zero, identify which OOB bit |
+| Wedge at t+90s+ AND sample 2 wedges | Wedge bracket really is [t+45s..t+90s]; T300 hit early edge of it | Sample 1 reliable, Sample 2 unreliable — rethink ladder placement |
+
+### Diff vs T300 fire (2026-04-27 17:41 BST, sample 1 clean / sample 2 missing / wedge at ~t+45s)
+
+- IDENTICAL module (no rebuild — T300 params already in `phase5/work/.../brcmfmac.ko`)
+- IDENTICAL fire script
+- IDENTICAL kernel cmdline (default ASPM — T299 falsified ASPM-as-cause, no need to flip)
+- ONLY DIFFERENCE: insmod timing. T300 fired at uptime ~2 min (boundary of row 83 clean window). T301 targets uptime ~10-15 min (middle of window). Removes the "cold-boot timing" cause from POST-TEST.300's 4 candidate explanations for the t+45s wedge.
+
+### Substrate state at writeup (19:16 BST)
+
+- Cold-boot at 19:14:57 BST; uptime 1 min
+- 03:00.0: `ASPM L0s L1 Enabled` (default), MAbort-, CommClk+, x1 @2.5GT/s
+- 02:00.0: `ASPM L1 Enabled` (default), MAbort-, CommClk+, x1 @5GT/s
+- modinfo confirms `bcm4360_test300_oob_pending` and `bcm4360_test269_early_exit` params present
+
+Verified clean. No reboot required between writeup and fire.
+
+### Pre-fire checklist (CLAUDE.md)
+
+1. ✓ NO REBUILD — same module bits that fired T300 clean
+2. ✓ Hypothesis matrix above (re-stated from POST-TEST.300 advisor consult)
+3. ✓ PCIe state checked (just done — clean)
+4. → Plan committed and pushed BEFORE fire (this commit)
+5. → FS sync after push
+6. → Wait for uptime ~10-15 min, then insmod
+7. ✓ No advisor call needed — re-fire of an advisor-blessed plan
+
+### Fire command (run when uptime hits ~10-15 min, i.e. ~19:25-19:30 BST)
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test287_sched_ctx_read=1 \
+    bcm4360_test287c_extended=1 \
+    bcm4360_test298_isr_walk=1 \
+    bcm4360_test300_oob_pending=1 \
+    bcm4360_test269_early_exit=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.301.run.txt 2>&1
+sleep 75
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.301.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.301.journalctl.txt
+```
+
+If wedged before journalctl: on next boot, `sudo journalctl -k -b -1 > phase5/logs/test.301.journalctl.txt`.
+
+### Risk and recovery
+
+- Identical risk profile to T300. Worst case: another silent kernel wedge requiring auto-recovery or SMC reset.
+- T300 was the FIRST successful BAR0 read of OOB Router (0x18109000). Reproduces the same scaffold; high confidence sample 1 will read cleanly again.
+
+### What this fire does NOT do
+
+- Does not advance the wake-trigger source identification (sample 1 = 0 was already observed)
+- Does not test ASPM hypothesis (T299 already falsified)
+- Does not move sample 2 timing (held until n=2 on the wedge bracket)
+- Does not test A2 (BAR2 sched_ctx mapping) or B (host-side wake-event injection)
+
+Pure timing/substrate discriminator. Cheap (no code change) + necessary (need n=2 before redesigning around t+45s).
 
 ## Archived detail
 

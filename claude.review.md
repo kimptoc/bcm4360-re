@@ -1,10 +1,5 @@
 # CLAUDE.md Review
 
-**Well-judged:**
-- Legal section is standard clean-room practice, not overly cautious — necessary for RE work
-- Push-after-commit and filesystem sync are pragmatic given crash history
-- "Grep prior phases before declaring new findings" avoids expensive re-discovery
-- Pre-test PCIe state check is load-bearing for this type of work
 
 **Potential concerns:**
 
@@ -17,7 +12,5 @@
 4. **Missing: failure mode branching** — The post-test checklist treats crash and success the same. Crashes need different recovery (check git integrity, verify filesystem). A short crash-specific sub-checklist would help.
 
 5. **"Always push immediately after every commit"** — This is aggressive but defensible. One risk: pushing broken WIP commits. Could add: commit messages should flag WIP state explicitly (e.g., `WIP: mid-experiment`).
-
-6. **No mention of automated testing** — For the non-hardware parts of the codebase, there's no lint/typecheck/test guidance. The project might benefit from that.
 
 **Overall:** Appropriately cautious for a kernel-module RE project. The main improvement would be **tiering the checklist by risk** rather than applying full ceremony to every interaction.
