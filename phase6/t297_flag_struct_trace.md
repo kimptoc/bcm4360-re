@@ -137,12 +137,48 @@ The most likely candidate is **D11 MAC interrupt block at +0x100 within the D11 
 
 This is verifiable cheaply with a TCM read-only probe at runtime (no chipcommon RMW needed) — read `flag_struct[+0x88]` directly via TCM and confirm.
 
-## What's next (advisor consult required)
+## T297-9: cluster-shape candidate at 0x6A814 — NOT flag_struct
 
-The cheapest static verification: scan for code that populates `flag_struct[+0x88]` with the per-class register base from sched_ctx (if it does, that's the EROM-walk-result store). If found → confirms architectural class of the wake-gate (D11/ARM/PCIE2/whichever class).
+The 0x6A8A4/0x6A8CC/0x6AC70 cluster (str at +0x60, strb at +0x88, strb at +0xAC, all on r4) flagged in T297e is a 232-byte (0xE8) struct allocator/initializer at fn@0x6A814. Body shape:
+- `bl alloc(?, 0xE8); memset(r4, 0, 0xE8)` — alloc-and-zero
+- Many field copies from `arg0` (template) → new struct (r4)
+- Explicit byte zeroing at +0x82..+0x89 + +0x94 (defensive zero)
+- The [+0x88] write is `strb.w r3, [r4, #0x88]` with r3=0 — a BYTE clearing, not a 32-bit base store
 
-Alternatively: **TCM read-only probe at runtime** — read `flag_struct[+0x88]` via BAR2 iowrite32 read-only probe at an early point post-set_active. This is the safe runtime approach the advisor suggested as a fallback. It does NOT require chipcommon RMW, just BAR2 read.
+Not flag_struct. Closes that line.
+
+## T297-10: wake-gate identification via brcmsmac/d11.h cross-reference
+
+Explore agent searched upstream Linux kernel for HW core matching the register-block signature (offsets 0x128, 0x168, 0x16C, 0x180-0x18C with bit constants 0xFFFFFFFF/0x4000/0x80000000/0x2000000):
+
+> The register block belongs to **D11 (core[2], ID 0x812, base 0x18001000)** — Broadcom 802.11 MAC.
+>
+> | Offset | Register | Purpose |
+> |---|---|---|
+> | 0x128 | `macintstatus` | MAC interrupt status (R/W) |
+> | 0x168 / 0x16C | (interrupt block — W1C-style) | (exact name varies between D11 revs; W1C-clear pattern matches) |
+> | 0x180 / 0x184 | `tsf_timerlow` / `tsf_timerhigh` | TSF time |
+> | 0x188 / 0x18C | `tsf_cfprep` / `tsf_cfpstart` | TSF CFP control |
+
+Constant decode under D11 INTSTATUS interpretation:
+- 0xFFFFFFFF write to +0x168 = "clear all pending MAC interrupts" (init/reset path)
+- 0x4000 = bit 14 = likely **MI_GP1** (general-purpose interrupt 1)
+- 0x80000000 = bit 31 = likely **MI_TO** (general-purpose timeout) or saturate flag
+- 0x2000000 = bit 25 = some MAC-event mask
+
+Note: BCM4360's D11 is rev 42 (per T287c), while upstream brcmsmac's d11.h covers older D11 revs (rev 24-26). Exact register names at +0x168/+0x16C may differ between revs, but the CORE identification (D11 = wireless MAC) is solid.
+
+### Strategic implication — major shift
+
+**fw is waiting for D11 (wireless MAC) interrupts to wake from WFI**, not for PCIE2 mailboxes (already ruled out per row 117) and not for chipcommon events (the analogy that misled T283/T287b).
+
+To get fw past WFI, the host needs to either:
+1. **Trigger a real D11 MAC event** — requires the MAC to be powered up + configured + receiving wireless activity. Pre-attach is too early; needs wlc_init complete first.
+2. **Write a D11 INTSTATUS bit directly via BAR0** (using `select_core(D11)` then write to D11_BASE+0x168). This SETS a software-friendly bit (e.g., MI_GP1) which fw responds to during dispatch.
+3. **Find an internal path** where chipcommon or another reachable core triggers a D11 INTSTATUS bit indirectly.
+
+**Fundamental re-frame**: the wake mechanism for fw isn't "host doorbell to PCIe" — it's "MAC event to D11 INTSTATUS". This explains why T241/T280/T284 host MBM writes did nothing (different register block entirely) and why hndrte_add_isr writes no HW registers (it's wlc-side scheduler work, not interrupt enable).
 
 ## Clean-room posture
 
-All findings are disassembled mnemonics + literal-pool resolution + offset-pattern matching. No reconstructed function bodies. Scripts in `phase6/t297*.py`. Zero hardware fires.
+All findings are disassembled mnemonics + literal-pool resolution + offset-pattern matching, plus open-source cross-reference (brcmsmac/d11.h via Explore). No reconstructed function bodies. Scripts in `phase6/t297*.py`. Zero hardware fires.
