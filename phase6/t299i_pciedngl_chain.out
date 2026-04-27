@@ -1,0 +1,831 @@
+Disasm pass…
+Total: 183,411
+
+=== (1) pciedngl_open: fn containing 0x1c78 ===
+  fn-start: 0x1c74
+
+=========== pciedngl_open  fn @ 0x1c74..0x1c8e ===========
+   0x1c74  push     {r4, lr}
+   0x1c76  ldr      r4, [r0, #0x18]
+   0x1c78  ldr      r1, [pc, #0x14]  ; "pciedngl_open"
+   0x1c7a  ldr      r0, [pc, #0x18]  ; lit=0x40692
+   0x1c7c  bl       #0xa30  → fn@0xa30
+   0x1c80  ldr      r3, [r4, #0x18]
+   0x1c82  movs     r0, #0
+   0x1c84  ldr      r2, [r3, #0x24]
+   0x1c86  orr      r2, r2, #0x100
+   0x1c8a  str      r2, [r3, #0x24]
+   0x1c8c  pop      {r4, pc}
+  ... [end 0x1c8e]
+
+
+=== (2) pciedngl_probe: fn containing 0x1e9e ===
+  fn-start: 0x1e90
+
+=========== pciedngl_probe  fn @ 0x1e90..0x1f50 ===========
+   0x1e90  push.w   {r4, r5, r6, r7, r8, sb, sl, fp, lr}
+   0x1e94  sub      sp, #0x14
+   0x1e96  mov      r6, r0
+   0x1e98  mov      r8, r1
+   0x1e9a  ldr      r0, [pc, #0xc0]  ; lit=0x40692
+   0x1e9c  mov      sb, r2
+   0x1e9e  ldr      r1, [pc, #0xc0]  ; "pciedngl_probe"
+   0x1ea0  mov      fp, r3
+   0x1ea2  ldr.w    sl, [sp, #0x3c]
+   0x1ea6  bl       #0xa30  → fn@0xa30
+   0x1eaa  mov      r0, r6
+   0x1eac  bl       #0x66e64  → fn@0x66e64
+   0x1eb0  movs     r1, #0x3c
+   0x1eb2  mov      r7, r0
+   0x1eb4  movs     r0, #0
+   0x1eb6  bl       #0x7d60  → fn@0x7d60
+   0x1eba  mov      r4, r0
+   0x1ebc  cbnz     r0, #0x1ec8
+   0x1ebe  mov      r1, sl
+   0x1ec0  ldr      r0, [pc, #0xa0]  ; lit=0x4a075 → fn@0x4a074
+   0x1ec2  bl       #0xa30  → fn@0xa30
+   0x1ec6  b        #0x1f40
+   0x1ec8  movs     r5, #0
+   0x1eca  movs     r1, #0
+   0x1ecc  movs     r2, #0x3c
+   0x1ece  bl       #0x91c  → fn@0x91c
+   0x1ed2  str.w    sl, [r4]
+   0x1ed6  str      r6, [r4, #0x1c]
+   0x1ed8  mov      r1, r7
+   0x1eda  str      r7, [r4, #0x10]
+   0x1edc  mov      r2, r8
+   0x1ede  mov      r3, sb
+   0x1ee0  mov      r0, fp
+   0x1ee2  str      r5, [sp]
+   0x1ee4  str      r5, [sp, #4]
+   0x1ee6  str      r5, [sp, #8]
+   0x1ee8  bl       #0x67358  → fn@0x67358
+   0x1eec  str.w    r8, [r4, #0x18]
+   0x1ef0  str      r0, [r4, #0xc]
+   0x1ef2  bl       #0x9948  → fn@0x9948
+   0x1ef6  str      r0, [r4, #4]
+   0x1ef8  ldr      r0, [r4, #0xc]
+   0x1efa  bl       #0x9964  → fn@0x9964
+   0x1efe  mov      r1, r5
+   0x1f00  ldr      r2, [r4, #0xc]
+   0x1f02  mov      r3, r7
+   0x1f04  str      r0, [r4, #8]
+   0x1f06  mov      r0, r4
+   0x1f08  bl       #0x64248  → fn@0x64248
+   0x1f0c  str      r0, [r4, #0x14]
+   0x1f0e  cbnz     r0, #0x1f1a
+   0x1f10  ldr      r1, [pc, #0x4c]  ; "pciedngl_probe"
+   0x1f12  ldr      r0, [pc, #0x54]  ; lit=0x40787 → fn@0x40786
+   0x1f14  bl       #0xa30  → fn@0xa30
+   0x1f18  b        #0x1f50
+   0x1f1a  mov      r0, r5
+   0x1f1c  ldr      r1, [sp, #0x38]
+   0x1f1e  mov      r2, sl
+   0x1f20  ldr      r3, [pc, #0x48]  ; lit=0x1c99 → fn@0x1c98
+   0x1f22  str      r6, [sp]
+   0x1f24  str.w    sb, [sp, #4]
+   0x1f28  bl       #0x63c24  → fn@0x63c24
+   0x1f2c  cbz      r0, #0x1f36
+   0x1f2e  ldr      r0, [pc, #0x40]  ; lit=0x4079f → fn@0x4079e
+   0x1f30  bl       #0xa30  → fn@0xa30
+   0x1f34  b        #0x1f50
+   0x1f36  mov      r0, r4
+   0x1f38  bl       #0x1e44  → fn@0x1e44
+   0x1f3c  mov      r0, r4
+   0x1f3e  b        #0x1f4a
+   0x1f40  ldr      r0, [pc, #0x30]  ; "pciedev_msg.c"
+   0x1f42  movs     r1, #0xad
+   0x1f44  bl       #0x11e8  → fn@0x11e8
+   0x1f48  movs     r0, #0
+   0x1f4a  add      sp, #0x14
+   0x1f4c  pop.w    {r4, r5, r6, r7, r8, sb, sl, fp, pc}
+  ... [end 0x1f50]
+
+
+=== (3) pciedngl_isr: fn containing 0x1ca0 ===
+  fn-start: 0x1c98
+
+=========== pciedngl_isr  fn @ 0x1c98..0x2298 ===========
+   0x1c98  push.w   {r4, r5, r6, r7, r8, sb, lr}
+   0x1c9c  ldr      r5, [r0, #0x18]
+   0x1c9e  sub      sp, #0x1c
+   0x1ca0  ldr      r0, [pc, #0xd8]  ; lit=0x4069d → fn@0x4069c
+   0x1ca2  ldr      r6, [r5, #0x18]
+   0x1ca4  bl       #0xa30  → fn@0xa30
+   0x1ca8  ldr      r3, [r6, #0x20]
+   0x1caa  str      r3, [sp, #0x14]
+   0x1cac  ldr      r3, [sp, #0x14]
+   0x1cae  tst.w    r3, #0x100
+   0x1cb2  bne      #0x1cc4
+   0x1cb4  ldr      r2, [sp, #0x14]
+   0x1cb6  ldr      r0, [pc, #0xc8]  ; "%s: invalid ISR status: 0x%08x"
+   0x1cb8  ldr      r1, [pc, #0xc8]  ; "pciedngl_isr"
+   0x1cba  add      sp, #0x1c
+   0x1cbc  pop.w    {r4, r5, r6, r7, r8, sb, lr}
+   0x1cc0  b.w      #0xa30
+   0x1cc4  mov.w    r3, #0x100
+   0x1cc8  ldr      r0, [r5, #0x20]
+   0x1cca  str      r3, [r6, #0x20]
+   0x1ccc  bl       #0x4e20  → fn@0x4e20
+   0x1cd0  mov      r4, r0
+   0x1cd2  cbnz     r0, #0x1ce6
+   0x1cd4  ldr      r1, [pc, #0xac]  ; "pciedngl_isr"
+   0x1cd6  ldr      r0, [pc, #0xb0]  ; lit=0x406d1 → fn@0x406d0
+   0x1cd8  bl       #0xa30  → fn@0xa30
+   0x1cdc  ldr      r0, [pc, #0xac]  ; "pciedev_msg.c"
+   0x1cde  movs     r1, #0xfa
+   0x1ce0  bl       #0x11e8  → fn@0x11e8
+   0x1ce4  b        #0x1d70
+   0x1ce6  ldr.w    sb, [r0, #0x10]
+   0x1cea  add.w    r7, r5, #0x24
+   0x1cee  mov.w    r2, #0x400
+   0x1cf2  mov      r1, sb
+   0x1cf4  mov      r0, r7
+   0x1cf6  bl       #0x2e10  → fn@0x2e10
+   0x1cfa  mov      r8, r0
+   0x1cfc  mov      r0, r7
+   0x1cfe  bl       #0x2d38  → fn@0x2d38
+   0x1d02  mov      r1, r8
+   0x1d04  mov      r7, r0
+   0x1d06  mov      r2, r7
+   0x1d08  ldr      r0, [pc, #0x84]  ; lit=0x406f3 → fn@0x406f2
+   0x1d0a  bl       #0xa30  → fn@0xa30
+   0x1d0e  cmp.w    r8, #0
+   0x1d12  beq      #0x1d62
+   0x1d14  mov      r0, r4
+   0x1d16  bl       #0x1514  → fn@0x1514
+   0x1d1a  cbnz     r0, #0x1d26
+   0x1d1c  ldr      r0, [pc, #0x6c]  ; "pciedev_msg.c"
+   0x1d1e  mov.w    r1, #0x104
+   0x1d22  bl       #0x11e8  → fn@0x11e8
+   0x1d26  ldr      r3, [r4, #0x10]
+   0x1d28  ldr      r2, [r4, #0xc]
+   0x1d2a  add      r3, r8
+   0x1d2c  cmp      r2, r3
+   0x1d2e  bhs      #0x1d3a
+   0x1d30  ldr      r0, [pc, #0x58]  ; "pciedev_msg.c"
+   0x1d32  mov.w    r1, #0x104
+   0x1d36  bl       #0x11e8  → fn@0x11e8
+   0x1d3a  movs     r1, #0
+   0x1d3c  movs     r3, #1
+   0x1d3e  strh.w   r8, [r4, #0x14]
+   0x1d42  mov      r2, r1
+   0x1d44  str      r3, [sp, #0xc]
+   0x1d46  mov      r3, sb
+   0x1d48  str.w    r8, [sp]
+   0x1d4c  str      r1, [sp, #4]
+   0x1d4e  str      r1, [sp, #8]
+   0x1d50  ldr      r0, [r5, #0x14]
+   0x1d52  bl       #0x20d8  → fn@0x20d8
+   0x1d56  subs     r2, r0, #0
+   0x1d58  bge      #0x1d62
+   0x1d5a  ldr      r0, [pc, #0x38]  ; "%s: error calling dngl_dev_ioctl: %d"
+   0x1d5c  ldr      r1, [pc, #0x24]  ; "pciedngl_isr"
+   0x1d5e  bl       #0xa30  → fn@0xa30
+   0x1d62  ldr      r0, [r5, #0x10]
+   0x1d64  mov      r1, r4
+   0x1d66  movs     r2, #0
+   0x1d68  bl       #0x7dc4  → fn@0x7dc4
+   0x1d6c  cmp      r7, #0
+   0x1d6e  bne      #0x1cc4
+   0x1d70  ldr      r0, [pc, #0x24]  ; lit=0x40733 → fn@0x40732
+   0x1d72  add      sp, #0x1c
+   0x1d74  pop.w    {r4, r5, r6, r7, r8, sb, lr}
+   0x1d78  b.w      #0xa30
+   0x1d7c  lsls     r5, r3, #0x1a
+   0x1d7e  movs     r4, r0
+   0x1d80  lsls     r2, r6, #0x1a
+   0x1d82  movs     r4, r0
+   0x1d84  lsls     r5, r0, #0x1a
+   0x1d86  movs     r4, r0
+   0x1d88  lsls     r1, r2, #0x1b
+   0x1d8a  movs     r4, r0
+   0x1d8c  lsls     r5, r4, #0x1b
+   0x1d8e  movs     r4, r0
+   0x1d90  lsls     r3, r6, #0x1b
+   0x1d92  movs     r4, r0
+   0x1d94  lsls     r6, r1, #0x1c
+   0x1d96  movs     r4, r0
+   0x1d98  lsls     r3, r6, #0x1c
+   0x1d9a  movs     r4, r0
+   0x1d9c  push     {r4, lr}
+   0x1d9e  ldr      r4, [r1, #0x18]
+   0x1da0  mov      r3, r0
+   0x1da2  cbz      r4, #0x1db0
+   0x1da4  ldr      r0, [r4, #0x14]
+   0x1da6  mov      r1, r3
+   0x1da8  pop.w    {r4, lr}
+   0x1dac  b.w      #0x2180
+   0x1db0  ldr      r1, [pc, #0x14]  ; "pciedngl_send"
+   0x1db2  ldr      r0, [pc, #0x18]  ; lit=0x40747 → fn@0x40746
+   0x1db4  bl       #0xa30  → fn@0xa30
+   0x1db8  ldr      r0, [pc, #0x14]  ; "pciedev_msg.c"
+   0x1dba  mov.w    r1, #0x11c
+   0x1dbe  bl       #0x11e8  → fn@0x11e8
+   0x1dc2  mov      r0, r4
+   0x1dc4  pop      {r4, pc}
+   0x1dc6  nop      
+   0x1dc8  lsls     r4, r4, #0x1f
+   0x1dca  movs     r4, r0
+   0x1dcc  lsls     r7, r0, #0x1d
+   0x1dce  movs     r4, r0
+   0x1dd0  lsls     r5, r4, #0x1b
+   0x1dd2  movs     r4, r0
+   0x1dd4  push     {r4, r5, lr}
+   0x1dd6  movs     r4, #0xa
+   0x1dd8  sub      sp, #0x14
+   0x1dda  mov      r5, r0
+   0x1ddc  movs     r1, #0xc4
+   0x1dde  ldr      r0, [r0, #0x10]
+   0x1de0  str      r4, [sp, #0xc]
+   0x1de2  bl       #0x7d60  → fn@0x7d60
+   0x1de6  str      r0, [r5, #0x20]
+   0x1de8  cbnz     r0, #0x1df8
+   0x1dea  ldr      r0, [pc, #0x4c]  ; "pciedev_msg.c"
+   0x1dec  movs     r1, #0xc8
+   0x1dee  bl       #0x11e8  → fn@0x11e8
+   0x1df2  mov.w    r5, #-1
+   0x1df6  b        #0x1e32
+   0x1df8  ldr      r2, [pc, #0x40]  ; lit=0x62990
+   0x1dfa  movs     r1, #0
+   0x1dfc  str      r0, [r2]
+   0x1dfe  movs     r2, #0xc4
+   0x1e00  bl       #0x91c  → fn@0x91c
+   0x1e04  movs     r3, #0
+   0x1e06  add      r2, sp, #0xc
+   0x1e08  str      r3, [sp]
+   0x1e0a  mov.w    r3, #0x400
+   0x1e0e  ldr      r0, [r5, #0x10]
+   0x1e10  ldr      r1, [r5, #0x20]
+   0x1e12  bl       #0x66a60  → fn@0x66a60
+   0x1e16  mov      r5, r0
+   0x1e18  cbnz     r0, #0x1e2a
+   0x1e1a  ldr      r1, [sp, #0xc]
+   0x1e1c  cmp      r1, #9
+   0x1e1e  bgt      #0x1e32
+   0x1e20  mov      r2, r4
+   0x1e22  ldr      r0, [pc, #0x1c]  ; lit=0x40764
+   0x1e24  bl       #0xa30  → fn@0xa30
+   0x1e28  b        #0x1e32
+   0x1e2a  ldr      r0, [pc, #0xc]  ; "pciedev_msg.c"
+   0x1e2c  movs     r1, #0xd5
+   0x1e2e  bl       #0x11e8  → fn@0x11e8
+   0x1e32  mov      r0, r5
+   0x1e34  add      sp, #0x14
+   0x1e36  pop      {r4, r5, pc}
+   0x1e38  lsls     r5, r4, #0x1b
+   0x1e3a  movs     r4, r0
+   0x1e3c  cmp      r1, #0x90
+   0x1e3e  movs     r6, r0
+   0x1e40  lsls     r4, r4, #0x1d
+   0x1e42  movs     r4, r0
+   0x1e44  ldr      r3, [pc, #0x44]  ; lit=0x62ea8
+   0x1e46  push     {r0, r1, r2, r4, r5, lr}
+   0x1e48  ldr      r3, [r3]
+   0x1e4a  mov      r4, r0
+   0x1e4c  ldr      r2, [r0, #0x18]
+   0x1e4e  add.w    r5, r4, #0x24
+   0x1e52  ldr      r1, [r3, #4]
+   0x1e54  bic      r1, r1, #0xfc000000
+   0x1e58  orr      r1, r1, #0x8000000
+   0x1e5c  str      r1, [r0, #0x38]
+   0x1e5e  ldr      r0, [r3, #4]
+   0x1e60  and      r0, r0, #0xfc000000
+   0x1e64  orr      r0, r0, #0xc
+   0x1e68  str.w    r0, [r2, #0x100]
+   0x1e6c  mov      r0, r5
+   0x1e6e  ldr      r2, [r3, #0xc]
+   0x1e70  movs     r3, #1
+   0x1e72  str      r3, [sp]
+   0x1e74  subs     r3, #1
+   0x1e76  bl       #0x2f18  → fn@0x2f18
+   0x1e7a  mov      r0, r5
+   0x1e7c  bl       #0x2df0  → fn@0x2df0
+   0x1e80  mov      r0, r4
+   0x1e82  add      sp, #0xc
+   0x1e84  pop.w    {r4, r5, lr}
+   0x1e88  b.w      #0x1dd4
+   0x1e8c  cmp      r6, #0xa8
+   0x1e8e  movs     r6, r0
+   0x1e90  push.w   {r4, r5, r6, r7, r8, sb, sl, fp, lr}
+   0x1e94  sub      sp, #0x14
+   0x1e96  mov      r6, r0
+   0x1e98  mov      r8, r1
+   0x1e9a  ldr      r0, [pc, #0xc0]  ; lit=0x40692
+   0x1e9c  mov      sb, r2
+   0x1e9e  ldr      r1, [pc, #0xc0]  ; "pciedngl_probe"
+   0x1ea0  mov      fp, r3
+   0x1ea2  ldr.w    sl, [sp, #0x3c]
+   0x1ea6  bl       #0xa30  → fn@0xa30
+   0x1eaa  mov      r0, r6
+   0x1eac  bl       #0x66e64  → fn@0x66e64
+   0x1eb0  movs     r1, #0x3c
+   0x1eb2  mov      r7, r0
+   0x1eb4  movs     r0, #0
+   0x1eb6  bl       #0x7d60  → fn@0x7d60
+   0x1eba  mov      r4, r0
+   0x1ebc  cbnz     r0, #0x1ec8
+   0x1ebe  mov      r1, sl
+   0x1ec0  ldr      r0, [pc, #0xa0]  ; lit=0x4a075 → fn@0x4a074
+   0x1ec2  bl       #0xa30  → fn@0xa30
+   0x1ec6  b        #0x1f40
+   0x1ec8  movs     r5, #0
+   0x1eca  movs     r1, #0
+   0x1ecc  movs     r2, #0x3c
+   0x1ece  bl       #0x91c  → fn@0x91c
+   0x1ed2  str.w    sl, [r4]
+   0x1ed6  str      r6, [r4, #0x1c]
+   0x1ed8  mov      r1, r7
+   0x1eda  str      r7, [r4, #0x10]
+   0x1edc  mov      r2, r8
+   0x1ede  mov      r3, sb
+   0x1ee0  mov      r0, fp
+   0x1ee2  str      r5, [sp]
+   0x1ee4  str      r5, [sp, #4]
+   0x1ee6  str      r5, [sp, #8]
+   0x1ee8  bl       #0x67358  → fn@0x67358
+   0x1eec  str.w    r8, [r4, #0x18]
+   0x1ef0  str      r0, [r4, #0xc]
+   0x1ef2  bl       #0x9948  → fn@0x9948
+   0x1ef6  str      r0, [r4, #4]
+   0x1ef8  ldr      r0, [r4, #0xc]
+   0x1efa  bl       #0x9964  → fn@0x9964
+   0x1efe  mov      r1, r5
+   0x1f00  ldr      r2, [r4, #0xc]
+   0x1f02  mov      r3, r7
+   0x1f04  str      r0, [r4, #8]
+   0x1f06  mov      r0, r4
+   0x1f08  bl       #0x64248  → fn@0x64248
+   0x1f0c  str      r0, [r4, #0x14]
+   0x1f0e  cbnz     r0, #0x1f1a
+   0x1f10  ldr      r1, [pc, #0x4c]  ; "pciedngl_probe"
+   0x1f12  ldr      r0, [pc, #0x54]  ; lit=0x40787 → fn@0x40786
+   0x1f14  bl       #0xa30  → fn@0xa30
+   0x1f18  b        #0x1f50
+   0x1f1a  mov      r0, r5
+   0x1f1c  ldr      r1, [sp, #0x38]
+   0x1f1e  mov      r2, sl
+   0x1f20  ldr      r3, [pc, #0x48]  ; lit=0x1c99 → fn@0x1c98
+   0x1f22  str      r6, [sp]
+   0x1f24  str.w    sb, [sp, #4]
+   0x1f28  bl       #0x63c24  → fn@0x63c24
+   0x1f2c  cbz      r0, #0x1f36
+   0x1f2e  ldr      r0, [pc, #0x40]  ; lit=0x4079f → fn@0x4079e
+   0x1f30  bl       #0xa30  → fn@0xa30
+   0x1f34  b        #0x1f50
+   0x1f36  mov      r0, r4
+   0x1f38  bl       #0x1e44  → fn@0x1e44
+   0x1f3c  mov      r0, r4
+   0x1f3e  b        #0x1f4a
+   0x1f40  ldr      r0, [pc, #0x30]  ; "pciedev_msg.c"
+   0x1f42  movs     r1, #0xad
+   0x1f44  bl       #0x11e8  → fn@0x11e8
+   0x1f48  movs     r0, #0
+   0x1f4a  add      sp, #0x14
+   0x1f4c  pop.w    {r4, r5, r6, r7, r8, sb, sl, fp, pc}
+   0x1f50  ldr      r0, [r4, #0x10]
+   0x1f52  mov      r1, r4
+   0x1f54  movs     r2, #0x3c
+   0x1f56  bl       #0x7d68  → fn@0x7d68
+   0x1f5a  b        #0x1f40
+   0x1f5c  lsls     r2, r2, #0x1a
+   0x1f5e  movs     r4, r0
+   0x1f60  lsls     r2, r6, #0x1f
+   0x1f62  movs     r4, r0
+   0x1f64  adr      r0, #0x1d4
+   0x1f66  movs     r4, r0
+   0x1f68  lsls     r7, r0, #0x1e
+   0x1f6a  movs     r4, r0
+   0x1f6c  adds     r1, r3, #2
+   0x1f6e  movs     r0, r0
+   0x1f70  lsls     r7, r3, #0x1e
+   0x1f72  movs     r4, r0
+   0x1f74  lsls     r5, r4, #0x1b
+   0x1f76  movs     r4, r0
+   0x1f78  push     {r4, r5, r6, lr}
+   0x1f7a  mov      r6, r1
+   0x1f7c  mov      r4, r0
+   0x1f7e  cbz      r0, #0x1fa0
+   0x1f80  ldrh     r5, [r1, #0x14]
+   0x1f82  adds     r0, #0x24
+   0x1f84  mov      r2, r5
+   0x1f86  ldr      r1, [r1, #0x10]
+   0x1f88  bl       #0x2e70  → fn@0x2e70
+   0x1f8c  mov.w    r2, #0x100
+   0x1f90  ldr      r3, [r4, #0x18]
+   0x1f92  mov      r1, r6
+   0x1f94  str      r2, [r3, #0x28]
+   0x1f96  movs     r2, #0
+   0x1f98  ldr      r0, [r4, #0x10]
+   0x1f9a  bl       #0x7dc4  → fn@0x7dc4
+   0x1f9e  b        #0x1fac
+   0x1fa0  ldr      r0, [pc, #0xc]  ; "pciedev_msg.c"
+   0x1fa2  mov.w    r1, #0x140
+   0x1fa6  bl       #0x11e8  → fn@0x11e8
+   0x1faa  mov      r5, r4
+   0x1fac  mov      r0, r5
+   0x1fae  pop      {r4, r5, r6, pc}
+   0x1fb0  lsls     r5, r4, #0x1b
+   0x1fb2  movs     r4, r0
+   0x1fb4  mov      r2, r1
+   0x1fb6  ldr      r1, [r0, #0x18]
+   0x1fb8  mov      r3, r0
+   0x1fba  ldr      r0, [r1, #0x14]
+   0x1fbc  mov      r1, r3
+   0x1fbe  b.w      #0x235c
+   0x1fc2  mov      r2, r1
+   0x1fc4  ldr      r1, [r0, #0x18]
+   0x1fc6  mov      r3, r0
+   0x1fc8  ldr      r0, [r1, #0x14]
+   0x1fca  mov      r1, r3
+   0x1fcc  b.w      #0x2208
+   0x1fd0  push.w   {r4, r5, r6, r7, r8, lr}
+   0x1fd4  mov      r8, r3
+   0x1fd6  ldr      r3, [pc, #0x54]  ; lit=0x58d24
+   0x1fd8  mov      r4, r0
+   0x1fda  mov      r6, r1
+   0x1fdc  mov      r5, r2
+   0x1fde  ldr      r3, [r3]
+   0x1fe0  tst.w    r3, #2
+   0x1fe4  beq      #0x1ff0
+   0x1fe6  ldr      r0, [pc, #0x48]  ; lit=0x4081c
+   0x1fe8  mov      r2, r8
+   0x1fea  ldr      r1, [pc, #0x48]  ; "proto_attach"
+   0x1fec  bl       #0xa30  → fn@0xa30
+   0x1ff0  mov      r0, r4
+   0x1ff2  movs     r1, #0x4c
+   0x1ff4  bl       #0x7d60  → fn@0x7d60
+   0x1ff8  mov      r7, r0
+   0x1ffa  cbz      r0, #0x2026
+   0x1ffc  movs     r1, #0
+   0x1ffe  movs     r2, #0x4c
+   0x2000  bl       #0x91c  → fn@0x91c
+   0x2004  mov.w    r3, #0x740
+   0x2008  str.w    r8, [r7, #0xc]
+   0x200c  str      r3, [r7, #0x34]
+   0x200e  mov.w    r3, #0x3e8
+   0x2012  str      r6, [r7]
+   0x2014  str      r3, [r7, #0x3c]
+   0x2016  movs     r3, #0x1c
+   0x2018  str      r5, [r7, #4]
+   0x201a  str      r3, [r7, #0x40]
+   0x201c  subs     r3, #0x10
+   0x201e  str      r4, [r7, #8]
+   0x2020  str      r3, [r7, #0x44]
+   0x2022  subs     r3, #8
+   0x2024  str      r3, [r7, #0x48]
+   0x2026  mov      r0, r7
+   0x2028  pop.w    {r4, r5, r6, r7, r8, pc}
+   0x202c  ldrh     r4, [r4, #0x28]
+   0x202e  movs     r5, r0
+   0x2030  lsrs     r4, r3, #0x20
+   0x2032  movs     r4, r0
+   0x2034  lsrs     r7, r1, #0x20
+   0x2036  movs     r4, r0
+   0x2038  subs     r2, r1, #0
+   0x203a  mov      r3, r0
+   0x203c  push     {r4, lr}
+   0x203e  ldr      r0, [r0, #0x3c]
+   0x2040  ble      #0x206a
+   0x2042  ldr      r4, [r3, #0x48]
+   0x2044  cmp      r4, #0
+   0x2046  ble      #0x206a
+   0x2048  subs     r2, #1
+   0x204a  cmp      r2, r4
+   0x204c  bge      #0x2056
+   0x204e  ldr      r3, [r3, #0x40]
+   0x2050  ldr.w    r0, [r3, r2, lsl #2]
+   0x2054  cbnz     r0, #0x206a
+   0x2056  ldr      r3, [pc, #0x14]  ; lit=0x58d24
+   0x2058  ldr      r0, [r3]
+   0x205a  ands     r0, r0, #1
+   0x205e  beq      #0x206a
+   0x2060  ldr      r0, [pc, #0xc]  ; lit=0x408fb → fn@0x408fa
+   0x2062  ldr      r1, [pc, #0x10]  ; "dngl_finddev"
+   0x2064  bl       #0xa30  → fn@0xa30
+   0x2068  movs     r0, #0
+   0x206a  pop      {r4, pc}
+   0x206c  ldrh     r4, [r4, #0x28]
+   0x206e  movs     r5, r0
+   0x2070  lsrs     r3, r7, #3
+   0x2072  movs     r4, r0
+   0x2074  lsrs     r1, r7, #2
+   0x2076  movs     r4, r0
+   0x2078  push     {r3, r4, r5, lr}
+   0x207a  mov      r3, r1
+   0x207c  cbz      r1, #0x20be
+   0x207e  ldr      r1, [r0, #0x3c]
+   0x2080  cmp      r3, r1
+   0x2082  beq      #0x20c0
+   0x2084  ldr      r5, [r0, #0x48]
+   0x2086  movs     r1, #0
+   0x2088  b        #0x20a4
+   0x208a  ldr      r4, [r0, #0x40]
+   0x208c  ldr.w    r4, [r4, r1, lsl #2]
+   0x2090  cmp      r3, r4
+   0x2092  add.w    r4, r1, #1
+   0x2096  bne      #0x20a2
+   0x2098  ldr      r3, [r2, #0x10]
+   0x209a  ldrb     r2, [r3, #2]
+   0x209c  orrs     r4, r2
+   0x209e  strb     r4, [r3, #2]
+   0x20a0  b        #0x20c8
+   0x20a2  mov      r1, r4
+   0x20a4  cmp      r1, r5
+   0x20a6  blt      #0x208a
+   0x20a8  ldr      r2, [pc, #0x20]  ; lit=0x58d24
+   0x20aa  ldr      r2, [r2]
+   0x20ac  tst.w    r2, #1
+   0x20b0  beq      #0x20c4
+   0x20b2  ldr      r1, [pc, #0x1c]  ; "dngl_setifindex"
+   0x20b4  mov      r2, r3
+   0x20b6  ldr      r0, [pc, #0x1c]  ; lit=0x40914
+   0x20b8  bl       #0xa30  → fn@0xa30
+   0x20bc  b        #0x20c4
+   0x20be  b        #0x20c8
+   0x20c0  movs     r1, #0
+   0x20c2  b        #0x20c8
+   0x20c4  mov.w    r1, #-1
+   0x20c8  mov      r0, r1
+   0x20ca  pop      {r3, r4, r5, pc}
+   0x20cc  ldrh     r4, [r4, #0x28]
+   0x20ce  movs     r5, r0
+   0x20d0  lsrs     r3, r3, #0xf
+   0x20d2  movs     r4, r0
+   0x20d4  lsrs     r4, r2, #4
+   0x20d6  movs     r4, r0
+   0x20d8  tst.w    r3, #3
+   0x20dc  push.w   {r0, r1, r2, r3, r4, r5, r6, r7, r8, sb, sl, lr}
+   0x20e0  ldrb.w   r6, [sp, #0x3c]
+   0x20e4  mov      r7, r0
+   0x20e6  mov      r8, r1
+   0x20e8  mov      r5, r2
+   0x20ea  mov      r4, r3
+   0x20ec  ldr.w    sb, [sp, #0x30]
+   0x20f0  beq      #0x20fa
+   0x20f2  ldr      r0, [pc, #0x70]  ; "dngl_rte.c"
+   0x20f4  movs     r1, #0x54
+   0x20f6  bl       #0x11e8  → fn@0x11e8
+   0x20fa  ldr      r3, [pc, #0x6c]  ; lit=0x58d24
+   0x20fc  mov      sl, r3
+   0x20fe  ldr      r2, [r3]
+   0x2100  tst.w    r2, #2
+   0x2104  beq      #0x211e
+   0x2106  ldr      r3, [pc, #0x64]  ; "SET"
+   0x2108  ldr      r2, [pc, #0x64]  ; "QUERY"
+   0x210a  ldr      r0, [pc, #0x68]  ; lit=0x4094b → fn@0x4094a
+   0x210c  cmp      r6, #0
+   0x210e  it       ne
+   0x2110  movne    r2, r3
+   0x2112  ldr      r1, [pc, #0x64]  ; "_dngl_devioctl"
+   0x2114  mov      r3, r5
+   0x2116  str.w    sb, [sp]
+   0x211a  bl       #0xa30  → fn@0xa30
+   0x211e  mov      r0, r7
+   0x2120  mov      r1, r8
+   0x2122  bl       #0x2038  → fn@0x2038
+   0x2126  cbz      r0, #0x2142
+   0x2128  ldr      r3, [r0, #0x10]
+   0x212a  mov      r1, r5
+   0x212c  ldr      r2, [sp, #0x34]
+   0x212e  str      r2, [sp]
+   0x2130  ldr      r2, [sp, #0x38]
+   0x2132  str      r2, [sp, #4]
+   0x2134  mov      r2, r4
+   0x2136  str      r6, [sp, #8]
+   0x2138  ldr      r6, [r3, #0x14]
+   0x213a  mov      r3, sb
+   0x213c  blx      r6  → indirect
+   0x213e  mov      r4, r0
+   0x2140  b        #0x2146
+   0x2142  mov.w    r4, #-1
+   0x2146  ldr.w    r3, [sl]
+   0x214a  tst.w    r3, #2
+   0x214e  beq      #0x215c
+   0x2150  ldr      r0, [pc, #0x28]  ; lit=0x4096a
+   0x2152  mov      r2, r4
+   0x2154  ldr      r1, [pc, #0x20]  ; "_dngl_devioctl"
+   0x2156  mov      r3, r4
+   0x2158  bl       #0xa30  → fn@0xa30
+   0x215c  mov      r0, r4
+   0x215e  add      sp, #0x10
+   0x2160  pop.w    {r4, r5, r6, r7, r8, sb, sl, pc}
+   0x2164  lsrs     r0, r0, #5
+   0x2166  movs     r4, r0
+   0x2168  ldrh     r4, [r4, #0x28]
+   0x216a  movs     r5, r0
+   0x216c  adds     r2, r2, r0
+   0x216e  movs     r4, r0
+   0x2170  lsrs     r2, r7, #4
+   0x2172  movs     r4, r0
+   0x2174  lsrs     r3, r1, #5
+   0x2176  movs     r4, r0
+   0x2178  lsrs     r6, r0, #3
+   0x217a  movs     r4, r0
+   0x217c  lsrs     r2, r5, #5
+   0x217e  movs     r4, r0
+   0x2180  push     {r3, r4, r5, r6, r7, lr}
+   0x2182  ldr      r6, [pc, #0x70]  ; lit=0x58d24
+   0x2184  mov      r4, r0
+   0x2186  mov      r7, r1
+   0x2188  mov      r5, r2
+   0x218a  ldr      r3, [r6]
+   0x218c  tst.w    r3, #2
+   0x2190  beq      #0x219c
+   0x2192  ldr      r0, [pc, #0x64]  ; lit=0x4081c
+   0x2194  ldr      r1, [pc, #0x64]  ; "dngl_sendpkt"
+   0x2196  ldr      r2, [r4, #0x38]
+   0x2198  bl       #0xa30  → fn@0xa30
+   0x219c  mov      r1, r5
+   0x219e  ldr      r0, [r4, #4]
+   0x21a0  bl       #0x7e44  → fn@0x7e44
+   0x21a4  mov      r5, r0
+   0x21a6  cbz      r0, #0x21f0
+   0x21a8  mov      r0, r4
+   0x21aa  mov      r1, r7
+   0x21ac  mov      r2, r5
+   0x21ae  bl       #0x2078  → fn@0x2078
+   0x21b2  cmp      r0, #0
+   0x21b4  blt      #0x21f0
+   0x21b6  ldr      r3, [pc, #0x48]  ; lit=0x62a14
+   0x21b8  mov      r1, r5
+   0x21ba  ldr      r0, [r4]
+   0x21bc  ldr      r3, [r3]
+   0x21be  ldr      r3, [r3, #0xc]
+   0x21c0  blx      r3  → indirect
+   0x21c2  cbz      r0, #0x21da
+   0x21c4  ldr      r0, [r4, #4]
+   0x21c6  mov      r1, r5
+   0x21c8  ldr      r6, [r4, #0x1c]
+   0x21ca  bl       #0x4fb8  → fn@0x4fb8
+   0x21ce  ldr      r3, [r4, #0x14]
+   0x21d0  adds     r3, #1
+   0x21d2  str      r3, [r4, #0x14]
+   0x21d4  adds     r0, r0, r6
+   0x21d6  str      r0, [r4, #0x1c]
+   0x21d8  b        #0x21f0
+   0x21da  ldr      r3, [r4, #0x2c]
+   0x21dc  adds     r3, #1
+   0x21de  str      r3, [r4, #0x2c]
+   0x21e0  ldr      r3, [r6]
+   0x21e2  tst.w    r3, #1
+   0x21e6  beq      #0x21f0
+   0x21e8  ldr      r0, [pc, #0x18]  ; lit=0x409ca
+   0x21ea  ldr      r1, [pc, #0x10]  ; "dngl_sendpkt"
+   0x21ec  bl       #0xa30  → fn@0xa30
+   0x21f0  movs     r0, #0
+   0x21f2  pop      {r3, r4, r5, r6, r7, pc}
+   0x21f4  ldrh     r4, [r4, #0x28]
+   0x21f6  movs     r5, r0
+   0x21f8  lsrs     r4, r3, #0x20
+   0x21fa  movs     r4, r0
+   0x21fc  lsrs     r6, r5, #3
+   0x21fe  movs     r4, r0
+   0x2200  cmp      r2, #0x14
+   0x2202  movs     r6, r0
+   0x2204  lsrs     r2, r1, #7
+   0x2206  movs     r4, r0
+   0x2208  push.w   {r0, r1, r4, r5, r6, r7, r8, lr}
+   0x220c  ldr      r7, [pc, #0x11c]  ; lit=0x58d24
+   0x220e  mov      r4, r0
+   0x2210  mov      r6, r1
+   0x2212  mov      r5, r2
+   0x2214  ldr      r3, [r7]
+   0x2216  tst.w    r3, #2
+   0x221a  beq      #0x2224
+   0x221c  ldr      r0, [pc, #0x110]  ; lit=0x40a25 → fn@0x40a24
+   0x221e  ldr      r1, [pc, #0x114]  ; "dngl_binddev"
+   0x2220  bl       #0xa30  → fn@0xa30
+   0x2224  cbz      r6, #0x2228
+   0x2226  cbnz     r5, #0x2234
+   0x2228  ldr      r3, [r7]
+   0x222a  tst.w    r3, #1
+   0x222e  beq      #0x2318
+   0x2230  ldr      r0, [pc, #0x104]  ; lit=0x40a30
+   0x2232  b        #0x227c
+   0x2234  ldr      r2, [r4, #0x38]
+   0x2236  cbnz     r2, #0x224e
+   0x2238  ldr      r3, [r4, #0x3c]
+   0x223a  cbnz     r3, #0x224e
+   0x223c  ldr      r3, [r7]
+   0x223e  str      r6, [r4, #0x38]
+   0x2240  tst.w    r3, #2
+   0x2244  str      r5, [r4, #0x3c]
+   0x2246  str      r5, [r6, #0x24]
+   0x2248  str      r6, [r5, #0x24]
+   0x224a  beq      #0x22cc
+   0x224c  b        #0x22c4
+   0x224e  cmp      r2, r6
+   0x2250  bne      #0x22ac
+   0x2252  ldr      r3, [r4, #0x3c]
+   0x2254  cmp      r3, r5
+   0x2256  beq      #0x22ac
+   0x2258  ldr      r6, [r4, #0x48]
+   0x225a  movs     r3, #0
+   0x225c  b        #0x226a
+   0x225e  ldr      r1, [r4, #0x40]
+   0x2260  ldr.w    r1, [r1, r3, lsl #2]
+   0x2264  cmp      r1, r5
+   0x2266  beq      #0x2272
+   0x2268  adds     r3, #1
+   0x226a  cmp      r3, r6
+   0x226c  blt      #0x225e
+   0x226e  movs     r3, #0
+   0x2270  b        #0x229a
+   0x2272  ldr      r3, [r7]
+   0x2274  tst.w    r3, #1
+   0x2278  beq      #0x2318
+   0x227a  ldr      r0, [pc, #0xc0]  ; lit=0x40a4c
+   0x227c  ldr      r1, [pc, #0xb4]  ; "dngl_binddev"
+   0x227e  bl       #0xa30  → fn@0xa30
+   0x2282  b        #0x2318
+   0x2284  ldr      r1, [r4, #0x40]
+   0x2286  add.w    r0, r1, r3, lsl #2
+   0x228a  ldr.w    r1, [r1, r3, lsl #2]
+   0x228e  adds     r3, #1
+   0x2290  cbnz     r1, #0x229a
+   0x2292  str      r5, [r0]
+   0x2294  mov      r0, r3
+   0x2296  str      r2, [r5, #0x24]
+  ... [end 0x2298]
+
+=== (pciedngl_close: fn containing 0x1c54) fn-start: 0x1c50 ===
+
+=========== pciedngl_close  fn @ 0x1c50..0x1c6a ===========
+   0x1c50  push     {r4, lr}
+   0x1c52  ldr      r4, [r0, #0x18]
+   0x1c54  ldr      r1, [pc, #0x14]  ; "pciedngl_close"
+   0x1c56  ldr      r0, [pc, #0x18]  ; lit=0x40692
+   0x1c58  bl       #0xa30  → fn@0xa30
+   0x1c5c  ldr      r3, [r4, #0x18]
+   0x1c5e  movs     r0, #0
+   0x1c60  ldr      r2, [r3, #0x24]
+   0x1c62  bic      r2, r2, #0x100
+   0x1c66  str      r2, [r3, #0x24]
+   0x1c68  pop      {r4, pc}
+  ... [end 0x1c6a]
+
+=== (pciedngl_ioctl: fn containing 0x1c3a) fn-start: 0x1c38 ===
+
+=========== pciedngl_ioctl  fn @ 0x1c38..0x1c46 ===========
+   0x1c38  push     {r3, lr}
+   0x1c3a  ldr      r1, [pc, #0xc]  ; "pciedngl_ioctl"
+   0x1c3c  ldr      r0, [pc, #0xc]  ; lit=0x40692
+   0x1c3e  bl       #0xa30  → fn@0xa30
+   0x1c42  movs     r0, #0
+   0x1c44  pop      {r3, pc}
+  ... [end 0x1c46]
+
+=== (pciedngl_send: fn containing 0x1db0) fn-start: 0x1d9c ===
+
+=========== pciedngl_send  fn @ 0x1d9c..0x1dc6 ===========
+   0x1d9c  push     {r4, lr}
+   0x1d9e  ldr      r4, [r1, #0x18]
+   0x1da0  mov      r3, r0
+   0x1da2  cbz      r4, #0x1db0
+   0x1da4  ldr      r0, [r4, #0x14]
+   0x1da6  mov      r1, r3
+   0x1da8  pop.w    {r4, lr}
+   0x1dac  b.w      #0x2180
+   0x1db0  ldr      r1, [pc, #0x14]  ; "pciedngl_send"
+   0x1db2  ldr      r0, [pc, #0x18]  ; lit=0x40747 → fn@0x40746
+   0x1db4  bl       #0xa30  → fn@0xa30
+   0x1db8  ldr      r0, [pc, #0x14]  ; "pciedev_msg.c"
+   0x1dba  mov.w    r1, #0x11c
+   0x1dbe  bl       #0x11e8  → fn@0x11e8
+   0x1dc2  mov      r0, r4
+   0x1dc4  pop      {r4, pc}
+  ... [end 0x1dc6]
+
+
+=== (5) bcm_olmsg_init: fn containing 0x2f26 ===
+  fn-start: 0x2f18
+
+=========== bcm_olmsg_init  fn @ 0x2f18..0x2f32 ===========
+   0x2f18  push     {r4, lr}
+   0x2f1a  ldrb.w   r4, [sp, #8]
+   0x2f1e  cbz      r0, #0x2f24
+   0x2f20  cbz      r1, #0x2f24
+   0x2f22  cbnz     r2, #0x2f32
+   0x2f24  ldr      r0, [pc, #0x24]  ; lit=0x414b5 → fn@0x414b4
+   0x2f26  ldr      r1, [pc, #0x28]  ; "bcm_olmsg_init"
+   0x2f28  bl       #0xa30  → fn@0xa30
+   0x2f2c  mvn      r0, #1
+   0x2f30  pop      {r4, pc}
+  ... [end 0x2f32]
+
+
+=== (6) Verify 'bmac_up_finish' (@0x4b1f0) ldr-loaded inside fn@0x17ED6 ===
+  Ldr-refs to 'bmac_up_finish' string: NONE
+
+=== (7) Verify 'bmac_up_prep' (@0x4af3c) ldr-loaded inside fn@0x15DA8 ===
+  Ldr-refs to 'bmac_up_prep' string: NONE
+
+
+=== (8) ALL callers of fn@0x17ED6 (wlc_bmac_up_finish) ===
+  fn-ptr table refs (0x17ED7): 0
+
+
+=== (9) ALL callers of fn@0x18FFC (wlc_up) ===
+  0x11670: bl #0x18ffc → caller fn @ 0x1164a
+  fn-ptr table refs (0x18FFD): 0
