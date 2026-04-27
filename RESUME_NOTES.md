@@ -8,9 +8,15 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 19:43 BST — PRE-TEST.302b drafted on user GO. T302b = T301 minus `test300_oob_pending` minus `test269_early_exit`, with `sleep 150` (T298/T299-baseline timing). Tests whether dropping test300 moves wedge back to [t+90s, t+120s]. Substrate: boot 0 uptime 15 min — late edge of row 83 clean window; lspci clean. Fire imminent.
+## Current state (2026-04-27 19:51 BST — POST-TEST.302b WRITTEN UP. T302b FIRED at 19:45:29 BST (boot -1 uptime ~17 min — late but within row 83 clean window). All probe stages clean through `t+90s SUMMARY count=2 sched_cc=0x1 events_p=0x18109000 pending=0x0` at 19:47:23. **Boot -1 ended SAME SECOND** — silent kernel death immediately after t+90s SUMMARY, exactly the [t+90s, t+120s] T270-BASELINE pattern. Auto-recovery, NO SMC reset (boot 0 started 19:49:32). Current uptime ~2 min, lspci clean.
 
-Prior fire (T301, 19:24:49 BST): sample 1 BAR0 OOB Router read at post-set_active SUCCEEDED (n=2 with T300, `pending=0x00000000`). **Wedge at t+60s, AT sample 2's BAR0 OOB Router window-write** — anchor-2 ("saved=0x18102000; about to set OOB Router window") flushed, anchor-3 never logged. Auto-recovery, no SMC reset. **NEW pattern with n=2 on test300 fires:** wedge bracket shifts EARLIER (T298/T299/T276/T287c/T270 baseline = [t+90s, t+120s]; T300 = ~t+45s; T301 = t+60s). Advisor catch on T302a: between t+45s and t+60s sample 2 is the only host MMIO op, so any substrate wedge would naturally fire AT sample 2 regardless of cause. T302b is the right discriminator.
+**Headline result.** Dropping `test300_oob_pending` MOVED wedge BACK to [t+90s, t+120s] — outcome row 1 of PRE-TEST.302b matrix. **Strong causal inference:** test300 BAR0 OOB Router read at post-set_active IS shifting the wedge bracket forward (n=6 without test300: T270-BASELINE/T276/T287c/T298/T299/T302b → wedge at [t+90s, t+120s]; n=2 with test300: T300 (~t+45s) / T301 (t+60s)). Also: T302b also dropped `test284_premask_enable` (the only other module-param diff vs T298/T299) but wedge bracket UNCHANGED — **eliminates the test284 confound from row 104.** test284 is NOT the wedge-shifting factor.
+
+**Secondary confirmation (n=3).** `count=1` at post-set_active (only RTE-CC ISR registered) → `count=2` at post-T276-poll (pciedngl_isr added) reproduces in T302b — same as T300/T301. Likely correlated with `test284_premask` being DROPPED (n=3 for both). T298/T299 with `test284_premask=1` saw count=2 at post-set_active. Not load-bearing for the wake question; possibly indicates test284 reorders pciedngl_isr registration earlier.
+
+**Wake-trigger source: NO ADVANCE.** test300 dropped means no OOB Router pending sample at all in T302b. The "is `pending` ever non-zero" question is unanswered — sample 2 has now never been read across T300/T301/T302b. Strong inference says test300 must be redesigned (single-shot at post-set_active only, or much earlier sample 2) to ever read pending at a different timing without destabilizing the bracket.
+
+Prior fire (T301, 19:24:49 BST): sample 1 BAR0 OOB Router read at post-set_active SUCCEEDED (n=2 with T300, `pending=0x00000000`). **Wedge at t+60s, AT sample 2's BAR0 OOB Router window-write** — anchor-2 ("saved=0x18102000; about to set OOB Router window") flushed, anchor-3 never logged. Auto-recovery, no SMC reset. T302b discriminator now answers the test300-causal question (CAUSAL).
 
 T299 FIRED 15:29:00 BST on boot -1 with full ASPM-disabled chain (cmdline `pcie_aspm.policy=performance` parsed, runtime sysfs flip applied at 15:27:57 before insmod; 03:00.0+02:00.0+root all `ASPM Disabled`). Probe ran clean through all 9 stages — IDENTICAL 2-node ISR readout to T298. Wedged at end-of-t+90s probe (boot -1 ended 15:31:05, ~7s after t+90s SUMMARY). User cold-boot/SMC reset; current uptime now ~30+ min, ASPM back to default. **H1 (ASPM = wedge cause) FALSIFIED.** **Wedge is the known [t+90s, t+120s] bracket** (KEY_FINDINGS row 104, T270-BASELINE pattern, reproduced T276/T287c/T298/T299) — NOT a "rmmod wedge" as POST-TEST.298 mistakenly claimed.
 
@@ -750,6 +756,76 @@ If wedged before journalctl: on next boot, `sudo journalctl -k -b -1 > phase5/lo
 
 - Identical risk profile to T298/T299 (which both wedged at [t+90s, t+120s] but auto-recovered or required SMC). Worst case: silent kernel wedge → auto-recovery or user SMC reset.
 - No new probe code; risk is substrate + the known wedge bracket.
+
+## POST-TEST.302b (2026-04-27 19:51 BST — T302b FIRED. All probe stages clean through t+90s SUMMARY. Wedged at end-of-t+90s probe — exact T270-BASELINE [t+90s, t+120s] pattern. Auto-recovery, no SMC reset needed.)
+
+### Headline result
+
+- **Wedge bracket moved BACK to [t+90s, t+120s] when `test300_oob_pending` was dropped.** Outcome row 1 of PRE-TEST.302b matrix. **Strong causal inference: test300 enablement IS shifting the wedge bracket forward** (n=6 without test300 vs n=2 with test300, distinct loci).
+- **`test284_premask` confound from row 104 ELIMINATED.** T302b also dropped `test284_premask_enable` (vs T298/T299). Wedge stayed at [t+90s, t+120s] regardless. test284 is NOT the wedge-shifting factor.
+- ISR-list at post-set_active: count=1 (only RTE-CC mask=0x1) → count=2 at post-T276-poll (pciedngl_isr mask=0x8 added). Same pattern as T300/T301 (n=3 now without test284_premask). All later stages frozen at count=2, `pending=0x0`, `events_p=0x18109000`, `sched_cc=0x1`.
+- No advance on the wake-trigger source question — test300 dropped means no OOB Router pending read at all.
+
+### ASPM state at fire time
+
+03:00.0 `ASPM L0s L1 Enabled`, 02:00.0 `ASPM L1 Enabled` (defaults; T299 falsified ASPM-as-cause, no flip). Same as T300/T301.
+
+### Timeline (boot -1, `phase5/logs/test.302b.journalctl.txt`, 1482 lines)
+
+- `19:27:36` boot start
+- `19:45:29` insmod (uptime ~17 min — late edge of row 83 clean window; planned for ~10-15 min, slipped slightly)
+- `19:45:34` SBR via bridge 0000:00:1c.2
+- `19:46:15` brcmf_chip_set_active returned TRUE
+- `19:46:15` post-set_active: **T298 count=1** (RTE-CC ISR only, mask=0x1) — same as T300/T301
+- `19:46:15` post-T276-poll → count=2 (pciedngl_isr added, mask=0x8). Steady state from here.
+- `19:46:15→22` post-T278-initial-dump, t+500ms, t+5s, t+30s — all clean, count=2 stable, `pending=0x0`
+- `19:46:27` t+35000ms dwell
+- `19:46:37` t+45000ms dwell (cleared T300's wedge point — second clearing after T301)
+- `19:46:53` t+60000ms dwell (cleared T301's wedge point — first clearing of t+60s with no test300 access)
+- `19:47:23` **t+90000ms dwell + t+90s test.278/287/287c/298 readout** — count=2 stable, `pending=0x0`
+- `19:47:23` **last log line: `test.298: stage t+90s SUMMARY count=2 sched_cc=0x00000001 events_p=0x18109000 pending=0x00000000`**
+- `19:47:23` boot -1 ends (silent kernel death same second as t+90s SUMMARY)
+- `19:49:32` boot 0 starts (auto-recovery, no SMC reset)
+
+### Hypothesis matrix vs result
+
+| Outcome (from PRE-TEST.302b) | Observed? |
+|---|---|
+| Wedge at [t+90s, t+120s] (test300 IS shifting bracket) | **YES** — t+90s SUMMARY printed cleanly, boot ended same second |
+| Wedge at t+45s..t+60s (ambiguous: substrate variance OR test284 confound) | NO |
+| Substrate-noise null upstream of t+45s | NO — all probe stages cleared |
+| New wedge mode | NO |
+
+Outcome row 1 confirmed. Strong inference per the matrix's "Next step" column: **decide whether to revisit the OOB Router probe with a different timing strategy (e.g., one-shot sample at post-set_active only, no sample 2; or skip OOB Router entirely and pivot).**
+
+### What this changes
+
+- **KEY_FINDINGS row 104 (wedge bracket robustness):** add T302b to reproduction list (now n=6 without test300: T270-BASELINE / T276 / T287c / T298 / T299 / T302b). **Eliminate the test284_premask confound:** T302b dropped test284 yet wedge stayed at [t+90s, t+120s] — test284 is NOT the wedge-shifting factor. test300 is.
+- **KEY_FINDINGS row 162 (OOB Router):** unchanged from T301 readings (no new sample 1 in T302b). The "test300 enablement causally shifts the wedge bracket" sub-question is now **CONFIRMED** at n=2 wedged with test300 vs n=6 without. Update LIVE → CONFIRMED on that sub-question.
+- **KEY_FINDINGS row 85 sub-entry (per-agent BAR0 noise belt):** unchanged. T302b had no BAR0 OOB Router access.
+- **NEW (n=3): `count=1` at post-set_active correlates with `test284_premask=0`.** T298/T299 (test284=1) saw count=2; T300/T301/T302b (test284=0) saw count=1 → count=2 transition at post-T276-poll. Likely test284 reorders pciedngl_isr registration earlier. Not load-bearing for wake question.
+- **What is NOT changed:** wake-trigger source for OOB bit 0 (RTE-CC) and bit 3 (pciedngl_isr) STILL LIVE. T302b had no probe of OOB Router pending — sample 2 of T300/T301/T302b campaign has never successfully read.
+
+### Files
+
+- `phase5/logs/test.302b.journalctl.txt` (boot -1, 1482 lines, ends at t+90s SUMMARY)
+- `phase5/logs/test.302b.run.txt` (0 bytes — silent kernel death)
+
+### Substrate state at writeup
+
+- Boot 0 started 19:49:32 BST, uptime ~2 min
+- 03:00.0: `ASPM L0s L1 Enabled` (default), MAbort-, CommClk+
+- No SMC reset performed (auto-recovery sufficient)
+
+### Next direction (held — needs advisor consult)
+
+Test300 enablement is causally shifting the wedge bracket. Three candidate next probes — all need an advisor pass before fire:
+
+1. **T303a — single-shot test300 (sample 1 only, NO sample 2).** Code edit: drop the t+60s sample 2 hook entirely; keep only the post-set_active sample 1. Predicts: wedge moves back to [t+90s, t+120s] (n=3+ on causal: BAR0 OOB Router read AT post-set_active alone is enough to perturb later bus state) OR wedge moves to a NEW point. Cleanest causal isolation of "what about test300 shifts the bracket" — was it sample 1 alone, or was it the cumulative effect of sample 1 + sample 2's pre-wedge access pattern.
+2. **T303b — move sample 2 to t+30s.** Code edit: change the sample 2 hook from t+60s to t+30s. Sample 2 has never been read; getting one reading at any non-post-set_active timing would advance the wake-trigger question. Risk: t+30s is BEFORE the [t+90s, t+120s] bracket but inside the t+45s/t+60s shift seen with test300 — sample 2 might still wedge. n=1 likely outcome.
+3. **A2 — BAR2 sched_ctx mapping (no BAR0).** Read sched+0xD0 (slot counter), sched+0xD4-table (per-slot core-id), the +0x300-0x350 gap. Cheap, low-risk, no BAR0. Speculative yield (might find a TCM-resident OOB-bit→ISR dispatch table). Doesn't advance pending-register reading.
+
+A2 is cheapest. T303a is the cleanest causal call. T303b is the highest information-yield IF it doesn't wedge. Awaiting user steer + advisor pass.
 
 ## Archived detail
 
