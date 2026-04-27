@@ -8,7 +8,7 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 20:18 BST — POST-TEST.303 WRITEUP IN PROGRESS. T303 FIRED at 20:10:56 BST (boot -1 uptime ~21 min — late but within row 83 clean window per row 83). All probe stages CLEAN through `t+90s SUMMARY count=2 sched_cc=0x1 events_p=0x18109000 pending=0x0` plus T303 readouts at every stage. **Boot -1 ended at 20:13:11** — silent kernel death right after t+90s SUMMARY, exact same [t+90s, t+120s] T270-BASELINE pattern (now n=7 without test300). Auto-recovery, NO SMC reset (boot 0 started 20:14:43). Current uptime ~2 min, lspci clean (MAbort-, CommClk+).
+## Current state (2026-04-27 20:25 BST — POST-TEST.303 WRITTEN UP, COMMITTED & PUSHED. Next-direction sharpened via second advisor consult: A2-extension static work always; fire decision (T303b vs B vs defer) needs user steer. T303 FIRED at 20:10:56 BST (boot -1 uptime ~21 min — late but within row 83 clean window per row 83). All probe stages CLEAN through `t+90s SUMMARY count=2 sched_cc=0x1 events_p=0x18109000 pending=0x0` plus T303 readouts at every stage. **Boot -1 ended at 20:13:11** — silent kernel death right after t+90s SUMMARY, exact same [t+90s, t+120s] T270-BASELINE pattern (now n=7 without test300). Auto-recovery, NO SMC reset (boot 0 started 20:14:43). Current uptime ~2 min, lspci clean (MAbort-, CommClk+).
 
 **Headline T303 results (all BAR2-only sched_ctx field reads, modeled after T287c):**
 
@@ -1018,17 +1018,34 @@ All probe printks bunched at journalctl timestamps 20:13:10/11. Insmod print and
 - Wake-trigger HW source (the OOB pending-events question). T303 was BAR2-only by design; sample 2 OOB Router pending read still never accomplished across T300/T301/T302b/T303.
 - The +0x318..+0x32c populated dwords' meaning. Need disasm or runtime trace of writers to interpret.
 
-### Next direction (held — needs advisor consult)
+### Next direction (sharpened 2026-04-27 20:25 BST after second advisor consult)
 
-Three candidates carried forward from the T302b "next direction" block, with T303 having narrowed options:
+Decision splits into TWO independent questions:
 
-1. **T303b — sample 2 OOB Router pending at t+30s.** Code edit: re-enable a single-shot test300 variant whose ONLY sample is at t+30s (not post-set_active, not t+60s). Predicts: substrate-budget call. T301 wedged at t+60s sample 2 BAR0 window-write. T303b at t+30s is BEFORE that point but during the OOB Router sample-2-causal window. Could finally read pending at a different timing — first observation of whether bit 0/3 ever transitions. Risk: row 104 bracket might shift to t+30s under test300 enablement (T300/T301 saw shifts to t+45s/t+60s, so t+30s is plausible). Would need cold-cycle if wedge happens earlier than expected.
+**Q1 — Static work (no substrate cost, do regardless):**
 
-2. **A2-extension — disassemble writers of `+0x318..+0x32c`.** No new fire; pure static work. Identify which fn populates those 6 dwords during fw init. If a per-slot init routine, find when it runs and what it represents. Cheap, low-risk, but speculative yield.
+- **A2-extension — disassemble writers of `+0x318..+0x32c`.** Pure static work in phase6/. Identify which fn populates those 6 dwords during fw init. T303 found 6 stable populated dwords where t300_static_prep §65 expected zero — static analysis missed the writers. Independent of the fire decision; can kick off in parallel with whatever Q2 picks. Likely outcome: reveal a per-slot init or class-config routine that updates fw understanding of the slot model.
 
-3. **B — host-side wake-event injection.** DMA transfer over Phase 4B olmsg ring (already plumbed at shared_info), MSI assert. Most ambitious; biggest information yield if it works. ASPM-falsified premise (row 152) means no de-risking from prior cmdline work.
+**Q2 — Next fire (substrate-budget call):**
 
-T303b is the cleanest advance on the wake question. A2-extension is the safest information-yield. B is the highest information-ceiling. Advisor consult before fire to pick.
+The reframe: sample 2 OOB Router pending read has now FAILED n=4 (T300 wedged before sample 2 at t+45s; T301 wedged AT sample 2's window-write at t+60s; T302b/T303 dropped test300). T303b's premise — "t+30s might succeed where t+60s didn't" — needs to confront the pattern that **test300 enablement shifts wedge forward proportional to access timing** (T300 t+45s, T301 t+60s). Under that model, sample 2 at t+30s probably wedges at ~t+30s. The passive-observation approach may simply be unreachable from the host side.
+
+The deeper reframe: the wake question is **"what sets OOB bits 0/3?"** Sample 2 (passive) tells us "does pending transition naturally during idle" — informative only if yes (n=4 says probably never gets to read it). **B (active wake-event injection)** tests the wake path directly — primary-source evidence either way (does pciedngl_isr fire? does pending bit 3 set after host MSI/DMA?).
+
+Three options:
+
+1. **T303b — sample 2 OOB Router pending at t+30s.** Passive observation. Risk: probably wedges at t+30s. Upside: if it lands, first non-zero pending observation. n=4 prior failures argue against.
+
+2. **B — host-side wake-event injection.** Active path. Choices: (i) MSI assert via test bit in PCIE2 config, (ii) DMA transfer over Phase 4B olmsg ring (already plumbed at shared_info; never triggered). Primary-source either way (wake fires, or it doesn't and we know what's missing). Most ambitious.
+
+3. **Neither — exhaust static surface first.** A2-extension + any other static surfaces (e.g. EROM walk for the OOB Router register layout, disasm of sched+0xCC writer to learn what flips it 0→1 during T276 poll). Defer next fire until a sharper hypothesis emerges.
+
+**Recommendation hierarchy** based on advisor framing:
+- Always do A2-extension (Q1).
+- For Q2: **option 3 (defer fire)** is the conservative call — n=4 suggests T303b unlikely to advance; B is high-stakes without clear hypothesis. Use static work to sharpen.
+- If pressed to fire: **option 2 (B)** is more likely informative than option 1 (T303b), per the n=4 sample-2 evidence. T303b risks burning substrate for another null.
+
+Awaiting user steer on Q2.
 
 ## Archived detail
 
