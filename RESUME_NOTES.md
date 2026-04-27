@@ -8,7 +8,9 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 20:25 BST — POST-TEST.303 WRITTEN UP, COMMITTED & PUSHED. Next-direction sharpened via second advisor consult: A2-extension static work always; fire decision (T303b vs B vs defer) needs user steer. T303 FIRED at 20:10:56 BST (boot -1 uptime ~21 min — late but within row 83 clean window per row 83). All probe stages CLEAN through `t+90s SUMMARY count=2 sched_cc=0x1 events_p=0x18109000 pending=0x0` plus T303 readouts at every stage. **Boot -1 ended at 20:13:11** — silent kernel death right after t+90s SUMMARY, exact same [t+90s, t+120s] T270-BASELINE pattern (now n=7 without test300). Auto-recovery, NO SMC reset (boot 0 started 20:14:43). Current uptime ~2 min, lspci clean (MAbort-, CommClk+).
+## Current state (2026-04-27 20:35 BST — POST-TEST.303 WRITTEN UP + A2-extension gap-writers analysis RESOLVED (commit 49c3c35, phase6/t303b_gap_writers.md). Awaiting user steer on Q2 fire decision (T303b vs B vs defer).
+
+**A2-extension result.** Subagent identified `fn@0x64590` (core enumerator, called from si_doattach at fn@0x670d8) as the writer of all 6 populated dwords at sched+0x318..+0x32c via indexed store at address 0x6466e (`str.w r0, [r4, r3, lsl #2]` where r3 = slot+0xc6). Values come from `fn@0x2728` (EROM core-descriptor parser) — per-core revision + wrapper capability fields cached at init from EROM. One entry per host-enumerated core, slot order matches T218 exactly. **Why static scan missed it:** writer location WAS documented in phase6/t288_pcie2_reg_map.md:90 — the gap was a documentation/cross-reference miss, not an analysis miss. **Wake-question impact: zero** — these are initialization-time metadata, no runtime readers identified in BFS scan. Likely informational/debug fields. Gap resolved; no follow-on direction from this surface. T303 FIRED at 20:10:56 BST (boot -1 uptime ~21 min — late but within row 83 clean window per row 83). All probe stages CLEAN through `t+90s SUMMARY count=2 sched_cc=0x1 events_p=0x18109000 pending=0x0` plus T303 readouts at every stage. **Boot -1 ended at 20:13:11** — silent kernel death right after t+90s SUMMARY, exact same [t+90s, t+120s] T270-BASELINE pattern (now n=7 without test300). Auto-recovery, NO SMC reset (boot 0 started 20:14:43). Current uptime ~2 min, lspci clean (MAbort-, CommClk+).
 
 **Headline T303 results (all BAR2-only sched_ctx field reads, modeled after T287c):**
 
@@ -1022,9 +1024,7 @@ All probe printks bunched at journalctl timestamps 20:13:10/11. Insmod print and
 
 Decision splits into TWO independent questions:
 
-**Q1 — Static work (no substrate cost, do regardless):**
-
-- **A2-extension — disassemble writers of `+0x318..+0x32c`.** Pure static work in phase6/. Identify which fn populates those 6 dwords during fw init. T303 found 6 stable populated dwords where t300_static_prep §65 expected zero — static analysis missed the writers. Independent of the fire decision; can kick off in parallel with whatever Q2 picks. Likely outcome: reveal a per-slot init or class-config routine that updates fw understanding of the slot model.
+**Q1 — Static work (no substrate cost, do regardless):** **DONE 2026-04-27 20:35 BST** (phase6/t303b_gap_writers.md, commit 49c3c35). Writer = fn@0x64590, called from si_doattach. Values are EROM core descriptor metadata (revisions + wrapper capability fields) cached at init, one per host-enumerated core. Wake-question impact: zero. Gap resolved; no follow-on direction from this surface. ~~A2-extension~~ closed.
 
 **Q2 — Next fire (substrate-budget call):**
 
