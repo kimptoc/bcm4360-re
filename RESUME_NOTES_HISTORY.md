@@ -1,5 +1,115 @@
 ---
 
+## T297 PRE/POST pair (2026-04-27 — migrated from RESUME_NOTES at POST-TEST.298)
+
+> Migrated when POST-TEST.298 landed (substrate-noise null fire #4 of the
+> T294→T297 streak; superseded by T298's clean BAR2-only fire).
+> POST-TEST.298 is now in RESUME_NOTES.md.
+
+---
+
+## PRE-TEST.297 (2026-04-27 ~11:45 BST — first hardware fire of the new
+direction. READ-ONLY probe to characterise wrapper-agent OOB-selector state
+at multiple init timings via the never-fired test.288a; reconfirm test.290a
+chain-never-populated past n=2 stopping rule; reconfirm test.287c sched_ctx
+stability past 90 s.)
+
+### Goal — single bit of information
+
+Does the AI-backplane wrapper agent OOB-selector at chipcommon-wrap+0x100
+(`oobselouta30`) carry a non-zero / non-default routing pattern across
+init stages? A non-default pattern would identify the wake-routing register
+the prior session's row 148 hypothesised but never empirically tested. A
+zero / unchanged pattern would weaken the chipcommon-wrap candidate and
+push attention to candidate #4 (PCIe MSI plumbing) or #5 (direct memory
+polling).
+
+### Hypothesis
+
+The wrapper agent registers will read sensible non-zero values once
+`set_active` runs (the scheduler-context wrappers populate at that point,
+per test.287c), and will be stable across the t+5/30/90 s timings just
+like sched_ctx is. If `oobselouta30` carries a pattern matching `[ARM-CR4
+IRQ index] | (chipcommon-source-bit << ofs)`, the chipcommon-wrap wake
+candidate strengthens.
+
+### Diff vs T295 fire
+
+- ADD `bcm4360_test288a_wrap_read=1` (the key new probe — never fired before)
+- ADD `bcm4360_test290a_chain=1` (read-only, push n=2 → n>3)
+- DROP `bcm4360_test290b_cc_write=1` (the wedge-prone chipcommon-write probe)
+- DROP `bcm4360_test294_cc_ro_probe=1` (no longer relevant since T290B dropped)
+- KEEP T276/T277/T278 console scaffold, T284 premask, T287/T287c sched_ctx, T236/T238 timing scaffold
+
+### Substrate prerequisites (recorded at plan time)
+
+- Uptime 5h+ (stale substrate). User cold-cycle recommended.
+- lspci clean at 11:42.
+- Realistic plan: 2-4 attempts, each requiring full cold cycle + likely SMC reset.
+
+### Discriminator outcomes (table from plan — never reached, kept for context)
+
+| `test.288a` chipcommon-wrap+0x100 (oobselouta30) reading | Reading |
+|---|---|
+| Non-zero, changes across stages | Wake-routing live and dynamic |
+| Non-zero, stable across stages | Static OOB routing |
+| All zeros at every stage | Chipcommon-wrap is NOT the wake gate |
+| Wedges before any T288a output | Substrate noise; null fire — cold cycle and retry |
+
+`test.290a` outcomes:
+- `wrong-node-fn-not-wlc-isr` again at all stages → confirms T304 dead-chain
+- `complete` with non-zero base → contradicts T299/T306 dead-chain finding
+
+### Pre-fire checklist (recorded at plan time)
+
+1. ✓ NO REBUILD — module built 22:38 same day as source 22:37
+2. ✓ Hypothesis stated above
+3. ✓ PCIe state checked (clean at 11:42)
+4. → Plan committed and pushed BEFORE fire
+5. → FS sync after push
+6. → (user) Cold cycle recommended
+
+## POST-TEST.297 (2026-04-27 11:47 BST → recovered ~12:42 BST after user SMC reset)
+
+### Result — substrate-noise null fire #4 (T294/T295/T296/T297 cumulative)
+
+**Wedge point:** `test.188: root-port pci_disable_link_state returned —
+reading LnkCtl` — 1319th and final journal line of boot -1 at
+11:47:35 BST. The pci_capability_read_word() that should have followed
+to print "after=0xNNNN" never returned. Same code site that T295 wedged
+on (one operation later in the function), and one operation upstream of
+T296's `chip=0x4360 chipid` print. Adds the 7th distinct wedge point
+along the Phase 5 init code path.
+
+**Recovery profile:** consistent with the recent cluster — watchdog did
+NOT auto-recover; user-initiated SMC reset + cold cycle required;
+~55-minute gap between wedge (11:47:35) and clean boot (12:42:43).
+
+**Instrumentation that fired:** zero. Wedge is upstream of test.276
+(shared_info), test.284 (premask), test.287/287c (sched_ctx), test.288a
+(wrapper-agent OOB read — the new probe), test.290a (chain walk).
+**No bit of new information was gathered.** Hypothesis untested,
+discriminator outcomes table N/A.
+
+### Process finding (the load-bearing observation)
+
+T297 was a chipcommon-wrap + PCIE2-wrap BAR0 read. KEY_FINDINGS row 85,
+written ~5 hours before T297 fired, had explicitly stopped further BAR0
+work: *"pivot to a different MMIO surface (TCM, not chipcommon BAR0)
+before further hardware fires."* The PRE-TEST.297 plan acknowledged
+substrate-noise risk but did not reconcile with the row 85 stopping
+rule. T297's null is the 4th confirmation that the rule was correct —
+not a reason to retry the same probe. This bypass pattern is now
+documented in row 85. **T298 (next fire) honoured the rule and fired
+clean — strong validation that the BAR2-only pivot was correct.**
+
+### Files
+
+- [phase5/logs/test.297.journalctl.txt](phase5/logs/test.297.journalctl.txt) (boot -1 capture)
+- [phase5/logs/test.297.run.txt](phase5/logs/test.297.run.txt) (0-byte — insmod wedged before redirect flushed)
+
+---
+
 ## T290 + T291 + T292(PRE) tests (2026-04-26 — migrated from RESUME_NOTES at POST-TEST.293)
 
 > Migrated from RESUME_NOTES.md when POST-TEST.293 landed (policy: ~3 tests in live notes).
