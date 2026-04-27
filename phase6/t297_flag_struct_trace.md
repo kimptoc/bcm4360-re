@@ -443,6 +443,74 @@ Possible causes:
 
 This finding re-explains the entire Phase 5 silent-host-wedge family. It's not "fw is waiting for a specific HW event we haven't triggered" — it's "fw isn't reaching a state where wakes are even armed". Every host MMIO probe at the WFI point operates on a chip whose D11 INTMASK is 0 — fw is genuinely deaf.
 
+## T299 — call chain mapping past wl_probe
+
+### T299a/b/c — wlc-attach hierarchy + function naming
+
+Function names recovered via printf-string id (the same approach that named wlc_bmac_up_finish):
+
+| Address | Name | Source |
+|---|---|---|
+| fn@0x67614 | wl_probe | T289b/T287c (already known) |
+| fn@0x68A68 | wlc_attach | "wlc_attach" string at 0x4B1FF, 3 refs |
+| fn@0x6820C | wlc_bmac_attach | "wlc_bmac_attach" string at 0x4B121, 13 refs |
+| fn@0x18FFC | wlc_up | "wlc_up" string at 0x4B16F, 2 refs |
+| fn@0x15DA8 | wlc_bmac_up_prep | "wlc_bmac_up_prep" string at 0x4AF38, 1 ref |
+| fn@0x17ED6 | wlc_bmac_up_finish | "wlc_bmac_up_finish" string at 0x4B1EC, 1 ref |
+| **fn@0x11648** | **wl_open** | "wl_open" string at 0x4A064, 1 ref |
+
+### Call chain confirmed
+
+- **wl_probe → wlc_attach → wlc_bmac_attach** (allocates flag_struct, all run during wl_probe per T287c — flag_struct exists at WFI freeze point)
+- **wl_open → wlc_up → wlc_bmac_up_prep → ... → wlc_bmac_up_finish** (this is the wake-arm path that DOESN'T run in current Phase 5)
+
+wl_open's body:
+```
+0x11648  ldr r3, [pc, #0x38]   ; load global
+0x1164a  push {r0, r1, r4, lr}
+0x1164e  ldr r4, [r0, #0x18]   ; r4 = arg0[+0x18] = wlc_info
+0x11650  tst.w r3, #1; beq .nodebug
+0x1166e  ldr r0, [r4, #8]     ; r0 = wlc_pub
+0x11670  bl #0x18ffc           ; wlc_up(wlc_pub)
+0x11674-1167e: r1=2 (BRCMF_C_UP), call ioctl-set helper at fn@0x1429C
+0x11682  pop {r2, r3, r4, pc}
+```
+
+So **wl_open invokes wlc_up + sends an ioctl-set notification** — classic Broadcom interface-up handler.
+
+### T299g — the wlc-handlers table dispatch is STRUCTURALLY ORPHANED
+
+The wlc-handlers table at 0x58F1C contains:
+```
+0x58F1C: wl_probe (0x67615)
+0x58F20: wl_open (0x11649)
+0x58F24: wl_close? (0x1132D)
+0x58F28: wl_ioctl? (0x11605)
+0x58F2C: 0
+0x58F30: ?
+0x58F34: ?
+0x58F38: wlc-isr fn@0x1146D
+0x58F3C: 0
+```
+
+Wrapper struct at 0x58F00 contains `0x58F1C` (pointer to table).
+
+**ZERO code refs** to either 0x58F1C or 0x58F00 anywhere in the blob (literal-pool scan + any-alignment byte search). The dispatch mechanism that calls wl_open via this table is hidden — possibly:
+- Computed-pointer pattern not caught by literal scans (e.g., add rN, pc, #imm with the table being PC-relative to some code site)
+- Structure is initialized at runtime by code that uses a different reference base
+- Structure is dead code (but T287c confirms wl_probe IS reached, so something dispatches it)
+
+This is the open puzzle: how does fw receive an "open the interface" command from the host? If the answer is "via olmsg ring → poller → wlc-handlers dispatch", we have a target — but the dispatch mechanism needs to be located.
+
+### Strategic state
+
+- Wake gate identified (D11+0x168) — CONFIRMED
+- Wake mask 0x48080 — CONFIRMED (sole path)
+- wlc_bmac_up_finish is the sole arm site — CONFIRMED
+- Path to arming = wl_open → wlc_up → wlc_bmac_up — IDENTIFIED
+- Trigger for wl_open = HOST MESSAGE (likely via olmsg/CDC ring) — INFERRED but dispatch mechanism not yet located
+- This connects to Phase 4B's olmsg-ring-prep that didn't trigger fw response — the "missing trigger" is now known to be a host-to-fw command processed via the orphaned-looking handlers table
+
 ## Clean-room posture
 
-All findings are disassembled mnemonics + literal-pool resolution + offset-pattern matching, plus open-source cross-reference (brcmsmac/d11.h via Explore) + printf string identification ("wlc_bmac_up_finish", "wlc_bmac.c"). No reconstructed function bodies. Scripts in `phase6/t297*.py` and `phase6/t298*.py`. Zero hardware fires.
+All findings are disassembled mnemonics + literal-pool resolution + offset-pattern matching, plus open-source cross-reference (brcmsmac/d11.h via Explore) + printf string identification. No reconstructed function bodies. Scripts in `phase6/t297*.py`, `phase6/t298*.py`, and `phase6/t299*.py`. Zero hardware fires.
