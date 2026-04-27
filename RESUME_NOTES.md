@@ -666,15 +666,26 @@ None of the three predicted outcomes match cleanly. The new outcome — wedge pr
 - 02:00.0: `ASPM L1 Enabled` (default), MAbort-, CommClk+, x1 @5GT/s
 - No SMC reset performed (auto-recovery sufficient)
 
-### Next direction (candidates — pending advisor consult)
+### Next direction (advisor-consulted 2026-04-27 19:35 BST)
 
-1. **T302a — Re-fire T301 unchanged.** Tests whether wedge AT sample 2 reproduces (would push the new datapoint to n=2 and strongly implicate sample 2's BAR0 access). If wedge happens elsewhere → substrate variance dominates and the t+60s/sample-2 coincidence was lucky.
-2. **T302b — Re-fire WITHOUT test300_oob_pending=1.** Tests "does T300 enablement shift the bracket?" If wedge moves back to [t+90s, t+120s] → yes, sample 1's BAR0 read alone has a delayed effect. If wedge stays earlier → substrate noise unrelated to T300.
-3. **T302c — Code edit: keep sample 1, skip sample 2.** Tests "is sample 2 the trigger vs cumulative effect of just any BAR0 OOB Router read?" Wedge at t+45s..t+60s → sample 1 alone is enough. Wedge at [t+90s..t+120s] → sample 2 specifically is the trigger.
+Advisor catch: **T302a's discriminative power is weaker than initially framed.** Between t+45s and t+60s the only host MMIO op IS sample 2 (the dwell prints between are pure pr_emerg, no bus traffic). So any substrate wedge in that window will fire AT sample 2 regardless of cause. "Wedge AT sample 2 reproduces" is consistent with BOTH (I) causal and (II) coincidence. T302a gives n=2 on locus, not on causation.
 
-Best discriminator value: option 2 (T302b) — cheapest (no rebuild), single param flip, tests a clean "does T300 enablement shift the wedge bracket?" question. Option 3 is more diagnostic but requires a rebuild.
+**Recommended: T302b — re-fire T301 with `bcm4360_test300_oob_pending=0` (i.e., drop the param, don't pass it). Otherwise unchanged.**
 
-Awaiting user steer + advisor consult before T302.
+Predictions vs outcome map:
+- Wedge moves back to [t+90s, t+120s] → test300 enablement IS shifting the bracket (clean inference)
+- Wedge stays at t+45s..t+60s → ambiguous: test300 not the cause + either (a) substrate variance widened independently OR (b) the dropped `test284_premask_enable` (also dropped in T300/T301 vs T298/T299) is what shifts the bracket
+- New wedge mode → handle on its own merits
+
+**Prediction (Claude's honest estimate before fire):** ~60-65% wedge moves back to [t+90s, t+120s] (test300 IS the shift cause); ~30-35% stays at t+45s..t+60s; ~5% something else. Confidence not high → test is well-targeted per advisor framing.
+
+**Caveat to accept upfront:** if T302b wedges at t+45s..t+60s, T302b' (drop test300, RE-ADD test284_premask=1) is the follow-up to bisect the param confound.
+
+T302c (code edit — keep sample 1, skip sample 2 — cleanest causal test) defers until after T302b. T302b's result will tell us whether T302c is even necessary.
+
+T302a (re-fire T301 unchanged) is held — only valuable for narrowing locus-within-sample-2, which is a sub-question we don't yet need answered.
+
+Awaiting user GO/NO-GO on T302b. Substrate state: boot 0 uptime ~3 min as of 19:30 writeup; row 83 middle-of-window timing → fire ~19:37-19:42 BST (uptime 10-15 min).
 
 ## Archived detail
 
