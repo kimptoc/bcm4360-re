@@ -1,0 +1,64 @@
+=== (1) DUMP fn@0x2408 (real C main, lr=0x320 fault on return) ===
+   0x2408  push     {r4, lr}
+   0x240a  bl       #0x642dc  → fn@0x642dc
+   0x240e  bl       #0x1cc  → fn@0x1cc
+   0x2412  bl       #0x642fc  → fn@0x642fc
+   0x2416  mov      r4, r0
+   0x2418  bl       #0xc6c  → fn@0xc6c
+   0x241c  mov      r0, r4
+   0x241e  pop.w    {r4, lr}
+   0x2422  b.w      #0x11d0  → tail-fn@0x11d0
+   0x2426  orr.w    r3, r1, r0
+   0x242a  orr.w    r3, r2, r3
+   0x242e  tst.w    r3, #3
+   0x2432  push     {r4, r5, lr}
+   0x2434  bne      #0x2460
+   0x2436  ldr      r4, [r1]
+   0x2438  ldr      r3, [r0]
+   0x243a  eor.w    r3, r4, r3
+   0x243e  str      r3, [r2]
+   0x2440  ldr      r4, [r1, #4]
+   0x2442  ldr      r3, [r0, #4]
+   0x2444  eor.w    r3, r4, r3
+   0x2448  str      r3, [r2, #4]
+   0x244a  ldr      r4, [r1, #8]
+   0x244c  ldr      r3, [r0, #8]
+   0x244e  eor.w    r3, r4, r3
+   0x2452  str      r3, [r2, #8]
+   0x2454  ldr      r1, [r1, #0xc]
+   0x2456  ldr      r3, [r0, #0xc]
+   0x2458  eor.w    r3, r1, r3
+   0x245c  str      r3, [r2, #0xc]
+   0x245e  pop      {r4, r5, pc}
+    [end pop pc]
+
+
+=== (2) BFS from fn@0x2408 (with bx-via-literal-pool tracking) ===
+Reached fns: 295
+
+Key targets reached + path:
+  not reached: 0x1c98 (pciedngl_isr)
+  not reached: 0x1e90 (pciedngl_probe)
+  not reached: 0x2f18 (bcm_olmsg_init)
+  not reached: 0x11648 (wl_open)
+  not reached: 0x11704 (init-shim → 142E0)
+  not reached: 0x11790 (wrap_ARM)
+  not reached: 0x142e0 (0x48080-writer)
+  not reached: 0x17ed6 (wlc_bmac_up_finish)
+  not reached: 0x18ffc (wlc_up)
+  not reached: 0x67358 (si_doattach_wrapper)
+  not reached: 0x67614 (wl_probe)
+  not reached: 0x6820c (wlc_bmac_attach)
+  not reached: 0x68a68 (wlc_attach)
+
+
+=== (3) Search for ldr-from-pool of wl_probe-ptr (0x67615) followed by bx ===
+  (only ldr-pool location of 0x67615 is at file offset 0x58F1C — handlers table)
+  Total ins disasm'd: 183,411
+  ldr-loaders for 0x67615: 0
+
+
+=== (4) Find ldr-from-pool of pciedngl_probe-ptr (0x1e91) ===
+  byte hits: 1
+    0x58c9c aligned=True
+  ldr-loaders for 0x1e91: 0

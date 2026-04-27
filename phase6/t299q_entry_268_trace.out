@@ -1,0 +1,180 @@
+=== (1) DUMP fn@0x268 (firmware's true entry point per reset vector) ===
+
+=========== fn@0x268 (true entry from reset)  starting at 0x268 ===========
+    0x268  bl       #0x390  → fn@0x390
+    0x26c  ldr      r0, [pc, #0xb8]  ; lit=0x18000000
+    0x26e  ldr      r1, [r0]
+    0x270  ldr      r2, [pc, #0xb8]  ; lit=0xfff8
+    0x272  and.w    r2, r2, r1
+    0x276  ldr      r1, [pc, #0xb8]  ; lit=0xfc
+    0x278  ldr      r1, [r0, r1]
+    0x27a  ldr      r2, [r1]
+    0x27c  ldr      r3, [pc, #0xb4]  ; lit=0xf
+    0x27e  and.w    r3, r3, r2
+    0x282  cmp      r3, #0xf
+    0x284  beq      #0x290
+    0x286  cmp      r3, #1
+    0x288  beq      #0x292
+    0x28a  add.w    r1, r1, #4
+    0x28e  b        #0x27a  → tail-fn@0x27a
+    0x290  b        #0x290  → tail-fn@0x290
+    0x292  add.w    r1, r1, #8
+    0x296  ldr      r3, [pc, #0xa0]  ; lit=0xfff00
+    0x298  and.w    r3, r3, r2
+    0x29c  ldr      r4, [pc, #0x9c]  ; lit=0x83e00
+    0x29e  cmp      r3, r4
+    0x2a0  bne      #0x27a
+    0x2a2  bl       #0x4ec  → fn@0x4ec
+    0x2a6  mov      r8, r0
+    0x2a8  bl       #0x50c  → fn@0x50c
+    0x2ac  mov      sb, r0
+    0x2ae  mov      r1, sb
+    0x2b0  ldr      r3, [pc, #0x8c]  ; lit=0x408
+    0x2b2  ldr      r3, [r1, r3]
+    0x2b4  ldr      r4, [pc, #0x8c]  ; lit=0x1c
+    0x2b6  and.w    r3, r3, r4
+    0x2ba  cmp      r3, #0
+    0x2bc  beq      #0x2c2
+    0x2be  bl       #0x538  → fn@0x538
+    0x2c2  ldr      r0, [pc, #0x84]  ; lit=0x0
+    0x2c4  ldr      r1, [pc, #0x84]  ; lit=0x21c
+    0x2c6  str      r0, [r1]
+    0x2c8  mov      r0, r8
+    0x2ca  ldr      r1, [pc, #0x84]  ; lit=0x230
+    0x2cc  str      r0, [r1]
+    0x2ce  mov      r0, sb
+    0x2d0  ldr      r1, [pc, #0x80]  ; lit=0x234
+    0x2d2  str      r0, [r1]
+    0x2d4  bl       #0x440  → fn@0x440
+    0x2d8  ldr      r1, [pc, #0x7c]  ; lit=0x58c74
+    0x2da  str      r5, [r1]
+    0x2dc  ldr      r1, [pc, #0x7c]  ; lit=0x58c78
+    0x2de  str      r6, [r1]
+    0x2e0  ldr      r1, [pc, #0x7c]  ; lit=0x58c7c
+    0x2e2  str      r7, [r1]
+    0x2e4  mov      r5, r7
+    0x2e6  ldr      r0, [pc, #0x7c]  ; lit=0x2
+    0x2e8  ldr      r1, [pc, #0x60]  ; lit=0x21c
+    0x2ea  str      r0, [r1]
+    0x2ec  ldr.w    r8, [pc, #0x78]  ; lit=0x58c8c
+    0x2f0  ldr.w    sb, [r8]
+    0x2f4  sub.w    r5, r5, sb
+    0x2f8  sub.w    r5, r5, #4
+    0x2fc  mov      sp, r5
+    0x2fe  ldr      r0, [pc, #0x6c]  ; lit=0x3
+    0x300  ldr      r1, [pc, #0x48]  ; lit=0x21c
+    0x302  str      r0, [r1]
+    0x304  ldr      r0, [pc, #0x68]  ; lit=0x62910
+    0x306  ldr      r1, [pc, #0x6c]  ; lit=0x63ac4
+    0x308  mov.w    r2, #0
+    0x30c  stm      r0!, {r2}
+    0x30e  cmp      r1, r0
+    0x310  bhi      #0x30c
+    0x312  ldr      r0, [pc, #0x64]  ; lit=0xa2c
+    0x314  ldr      r1, [pc, #0x34]  ; lit=0x21c
+    0x316  str      r0, [r1]
+    0x318  ldr      r0, [pc, #0x60]  ; lit=0x320
+    0x31a  mov      lr, r0
+    0x31c  ldr      r4, [pc, #0x60]  ; lit=0x2409 → fn@0x2408
+    0x31e  bx       r4
+    0x320  ldr      r0, [pc, #0x60]  ; lit=0xbaad → fn@0xbaac
+    0x322  ldr      r1, [pc, #0x28]  ; lit=0x21c
+    0x324  str      r0, [r1]
+    0x326  b        #0x326  → tail-fn@0x326
+    0x328  movs     r0, r0
+    0x32a  adds     r0, r0, r0
+    0x32c  vrev64.32 d16, d0
+    0x330  lsls     r4, r7, #3
+    0x332  movs     r0, r0
+    0x334  movs     r7, r1
+    0x336  movs     r0, r0
+    0x338  vhadd.u8 d0, d0, d15
+    0x33c  subs     r6, #0
+    0x33e  movs     r0, r1
+    0x340  lsls     r0, r1, #0x10
+    0x342  movs     r0, r0
+    0x344  movs     r4, r3
+    0x346  movs     r0, r0
+    0x348  movs     r0, r0
+    0x34a  movs     r0, r0
+    0x34c  lsls     r4, r3, #8
+    0x34e  movs     r0, r0
+    0x350  lsls     r0, r6, #8
+    0x352  movs     r0, r0
+    0x354  lsls     r4, r6, #8
+    0x356  movs     r0, r0
+    0x358  ldrh     r4, [r6, #0x22]
+    0x35a  movs     r5, r0
+    0x35c  ldrh     r0, [r7, #0x22]
+    0x35e  movs     r5, r0
+    0x360  ldrh     r4, [r7, #0x22]
+    0x362  movs     r5, r0
+    0x364  movs     r2, r0
+    0x366  movs     r0, r0
+    0x368  ldrh     r4, [r1, #0x24]
+    0x36a  movs     r5, r0
+    0x36c  movs     r3, r0
+    0x36e  movs     r0, r0
+    0x370  cmp      r1, #0x10
+    0x372  movs     r6, r0
+    0x374  subs     r2, #0xc4
+    0x376  movs     r6, r0
+    0x378  lsrs     r4, r5, #8
+    0x37a  movs     r0, r0
+  ... TRUNCATED at 120 lines
+
+
+=== (2) DUMP fn@0x4718 directly (leaf — no push lr) ===
+
+=========== fn@0x4718  starting at 0x4718 ===========
+   0x4718  str      r2, [r0, #0x4c]
+   0x471a  str      r1, [r0, #0x50]
+   0x471c  bx       lr
+    [end bx lr]
+
+
+=== (3) Reachable callees from fn@0x268 (BFS depth 4) ===
+Reached fns: total 27
+Key targets reached:
+  0x1c98 (pciedngl_isr): not reached
+  0x1e90 (pciedngl_probe): not reached
+  0x2f18 (bcm_olmsg_init): not reached
+  0x11648 (wl_open): not reached
+  0x11704 (init-shim → 142E0): not reached
+  0x11790 (wrap_ARM): not reached
+  0x142e0 (0x48080-writer): not reached
+  0x17ed6 (wlc_bmac_up_finish): not reached
+  0x18ffc (wlc_up): not reached
+  0x67358 (si_doattach_wrapper): not reached
+  0x67614 (wl_probe): not reached
+  0x6820c (wlc_bmac_attach): not reached
+  0x68a68 (wlc_attach): not reached
+
+First 30 reached fns (sorted):
+  fn@0x268
+  fn@0x27a
+  fn@0x290
+  fn@0x326
+  fn@0x390
+  fn@0x3a2
+  fn@0x440
+  fn@0x4ec
+  fn@0x50c
+  fn@0x538
+  fn@0x53e
+  fn@0x548
+  fn@0x586
+  fn@0x59e
+  fn@0x608
+  fn@0x63e
+  fn@0x678
+  fn@0x6a4
+  fn@0x6ba
+  fn@0x6d6
+  fn@0x6de
+  fn@0x70c
+  fn@0x70e
+  fn@0x716
+  fn@0x734
+  fn@0x76a
+  fn@0x76e
