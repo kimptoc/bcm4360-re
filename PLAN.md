@@ -150,27 +150,50 @@ wake-injection, the bus_info[+0x18] physical identity is a real gap.**
 
 The "find a host-injection path" frame has been thoroughly exhausted
 on the surfaces accessible to a static + single-shot empirical
-campaign. Two remaining viable directions:
+campaign. Two parallel option-2 static passes (T304f + T304g)
+further narrowed the picture:
 
-1. **`wl` driver comparison work — PROMOTED to highest priority.**
+- **T304f:** Offload runtime does NOT initialize D11 MAC. Zero D11
+  register writes in live code, zero D11-base literals, zero
+  `si_setcoreidx(0x812)` calls. fw stores D11 base at sched_ctx[+0x88]
+  via EROM walk (T287c runtime confirmed) but never writes any D11
+  register. **The "synthetic injection via D11/PHY config" angle
+  under option 2 is closed by D11 dormancy.**
+- **T304g:** Static ISR-registration audit confirms T298's empirical
+  2-node enumeration (bits 0+3) is the wake surface — but
+  inadvertently exposed a real BFS coverage gap (the path by which
+  pciedngl_isr is registered at runtime is NOT reached by the BFS).
+  Strategic verdict (2 ISRs, bits 0+3) is unchanged because T298
+  directly observed the linked list — empirical primary-source. But
+  the BFS-based "no other ISRs could exist" inference is weakened.
+
+**Refined direction triage post-T304g:**
+
+1. **`wl` driver comparison work — HIGHEST-VALUE REMAINING DIRECTION.**
    Previously sat in "deferred / lower-priority" since post-T299. The
    vendor `wl` driver presumably DOES make this fw fire pciedngl_isr
    (or some other ISR) successfully, since the chip works under the
    original driver. Capturing the register-write sequence `wl` issues
    during init/up — and diffing against what brcmfmac does — is the
-   highest-value remaining direction. Concrete first step: load `wl`
-   on a parallel system or in a controlled environment and capture
-   MMIO/config-write trace via lib instrumentation, ftrace, or a
-   strategic LD_PRELOAD wrapper.
+   single highest-value remaining direction. Concrete first step:
+   load `wl` on a parallel system or in a controlled environment and
+   capture MMIO/config-write trace via instrumentation (ftrace,
+   kprobes, or a strategic LD_PRELOAD wrapper).
 
-2. **Accept that wake requires HW-internal events** (D11 MAC events,
-   chipcommon events, internal core asserts driven by frame
-   reception or PHY state). These are not directly host-driveable
-   but might reveal a synthetic injection path through D11 MAC
-   config or PHY register manipulation. Higher cost,
-   lower-probability than (1).
+2. **HW-internal events surface — EFFECTIVELY CLOSED** without fw
+   modification. T304f closes D11; T304c closes PMU/GPIO; chipcommon
+   events have no handler beyond bit 0 RTE class. The only remaining
+   structural unknown is whether a third ISR could exist via the
+   indirect-dispatch BFS gap T304g exposed — but T298's empirical
+   2-node count is the load-bearing fact, not a static enumeration.
 
 **No fire warranted.** Awaiting user steer on direction.
+
+**Pattern caveat** (n=3 occurrences this session: T304c, T304e,
+T304f): subagents have repeatedly invented runtime ISR-firing claims
+from static identification cites. When a static report says "fires"
+or "executes", cross-check against the wr_idx=587 frozen record
+before propagating. **Static reach ≠ runtime execution.**
 
 **Heuristic caveat (per KEY_FINDINGS row 161):** the 311-fn live BFS
 rests on push-lr-as-fn-start + direct-BL coverage; indirect-call sites
