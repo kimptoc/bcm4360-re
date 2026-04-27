@@ -31,6 +31,15 @@
 - (b) Is the FW actually waiting at wfi for D11 INTMASK events, or for PCIe doorbell from host?
 - (c) What does fn@0x11cc (the main loop event processor) actually do?
 
+**T302 (kernel source review, no probe):** brcmfmac/pcie.c contains an extensive H2D mailbox/doorbell wake test series — test.240 (ring H2D_MAILBOX_1), test.258/259/260/262 (MAILBOXMASK + H2D_MAILBOX_1 with no-op IRQ handler), test.279 (H2D_MAILBOX_1 then H2D_MAILBOX_0 to trigger pciedngl_isr per T274), test.280 (enable MAILBOXMASK = 0xFF0300), test.284 (pre-set_active MAILBOXMASK with persistence). These were ALREADY run in prior sessions and per KEY_FINDINGS row 125 "MAILBOXMASK writes silently drop". So the H2D mailbox doorbell wake pathway was empirically tested and failed BEFORE the prior session pivoted to the D11+0x16C/0x48080 hypothesis. This session's T299/T300 now shows the D11 path is structurally dead too. Both hypotheses fail empirically AND structurally — there's a missing piece in the wake-mechanism model.
+
+**Search of brcmfmac source for D11 INTMASK / 0x48080 / macintstatus / 0x16c**: ZERO matches. The host driver only writes the PCIe2-core INTMASK at +0x24 (0x00FF0300) and touches D11 only for reset/coredisable via `wrapbase + BCMA_IOCTL/BCMA_RESET_CTL`. Host driver never writes D11+0x16C or 0x48080.
+
+**Strategic recommendation for next session:**
+1. **Audit prior wake-gate KEY_FINDINGS rows** (especially rows 158/159/160) given the structural-dead-code finding. The wake-gate identification at "D11+0x168 with mask 0x48080" was technically correct as a finding ABOUT THE FullMAC code, but NOT load-bearing for offload-mode fw runtime behavior.
+2. **Look elsewhere for the wake gate** — chipcommon INTMASK at +0x104, ARM-CR4 wrapper-side gate, or PCIe doorbell mechanism not yet tested. Also: the chipcommon-wrapper write hypothesis at row 148 ("wrap+0x100" wake target) was untested — that may be the actual gate.
+3. **Avoid more static-disasm probes** until a runtime data point is gathered — convergence-without-progress is the failure mode.
+
 **Unresolved from prior session:** substrate-null cluster (T294/T295/T296), n=3 stopping rule triggered. No hardware fires this session.
 
 ## Prior state (2026-04-26 23:35 BST — POST-TEST.295 NULL FIRE; n=2 of 3-stopping-rule; PRE-TEST.296 plan was a plain re-fire on tight-freshness substrate.)
