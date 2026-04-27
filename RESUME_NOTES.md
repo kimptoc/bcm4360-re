@@ -8,14 +8,15 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 — PRE-TEST.299 v3: cmdline corrected to `pcie_aspm.policy=performance` (v2 `pcie_aspm=off` was ALSO insufficient — it disables the kernel's ASPM subsystem entirely without touching the link bits BIOS already wrote). AWAITING USER reboot.)
+## Current state (2026-04-27 — PRE-TEST.299 v4: cmdline `pcie_aspm.policy=performance` did NOT take effect at boot (sysfs still `[default]`, LnkCtl still `ASPM L0s L1 Enabled`). Pivoted to runtime sysfs flip. ASPM now Disabled on full chain. Ready to fire T299.)
 
-**Cmdline correction history.** Three attempts at the same intent (force ASPM Disabled on the link):
+**Cmdline correction history.** Four attempts at the same intent (force ASPM Disabled on the link):
 1. v1: `pci=noaspm` — passive, cannot disable BIOS-enabled ASPM. Post-reboot LnkCtl showed L0s L1 still Enabled.
 2. v2: `pcie_aspm=off` — *also* passive. Disables the kernel ASPM management subsystem ("PCIe ASPM is disabled" in dmesg) but BIOS-written LnkCtl bits remain. Post-reboot 2026-04-27 evening: 03:00.0 still `ASPM L0s L1 Enabled`, 02:00.0 still `ASPM L1 Enabled`. Per-device `link/` sysfs not created (subsystem disabled), policy knob locked at runtime.
-3. **v3: `pcie_aspm.policy=performance`** — active disable. Keeps subsystem on; kernel writes ASPM-Disabled to all LnkCtl regs at boot; policy sysfs stays writable for runtime overrides.
+3. v3: `pcie_aspm.policy=performance` — added to cmdline, `nixos-rebuild boot` ran cleanly, /proc/cmdline confirms it post-reboot — but kernel ignored the param. Sysfs `policy` still showed `[default]`, LnkCtl on 03:00.0 still `ASPM L0s L1 Enabled`, 02:00.0 still `ASPM L1 Enabled`. Subsystem WAS live this time (sysfs writable, `link/` dir present), so the param was at least parsed enough to keep the subsystem alive — just not applied. Likely cause: kernel-internal early default committed before `pcie_aspm` saw its module param.
+4. **v4: runtime sysfs flip.** `echo performance | sudo tee /sys/module/pcie_aspm/parameters/policy` — actively disables. Verified 2026-04-27 post-third-reboot: policy sysfs now `default [performance] powersave powersupersave`. LnkCtl post-flip: 03:00.0 `ASPM Disabled`, 02:00.0 `ASPM Disabled`, 00:1c.0 root port `ASPM Disabled`. MAbort- everywhere. CommClk+ on 03:00.0 and 02:00.0, CommClk- on root (structural, not a fault).
 
-Edited `/etc/nixos/configuration.nix` line 22, `nixos-rebuild boot` succeeded. Awaiting third reboot before T299 fire.
+T299 fire premise (PRE-TEST verification step 5) now satisfied via runtime path instead of boot path. The single-bit hypothesis is unchanged.
 
 **Model.** The blob carries two runtimes; the live one is HNDRTE/offload, not
 the `wl_probe → wlc_*` FullMAC chain. T298 just provided primary-source
