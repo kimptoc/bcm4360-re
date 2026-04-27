@@ -1045,6 +1045,31 @@ static int bcm4360_test294_cc_ro_probe;
 module_param(bcm4360_test294_cc_ro_probe, int, 0644);
 MODULE_PARM_DESC(bcm4360_test294_cc_ro_probe, "BCM4360 test.294: READ-ONLY chipcommon discriminator probe at post-T276-poll. Saves BAR0_WINDOW, selects CHIPCOMMON, READS BAR0_WINDOW BACK to verify select_core landed, reads chipid (CC+0x00 — known-stable), reads BCAST_DATA (CC+0x54) twice for stability. NO writes to chipcommon. Discriminates T293 firing-#4's orig=0xffffffff anomaly: (a) select_core silently failed → window stays at saved value; (b) BCAST_DATA genuinely went 0→0xffffffff during 2s poll → chipid reads valid (0x15034360 or similar with 0x4360 low bits) but BCAST_DATA=0xffffffff; (c) chipcommon access path degraded → all reads return 0xffffffff. Wired at post-T276-poll only. (1=enable, 0=off)");
 
+/* BCM4360 test.298: BAR2-only ISR-list walk + sched_ctx/pending-events read.
+ * Honours KEY_FINDINGS row 85 stopping rule: zero BAR0 / select_core /
+ * chipcommon-wrap / PCIE2-wrap touches. Uses ONLY brcmf_pcie_read_ram32
+ * (pcie.c:1875 — direct BAR2 ioread, no BAR0_WINDOW write).
+ *
+ * Static rationale in phase6/t298_static_pass_findings.md.
+ *
+ * Walks the linked list whose head ptr lives at TCM[0x629A4] (per T269/T289
+ * disasm of hndrte_add_isr fn@0x63C24). Each 16-byte node:
+ *   [+0]=next, [+4]=callback fn, [+8]=arg, [+0xC]=1<<bit_index
+ * where bit_index was allocated by BIT_alloc reading wrap+0x100
+ * (oobselouta30) at registration time. Reading [+0xC] gives us the OOB
+ * bit allocation WITHOUT touching the wrapper register at runtime.
+ *
+ * Static enumeration found 3 hndrte_add_isr callers in the blob:
+ *   fn=0x1C99 (pciedngl_isr) — caller pcidongle_probe @ 0x1F28; LIVE per T256
+ *   fn=0x0B05 (RTE class-0x800 chipcommon ISR thunk) — caller @ 0x63CF0; likely LIVE
+ *   fn=0x1146D (wlc_isr) — caller wl_attach @ 0x67774; DEAD in offload mode per T299/T306
+ *
+ * Also reads sched_ctx[+0xCC] (current class) and pending-events word at
+ * *(*(sched+0x358))+0x100) for HW IRQ activity shadow. */
+static int bcm4360_test298_isr_walk;
+module_param(bcm4360_test298_isr_walk, int, 0644);
+MODULE_PARM_DESC(bcm4360_test298_isr_walk, "BCM4360 test.298: BAR2-only dynamic walk of ISR list at TCM[0x629A4] (head ptr) + sched_ctx[+0xCC] + pending-events word. Per-stage. ZERO BAR0 / select_core / wrapper-MMIO touches — honours KEY_FINDINGS row 85 stopping rule. Decoder: fn=0x1C99=pciedngl_isr, fn=0x0B05=RTE-CC-class ISR, fn=0x1146D=wlc_isr (FullMAC; dead per T299/T306). (1=enable, 0=off)");
+
 #define BCM4360_T288A_CC_WRAP_BASE	0x18100000
 #define BCM4360_T288A_PCIE2_WRAP_BASE	0x18103000
 
@@ -1077,6 +1102,63 @@ MODULE_PARM_DESC(bcm4360_test294_cc_ro_probe, "BCM4360 test.294: READ-ONLY chipc
 		pr_emerg("BCM4360 test.288a: %s CC.wrap[0x000]=0x%08x [0x100]=0x%08x PCIE2.wrap[0x000]=0x%08x [0x100]=0x%08x (saved_win=0x%08x)\n", \
 			 tag, _t288a_cc_in, _t288a_cc_out, \
 			 _t288a_pcie_in, _t288a_pcie_out, _t288a_saved); \
+	} \
+} while (0)
+
+/* BCM4360 test.298: BAR2-only dynamic ISR-list walk + sched/pending read.
+ * Defensive bounds: 0xA0000 = ramsize per T121. 16-node walk cap.
+ * ZERO BAR0 touches — uses only brcmf_pcie_read_ram32 (BAR2-direct). */
+#define BCM4360_T298_RAMSIZE_BOUND  0xA0000
+#define BCM4360_T298_MAX_NODES      16
+#define BCM4360_T298_LIST_HEAD_ADDR 0x629A4
+#define BCM4360_T298_SCHED_PTR_ADDR 0x6296C
+
+#define BCM4360_T298_ISR_WALK(tag) do { \
+	if (bcm4360_test298_isr_walk) { \
+		u32 _t298_head = brcmf_pcie_read_ram32(devinfo, \
+			BCM4360_T298_LIST_HEAD_ADDR); \
+		u32 _t298_sched = brcmf_pcie_read_ram32(devinfo, \
+			BCM4360_T298_SCHED_PTR_ADDR); \
+		u32 _t298_node = _t298_head; \
+		u32 _t298_n; \
+		u32 _t298_cc = 0xFFFFFFFF; \
+		u32 _t298_evp = 0, _t298_pending = 0; \
+		pr_emerg("BCM4360 test.298: %s head=0x%08x sched_ctx=0x%08x\n", \
+			 tag, _t298_head, _t298_sched); \
+		for (_t298_n = 0; _t298_n < BCM4360_T298_MAX_NODES; _t298_n++) { \
+			u32 _t298_next, _t298_fn, _t298_arg, _t298_mask; \
+			if (_t298_node == 0 || \
+			    _t298_node >= BCM4360_T298_RAMSIZE_BOUND) { \
+				pr_emerg("BCM4360 test.298: %s node[%u] end ptr=0x%08x\n", \
+					 tag, _t298_n, _t298_node); \
+				break; \
+			} \
+			_t298_next = brcmf_pcie_read_ram32(devinfo, \
+				_t298_node + 0x0); \
+			_t298_fn   = brcmf_pcie_read_ram32(devinfo, \
+				_t298_node + 0x4); \
+			_t298_arg  = brcmf_pcie_read_ram32(devinfo, \
+				_t298_node + 0x8); \
+			_t298_mask = brcmf_pcie_read_ram32(devinfo, \
+				_t298_node + 0xC); \
+			pr_emerg("BCM4360 test.298: %s node[%u]@0x%08x next=0x%08x fn=0x%08x arg=0x%08x mask=0x%08x\n", \
+				 tag, _t298_n, _t298_node, _t298_next, \
+				 _t298_fn, _t298_arg, _t298_mask); \
+			_t298_node = _t298_next; \
+		} \
+		if (_t298_sched != 0 && \
+		    _t298_sched < BCM4360_T298_RAMSIZE_BOUND) { \
+			_t298_cc = brcmf_pcie_read_ram32(devinfo, \
+				_t298_sched + 0xCC); \
+			_t298_evp = brcmf_pcie_read_ram32(devinfo, \
+				_t298_sched + 0x358); \
+			if (_t298_evp != 0 && \
+			    _t298_evp < BCM4360_T298_RAMSIZE_BOUND) \
+				_t298_pending = brcmf_pcie_read_ram32(devinfo, \
+					_t298_evp + 0x100); \
+		} \
+		pr_emerg("BCM4360 test.298: %s SUMMARY count=%u sched_cc=0x%08x events_p=0x%08x pending=0x%08x\n", \
+			 tag, _t298_n, _t298_cc, _t298_evp, _t298_pending); \
 	} \
 } while (0)
 
@@ -1276,6 +1358,7 @@ MODULE_PARM_DESC(bcm4360_test294_cc_ro_probe, "BCM4360 test.294: READ-ONLY chipc
 		BCM4360_T285_READ_CC("stage " tag); \
 		BCM4360_T287_READ_SCHED("stage " tag); \
 		BCM4360_T288A_READ_WRAPS("stage " tag); \
+		BCM4360_T298_ISR_WALK("stage " tag); \
 		BCM4360_T290A_CHAIN("stage " tag); \
 		/* T290B excluded from T278 stage hook per advisor #3 — \
 		 * 2 samples (post-set_active + post-T276-poll) sufficient */ \
@@ -4417,11 +4500,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				 * pre-set_active MBM writes work. Open question:
 				 * does the pre-set mask survive fw init? */
 				if (bcm4360_test284_premask_enable) {
-					BCM4360_T284_READ_MBM("pre-write (pre-set_active)"); BCM4360_T285_READ_CC("pre-write (pre-set_active)"); BCM4360_T287_READ_SCHED("pre-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("pre-write (pre-set_active)"); BCM4360_T290A_CHAIN("pre-write (pre-set_active)"); BCM4360_T290B_CC_WRITE("pre-write (pre-set_active)");
+					BCM4360_T284_READ_MBM("pre-write (pre-set_active)"); BCM4360_T285_READ_CC("pre-write (pre-set_active)"); BCM4360_T287_READ_SCHED("pre-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("pre-write (pre-set_active)"); BCM4360_T298_ISR_WALK("pre-write (pre-set_active)"); BCM4360_T290A_CHAIN("pre-write (pre-set_active)"); BCM4360_T290B_CC_WRITE("pre-write (pre-set_active)");
 					pr_emerg("BCM4360 test.284: calling brcmf_pcie_intr_enable (pre-set_active — writes MBM = 0xFF0300)\n");
 					brcmf_pcie_intr_enable(devinfo);
 					pr_emerg("BCM4360 test.284: brcmf_pcie_intr_enable returned\n");
-					BCM4360_T284_READ_MBM("post-write (pre-set_active)"); BCM4360_T285_READ_CC("post-write (pre-set_active)"); BCM4360_T287_READ_SCHED("post-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("post-write (pre-set_active)"); BCM4360_T290A_CHAIN("post-write (pre-set_active)"); BCM4360_T290B_CC_WRITE("post-write (pre-set_active)");
+					BCM4360_T284_READ_MBM("post-write (pre-set_active)"); BCM4360_T285_READ_CC("post-write (pre-set_active)"); BCM4360_T287_READ_SCHED("post-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("post-write (pre-set_active)"); BCM4360_T298_ISR_WALK("post-write (pre-set_active)"); BCM4360_T290A_CHAIN("post-write (pre-set_active)"); BCM4360_T290B_CC_WRITE("post-write (pre-set_active)");
 				}
 
 				pr_emerg("BCM4360 test.238: calling brcmf_chip_set_active resetintr=0x%08x (ultra-extended ladder t+120s)\n",
@@ -4432,7 +4515,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				else
 					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned TRUE\n");
 
-				BCM4360_T284_READ_MBM("post-set_active (CRITICAL: does ARM release clear it?)"); BCM4360_T285_READ_CC("post-set_active"); BCM4360_T287_READ_SCHED("post-set_active"); BCM4360_T288A_READ_WRAPS("post-set_active"); BCM4360_T290A_CHAIN("post-set_active"); BCM4360_T290B_CC_WRITE("post-set_active");
+				BCM4360_T284_READ_MBM("post-set_active (CRITICAL: does ARM release clear it?)"); BCM4360_T285_READ_CC("post-set_active"); BCM4360_T287_READ_SCHED("post-set_active"); BCM4360_T288A_READ_WRAPS("post-set_active"); BCM4360_T298_ISR_WALK("post-set_active"); BCM4360_T290A_CHAIN("post-set_active"); BCM4360_T290B_CC_WRITE("post-set_active");
 
 				/* BCM4360 test.276: 2 s post-ARM-release poll of
 				 * shared_info response fields. Log on any change,
@@ -4481,7 +4564,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						 brcmf_pcie_read_reg32(devinfo,
 							BRCMF_PCIE_PCIE2REG_MAILBOXINT));
 
-					BCM4360_T284_READ_MBM("post-T276-poll"); BCM4360_T285_READ_CC("post-T276-poll"); BCM4360_T287_READ_SCHED("post-T276-poll"); BCM4360_T288A_READ_WRAPS("post-T276-poll"); BCM4360_T290A_CHAIN("post-T276-poll"); BCM4360_T294_CC_RO_PROBE("post-T276-poll"); BCM4360_T290B_CC_WRITE("post-T276-poll");
+					BCM4360_T284_READ_MBM("post-T276-poll"); BCM4360_T285_READ_CC("post-T276-poll"); BCM4360_T287_READ_SCHED("post-T276-poll"); BCM4360_T288A_READ_WRAPS("post-T276-poll"); BCM4360_T298_ISR_WALK("post-T276-poll"); BCM4360_T290A_CHAIN("post-T276-poll"); BCM4360_T294_CC_RO_PROBE("post-T276-poll"); BCM4360_T290B_CC_WRITE("post-T276-poll");
 
 					/* BCM4360 test.277: post-poll console decode.
 					 * Re-read the pointer fw published at si[+0x010]
@@ -4566,7 +4649,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							"POST-POLL (full)",
 							t278_ptr,
 							&devinfo->t278_prev_write_idx);
-						BCM4360_T284_READ_MBM("post-T278-initial-dump"); BCM4360_T285_READ_CC("post-T278-initial-dump"); BCM4360_T287_READ_SCHED("post-T278-initial-dump"); BCM4360_T288A_READ_WRAPS("post-T278-initial-dump"); BCM4360_T290A_CHAIN("post-T278-initial-dump");
+						BCM4360_T284_READ_MBM("post-T278-initial-dump"); BCM4360_T285_READ_CC("post-T278-initial-dump"); BCM4360_T287_READ_SCHED("post-T278-initial-dump"); BCM4360_T288A_READ_WRAPS("post-T278-initial-dump"); BCM4360_T298_ISR_WALK("post-T278-initial-dump"); BCM4360_T290A_CHAIN("post-T278-initial-dump");
 					} else if (bcm4360_test278_console_periodic) {
 						pr_emerg("BCM4360 test.278: requires bcm4360_test277_console_decode=1; skipping\n");
 					}

@@ -1,0 +1,46 @@
+hndrte_add_isr (0x63c24) direct bl/blx call sites: 3
+
+=== call site 0x1f28 ===
+  pre-call 0x1f20: ldr r3, [pc, #0x48]  -> pool[0x1f6c] = 0x00001c99  (Thumb-fn? 0x1c98)
+  pre-call 0x1f12: ldr r0, [pc, #0x54]  -> pool[0x1f68] = 0x00040787  (Thumb-fn? 0x40786)
+  pre-call 0x1f10: ldr r1, [pc, #0x4c]  -> pool[0x1f60] = 0x000407f2  (Thumb-fn? 0x407f2)
+
+=== call site 0x63cf0 ===
+  pre-call 0x63cea: ldr r3, [pc, #0x18]  -> pool[0x63d04] = 0x00000b05  (Thumb-fn? 0xb04)
+  pre-call 0x63cdc: ldr r3, [pc, #0x20]  -> pool[0x63d00] = 0x00062960  (Thumb-fn? 0x62960)
+  pre-call 0x63cce: ldr r0, [pc, #0x2c]  -> pool[0x63cfc] = 0x00040364  (Thumb-fn? 0x40364)
+  pre-call 0x63cc8: ldr r4, [pc, #0x2c]  -> pool[0x63cf8] = 0x00062994  (Thumb-fn? 0x62994)
+  pre-call 0x63c98: ldr r3, [pc, #0x20]  -> pool[0x63cbc] = 0x000629a4  (Thumb-fn? 0x629a4)
+
+=== call site 0x67774 ===
+  pre-call 0x6776c: ldr r3, [pc, #0x154]  -> pool[0x678c4] = 0x0001146d  (Thumb-fn? 0x1146c)
+  pre-call 0x67760: ldr r3, [pc, #0x15c]  -> pool[0x678c0] = 0x00040c2f  (Thumb-fn? 0x40c2e)
+  pre-call 0x67756: ldr r0, [pc, #0x164]  -> pool[0x678bc] = 0x0006bb1d  (Thumb-fn? 0x6bb1c)
+  pre-call 0x67752: ldr r2, [pc, #0x164]  -> pool[0x678b8] = 0x00062eb0  (Thumb-fn? 0x62eb0)
+  pre-call 0x67742: ldr r2, [pc, #0x170]  -> pool[0x678b4] = 0x0004a0ec  (Thumb-fn? 0x4a0ec)
+  pre-call 0x6773c: ldr r3, [pc, #0x170]  -> pool[0x678b0] = 0x00011735  (Thumb-fn? 0x11734)
+  pre-call 0x67728: ldr r0, [pc, #0x180]  -> pool[0x678ac] = 0x0004a0c5  (Thumb-fn? 0x4a0c4)
+
+str@0x40410 = 'hndrte_add_isr: hndrte_malloc failed'
+str@0x40685 = 'pciedngl_isr'
+str@0x4069d = 'pciedngl_isr called'
+str@0x40733 = 'pciedngl_isr exits'
+str@0x4079f = 'pcidongle_probe:hndrte_add_isr failed'
+str@0x4a0f1 = 'wl%d: hndrte_add_isr failed'
+str@0x50553 = 'wlc_isr: end of ATIM window'
+str@0x50553 = 'wlc_isr: end of ATIM window'
+str@0x40685 = 'pciedngl_isr'
+str@0x4069d = 'pciedngl_isr called'
+str@0x40733 = 'pciedngl_isr exits'
+str@0x4079f = 'pcidongle_probe:hndrte_add_isr failed'
+str@0x40364 = 'hndrte.c'
+str@0x403e7 = 'hndrte_init_timer: hndrte_malloc failed'
+str@0x403e7 = 'hndrte_init_timer: hndrte_malloc failed'
+str@0x40410 = 'hndrte_add_isr: hndrte_malloc failed'
+str@0x40410 = 'hndrte_add_isr: hndrte_malloc failed'
+str@0x40489 = 'hndrte_lbuf.c'
+str@0x4050e = 'hndrte_cons.c'
+str@0x40664 = 'hndrte_arm.c'
+str@0x4079f = 'pcidongle_probe:hndrte_add_isr failed'
+str@0x44c16 = 'hndrte_osl.c'
+str@0x4a0f1 = 'wl%d: hndrte_add_isr failed'
