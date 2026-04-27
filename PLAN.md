@@ -20,10 +20,12 @@ compare against the existing `brcmfmac` codebase.
 > documentation. Do not copy disassembly structure directly into driver code.
 > See README.md and CLAUDE.md for full guidelines (ref: issue #12).
 
-## Current Status (2026-04-27)
+## Current Status (2026-04-27, post-T298)
 
-**Active phases:** Phase 5.2 and Phase 6 remain active, but the frontier has
-changed.
+**Active phases:** Phase 5.2 and Phase 6 remain active. T298 (BAR2-only
+ISR-walk) just shifted the frontier: the OOB routing slots used by the
+two live ISRs are now identified at primary-source level, but the HW
+events that fire those slots are still unknown.
 
 Phase 5 proved the host can reliably get BCM4360 through download, NVRAM
 placement, Apple-specific seed/footer setup, and ARM release. Phase 6 then
@@ -64,11 +66,30 @@ runtime discriminator lands.
 
 ### Current highest-value next work
 
-1. **Gather a new runtime discriminator.**
-   The leading pending probe is the already-compiled read-only `test.288a`
-   wrapper-register read of chipcommon-wrap and PCIe2-wrap OOB-selector
-   registers. This directly tests the still-live "wrapper/OOB wake path"
-   hypothesis without adding new code.
+1. **Choose between two TCM/host-side wake-trigger probes (do NOT draft a
+   PRE-TEST plan until the choice is made — committing early is the
+   anti-pattern that produced the T294→T297 4-null streak).**
+
+   Background: T298 (BAR2-only ISR-list walk, 2026-04-27 14:19 BST) cleared
+   the BAR0 noise belt on first attempt and identified the OOB-routing slot
+   for both registered ISRs at primary-source level (RTE-CC ISR allocated
+   bit 0 of `oobselouta30`; pciedngl_isr allocated bit 3). What remains
+   open is which HW event SETS those bits to wake the firmware from WFI.
+
+   Candidate A — TCM-side `oobselouta30` shadow read. If firmware caches
+   the live OOB-selector value in TCM, BAR2 reads of that cache give the
+   live state without re-touching chipcommon-wrap MMIO (the row 85 noise
+   surface). Static work needed first to find the cache address.
+
+   Candidate B — Host-side wake-event injection. Plausible: trigger a real
+   DMA transfer over the Phase 4B olmsg-ring path (already plumbed at the
+   shared_info handshake but never actually transferred), or use MSI
+   assert via PCIe config space, or test the upstream `pci=noaspm` lead
+   from KEY_FINDINGS row 152.
+
+   The previously-recommended `test.288a` BAR0 probe is RETIRED — T297
+   wedged on it (row 85), and T298 has already extracted the OOB result
+   from the TCM side without touching BAR0.
 
 2. **Reduce dependence on single-fire interpretations.**
    Substrate instability is now a first-order constraint. Future hardware tests
