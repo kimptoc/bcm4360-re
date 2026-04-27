@@ -132,19 +132,54 @@ Phase 5 generated the most logs and ad hoc test planning in the repo. The new
 documentation split should keep this file as synthesis, not as a rolling
 session diary.
 
+## Post-T299 update (2026-04-27)
+
+T298 (BAR2-only ISR-list walk, 2026-04-27 14:19 BST) cleared the BAR0
+noise belt and identified the OOB-routing slots at primary-source
+level: RTE chipcommon-class ISR allocated bit 0 of `oobselouta30`;
+`pciedngl_isr` allocated bit 3.
+
+T299 (2026-04-27 15:29 BST) reproduced the 2-node ISR result
+**bit-for-bit** under full upstream ASPM disable (cmdline
+`pcie_aspm.policy=performance` + runtime sysfs flip → 03:00.0 +
+02:00.0 + root port 00:1c.2 all `ASPM Disabled`). Wedged at
+end-of-t+90s probe — same point as T270-BASELINE / T276 / T287c /
+T298. **ASPM falsified** as the cause of the [t+90s, t+120s] wedge
+bracket (KEY_FINDINGS row 152). Also corrected: the wedge has always
+been at end-of-t+90s, not at rmmod — boot-end timestamps prove rmmod
+(after `sleep 150`) never executed in any of these fires
+(KEY_FINDINGS row 163).
+
 ## Best Next Work For Phase 5
 
-1. Run the already-compiled read-only `test.288a` wrapper/OOB probe.
-   Reason: it targets one of the best remaining live wake hypotheses without
-   adding new code.
+1. **T300 = BAR2-only sched_ctx / OOB-mapping pass.** Per
+   `../../t299_next_steps.md`: static prep for writer of
+   `sched_ctx + 0x358`, sweep `+0x2c0..+0x35c`, and ISR-list
+   handling around `TCM[0x629A4]`. If a BAR2-readable mapping
+   candidate exists, fire a single-purpose probe (no `BAR0_WINDOW`
+   write, no `select_core`, no chipcommon/PCIE2/wrapper/OOB-router
+   reads) that exits before the [t+90s, t+120s] wedge bracket.
+   `test.288a` is RETIRED (T297 wedged on it; T298 obsoleted it).
 
-2. Prefer runtime discriminators over more broad static interpretation.
-   Reason: the active blocker is now “what live event is missing?” rather than
-   “what code exists in the blob?”
+2. If T300 step 1 finds no BAR2 mapping, A3 (one-shot OOB Router
+   pending read at `0x18109100`) is the surgical fallback — must
+   cite KEY_FINDINGS row 85, justify why OOB Router is a distinct
+   backplane agent from the chipcommon/PCIE2-wrap surfaces, and
+   exit before t+90s.
 
-3. Use Phase 6 only where it sharpens a specific host-side experiment.
-   Reason: Phase 5 now depends more on runtime closure than on more function
-   archaeology.
+3. Wake-event injection (B) is DEFERRED until pending state is
+   observable. Per advisor constraint walk 2026-04-27, the
+   enumerated B sub-options (MSI assert, olmsg-ring write, DMA
+   "over olmsg ring", `pci=noaspm`) lack a mechanism that fires
+   `oobselouta30` bit 0 or bit 3.
+
+4. Prefer runtime discriminators over more broad static
+   interpretation. Reason: the active blocker is "what HW event
+   sets OOB bit 0 or bit 3?" — answered by step 1 or step 2, not
+   by more callgraph work.
+
+5. Use Phase 6 only where it sharpens a specific host-side
+   experiment (e.g., the T300 static prep step is exactly that).
 
 ## Evidence Pointers
 

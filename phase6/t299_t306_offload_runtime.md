@@ -53,17 +53,47 @@ boots, reaches a stable WFI idle, but no probed wake event ever fires.
    never-fired `test.288a` wrap-read probe is the cheapest read-only
    discriminator for that path.
 
-**Impact on next work.**
+**Correction note (2026-04-27 evening, post-T299 — supersedes
+recommendations #6 and the next-work bullets below).**
+
+The "next runtime probe should be `test.288a`" recommendation was
+**superseded by T297, T298, and T299**:
+
+- **T297** fired `test.288a` (chipcommon-wrap + PCIE2-wrap BAR0 reads)
+  and wedged at the root-port `pci_disable_link_state` reading — never
+  reached the wrap reads. KEY_FINDINGS row 85 stopping rule then
+  retired the BAR0 chipcommon/wrapper surface.
+- **T298** (BAR2-only ISR-list walk) extracted the OOB-allocation
+  result without touching BAR0: RTE chipcommon-class ISR allocated
+  bit 0 of `oobselouta30`; `pciedngl_isr` allocated bit 3. Direct
+  primary-source confirmation of this file's live-runtime conclusion.
+- **T299** reproduced T298's ISR-list bit-for-bit under full ASPM
+  disable on 03:00.0 + 02:00.0 + root port — falsifying KEY_FINDINGS
+  row 152's ASPM-as-wake-fix claim for the [t+90s, t+120s] wedge.
+
+**The live-runtime conclusion (#1–#5 above) still stands.** Only the
+test.288a-as-next-step recommendation aged out.
+
+**Current next work** (per `../t299_next_steps.md`): T300 = BAR2-only
+sched_ctx / OOB-mapping pass (writer of `sched_ctx+0x358`, sweep
+`+0x2c0..+0x35c` esp. `+0xd0/+0xd4/+0x300..+0x35c`, ISR list around
+`TCM[0x629A4]`, class/core/slot table tying OOB bit positions to ISR
+nodes). If T300 finds no BAR2-readable mapping, A3 (one-shot OOB
+Router pending read at `0x18109100`) is the surgical fallback. Wake
+injection deferred until pending state is observable.
+
+**Impact on next work.** (Original wording — kept for archival; superseded
+by the correction note above.)
 
 - Stop expanding static-disasm probes against the FullMAC chain; treat it
   as dead code in offload mode for planning purposes.
 - Promote the load-bearing distinction (live HNDRTE vs dead FullMAC,
   sched_ctx vs flag_struct) into KEY_FINDINGS so future sessions don't
   retread the wake-gate / `0x48080` thread on the dead path.
-- The next runtime probe should be `test.288a` plus, if substrate allows,
+- ~~The next runtime probe should be `test.288a` plus, if substrate allows,
   re-running `test.290a` at later stages (post-set_active, post-T276-poll,
   post-T278) to push the n=2 chain-walk result above the 3-sample
-  stopping rule.
+  stopping rule.~~ **Superseded** — see correction note.
 
 **Cross-references.**
 
@@ -72,8 +102,13 @@ boots, reaches a stable WFI idle, but no probed wake event ever fires.
   execute that path).
 - KEY_FINDINGS row 125 — PCIe2 mailbox doorbell empirically tested and
   silently drops; consistent with this finding.
-- KEY_FINDINGS row 148 — chipcommon-wrapper write target hypothesis,
-  still untested, addressed by `test.288a`.
+- KEY_FINDINGS row 148 — chipcommon-wrapper write target hypothesis;
+  ~~still untested, addressed by `test.288a`~~ now PARTIALLY-IDENTIFIED
+  via T298 (RTE-CC ISR was allocated bit 0 at registration); wake-trigger
+  source for that bit still LIVE (T300 / A3 are the addressing routes).
+- KEY_FINDINGS rows 104, 152, 163 — post-T299 corrections covering the
+  [t+90s, t+120s] wedge bracket, ASPM falsification, and the corrected
+  "wedge happens at end-of-t+90s probe, not at rmmod" framing.
 - `phase6/t297_flag_struct_trace.md` — the prior-session static
   identification of the wake-arm path; correct in its own scope.
 

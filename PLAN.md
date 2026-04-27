@@ -20,12 +20,17 @@ compare against the existing `brcmfmac` codebase.
 > documentation. Do not copy disassembly structure directly into driver code.
 > See README.md and CLAUDE.md for full guidelines (ref: issue #12).
 
-## Current Status (2026-04-27, post-T298)
+## Current Status (2026-04-27, post-T299)
 
 **Active phases:** Phase 5.2 and Phase 6 remain active. T298 (BAR2-only
-ISR-walk) just shifted the frontier: the OOB routing slots used by the
-two live ISRs are now identified at primary-source level, but the HW
-events that fire those slots are still unknown.
+ISR-walk) shifted the frontier to "what HW event fires the OOB slots".
+T299 then falsified the ASPM hypothesis for the [t+90s, t+120s] wedge
+(KEY_FINDINGS row 152): full ASPM disable on 03:00.0 + 02:00.0 + root
+port 00:1c.2 reproduced T298's 2-node ISR result bit-for-bit, and still
+wedged at end-of-t+90s probe — same bracket as T270-BASELINE / T276 /
+T287c / T298. Also corrected: the wedge is at end-of-t+90s, NOT during
+rmmod (boot-end timestamps prove rmmod after `sleep 150` never executed
+in any of these fires; KEY_FINDINGS row 163 updated).
 
 Phase 5 proved the host can reliably get BCM4360 through download, NVRAM
 placement, Apple-specific seed/footer setup, and ARM release. Phase 6 then
@@ -66,30 +71,57 @@ runtime discriminator lands.
 
 ### Current highest-value next work
 
-1. **Choose between two TCM/host-side wake-trigger probes (do NOT draft a
-   PRE-TEST plan until the choice is made — committing early is the
-   anti-pattern that produced the T294→T297 4-null streak).**
+Sequence per `t299_next_steps.md`: **T300 (A2 — BAR2-only sched_ctx /
+OOB-mapping probe) first, then A3 (one-shot OOB Router pending read at
+0x18109100) only if A2 yields no mapping. Wake-injection (B) deferred
+until pending-event state is observable.**
 
-   Background: T298 (BAR2-only ISR-list walk, 2026-04-27 14:19 BST) cleared
-   the BAR0 noise belt on first attempt and identified the OOB-routing slot
-   for both registered ISRs at primary-source level (RTE-CC ISR allocated
-   bit 0 of `oobselouta30`; pciedngl_isr allocated bit 3). What remains
-   open is which HW event SETS those bits to wake the firmware from WFI.
+1. **T300 — BAR2-only sched_ctx + ISR-list metadata pass.** Two-step:
+   (1a) static prep — find writer of `sched_ctx + 0x358`, sweep
+   `sched_ctx + 0x2c0..0x35c` (esp. +0xd0/+0xd4/+0x300..+0x35c), and
+   ISR list handling around `TCM[0x629A4]`, looking for any class /
+   core / slot table that ties OOB bit positions to ISR nodes; (1b)
+   if a BAR2-readable mapping candidate is found, implement a
+   single-purpose probe that reads ONLY: `TCM[0x6296C]`, `TCM[0x629A4]`,
+   ISR nodes/masks, `sched_ctx + 0x2c0..0x35c`, console struct ptr/wr_idx.
+   **Forbidden in T300:** any `BAR0_WINDOW` write, `select_core`,
+   chipcommon read, PCIE2 read, wrapper read, or OOB-router BAR0 read.
+   The fire MUST exit before the [t+90s, t+120s] bracket (use
+   `bcm4360_test269_early_exit=1` or a similar early-exit path).
 
-   Candidate A — TCM-side `oobselouta30` shadow read. If firmware caches
-   the live OOB-selector value in TCM, BAR2 reads of that cache give the
-   live state without re-touching chipcommon-wrap MMIO (the row 85 noise
-   surface). Static work needed first to find the cache address.
+2. **A3 — OOB Router pending-events read at `0x18109100`** (only if T300
+   step 1a finds no usable BAR2 mapping). Single-purpose surgical probe:
+   raw `BAR0_WINDOW = 0x18109000`, read `BAR0 + 0x100`, exit. Must cite
+   KEY_FINDINGS row 85 in the PRE-TEST and explain why OOB Router is a
+   distinct backplane agent from the chipcommon/PCIE2-wrap surfaces that
+   wedged in T297.
 
-   Candidate B — Host-side wake-event injection. Plausible: trigger a real
-   DMA transfer over the Phase 4B olmsg-ring path (already plumbed at the
-   shared_info handshake but never actually transferred), or use MSI
-   assert via PCIe config space, or test the upstream `pci=noaspm` lead
-   from KEY_FINDINGS row 152.
+3. **Wake-event injection (B)** — DEFERRED. Per advisor constraint walk
+   2026-04-27 evening: each enumerated B sub-option (MSI assert, olmsg
+   ring write, DMA transfer, `pci=noaspm`) lacks a mechanism that
+   actually fires `oobselouta30` bit 0 or bit 3. MAILBOXMASK=0 +
+   write-locked (KEY_FINDINGS rows 117/118/126) blocks the MSI/MBM
+   path; Phase 4B row 39 shows fw doesn't poll the olmsg ring; ASPM
+   was already falsified by T299. B becomes viable once OOB pending
+   state is observable (one of the candidates from `t299_next_steps.md`
+   §4: real DMA over shared_info buffer, PCI-CDC message-queue path
+   per fw banner, or OOB-router pending-driven event-source choice).
 
-   The previously-recommended `test.288a` BAR0 probe is RETIRED — T297
-   wedged on it (row 85), and T298 has already extracted the OOB result
-   from the TCM side without touching BAR0.
+   The previously-recommended `test.288a` BAR0 probe is RETIRED —
+   T297 wedged on it (row 85), and T298 already extracted the OOB
+   result from TCM without touching BAR0.
+
+### Hardware Fire Gate (per `t299_next_steps.md`)
+
+Before any next hardware fire, the PRE-TEST block MUST state:
+
+- whether the test touches BAR0
+- if BAR0 is touched, the exact address and exact expected
+  value/bit pattern
+- if BAR2-only, that it performs no `BAR0_WINDOW`, `select_core`,
+  chipcommon, PCIE2, wrapper, or OOB-router reads
+- how the test exits before the [t+90s, t+120s] wedge bracket
+- what single bit of information the fire is expected to decide
 
 2. **Reduce dependence on single-fire interpretations.**
    Substrate instability is now a first-order constraint. Future hardware tests

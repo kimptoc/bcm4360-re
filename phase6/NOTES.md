@@ -102,8 +102,14 @@ The recent repo state calls this out explicitly as
 ## Best Next Work For Phase 6
 
 1. Support a specific Phase-5 runtime probe.
-   Example: if `test.288a` lands data, use Phase 6 to interpret those wrapper
-   values and derive the next narrow experiment.
+   Current example: T300 BAR2-only sched_ctx / OOB-mapping pass — see
+   `../t299_next_steps.md` and `../PLAN.md` post-T299 section. Phase 6
+   help is welcome on the static prep step (writer of `sched_ctx+0x358`,
+   class/core/slot table tying OOB bit positions to ISR nodes). The
+   previously listed `test.288a` lead is RETIRED (wedged in T297 per
+   KEY_FINDINGS row 85; superseded by T298's BAR2-only ISR-list
+   extraction at primary-source level, then T299's bit-for-bit
+   reproduction with ASPM disabled).
 
 2. Prioritize `wl` comparison work that yields register or event deltas.
    Example: live MMIO/config-space comparison, or explicit initialization-table
