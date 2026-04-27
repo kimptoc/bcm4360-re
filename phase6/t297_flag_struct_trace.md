@@ -369,6 +369,80 @@ The first-wake mechanism is now the open question — not "what specific HW even
 
 Need to: (a) find caller of fn@0x2333C (the secondary-entry-point), (b) check if HW D11 INTMASK has a non-zero default at chip reset, (c) look for fn@0x2340C indirect callers (fn-ptr through structs).
 
+## T298q/r/s — advisor's cheap checks resolved the chicken-and-egg
+
+### T298q — three loose-byte / tail-call / literal scans
+
+Per advisor: the bl-target scan misses tail-calls (b/b.w), packed Thumb-ptrs in struct templates, and would-miss-it-if-you-didn't-look-for-it patterns. Three checks:
+
+1. **Tail-call branches:** `b.w #0x233e8` at 0x11792, `b.w #0x2340c` at 0x11798 — TWO TAIL-CALLS missed by the bl-only scan!
+2. **Packed Thumb-ptr bytes:** ZERO hits for fn-ptrs to ARM/DISARM (fn@0x233E9, 0x2340D) at any alignment.
+3. **Literal 0x48080 anywhere:** Only ONE hit at 0x14318 (fn@0x142E0's literal pool entry). No struct template contains 0x48080 as init data.
+
+### T298r — the wrapper table
+
+The two tail-calls are part of a **3-entry wrapper table** at 0x11784..0x117A2:
+
+```
+0x11790  ldr r0, [r0, #8]   ; wrap_ARM:    r0 = arg[+8] = wlc_pub[+8] = dispatch_ctx
+0x11792  b.w #0x233e8       ;              tail-call ARM (writes 0x48080 to D11+0x16C)
+0x11796  ldr r0, [r0, #8]   ; wrap_DISARM: r0 = dispatch_ctx
+0x11798  b.w #0x2340c       ;              tail-call DISARM (writes 0 to D11+0x16C)
+0x1179c  ldr r0, [r0, #8]   ; wrap_setmask: r0 = dispatch_ctx
+0x1179e  b.w #0x2343a       ;               tail-call set-arbitrary-mask
+```
+
+Each wrapper is 6 bytes — a thin shim that loads dispatch_ctx then tail-calls the underlying impl with no LR overhead.
+
+### T298s — wrapper callers found
+
+| Wrapper | Direct bl callers | Tail-call branches |
+|---|---|---|
+| **wrap_ARM @ 0x11790** | **1** (at 0x17F4E) | 0 |
+| wrap_DISARM @ 0x11796 | 7 | 1 (at 0x1421A) |
+| wrap_setmask @ 0x1179C | 4 | 1 (at 0x1422C) |
+
+The single wrap_ARM caller at 0x17F4E is inside fn@0x17ED6.
+
+### T298 final — fn@0x17ED6 is `wlc_bmac_up_finish`
+
+Body of fn@0x17ED6 contains the printf string **`"wlc_bmac_up_finish"`** at lit@0x4b8e8 (referenced at site 0x17ef6) plus **`"wlc_bmac.c"`** assert source-file references at lines 0x112c, 0x112d. Function-name confirmed by direct printf.
+
+Body summary:
+- printf "wlc_bmac_up_finish" debug line
+- memset r4[+0x174] (init buffer)
+- Set r4[+0xac] = 1 (enable some flag)
+- Assert flag_struct[+0x60] == 0 ("interrupts must be off before arming")
+- **`bl #0x11790` — call wrap_ARM → fn@0x233E8 ARM with 0x48080 → writes D11+0x16C = 0x48080 (HW INTMASK ARM)**
+- Set up periodic timer (fn@0x117bc with 0x3E8 = 1000ms interval)
+- Call fn@0x17ECC (likely wlc_intrson)
+- Returns 0
+
+### Strategic conclusion — wake gate is structurally closed at Phase 5 freeze point
+
+**Confirmed: `wlc_bmac_up_finish` is the SOLE INIT-TIME ARM site for D11+0x16C INTMASK. The wake mask is NOT armed during wl_probe.**
+
+T287c primary-source: fw freezes silently at WFI immediately AFTER wl_probe — per fw console capture, "wl_probe called" is the last log line, no further entries across t+500ms / t+5s / t+30s / t+90s.
+
+This means: at the WFI freeze point, **D11+0x16C INTMASK = 0**. Even if real HW events fire (DMA completion, MAC events, etc.), the bits won't propagate through the closed mask to wake fw. Every prior probe (T241/T280/T284 MBM, T292/T293 chipcommon RMW) failed silently because the wake gate was structurally closed regardless of what bits we tried to fire.
+
+**Interpretation #4 (the worst case from the prior advisor reconcile) is now CONFIRMED.**
+
+### Re-frame of the problem
+
+The original framing was "find the wake-gate bit fw is waiting for". The real problem is **"why doesn't fw progress from wl_probe to wlc_bmac_up_finish?"**
+
+wlc_bmac_up_finish is part of the wlc_bmac_up sequence — typically called from wlc_init / wlc_attach. Phase 5's current state somehow skips or never reaches this stage. The missing-progression cause is now the open question.
+
+Possible causes:
+1. **Missing init step earlier in fw**: a wlc_attach helper between wl_probe and wlc_bmac_up_finish errors out silently, halting init in WFI without progress.
+2. **Missing host action**: fw is genuinely waiting for some host signal (configuration, queue setup, MAC parameters via shared_info+olmsg) before proceeding — and Phase 4B's olmsg/shared_info setup wasn't sufficient to trigger this.
+3. **Missing dependency**: a register-read or DMA setup that should have completed during wl_probe didn't — fw is in error-handling silent-loop, not productive WFI.
+
+### Re-classification of Phase 5 substrate evidence
+
+This finding re-explains the entire Phase 5 silent-host-wedge family. It's not "fw is waiting for a specific HW event we haven't triggered" — it's "fw isn't reaching a state where wakes are even armed". Every host MMIO probe at the WFI point operates on a chip whose D11 INTMASK is 0 — fw is genuinely deaf.
+
 ## Clean-room posture
 
-All findings are disassembled mnemonics + literal-pool resolution + offset-pattern matching, plus open-source cross-reference (brcmsmac/d11.h via Explore). No reconstructed function bodies. Scripts in `phase6/t297*.py` and `phase6/t298*.py`. Zero hardware fires.
+All findings are disassembled mnemonics + literal-pool resolution + offset-pattern matching, plus open-source cross-reference (brcmsmac/d11.h via Explore) + printf string identification ("wlc_bmac_up_finish", "wlc_bmac.c"). No reconstructed function bodies. Scripts in `phase6/t297*.py` and `phase6/t298*.py`. Zero hardware fires.
