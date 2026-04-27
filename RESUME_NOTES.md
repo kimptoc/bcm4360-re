@@ -204,6 +204,30 @@ Observed after user reboot into wl-unblacklisted boot:
 
 **Awaiting user steer on A vs B vs C.**
 
+## OPTION-A INVESTIGATION (2026-04-27 ~23:50 BST — wl.ko static disasm)
+
+User picked A; investigation findings (read-only, no state changes):
+
+**wl.ko inspected:** `/run/booted-system/kernel-modules/lib/modules/6.12.80/kernel/net/wireless/wl.ko` (broadcom-sta 6.30.223.271-59, built for kernel 6.12.80; `modinfo` claims `retpoline:Y`).
+
+**Key disasm + relocation findings:**
+
+1. **`getvar+0x20` → `osl_strlen`.** Confirmed via `.rela.text`: relocation at file offset 0xb823 → `R_X86_64_PC32 osl_strlen - 4`. So the WARN's caller chain is `getvar → osl_strlen`. osl_strlen at .text+0x181d60 is a 0x1a-byte stub: `endbr64 / call <fentry> / push rbp / call <inner> / pop rbp / xor edi,edi / jmp <tail>` — Broadcom blob shape that the kernel's RET-rewriter falls back to `warn_thunk_thunk` on.
+
+2. **`wl_module_init` (init_module) is short — only 0xb0 bytes.** Reading `.rela.init.text`: prints banner via `_printk` (the "Broadcom STA … incompatible with Linux kernel security mitigations" line — `.rodata.str1.8 + 0x60`), calls `getvar(NULL, "wl_dispatch_mode")` and `getvar(NULL, "wl_txq_thresh")` to populate two module variables, then `jmp __pci_register_driver`. **There is NO branch in wl_module_init that returns 1.**
+
+3. **The "failed with code %d" printk lives in `wl_pci_probe`, NOT wl_module_init.** Format string at `.rodata.str1.8 + 0x150` ("wl driver %s failed with code %d"). Per `.rela.init.text`, `_printk` call site is at `.init.text + 0x408`. wl_pci_probe is at `.init.text + 0xc0`, size 1491 bytes — covers +0x408. The `wlc_attach` call is at `.init.text + 0x3e2`, just before the failure printk. **The "code 1" is `wlc_attach`'s return value.**
+
+4. **WARN is structurally a noisy printk, not the failure.** WARN_ONCE doesn't return an error. mitigations=off didn't silence it (apply_returns RET-patch fallback is unconditional in 6.12), AND the WARN doesn't cause `code 1`. If we silenced the WARN, we'd still see `wl driver 6.30.223.271 failed with code 1` because wlc_attach is what fails.
+
+**Implication.** Fixing the WARN is irrelevant. The real failure is wlc_attach returning 1 — which is inside Broadcom's precompiled blob (6639 bytes of x86-64 closed-source code). No public source. Diagnosing this would require either:
+- Disassembling wlc_attach (6639 bytes of closed-source x86-64; same complexity wall T304h hit on wl.ko)
+- ftrace/kprobes around wlc_attach return paths to identify the failing sub-call
+- Trying alternate wl variants (broadcom-sta-6.30.223.271-57 for kernel 6.12.40 in nix store; semantic differences unknown)
+- Trying module params (`passivemode=1`, `oneonly`, etc.)
+
+**Cost-vs-value reframe.** The wl trace was meant to ANSWER ONE QUESTION ("does wr_idx advance under wl?"). Spending hours+ disassembling Broadcom's wlc_attach blob to make wl bind is investment in a TOOL, not the actual BCM4360 RE goal. Path (a) (Option C) is one cheap brcmfmac-only experiment that directly tests a hypothesis from the actual research; the wl path is starting to look like sunk-cost territory. Calling advisor for steer per user's "handle decisions in my absence".
+
 **Substrate is fresh** (boot 0 @ 21:16:01). PCIe lspci clean. No code changes outstanding. T304 macro is empirically validated. Docs cleaned up per DOCS.md §3 (T299/T300/T301 pairs migrated). PLAN.md, RESUME_NOTES, KEY_FINDINGS all current as of this writeup.
 
 **Earlier in session (2026-04-27):** T304 fire result + POST-TEST.304 + KEY_FINDINGS gate-1 row + row 104 extension. T304b (no-pollers) + T304c (PMU/GPIO dormant) static recces. T304d (pciedngl_isr disasm — mailbox-only). T304e (bus_info+0x18 trace — HOSTRDY_DB1 absence). T304f + T304g (D11 dormant + ISR coverage audit; this commit). **KEY_FINDINGS gained 7 new rows total this session.**
