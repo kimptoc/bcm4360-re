@@ -1,0 +1,66 @@
+Disasm pass...
+Total ins: 183,411
+
+=== (1) Containing function for key insns ===
+  wfi (idle) @ 0x1c1e  inside fn@0x1ba6..0x1bec
+  cpsie ai (IRQ enable) @ 0x4356e  inside fn@0x4350c..0x43b0c
+  cpsid none #1 @ 0x45890  inside fn@0x457ec..0x45dec
+  cpsid none #2 @ 0x470ba  inside fn@0x47016..0x473fa
+  cpsid af @ 0x6b89c  inside fn@0x6b728..0x6b770
+
+
+=== (2) Dump fn containing wfi (the idle function) ===
+  fn-start: 0x1ba6
+  fn-end: 0x1bec
+
+   0x1ba6  push     {r4, lr}
+   0x1ba8  ldr      r3, [r3]
+   0x1baa  ldr.w    r2, [r3, #0x644]
+   0x1bae  tst.w    r2, #0x2000000
+   0x1bb2  beq      #0x1bea
+   0x1bb4  ldr      r4, [pc, #0x38]  ; lit=0x629c8
+   0x1bb6  movs     r2, #0x40
+   0x1bb8  str.w    r2, [r3, #0x608]
+   0x1bbc  ldr.w    r3, [r3, #0x608]
+   0x1bc0  ldr      r3, [r4]
+   0x1bc2  cbz      r3, #0x1be2
+   0x1bc4  bl       #0xfd8  → #0xfd8
+   0x1bc8  ldr      r3, [pc, #0x28]  ; lit=0x629c4
+   0x1bca  ldr      r3, [r3]
+   0x1bcc  subs     r3, r0, r3
+   0x1bce  ldr      r0, [r4]
+   0x1bd0  cmp      r0, r3
+   0x1bd2  ite      hi
+   0x1bd4  rsbhi    r0, r3, r0
+   0x1bd8  movls    r0, #0
+   0x1bda  pop.w    {r4, lr}
+   0x1bde  b.w      #0x1b3c
+   0x1be2  pop.w    {r4, lr}
+   0x1be6  b.w      #0x1078
+   0x1bea  pop      {r4, pc}
+
+
+=== (3) Dump fn containing cpsie ai ===
+  fn-start: 0x4350c
+  fn-end: 0x43b0c
+
+  0x4350c  push     {r0, r1, r3, r5, r6, lr}
+  0x4350e  adr      r5, #0x28
+  0x43510  add      r0, sp, #0x3e8
+  0x43512  adds     r5, #0xb5
+  0x43514  ldr      r0, [sp, #0x1b0]
+  0x43516  cmp      r2, r6
+  0x43518  ldm      r1, {r1, r2, r4, r6, r7}
+  0x4351a  blt      #0x43494
+
+
+=== (4) Reachability check from fn@0x268 ===
+BFS reach: 27 fns
+  fn containing wfi   (0x1ba6): ✗ not reached
+  fn containing cpsie (0x4350c): ✗ not reached
+
+
+=== (5) Direct callers of cpsie's fn (0x4350c) ===
+  fn-ptr hits (0x4350d): 0
+
+=== (6) Callers of wfi's fn (0x1ba6) ===

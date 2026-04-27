@@ -1,0 +1,37 @@
+Disasm pass...
+Total ins: 183,411
+
+=== (1) ALL ldr-pc-rel loaders for value 0x224 ===
+  ldr-loaders for 0x224: 1
+    0x162: ldr r4, =0x224  inside fn@0x128
+
+
+=== (2) Following each loader of 0x224 — look for store to *(0x224) ===
+
+  Loader at 0x162 (sets r4 = 0x224) inside fn@0x128
+
+
+=== (3) Loaders of nearby exception globals ===
+
+  Loaders for 0x21c:
+    0x250: r1, [pc, #0xc]  inside fn@0x128
+    0x2c4: r1, [pc, #0x84]  inside fn@0x128
+    0x2e8: r1, [pc, #0x60]  inside fn@0x128
+    0x300: r1, [pc, #0x48]  inside fn@0x128
+    0x314: r1, [pc, #0x34]  inside fn@0x128
+    0x322: r1, [pc, #0x28]  inside fn@0x128
+    0x442: r1, [pc, #0x8c]  inside fn@0x128
+    0x53a: r1, [pc, #8]  inside fn@0x128
+
+  Loaders for 0x228:
+    0x20c: r2, [pc, #8]  inside fn@0x128
+    0x254: r0, [pc, #0xc]  inside fn@0x128
+
+  Loaders for 0x230:
+    0x2ca: r1, [pc, #0x84]  inside fn@0x128
+
+
+=== (4) ALL alignments where a 4-byte value 0x224 appears (could be embedded in code or struct) ===
+  Hits: 2
+    0x188 aligned=True  near fn@0x128
+    0x24c aligned=True  near fn@0x128

@@ -1,0 +1,43 @@
+Disasm pass...
+Total ins: 183,411
+
+=== (1) ALL CPSR-control / IRQ-enable/disable instructions ===
+  Total CPSR-related insns: 15
+
+  Distribution by mnemonic:
+    cps: 7
+    msr: 3
+    cpsid: 3
+    wfi: 1
+    cpsie: 1
+
+  All instances:
+       0x52  msr      cpsr_fc, r0
+       0x68  cps      #0x1f
+       0x82  cps      #0x1f
+       0xa2  cps      #0x1f
+       0xc2  cps      #0x1f
+       0xe2  cps      #0x1f
+      0x102  cps      #0x1f
+      0x122  cps      #0x1f
+      0x1a0  msr      cpsr_fc, r1
+      0x1c0  msr      cpsr_fc, r1
+     0x1c1e  wfi      
+    0x4356e  cpsie    ai
+    0x45890  cpsid    none
+    0x470ba  cpsid    none
+    0x6b89c  cpsid    af
+
+
+=== (2) cpsie variants (would re-enable IRQ/FIQ) ===
+  ★ 0x4356e: cpsie ai
+
+
+=== (3) msr cpsr_* — what value sets the I bit? ===
+  0x52: msr cpsr_fc, r0
+  0x1a0: msr cpsr_fc, r1
+  0x1c0: msr cpsr_fc, r1
+
+
+=== (4) wfi/wfe instructions (CPU halt waiting for event) ===
+  0x1c1e: wfi 
