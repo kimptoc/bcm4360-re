@@ -1094,6 +1094,73 @@ Three options:
 
 Awaiting user steer on Q2.
 
+## PRE-TEST.304 (drafted 2026-04-27 21:05 BST after user approval — gate-1 empirical probe of OOB Router pending register write semantics. Single new test304 macro added; all other params unchanged from T303 baseline.)
+
+### Goal — single bit of information
+
+**Does writing 0xFFFFFFFF to 0x18109100 (OOB Router pending register) set the bits, or is the register W1C / read-only?** This resolves Gate 1 of the option-B fire-ability gate stack (phase6/t303e).
+
+### Hypothesis matrix
+
+| Outcome | Interpretation | Updates |
+|---|---|---|
+| post-write read = `0xFFFFFFFF` | **RW1S** — host CAN set OOB pending bits. Option B is fire-able conditional on remaining gates. | KEY_FINDINGS row 162 + new row on register semantics. Gate 1 → KNOWN-OPEN. |
+| post-write read = `0x00000000` | **W1C or RO** — host CANNOT set bits via this register. Option B via OOB Router pending is dead. Need different wake-trigger surface. | KEY_FINDINGS row 162: gate 1 → KNOWN-CLOSED. Switch direction (PMU GPIO, fw entry to unblock MAILBOXMASK, or other). |
+| post-write read = partial set (e.g. `0x00000009` or `0xFFF80000`) | Sparse RW1S — only some bits implemented; can set the implemented ones | New finding: which bits are implemented. Compare to T298-allocated bits 0/3. |
+| Any non-zero readout AND console wr_idx advances OR fw_init_done set OR mbxint changes | **BONUS:** dispatch chain fired downstream — partial Gate 3 evidence (ARM IRQ enable was open, exception was taken) | Gate 3 → KNOWN-OPEN by inference. Major progress. |
+| Probe wedges before SUMMARY (anchor lines flushed, SUMMARY missing) | wedge during the write step — could be substrate noise OR write-induced fw response that crashes host (e.g. fw asserts unexpected IRQ that wedges PCIe) | Pre-fire interpretation: substrate noise more likely; if wedge AT anchor-5 specifically (after the write), interpret as write-induced |
+| Probe completes but T303 fields show NEW values vs T303 baseline | Side effect of pending-bit write affecting fw scheduler state | Captured by T303/T298 instrumentation already in place |
+
+### Diff vs T303 fire (2026-04-27 20:10 BST)
+
+- IDENTICAL module params plus `bcm4360_test304_oob_write_probe=1`
+- IDENTICAL fire script
+- REBUILD with new test304 macro
+- Same hook site as T300 sample 1: post-set_active only (proven safe n=2)
+- Test300 STAYS DISABLED (it shifts the wedge bracket; no need to mix probes)
+
+### Pre-fire checklist (CLAUDE.md)
+
+1. ✓ REBUILD done — `make` exited clean, modinfo verified `bcm4360_test304_oob_write_probe` param visible
+2. ✓ Hypothesis matrix above
+3. → PCIe state check before fire (lspci MAbort/CommClk)
+4. → Plan committed and pushed BEFORE fire (this commit)
+5. → FS sync after push
+6. → Fire when substrate is in clean window (current uptime ~50 min — late side; consider cold cycle for fresher substrate, or fire now and accept higher null-fire risk)
+7. ✓ Advisor consulted (twice — once on Q2 fire decision flow, once on gate-stack interpretation; recommendation = fire gate-1 empirical probe)
+
+### Module params (fire command)
+
+- ENABLE: T236, T238, T276, T277, T278, T287, T287c, T298, T303, **T304 (new)**
+- DISABLED: test300 (causal wedge shifter), test269 (early exit), test284 (premask)
+- Same baseline as T303 plus T304
+
+### Fire command (run AFTER lspci verify + uptime in window)
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test287_sched_ctx_read=1 \
+    bcm4360_test287c_extended=1 \
+    bcm4360_test298_isr_walk=1 \
+    bcm4360_test303_sched_extras=1 \
+    bcm4360_test304_oob_write_probe=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.304.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.304.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.304.journalctl.txt
+```
+
+### Risk and recovery
+
+- Single BAR0 write at post-set_active timing — same risk profile as T300 sample 1 (clean n=2). The added write step (vs T300's read-only) is the only delta; if BAR0 OOB Router writes have different reachability than reads, this is where we'd find out.
+- If RW1S and dispatch fires: fw might do something unexpected (e.g. assert host IRQ via PCIE2 mailbox response, change shared_info state, write to TCM). T276/T278/T287/T287c/T298/T303 instrumentation will catch any visible state change.
+- Wedge bracket [t+90s, t+120s] still expected as baseline. Auto-recovery should suffice.
+- Worst case: silent kernel wedge in normal bracket; user SMC reset if no auto-recovery.
+
 ## Archived detail
 
 Older PRE/POST test blocks have been migrated to

@@ -1192,6 +1192,59 @@ MODULE_PARM_DESC(bcm4360_test300_oob_pending, "BCM4360 test.300 (A3): one-shot B
 	} \
 } while (0)
 
+/* BCM4360 test.304: gate-1 empirical probe — write semantics of OOB
+ * Router pending-events register at 0x18109100. Per phase6/t303e gate-
+ * stack analysis, gate 1 (RW1S vs W1C vs RO) is empirical-only. Single
+ * BAR0 read-write-readback at post-set_active timing. Risk profile =
+ * T300 sample 1 (clean n=2). Outcomes:
+ *   post-write read = 0xFFFFFFFF -> RW1S (host CAN set bits)
+ *   post-write read = 0x0        -> W1C or RO (host CANNOT set bits)
+ * If RW1S, the dispatch chain (fn@0x138 -> fn@0x115c) MAY fire as a
+ * side effect — observable via standard T276/T278/T287/T298/T303
+ * instrumentation already in place. */
+static int bcm4360_test304_oob_write_probe;
+module_param(bcm4360_test304_oob_write_probe, int, 0644);
+MODULE_PARM_DESC(bcm4360_test304_oob_write_probe, "BCM4360 test.304: gate-1 empirical probe — write 0xFFFFFFFF to OOB Router pending (0x18109100) and read back to determine RW1S vs W1C vs RO write semantics. Single shot at post-set_active. (1=enable, 0=off)");
+
+#define BCM4360_T304_OOB_ROUTER_BASE  0x18109000
+#define BCM4360_T304_OOB_PENDING_OFF  0x100
+#define BCM4360_T304_TEST_VALUE       0xFFFFFFFF
+
+#define BCM4360_T304_OOB_WRITE_PROBE(tag) do { \
+	if (bcm4360_test304_oob_write_probe) { \
+		u32 _t304_saved = 0xDEADC0DE; \
+		u32 _t304_pre = 0xDEADC0DE, _t304_post = 0xDEADC0DE; \
+		pr_emerg("BCM4360 test.304: %s anchor-1 (about to save BAR0_WINDOW)\n", tag); \
+		pci_read_config_dword(devinfo->pdev, \
+			BRCMF_PCIE_BAR0_WINDOW, &_t304_saved); \
+		pr_emerg("BCM4360 test.304: %s anchor-2 (saved=0x%08x; about to set OOB Router window=0x%08x)\n", \
+			 tag, _t304_saved, BCM4360_T304_OOB_ROUTER_BASE); \
+		pci_write_config_dword(devinfo->pdev, \
+			BRCMF_PCIE_BAR0_WINDOW, BCM4360_T304_OOB_ROUTER_BASE); \
+		pr_emerg("BCM4360 test.304: %s anchor-3 (window set; about to read pre-write +0x%03x)\n", \
+			 tag, BCM4360_T304_OOB_PENDING_OFF); \
+		_t304_pre = brcmf_pcie_read_reg32(devinfo, \
+			BCM4360_T304_OOB_PENDING_OFF); \
+		pr_emerg("BCM4360 test.304: %s anchor-4 (pre=0x%08x; about to write 0x%08x)\n", \
+			 tag, _t304_pre, BCM4360_T304_TEST_VALUE); \
+		brcmf_pcie_write_reg32(devinfo, \
+			BCM4360_T304_OOB_PENDING_OFF, \
+			BCM4360_T304_TEST_VALUE); \
+		pr_emerg("BCM4360 test.304: %s anchor-5 (write done; about to read post-write +0x%03x)\n", \
+			 tag, BCM4360_T304_OOB_PENDING_OFF); \
+		_t304_post = brcmf_pcie_read_reg32(devinfo, \
+			BCM4360_T304_OOB_PENDING_OFF); \
+		pr_emerg("BCM4360 test.304: %s anchor-6 (post=0x%08x; about to restore BAR0_WINDOW=0x%08x)\n", \
+			 tag, _t304_post, _t304_saved); \
+		pci_write_config_dword(devinfo->pdev, \
+			BRCMF_PCIE_BAR0_WINDOW, _t304_saved); \
+		pr_emerg("BCM4360 test.304: %s SUMMARY pre=0x%08x wrote=0x%08x post=0x%08x verdict=%s\n", \
+			 tag, _t304_pre, BCM4360_T304_TEST_VALUE, _t304_post, \
+			 (_t304_post == BCM4360_T304_TEST_VALUE) ? "RW1S(set)" : \
+			 (_t304_post == 0) ? "W1C-or-RO(no-set)" : "PARTIAL/UNEXPECTED"); \
+	} \
+} while (0)
+
 #define BCM4360_T288A_CC_WRAP_BASE	0x18100000
 #define BCM4360_T288A_PCIE2_WRAP_BASE	0x18103000
 
@@ -4638,7 +4691,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				else
 					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned TRUE\n");
 
-				BCM4360_T284_READ_MBM("post-set_active (CRITICAL: does ARM release clear it?)"); BCM4360_T285_READ_CC("post-set_active"); BCM4360_T287_READ_SCHED("post-set_active"); BCM4360_T303_READ_EXTRAS("post-set_active"); BCM4360_T288A_READ_WRAPS("post-set_active"); BCM4360_T298_ISR_WALK("post-set_active"); BCM4360_T290A_CHAIN("post-set_active"); BCM4360_T290B_CC_WRITE("post-set_active"); BCM4360_T300_OOB_PENDING_READ("post-set_active");
+				BCM4360_T284_READ_MBM("post-set_active (CRITICAL: does ARM release clear it?)"); BCM4360_T285_READ_CC("post-set_active"); BCM4360_T287_READ_SCHED("post-set_active"); BCM4360_T303_READ_EXTRAS("post-set_active"); BCM4360_T288A_READ_WRAPS("post-set_active"); BCM4360_T298_ISR_WALK("post-set_active"); BCM4360_T290A_CHAIN("post-set_active"); BCM4360_T290B_CC_WRITE("post-set_active"); BCM4360_T300_OOB_PENDING_READ("post-set_active"); BCM4360_T304_OOB_WRITE_PROBE("post-set_active");
 
 				/* BCM4360 test.276: 2 s post-ARM-release poll of
 				 * shared_info response fields. Log on any change,
