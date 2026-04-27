@@ -37,6 +37,27 @@
 
 **T304 (EMPIRICAL CONFIRMATION — primary source, no probe):** test.290.journalctl.txt shows the only existing runtime data on the wlc_* chain. test.290a walks `TCM[0x96F48+4]` expecting `0x1146D` (wlc_isr fn ptr). Both n=2 results (pre-write and post-write at pre-set_active timing) returned `wrong-node-fn-not-wlc-isr` with `node_fn=0xae8f1edb` (uninitialized/random data), `wcc=0`, `wpub=0`, `dc=0`, `fs=0`, `base=0`. **The wlc_isr scheduler node at 0x96F48 was NEVER populated.** This is empirical (host runtime read of TCM) confirmation that the FullMAC chain (wl_probe → wlc_attach → ... → install scheduler node) does NOT execute in offload-mode fw, consistent with T299 static-trace findings. Re-enabling test.290a at later stages (post-set_active, post-T276-poll, post-T278) in a future test would strengthen this from n=2 to n>3.
 
+**T305 (SCHED_CTX vs FLAG_STRUCT distinction — primary source from test.287c.journalctl.txt):** test.287c reads sched_ctx fields at multiple stages. Stable readings at t+5s, t+30s, t+90s show sched_ctx IS populated:
+- `sched[+0x10]=0x00000011` (small flag)
+- `sched[+0x18]=0x58680001` (TCM ptr — likely a sub-struct)
+- `sched[+0x88]=0x18001000` (D11 MAC core base)
+- `sched[+0x8c]=0x18000000` (chipcommon base)
+- `sched[+0x168]=0x00000000` (would-be D11 macintstatus mirror — never fired)
+- `sched[+0x254..0x268]=0x18101000/0x18102000/0x18103000/0x18104000` (D11/CC/ARM-CR4/PCIe2 WRAPPER bases)
+- `sched[+0x26c..0x270]=0` (post-set_active populates 0x25c-0x268 wrappers)
+- MAILBOXMASK=0x00000000, MAILBOXINT=0x00000000 (no PCIe2 mailbox events at any timing)
+
+**Key insight:** sched_ctx ≠ flag_struct. sched_ctx is the silicon-info struct (`si_t`) populated by si_doattach (fn@0x670d8 — IN my live BFS). Both si_t and flag_struct happen to have D11 base at +0x88 (BCM convention). The prior session likely conflated them because of the matching offset. flag_struct (with wake mask at +0x64, allocated/populated by dead wlc_bmac_attach) is a SEPARATE struct that doesn't exist in offload-mode fw.
+
+**Strategic implication:** "fw freezes at WFI" is NORMAL IDLE behavior — fw is alive, sched_ctx stable across 90s, all expected fields populated, just sitting at wfi waiting for events. The mystery isn't "what's wrong with the fw" but "what wake event does fw expect that isn't being generated". sched[+0x168]=0 (D11 macintstatus mirror) confirms NO D11 events ever fired across the test window, so D11 isn't the wake source.
+
+**Wake-mechanism candidates (renumbered per this session's understanding):**
+1. **PCIe2 mailbox doorbell (H2D_MAILBOX_0/1)** — empirically tested, "silently drops" per row 125
+2. **D11 macintstatus events** — sched[+0x168]=0 across 90s, no events generated
+3. **Chipcommon INT path** — never empirically tested with the right register
+4. **PCIe MSI** — host enables MSI in some tests; need to verify which IRQ vector connects
+5. **Direct memory polling** — fw's main loop fn@0x11cc may poll a host-shared structure, no IRQ needed
+
 **Search of brcmfmac source for D11 INTMASK / 0x48080 / macintstatus / 0x16c**: ZERO matches. The host driver only writes the PCIe2-core INTMASK at +0x24 (0x00FF0300) and touches D11 only for reset/coredisable via `wrapbase + BCMA_IOCTL/BCMA_RESET_CTL`. Host driver never writes D11+0x16C or 0x48080.
 
 **Strategic recommendation for next session:**
