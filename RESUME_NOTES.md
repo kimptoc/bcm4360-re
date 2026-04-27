@@ -58,6 +58,12 @@
 4. **PCIe MSI** — host enables MSI in some tests; need to verify which IRQ vector connects
 5. **Direct memory polling** — fw's main loop fn@0x11cc may poll a host-shared structure, no IRQ needed
 
+**T306 (READY-TO-FIRE OPPORTUNITY for next session):** test.288a (chipcommon-wrap + PCIE2-wrap register read) has NEVER been run — checked all phase5/logs/*.txt. It's a READ-ONLY probe that reads:
+- chipcommon-wrap (0x18100000) +0x000 (oobselina30) and +0x100 (oobselouta30)
+- PCIE2-wrap (0x18103000) +0x000 and +0x100
+
+These are the **AI-backplane wrapper agent OOB-selector registers** — the leading candidate for "chipcommon-side wake target" per KEY_FINDINGS row 148. test.288a fires at every T287 stage, giving runtime values across pre-set_active, post-set_active, t+5s/30s/90s timings. Adding `bcm4360_test288a_wrap_read=1` to the next insmod (no rebuild needed — test is already compiled in) would close candidate #3 with primary-source data. Substrate noise risk applies (per row 85); 2-4 attempt budget likely needed.
+
 **Search of brcmfmac source for D11 INTMASK / 0x48080 / macintstatus / 0x16c**: ZERO matches. The host driver only writes the PCIe2-core INTMASK at +0x24 (0x00FF0300) and touches D11 only for reset/coredisable via `wrapbase + BCMA_IOCTL/BCMA_RESET_CTL`. Host driver never writes D11+0x16C or 0x48080.
 
 **Strategic recommendation for next session:**
