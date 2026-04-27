@@ -8,7 +8,18 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 21:00 BST — Four static surfaces resolved: gap writers (49c3c35), sched+0xCC writer (5465446), OOB pending-read schedule (0cf433b), OOB gate stack (4adaa81). Headline: **defer cycles have hit boundary**. Gate stack found 1 known-open + 1 plausibly-open + 4 unknown; Gate 1 (write semantics) is **empirical-only by agent admission**. Proposed fire: PRE-TEST.304 = gate-1 empirical probe (BAR0 read-write-readback at 0x18109100), T300-sample-1-equivalent risk profile. AWAITING USER GO/NO-GO.
+## Current state (2026-04-27 21:05 BST — PRE-TEST.304 READY TO FIRE. User approved gate-1 empirical probe; rebooting first to refresh substrate (was at uptime 48 min, late side of row 83 window). After reboot: lspci check, then fire when uptime is in 10-20 min window. Module already built (commit 66a2a89). Fire command in PRE-TEST.304 block below — copy-paste ready.
+
+**FIRE-READY CHECKLIST (after reboot):**
+1. PCIe state check: `sudo lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta|LnkCtl'` → expect MAbort-, CommClk+
+2. Wait for uptime ~10-20 min (`uptime`)
+3. Run fire command from PRE-TEST.304 block (it includes the rmmod + journalctl capture)
+4. Write up POST-TEST.304 in RESUME_NOTES, update KEY_FINDINGS rows 162 + new row for register semantics
+5. Commit + push immediately
+
+**Prior progress in this session (2026-04-27):**
+
+- POST-TEST.303 written up + committed (commit 3c85608); KEY_FINDINGS rows 104/162/163 updated
 
 **Gate-stack result (commit 4adaa81, phase6/t303e_oob_gate_stack.md).** 6 gates between host writing OOB Router pending and fn@0x115c executing on ARM:
 
