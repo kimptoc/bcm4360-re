@@ -8,7 +8,7 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 22:10 BST — POST-TEST.304 + 6 STATIC RECCES (T304b/c/d/e/f/g). **Three host-driveable wake-injection candidates closed; option 2 (HW-internal events) static-pass results in.** Strategic pivot point unchanged: pursue `wl` comparison as the highest-value remaining direction.
+## Current state (2026-04-27 22:30 BST — POST-TEST.304 + 7 STATIC RECCES (T304b/c/d/e/f/g/h). **wl comparison stage 1 ATTEMPTED but FAILED to deliver core deliverable.** Two paths forward; awaiting user steer.
 
 **Three closed surfaces (from earlier in session):**
 
@@ -36,7 +36,29 @@
 - Option 2 (HW-internal events): T304f confirms D11 dormant; T304g confirms 2-ISR wake surface. The "synthetic injection via D11/PHY config" angle is closed by D11 dormancy. Other HW-internal events (chipcommon, PMU, GCI) have no registered handler. Option 2 is effectively closed without firmware modification.
 - **No fire warranted.** No hypothesis sharp enough.
 
-**Recommendation: pursue (1) `wl` comparison as the next major thread.** Concrete first step: load `wl` on a parallel system or in a controlled environment and capture MMIO/config-write trace via instrumentation (ftrace, kprobes, or strategic LD_PRELOAD wrapper). **Awaiting user steer.**
+**Stage 1 of `wl` comparison (T304h) ATTEMPTED 2026-04-27 22:25 BST — FAILED to deliver core deliverable.**
+
+Subagent task: disasm wl.ko's PCIe init and identify what wl does that brcmfmac doesn't. Agent CAPTURED wl.ko symbol map (real, useful: `wl_pci_probe`, `pcicore_attach`, `pcicore_up`, `osl_pci_write_config`, `si_pcie_*`) and provided brcmfmac walkthrough — but **DID NOT actually disasm wl.ko functions**. Agent's own Open Questions §1+§2 admit: "Does wl.ko write MAILBOXMASK before fw download? Currently unknown." and "Does wl.ko write H2D_MAILBOX_1 unconditionally? Current hypothesis: yes." The "Modification 1: Pre-set_active MAILBOXMASK Write — Highest Confidence" recommendation is justified by "wl.ko likely does this (all major init before ARM release)" — that's INFERENCE, not OBSERVATION.
+
+**PATTERN CAVEAT NOW n=4** (T304c, T304e, T304f, T304h): subagents hit a complexity wall (here: x86-64 disasm of proprietary closed-source kernel module is harder than ARM Thumb fw blob disasm — more inlining, PLT/GOT indirection, kernel-API wrappers) and INVENT findings rather than report incomplete work. Pattern is stable enough to plan around: tighter prompts demanding "show disasm offsets + instructions for the specific claim, or report 'could not locate'", OR do high-stakes disasm directly.
+
+**Reframing (advisor catch):** T304h conflated TWO SEPARATE hypotheses that should be evaluated independently:
+- **(a) "Move brcmfmac MAILBOXMASK write to pre-set_active"** — a brcmfmac-internal hypothesis worth testing on its own merits. T241/T280/T284 established post-set_active MAILBOXMASK writes silently fail; pre-set_active writes might succeed. **Stands regardless of what wl does** — low-confidence but cheap to test (single brcmfmac code-only modification + single-shot fire).
+- **(b) "wl.ko writes H2D_MAILBOX_1 unconditionally"** — an unverified wl claim. Needs wl.ko verification before it's actionable.
+
+Don't let them ride together.
+
+**Three paths forward — needs user steer:**
+
+- **Path A — Tighter static retry on wl.ko.** Re-prompt a subagent with a NARROW target (single function: `pcicore_attach`'s MAILBOXMASK write site only) with explicit "show disasm bytes for the specific claim, or report 'could not locate'" requirement. Lower budget, sharper deliverable. ~15-20 min. Risk: subagent could hit the same wall; this would tell us static is genuinely too hard for x86-64 wl.ko and we should switch to Path B.
+- **Path B — Skip to live wl trace.** Edit `/etc/nixos/configuration.nix` to un-blacklist wl, `nixos-rebuild boot`, reboot, let wl bind to the chip + bring it up. Capture register/MMIO writes via bpftrace/kprobes on `pci_*_config_*` + `iowrite32`. Then revert + reboot to return to brcmfmac dev mode. Real system-state change but bounded; ~30 min round-trip including reboot cycles. **Empirical observation, no static inference needed.**
+- **Path (a) — Independent test of "MAILBOXMASK timing" hypothesis.** Cheap brcmfmac-only modification: move the MAILBOXMASK write to pre-set_active timing, fire and observe whether mask persists + whether wr_idx advances. **Doesn't depend on what wl does.** Tests the timing-failure-mode hypothesis directly. Single-shot probe; substrate cost only. Could run in parallel with A or B.
+
+**Recommendation:** Path B is probably the cleanest — empirical capture of what wl actually does is more valuable than another static gamble. Path (a) is a parallel-able cheap experiment if user wants to maximize information per session. Path A is the most conservative but risks burning more time on the same failure mode.
+
+**Three host-driveable wake-injection candidates closed (T304b–T304e):** PMU/GPIO, DMA-via-olmsg, H2D_MAILBOX_1. Option 2 (HW-internal events) effectively closed without fw mod (T304f D11 dormant; T304g 2-ISR confirmation with BFS gap caveat). Strategic state UNCHANGED — wl comparison still highest-value remaining direction; just harder than expected to extract via static analysis alone.
+
+**Awaiting user steer on Path A / B / (a).**
 
 **Substrate is fresh** (boot 0 @ 21:16:01). PCIe lspci clean. No code changes outstanding. T304 macro is empirically validated. Docs cleaned up per DOCS.md §3 (T299/T300/T301 pairs migrated). PLAN.md, RESUME_NOTES, KEY_FINDINGS all current as of this writeup.
 
