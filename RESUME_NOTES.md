@@ -8,7 +8,7 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 17:30 BST — PRE-TEST.300 (A3) drafted + module REBUILT + verified via modinfo. Plan satisfies the Hardware Fire Gate from `t299_next_steps.md`. **REQUIRES USER GO/NO-GO BEFORE FIRE.** Key risk: BAR0 region 0x181xx000 — OOB Router (0x18109000) is a distinct backplane agent from the chipcommon-wrap (0x18100000) / PCIE2-wrap (0x18103000) surfaces that wedged in T297, but whether the entire region is noise-belt territory is part of what the fire tests. Single-purpose probe: 2 BAR0 reads (post-set_active, t+60s), bare BAR0_WINDOW save/write/read/restore (no select_core), early-exit at t+60s via test269.
+## Current state (2026-04-27 17:50 BST — POST-TEST.300 written up. T300 FIRED 17:41 BST and crashed the machine; auto-recovered (no SMC reset). Sample 1 (post-set_active) read **`pending=0x00000000` cleanly** via BAR0 OOB Router window — first primary-source read of OOB Router pending-events. Sample 2 (t+60s) NEVER RAN — silent wedge at ~t+45s, EARLIER than the prior [t+90s, t+120s] bracket. Key implication: **KEY_FINDINGS row 85 narrows — BAR0 noise belt does NOT extend to OOB Router agent (0x18109000)**. Awaiting user steer on next step (re-fire / move sample-2 earlier / A2 BAR2 mapping). See POST-TEST.300 below.
 
 T299 FIRED 15:29:00 BST on boot -1 with full ASPM-disabled chain (cmdline `pcie_aspm.policy=performance` parsed, runtime sysfs flip applied at 15:27:57 before insmod; 03:00.0+02:00.0+root all `ASPM Disabled`). Probe ran clean through all 9 stages — IDENTICAL 2-node ISR readout to T298. Wedged at end-of-t+90s probe (boot -1 ended 15:31:05, ~7s after t+90s SUMMARY). User cold-boot/SMC reset; current uptime now ~30+ min, ASPM back to default. **H1 (ASPM = wedge cause) FALSIFIED.** **Wedge is the known [t+90s, t+120s] bracket** (KEY_FINDINGS row 104, T270-BASELINE pattern, reproduced T276/T287c/T298/T299) — NOT a "rmmod wedge" as POST-TEST.298 mistakenly claimed.
 
@@ -423,6 +423,79 @@ Summary line at every stage: `count=2 sched_cc=0x1 events_p=0x18109000 pending=0
 T299 closes the row 152 question. The choice of next probe is unchanged shape — A2 (BAR2 sched_ctx mapping), A3 (OOB Router pending-events at 0x18109100 via BAR0), or B (host-side wake-event injection). H1-falsified does NOT make B more likely (ASPM was supposed to *de-risk* B; falsified means B is at the same risk it was before T299).
 
 Awaiting user steer on direction. The advisor flagged a cheaper precursor: re-fire with `bcm4360_test269_early_exit=1` (skip everything past t+60s) to discriminate "[t+90s, t+120s] wedge is probe-induced" vs "[t+90s, t+120s] wedge is substrate-side regardless of probe activity". If that single param flip avoids the wedge → next probe should not include t+90s readout. If wedge persists → fw-side, ignore probe, pick A/B normally.
+
+## POST-TEST.300 (2026-04-27 17:41 BST — A3 OOB Router pending read FIRED. Sample 1 SUCCEEDED with `pending=0x00000000`. Sample 2 NEVER RAN — silent kernel wedge at ~t+45s, well before the t+60s sample 2 hook. Machine auto-rebooted (no SMC reset needed) — boot -1 ended 17:42:30, boot 0 started 17:43:23.)
+
+### Headline result
+
+- **OOB Router agent at backplane 0x18109000 IS reachable via BAR0 window without wedging.** Sample 1 completed all 4 anchors cleanly:
+  - anchor-1: about to save BAR0_WINDOW
+  - anchor-2: saved=0x18102000; about to set window=0x18109000
+  - anchor-3: window set; about to read +0x100
+  - anchor-4: pending=0x00000000; about to restore
+  - SUMMARY: `pending@0x18109100 = 0x00000000 (saved_win=0x18102000 restored)`
+  - **No t+0 wedge.** Distinct from T297-style chipcommon-wrap (0x18100000) / PCIE2-wrap (0x18103000) BAR0 noise belt. The OOB Router (BCMA core 0x367) is BAR0-reachable.
+- **Sample 1 reads `pending=0` at post-set_active.** No HW OOB events asserted at that moment. Per T298 mask map: bit 0 (RTE-CC ISR) NOT pending, bit 3 (pciedngl_isr) NOT pending.
+- **Sample 2 at t+60s never ran.** Silent kernel wedge at ~t+45s, before T269 early-exit could fire.
+
+### ASPM state at fire time
+
+03:00.0 `ASPM L0s L1 Enabled`, 02:00.0 `ASPM L1 Enabled` (defaults; no runtime sysfs flip this fire — T299 falsified the ASPM-as-cause hypothesis, so reverted to default).
+
+### Timeline (boot -1, `phase5/logs/test.300.journalctl.txt`, 1472 lines)
+
+- `17:39:21` boot start
+- `17:41:22` insmod (`module_init` entry)
+- `17:41:25` brcmf_chip_attach, BAR0 alive (0x15034360)
+- `17:41:41` post-set_active stage — **T298 count=1** (only RTE-CC ISR registered yet — pciedngl_isr not yet added; T298/T299 saw count=2 at this stage; timing variance vs `hndrte_add_isr` ordering, **first observation of count=1 at post-set_active in this campaign**)
+- `17:41:41` **T300 sample 1: 4 anchors + SUMMARY all clean — `pending=0x00000000`**
+- `17:41:43` post-T276-poll → count=2 (pciedngl_isr now registered, mask=0x8). Steady state for the rest of the run.
+- `17:41:43→49` post-T278-initial-dump, t+500ms, t+5s — all clean, count=2 stable
+- `17:42:14` t+30s probes — all clean, count=2 stable
+- `17:42:20` t+35000ms dwell
+- `17:42:30` **t+45000ms dwell — LAST LOG LINE**
+- `17:42:30` boot -1 ends (silent kernel death between t+45s dwell print and the would-be next probe stage)
+- `17:43:23` boot 0 starts (auto-recovery, no SMC reset)
+
+### Hypothesis matrix vs result
+
+| Outcome (from PRE-TEST.300) | Observed? |
+|---|---|
+| Sample 1 + Sample 2 BOTH zero (H1: WFI, no event) | **Partial** — sample 1 = 0; sample 2 missing |
+| Sample 1 NON-ZERO | NO |
+| Sample 1 wedges (anchor-2/3) — OOB Router IS noise belt | **NO — falsifies row 85 extension to OOB Router** |
+| Sample 1 clean, Sample 2 wedges | NOT applicable (wedge was earlier than sample 2, not at sample 2) |
+| anchor-2/3 reads 0xffffffff | NO — pending was the canonical 0x00000000 |
+| New wedge mode | wedge happened at ~t+45s, **EARLIER than usual [t+90s, t+120s] bracket** — new datapoint |
+
+### What this changes / leaves open
+
+- **KEY_FINDINGS row 85 narrows.** BAR0 noise belt is real for chipcommon-wrap (0x18100000) and PCIE2-wrap (0x18103000) but does NOT extend to OOB Router (0x18109000). OOB Router BAR0 read worked first try at post-set_active. Row 85 needs a "scope" qualifier added.
+- **KEY_FINDINGS row 116 strengthened (n=1).** Sample 1 reads pending=0 — concrete primary-source evidence that no OOB events are asserted at post-set_active. Combined with row 161 (no FullMAC `wlc_isr` registered) this further tightens the "fw genuinely in WFI" reading.
+- **NEW signal: wedge at ~t+45s, not [t+90s, t+120s].** First fire to wedge before t+90s in this campaign. Possible causes (n=1, can't choose):
+  1. Substrate variance — wedge bracket may be wider than [t+90s, t+120s]
+  2. T300 BAR0 read at post-set_active had a delayed effect, brought wedge forward
+  3. Different ASPM state (T300 = default Enabled; T299 = sysfs flip Disabled) shifted timing
+  4. Cold-cycle window timing — insmod at 17:41:22 was ~2 min after boot at 17:39:21, ON the row 83 boundary
+- **T269 early-exit DID NOT GET A CHANCE TO RUN.** The wedge fired at t+45s, before the early-exit hook at t+60s. So the original T269-precursor question (probe-induced vs substrate wedge) is still unanswered for the [t+90s, t+120s] bracket — this fire wedged earlier instead.
+- **Sample 2 question still LIVE.** Whether OOB pending ever transitions from 0 to non-zero between post-set_active and ~t+90s is unanswered; we got 1 of 2 planned samples.
+
+### Files
+
+- [phase5/logs/test.300.journalctl.txt](phase5/logs/test.300.journalctl.txt) (boot -1, 1472 lines, ends at t+45000ms dwell)
+- [phase5/logs/test.300.run.txt](phase5/logs/test.300.run.txt) (0 bytes — silent kernel death)
+
+### Substrate state at writeup
+
+Boot 0 started 17:43:23, uptime ~2 min. PCIe clean: 03:00.0 ASPM L0s L1 Enabled (default), 02:00.0 ASPM L1 Enabled (default), MAbort- everywhere, CommClk+ on bridge. No leftover dirt.
+
+### Next direction (3 candidates)
+
+1. **Re-fire T300 unchanged for sample 2.** Cheapest. If sample 2 reads cleanly (0 or non-zero) we pick up the missing data. If wedge again at ~t+45s → confirms wedge-bracket is wider than [t+90s, t+120s] and probably narrows to the dwell-period window. Risk: another silent wedge; cost is low (sample 1 already proven safe).
+2. **Move sample 2 earlier in the dwell ladder** — e.g., place at t+30s instead of t+60s. Captures useful information *before* the wedge bracket. One-line code edit + rebuild + re-fire.
+3. **A2 — BAR2 sched_ctx mapping** (sched+0xD0 slot counter, +0xD4 per-slot core-id). Cheap, no BAR0 risk, but speculative yield (per row 137/138 these are reads of internal scheduler state).
+
+Awaiting user steer. Recommend option 2 (move sample to t+30s) — it gives us a known-clean window for sample 2 at minimum cost.
 
 ## Archived detail
 
