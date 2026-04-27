@@ -20,17 +20,48 @@ compare against the existing `brcmfmac` codebase.
 > documentation. Do not copy disassembly structure directly into driver code.
 > See README.md and CLAUDE.md for full guidelines (ref: issue #12).
 
-## Current Status (2026-04-27, post-T299)
+## Current Status (2026-04-27, post-T304)
 
-**Active phases:** Phase 5.2 and Phase 6 remain active. T298 (BAR2-only
-ISR-walk) shifted the frontier to "what HW event fires the OOB slots".
-T299 then falsified the ASPM hypothesis for the [t+90s, t+120s] wedge
-(KEY_FINDINGS row 152): full ASPM disable on 03:00.0 + 02:00.0 + root
-port 00:1c.2 reproduced T298's 2-node ISR result bit-for-bit, and still
-wedged at end-of-t+90s probe — same bracket as T270-BASELINE / T276 /
-T287c / T298. Also corrected: the wedge is at end-of-t+90s, NOT during
-rmmod (boot-end timestamps prove rmmod after `sleep 150` never executed
-in any of these fires; KEY_FINDINGS row 163 updated).
+**Active phases:** Phase 5.2 and Phase 6 remain active. The frontier is
+"what HW event fires the OOB slots that wake the offload runtime from
+WFI". This question has narrowed substantially since the previous PLAN
+revision — see "What changed since post-T299" below.
+
+### What changed since post-T299
+
+T298 → T304 fire chain (2026-04-27) closed several major sub-questions:
+
+- **T299** falsified the ASPM hypothesis for the [t+90s, t+120s] wedge
+  bracket (KEY_FINDINGS row 152). Full ASPM disable on 03:00.0 +
+  02:00.0 + root port 00:1c.2 reproduced T298's 2-node ISR result and
+  still wedged at end-of-t+90s probe. Also corrected: the wedge is at
+  end-of-t+90s, NOT during rmmod (boot-end timestamps prove rmmod after
+  `sleep 150` never executed in any wedge fire; row 163 updated).
+- **T300/T301** identified the ARM OOB Router agent (BCMA core 0x367
+  at 0x18109000) as BAR0-reachable from host at post-set_active timing
+  (n=2 sample-1 read clean, `pending=0x0`). T301 sample-2 wedged AT the
+  re-access at t+60s.
+- **T302b** confirmed the wedge bracket is robust without test300 (n=6,
+  later n=8); test284_premask confound eliminated.
+- **T303** read the fw scheduler's slot table (`sched+0xD0..+0xF0`):
+  6 populated entries match host-side `brcmf_pcie_select_core` exactly,
+  OOB Router (0x367) is NOT in the slot table — confirming fw uses the
+  separate `sched+0x358 = 0x18109000` pointer for OOB Router access.
+- **T303d** (static, no fire) showed the OOB pending-events register at
+  0x18109100 is read ON-DISPATCH ONLY by `fn@0x9936`, called only from
+  `fn@0x115c` reached only via fallthrough from the exception-vector
+  chain. fw IS in WFI; only an ARM exception (HW IRQ assert) wakes it.
+- **T303e** mapped a 6-gate stack between "host writes OOB Router
+  pending bit" and "fn@0x115c executes on ARM"; gate 1 (write
+  semantics) was the cheapest empirical question.
+- **T304** fired the gate-1 probe: wrote 0xFFFFFFFF to 0x18109100 from
+  host BAR0 at post-set_active, read back 0x00000000. Per advisor
+  ruling-out (only bit 0 had a registered ISR at this stage; bits
+  1/2/4-31 would have remained SET under RW1S), the verdict is **W1C
+  or RO** — host cannot set OOB pending bits via this register.
+  **Option B (host-injected wake via OOB Router pending) is DEAD.**
+
+KEY_FINDINGS new row above row 162 pins the gate-1 verdict.
 
 Phase 5 proved the host can reliably get BCM4360 through download, NVRAM
 placement, Apple-specific seed/footer setup, and ARM release. Phase 6 then
@@ -71,45 +102,79 @@ runtime discriminator lands.
 
 ### Current highest-value next work
 
-Sequence per `t299_next_steps.md`: **T300 (A2 — BAR2-only sched_ctx /
-OOB-mapping probe) first, then A3 (one-shot OOB Router pending read at
-0x18109100) only if A2 yields no mapping. Wake-injection (B) deferred
-until pending-event state is observable.**
+Post-T304 the OOB Router host-injection path is closed. Two parallel
+static reconnaissance passes (T304b + T304c, completed 2026-04-27
+21:25 BST, no fire) further narrowed the option space. Reports are at
+`phase6/t304b_fw_poller_enumeration.md` and
+`phase6/t304c_pmu_gpio_surface.md`. KEY_FINDINGS gained two new rows
+(no-live-pollers + PMU/GPIO dormant) capturing the load-bearing
+verdicts.
 
-1. **T300 — BAR2-only sched_ctx + ISR-list metadata pass.** Two-step:
-   (1a) static prep — find writer of `sched_ctx + 0x358`, sweep
-   `sched_ctx + 0x2c0..0x35c` (esp. +0xd0/+0xd4/+0x300..+0x35c), and
-   ISR list handling around `TCM[0x629A4]`, looking for any class /
-   core / slot table that ties OOB bit positions to ISR nodes; (1b)
-   if a BAR2-readable mapping candidate is found, implement a
-   single-purpose probe that reads ONLY: `TCM[0x6296C]`, `TCM[0x629A4]`,
-   ISR nodes/masks, `sched_ctx + 0x2c0..0x35c`, console struct ptr/wr_idx.
-   **Forbidden in T300:** any `BAR0_WINDOW` write, `select_core`,
-   chipcommon read, PCIE2 read, wrapper read, or OOB-router BAR0 read.
-   The fire MUST exit before the [t+90s, t+120s] bracket (use
-   `bcm4360_test269_early_exit=1` or a similar early-exit path).
+**Refined option triage:**
 
-2. **A3 — OOB Router pending-events read at `0x18109100`** (only if T300
-   step 1a finds no usable BAR2 mapping). Single-purpose surgical probe:
-   raw `BAR0_WINDOW = 0x18109000`, read `BAR0 + 0x100`, exit. Must cite
-   KEY_FINDINGS row 85 in the PRE-TEST and explain why OOB Router is a
-   distinct backplane agent from the chipcommon/PCIE2-wrap surfaces that
-   wedged in T297.
+1. **PMU / GPIO surface — CLOSED** (T304c). Both subsystems are
+   host-reachable via BAR0 windowing but neither has a registered fw
+   ISR in the offload runtime. T298 enumerated exactly 2 live ISRs
+   (pciedngl_isr OOB bit 3, RTE chipcommon-class fn@0xB04 OOB bit 0)
+   — no PMU- or GPIO-class ISR present. Even if host writes
+   PMU_WATCHDOG / PMU_RES_REQT or toggles GPIO, no fw handler will
+   receive a resulting IRQ. **Closed without fw modification.**
 
-3. **Wake-event injection (B)** — DEFERRED. Per advisor constraint walk
-   2026-04-27 evening: each enumerated B sub-option (MSI assert, olmsg
-   ring write, DMA transfer, `pci=noaspm`) lacks a mechanism that
-   actually fires `oobselouta30` bit 0 or bit 3. MAILBOXMASK=0 +
-   write-locked (KEY_FINDINGS rows 117/118/126) blocks the MSI/MBM
-   path; Phase 4B row 39 shows fw doesn't poll the olmsg ring; ASPM
-   was already falsified by T299. B becomes viable once OOB pending
-   state is observable (one of the candidates from `t299_next_steps.md`
-   §4: real DMA over shared_info buffer, PCI-CDC message-queue path
-   per fw banner, or OOB-router pending-driven event-source choice).
+2. **DMA-via-olmsg trip path — PARTIALLY OPEN** (T304b). Zero live fw
+   pollers found in the 311-fn BFS reach set; the olmsg ring cannot
+   be serviced by a fw poller. Viability hinges on (a) DMA-completion
+   → IRQ wiring (MSI or OOB bit assertion), and (b) a registered ISR
+   callback for that IRQ. The most likely candidate handler is
+   pciedngl_isr (fn@0x1c98/0x1c99) — the cheapest next static move
+   is to disassemble pciedngl_isr's event-dispatch logic and
+   determine what events it processes. If it handles PCIe-side DMA
+   completion events, option 2 has a known target; if not, option 2
+   needs different machinery.
 
-   The previously-recommended `test.288a` BAR0 probe is RETIRED —
-   T297 wedged on it (row 85), and T298 already extracted the OOB
-   result from TCM without touching BAR0.
+3. **Passive sample-2 re-read of OOB Router pending — LOWER
+   PRIORITY.** With gate 1 closed, even if pending transitions
+   naturally, host can't act on it. Useful only as observational
+   evidence about idle-state fw/agent behaviour.
+
+**Next concrete move (no fire required):** static disassembly of
+pciedngl_isr to gate option 2's viability. Both T304b §"Open
+Questions" #1 and T304c §6.1.3 flag this as the unresolved
+question. Pending user approval to launch.
+
+**Heuristic caveat (per KEY_FINDINGS row 161):** the 311-fn live BFS
+rests on push-lr-as-fn-start + direct-BL coverage; indirect-call sites
+may escape detection. T304b's "no pollers" is bounded by these
+heuristics. If a future probe surfaces evidence of a missed indirect
+dispatcher, revisit option 2's premise.
+
+### Hardware Fire Gate (per `t299_next_steps.md`, retained)
+
+Before any next hardware fire, the PRE-TEST block MUST state:
+
+- whether the test touches BAR0
+- if BAR0 is touched, the exact address and exact expected
+  value/bit pattern
+- if BAR2-only, that it performs no `BAR0_WINDOW`, `select_core`,
+  chipcommon, PCIE2, wrapper, or OOB-router reads
+- how the test exits before the [t+90s, t+120s] wedge bracket
+  (n=8 reproduction count as of T304)
+- what single bit of information the fire is expected to decide
+
+T304 demonstrated that BAR0 OOB Router *write*-then-readback at
+post-set_active is also tolerated (n=1, alongside n=3 read-only
+sample-1 fires). The "OOB Router agent at post-set_active is safe for
+single-shot transactions" datum extends to writes, not just reads.
+
+### Methodology disciplines (retained)
+
+Reduce dependence on single-fire interpretations. Substrate
+instability is a first-order constraint (KEY_FINDINGS row 85). Future
+hardware tests should be chosen for high discrimination per fire and
+judged over repeated attempts where possible.
+
+The previously-recommended `test.288a` chipcommon BAR0 probe is
+RETIRED — T297 wedged on it, and BAR2-only walks have extracted the
+relevant OOB allocation without touching it.
 
 ### Hardware Fire Gate (per `t299_next_steps.md`)
 
@@ -123,15 +188,10 @@ Before any next hardware fire, the PRE-TEST block MUST state:
 - how the test exits before the [t+90s, t+120s] wedge bracket
 - what single bit of information the fire is expected to decide
 
-2. **Reduce dependence on single-fire interpretations.**
-   Substrate instability is now a first-order constraint. Future hardware tests
-   should be chosen for high discrimination per fire and judged over repeated
-   attempts where possible.
-
-3. **Resume `wl` comparison work only where it produces runtime deltas.**
-   The Phase 6 thread still matters, but the best remaining value is likely
-   live `wl` MMIO/config comparison or explicit register-sequence comparison,
-   not more broad dead-code archaeology.
+**Resume `wl` comparison work only where it produces runtime deltas.**
+The Phase 6 thread still matters, but the best remaining value is
+likely live `wl` MMIO/config comparison or explicit register-sequence
+comparison, not more broad dead-code archaeology.
 
 ### Deferred / lower-priority lines
 
