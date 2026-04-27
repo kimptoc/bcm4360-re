@@ -122,7 +122,50 @@ If NO → either wl can't drive this fw build either (different problem entirely
 
 **Substrate note:** the chip is going through 2 reboot cycles + actual wl init. The "fresh substrate" baselines from earlier in this session no longer apply post-cleanup — would need new baselines if any further brcmfmac fires happen. For wl-discriminator purposes this is fine.
 
-**Awaiting nixos-rebuild boot completion to commit + push + reboot.**
+**POST-CYCLE.1 (2026-04-27 ~22:55 BST) — wl FAILED to bind; failure is host-side, not chip-side.**
+
+Observed after user reboot into wl-unblacklisted boot:
+- `wl driver 6.30.223.271 (r587334) failed with code 1` then `ERROR @wl_cfg80211_detach : NULL ndev->ieee80211ptr, unable to deref wl`
+- Stack: `__warn_thunk` ("Unpatched return thunk in use") → `warn_thunk_thunk` → `getvar+0x20/0x70 [wl]` → `wl_module_init+0x27/0xb0 [wl]` → `do_one_initcall`. Aborts at `wl_module_init`, BEFORE `wl_pci_probe` is registered.
+- `lspci -k -s 03:00.0` → `Kernel modules: bcma, wl` with NO "Kernel driver in use" line. Chip is unbound; wl never reached the chip.
+- The `wlp0s20u2` interface is the USB MT76 dongle (`mt76x2u 2-2:1.0`), NOT the BCM4360.
+- `rmmod wl ; modprobe -v wl` reproduces deterministically.
+- Decisive question (does wr_idx advance under wl?) **cannot be answered as planned** — wl_module_init aborts in driver-internal init, never gets to PCI probe.
+- Likely root cause: NixOS broadcom-sta-6.30.223.271-59 ↔ kernel-6.12.80 mitigation/build mismatch. modinfo claims `retpoline: Y` but runtime warns "Unpatched return thunk in use" inside getvar.
+
+**Strategic implication:** Path B as originally framed is blocked by host-side packaging, not by chip behavior. Doesn't tell us anything about the chip yet — wl never touched it. To salvage Path B we need wl to actually load and bind.
+
+## PRE-CYCLE.1b (mitigations=off attempt to unblock wl init)
+
+**Hypothesis:** `mitigations=off` boot param disables retpoline/SRSO/etc enforcement, silencing/skipping the unpatched-return-thunk WARN inside `getvar`. If the WARN itself was the failure path (e.g., panic_on_warn-equivalent or early-abort), wl_module_init may now complete and wl will bind to the chip.
+
+**Risk acknowledged:** the WARN macro doesn't return a value, so `code 1` may originate elsewhere inside `getvar`/`wl_module_init` and this attempt may not change anything. Cheap test (one rebuild + one reboot); we'll know fast.
+
+**State change executed (2026-04-27 ~22:58 BST):**
+- `/etc/nixos/configuration.nix.preWlCycle1b` — backup of pre-edit state (pre-mitigations-off)
+- `/etc/nixos/configuration.nix` line 22 — added `"mitigations=off"` to `boot.kernelParams`
+- `sudo nixos-rebuild boot` — DONE (built `/nix/store/g854l90djjbq2vnsgxf40c779dhzmdpx-...`)
+
+**Required next:** user reboots; post-reboot Claude re-runs the cycle 1 capture sequence.
+
+**POST-REBOOT capture (cycle 1b):**
+1. `dmesg | grep -E 'mitigations|Spectre|retbleed' | head -10` — confirm mitigations=off active
+2. `dmesg | grep -E 'wl driver|@wl_cfg80211' | head -10` — has `failed with code 1` gone?
+3. `lspci -k -s 03:00.0` — does `Kernel driver in use: wl` now appear?
+4. If wl bound → proceed with the original cycle 1 capture (steps 5-9 above: TCM[0x9af88] wr_idx, TCM[0x629A4] ISR list, lspci snapshot, dmesg snapshot)
+5. If wl still failed → the failure is NOT mitigations-related; pivot per `Three options` below
+
+**Three options if cycle 1b also fails:**
+- Cleanup wl, restore both backups, return to brcmfmac dev mode, then Path A (narrow-prompt static retry on wl.ko) or Path (a) (MAILBOXMASK timing test — chip-side experiment that's independent of wl)
+- Live USB / older kernel — bigger detour
+- Strace modprobe / inspect wl getvar source from broadcom-sta-src — moderate effort
+
+**Cleanup cycle (after capture, EITHER outcome):**
+1. `sudo cp /etc/nixos/configuration.nix.preWlCycle1 /etc/nixos/configuration.nix` — restore the ORIGINAL backup (predates BOTH cycle1 and cycle1b changes; restores wl blacklist AND removes mitigations=off)
+2. `sudo nixos-rebuild boot` ; commit + push + sync ; user reboots
+3. Verify back to dev mode (brcmfmac usable, wl blacklisted, mitigations restored)
+
+**Awaiting user reboot for cycle 1b.**
 
 **Substrate is fresh** (boot 0 @ 21:16:01). PCIe lspci clean. No code changes outstanding. T304 macro is empirically validated. Docs cleaned up per DOCS.md §3 (T299/T300/T301 pairs migrated). PLAN.md, RESUME_NOTES, KEY_FINDINGS all current as of this writeup.
 
