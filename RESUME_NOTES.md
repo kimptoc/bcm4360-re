@@ -5,7 +5,11 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-27 ~07:30 BST — **POST-TEST.296 NULL FIRE recorded; STOPPING RULE TRIGGERED → advisor pivot to (δ) static disasm. T297 series this session produced a MAJOR BREAKTHROUGH: wake-gate identified as D11 (core[2] = 0x18001000) MAC interrupt block, wake-register at D11+0x168 (0x18001168). Static producer LOCATED at fn@0x6820C — flag_struct allocator that calls si_setcoreidx(D11) and stores the result at flag_struct[+0x88]. KEY_FINDINGS row promoted LIVE-STRONG → CONFIRMED. NEXT MOVE: advisor consult on host-write path: select_core(D11) + iowrite32(BAR0+0x168, 0x4000=MI_GP1) to wake fw. T297 work was zero-substrate-cost — no hardware fires this session. The substrate-null cluster (n=3) is unresolved but no longer blocking strategy.**)
+## Current state (2026-04-27 ~09:00 BST — **POST-TEST.296 NULL FIRE recorded; STOPPING RULE TRIGGERED → advisor pivot to (δ) static disasm. T297-298 series produced a CASCADE OF BREAKTHROUGHS:**
+**(1) Wake-gate identified as D11 macintstatus block (D11+0x168, base=0x18001000). flag_struct allocator located (fn@0x6820C). Wake mask is 0x48080 (bits MI_NSPECGEN_0/MI_DMAINT/MI_BG_NOISE per brcmsmac).**
+**(2) macintstatus is W1C — host CANNOT inject bits via writes; the earlier MI_GP1 host-write narrative is structurally impossible.**
+**(3) MAJOR re-frame: `wlc_bmac_up_finish` (fn@0x17ED6, identified by printf string) is the SOLE init-time arm path for D11+0x16C INTMASK with the canonical 0x48080 mask. fw's WFI freeze point per T287c is AFTER wl_probe but BEFORE wlc_bmac_up — meaning D11+0x16C=0 at the freeze point and fw is structurally deaf to all HW events. This explains why every prior probe (MBM writes, chipcommon RMW, etc.) failed silently — the wake gate was closed regardless of what we tried. Verified by T298t advisor scan: ZERO alternative paths to construct 0x48080 anywhere in the blob.**
+**The strategic problem RE-FRAMES: NOT "find the wake bit fw waits for" but "why doesn't fw advance from wl_probe to wlc_bmac_up_finish?". This is the new investigation target. Zero hardware fires this session — substrate-null cluster (n=3) is unresolved but irrelevant to the new direction.**)
 
 ## Prior state (2026-04-26 23:35 BST — POST-TEST.295 NULL FIRE; n=2 of 3-stopping-rule; PRE-TEST.296 plan was a plain re-fire on tight-freshness substrate.)
 
