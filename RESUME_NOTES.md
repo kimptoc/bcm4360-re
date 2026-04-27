@@ -8,7 +8,9 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 19:30 BST — POST-TEST.301 captured. T301 fired at 19:24:49 BST (insmod uptime ~10 min, middle of row 83's 20-25 min clean window per plan). Sample 1 BAR0 OOB Router read at post-set_active SUCCEEDED (n=2 with T300, `pending=0x00000000` again). **Wedge at t+60s, AT sample 2's BAR0 OOB Router window-write — between anchor-2 (saved BAR0_WINDOW=0x18102000) and anchor-3 (would-be "window set; about to read +0x100").** Sample 2 anchor-1 + anchor-2 prints flushed; anchor-3 never logged. Boot -1 ended 19:26:13 BST same second as anchor-2. Auto-recovery, no SMC reset (boot 0 started 19:27:36, uptime ~1 min at writeup). Substrate clean: 03:00.0 `ASPM L0s L1 Enabled` MAbort- CommClk+, 02:00.0 `ASPM L1 Enabled` MAbort- CommClk+. **NEW DATAPOINT — none of the 3 PRE-TEST.301 predicted outcomes match.** With test300 enabled, n=2 fires both wedge earlier than the [t+90s, t+120s] baseline (T300=~t+45s, T301=t+60s); T301 wedged precisely AT sample 2's BAR0 access — strong correlation but n=1 each on timing/locus, can't yet distinguish substrate variance from causation.
+## Current state (2026-04-27 19:43 BST — PRE-TEST.302b drafted on user GO. T302b = T301 minus `test300_oob_pending` minus `test269_early_exit`, with `sleep 150` (T298/T299-baseline timing). Tests whether dropping test300 moves wedge back to [t+90s, t+120s]. Substrate: boot 0 uptime 15 min — late edge of row 83 clean window; lspci clean. Fire imminent.
+
+Prior fire (T301, 19:24:49 BST): sample 1 BAR0 OOB Router read at post-set_active SUCCEEDED (n=2 with T300, `pending=0x00000000`). **Wedge at t+60s, AT sample 2's BAR0 OOB Router window-write** — anchor-2 ("saved=0x18102000; about to set OOB Router window") flushed, anchor-3 never logged. Auto-recovery, no SMC reset. **NEW pattern with n=2 on test300 fires:** wedge bracket shifts EARLIER (T298/T299/T276/T287c/T270 baseline = [t+90s, t+120s]; T300 = ~t+45s; T301 = t+60s). Advisor catch on T302a: between t+45s and t+60s sample 2 is the only host MMIO op, so any substrate wedge would naturally fire AT sample 2 regardless of cause. T302b is the right discriminator.
 
 T299 FIRED 15:29:00 BST on boot -1 with full ASPM-disabled chain (cmdline `pcie_aspm.policy=performance` parsed, runtime sysfs flip applied at 15:27:57 before insmod; 03:00.0+02:00.0+root all `ASPM Disabled`). Probe ran clean through all 9 stages — IDENTICAL 2-node ISR readout to T298. Wedged at end-of-t+90s probe (boot -1 ended 15:31:05, ~7s after t+90s SUMMARY). User cold-boot/SMC reset; current uptime now ~30+ min, ASPM back to default. **H1 (ASPM = wedge cause) FALSIFIED.** **Wedge is the known [t+90s, t+120s] bracket** (KEY_FINDINGS row 104, T270-BASELINE pattern, reproduced T276/T287c/T298/T299) — NOT a "rmmod wedge" as POST-TEST.298 mistakenly claimed.
 
@@ -686,6 +688,68 @@ T302c (code edit — keep sample 1, skip sample 2 — cleanest causal test) defe
 T302a (re-fire T301 unchanged) is held — only valuable for narrowing locus-within-sample-2, which is a sub-question we don't yet need answered.
 
 Awaiting user GO/NO-GO on T302b. Substrate state: boot 0 uptime ~3 min as of 19:30 writeup; row 83 middle-of-window timing → fire ~19:37-19:42 BST (uptime 10-15 min).
+
+## PRE-TEST.302b (drafted 2026-04-27 19:43 BST on user GO. Drops `bcm4360_test300_oob_pending=1` AND `bcm4360_test269_early_exit=1` from the T301 fire; otherwise unchanged. Restores `sleep 150` per T298/T299 baseline so the t+90s/t+120s probes actually run. NO rebuild — same module bits, different param set.)
+
+### Goal — single bit of information
+
+Does dropping `test300_oob_pending` move the wedge back to the prior [t+90s, t+120s] bracket?
+
+| Outcome | Interpretation | Next step |
+|---|---|---|
+| Wedge at [t+90s, t+120s] | **test300 enablement IS shifting the bracket forward.** OOB Router BAR0 read at post-set_active has a delayed effect on bus state. Strong inference. | Decide whether to revisit the OOB Router probe with a different timing strategy (e.g., one-shot sample at post-set_active only, no sample 2; or skip OOB Router entirely and pivot) |
+| Wedge at t+45s..t+60s | **AMBIGUOUS.** Either (a) test300 was a red herring and substrate variance widened independently, or (b) the dropped `test284_premask_enable` (also dropped in T300/T301 vs T298/T299) is what shifts the bracket. T302b' (drop test300, RE-ADD test284) bisects | Fire T302b' next |
+| Substrate-noise null upstream of t+45s | falls into the existing row 85 noise belt; T302b not the culprit. Cold cycle and re-fire | substrate variance |
+| New wedge mode | handle on its own merits | TBD |
+
+**Prediction (Claude before fire):** ~60-65% wedge at [t+90s, t+120s]; ~30-35% stays at t+45s..t+60s; ~5% other. Confidence not high → test is well-targeted.
+
+### Diff vs T301 fire (2026-04-27 19:24 BST, sample 2 wedge at t+60s)
+
+- IDENTICAL module (no rebuild)
+- IDENTICAL kernel cmdline (default ASPM)
+- DROPPED: `bcm4360_test300_oob_pending=1` (the param under test) and `bcm4360_test269_early_exit=1` (early exit at t+60s would skip the [t+90s, t+120s] bracket and defeat the test)
+- CHANGED: `sleep 75` → `sleep 150` (matches T298/T299 baseline so rmmod attempt would happen after t+90s probes if they survive)
+
+### Substrate state at writeup (19:43 BST)
+
+- Boot 0 started 19:27:36 BST; uptime 15 min — **at late edge of row 83's 10-15 min middle window**
+- 03:00.0: `ASPM L0s L1 Enabled` (default), MAbort-, CommClk+, x1 @2.5GT/s
+- 02:00.0: `ASPM L1 Enabled` (default), MAbort-, CommClk+, x1 @5GT/s
+
+### Pre-fire checklist (CLAUDE.md)
+
+1. ✓ NO REBUILD — same module bits that fired T301
+2. ✓ Hypothesis matrix above
+3. ✓ PCIe state checked (clean, just done)
+4. → Plan committed and pushed BEFORE fire (this commit)
+5. → FS sync after push
+6. → Fire immediately (uptime already 15 min — at late edge of clean window)
+7. ✓ Advisor consulted (post-T301; recommended T302b over T302a)
+
+### Fire command (run immediately after commit/push/sync)
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test287_sched_ctx_read=1 \
+    bcm4360_test287c_extended=1 \
+    bcm4360_test298_isr_walk=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.302b.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.302b.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.302b.journalctl.txt
+```
+
+If wedged before journalctl: on next boot, `sudo journalctl -k -b -1 > phase5/logs/test.302b.journalctl.txt`.
+
+### Risk and recovery
+
+- Identical risk profile to T298/T299 (which both wedged at [t+90s, t+120s] but auto-recovered or required SMC). Worst case: silent kernel wedge → auto-recovery or user SMC reset.
+- No new probe code; risk is substrate + the known wedge bracket.
 
 ## Archived detail
 
