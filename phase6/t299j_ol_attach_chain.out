@@ -1,0 +1,97 @@
+Disasm pass…
+Total: 183,411
+
+=== (1) DUMP fn@0x67358 (called from pciedngl_probe @ 0x1ee8) ===
+
+=========== fn@0x67358 (offload-mode device-attach?)  fn @ 0x67358..0x673c8 ===========
+  0x67358  push.w   {r0, r1, r2, r3, r4, r5, r6, r7, r8, sb, sl, lr}
+  0x6735c  mov      r8, r0
+  0x6735e  mov      r7, r1
+  0x67360  mov      r0, r1
+  0x67362  mov.w    r1, #0x35c
+  0x67366  mov      sb, r2
+  0x67368  mov      sl, r3
+  0x6736a  ldr      r6, [sp, #0x34]
+  0x6736c  ldr      r5, [sp, #0x38]
+  0x6736e  bl       #0x7d60  → fn@0x7d60
+  0x67372  mov      r4, r0
+  0x67374  cbnz     r0, #0x67386
+  0x67376  mov      r0, r7
+  0x67378  bl       #0x7d6e  → fn@0x7d6e
+  0x6737c  mov      r1, r0
+  0x6737e  ldr      r0, [pc, #0x48]  ; lit=0x47773 → fn@0x47772
+  0x67380  bl       #0xa30  → fn@0xa30
+  0x67384  b        #0x673c0  → tail-fn@0x673c0
+  0x67386  ldr      r3, [sp, #0x30]
+  0x67388  mov      r1, r8
+  0x6738a  str      r3, [sp, #4]
+  0x6738c  mov      r2, r7
+  0x6738e  mov      r3, sb
+  0x67390  str.w    sl, [sp]
+  0x67394  str      r6, [sp, #8]
+  0x67396  str      r5, [sp, #0xc]
+  0x67398  bl       #0x670d8  → fn@0x670d8
+  0x6739c  mov      r8, r0
+  0x6739e  cbnz     r0, #0x673b0
+  0x673a0  mov      r1, r4
+  0x673a2  mov      r0, r7
+  0x673a4  mov.w    r2, #0x35c
+  0x673a8  bl       #0x7d68  → fn@0x7d68
+  0x673ac  mov      r4, r8
+  0x673ae  b        #0x673c0  → tail-fn@0x673c0
+  0x673b0  cbz      r6, #0x673b4
+  0x673b2  ldr      r6, [r6]
+  0x673b4  str.w    r6, [r4, #0x80]
+  0x673b8  cbz      r5, #0x673bc
+  0x673ba  ldr      r5, [r5]
+  0x673bc  str.w    r5, [r4, #0x84]
+  0x673c0  mov      r0, r4
+  0x673c2  add      sp, #0x10
+  0x673c4  pop.w    {r4, r5, r6, r7, r8, sb, sl, pc}
+  ... [end 0x673c8]
+
+
+=== (2) Map ol_attach / ol_init / olmsg_*_up printf strings to fns ===
+  'ol_attach' @ 0x50f12: NO ldr refs
+  'ol_attach' @ 0x56f3a: NO ldr refs
+  'ol_attach' @ 0x57c0d: NO ldr refs
+  'ol_attach' @ 0x58997: NO ldr refs
+  'ol_init' @ 0x57c62: NO ldr refs
+  'ol_attach() failed.' @ 0x4c774: NO ldr refs
+  'ol_attach failed' @ 0x4d15b: NO ldr refs
+  'ol_attach failed' @ 0x4d1a0: NO ldr refs
+  'offload attach FAILED (err %d)' @ 0x4c64a: NO ldr refs
+  'offload attach FAILED (err %d)' @ 0x4c673: NO ldr refs
+  'bmac_up_prep' @ 0x4af3c: NO ldr refs
+  'bmac_up_finish' @ 0x4b1f0: NO ldr refs
+  'pciedngl_isr' @ 0x40685 → ref @ 0x1cb8  inside fn@0x1c98
+  'pciedngl_isr' @ 0x40685 → ref @ 0x1cd4  inside fn@0x1c98
+  'pciedngl_isr' @ 0x40685 → ref @ 0x1d5c  inside fn@0x1c98
+  'pciedngl_probe' @ 0x407f2 → ref @ 0x1e9e  inside fn@0x1e90
+  'pciedngl_probe' @ 0x407f2 → ref @ 0x1f10  inside fn@0x1e90
+
+
+=== (3) Indirect/tagged ref scan for fn@0x17ED6 (wlc_bmac_up_finish) ===
+  (a) Aligned 4B literal-pool occurrences of EXACT 0x17ED6 / 0x17ED7:
+    val=0x17ed6: 0 hits
+    val=0x17ed7: 0 hits
+
+  (b) Tagged/off-by-N: any 4B word in [0x17EA0..0x17F40] anywhere in blob:
+    Hits (any alignment): 0
+
+  (c) PC-relative add/adr targeting 0x17ED6 area:
+    adr-near-target hits: 0
+
+
+=== (4) Indirect ref scan for fn@0x18FFC (wlc_up) ===
+  (a) Aligned 4B literal-pool occurrences of EXACT 0x18FFC / 0x18FFD:
+    val=0x18ffc: 0 hits
+    val=0x18ffd: 0 hits
+
+  (b) Tagged: any 4B word in [0x18FE0..0x19040]:
+
+
+=== (5) Callers of fn@0x67358 (sanity: should be from pciedngl_probe + maybe more) ===
+  0x1ee8: bl → caller fn @ 0x1e90
+  0x67f34: b.w → caller fn @ 0x67f2c
+  fn-ptr (0x67359) any alignment: 0

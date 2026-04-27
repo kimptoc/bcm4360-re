@@ -1,0 +1,157 @@
+Disasm pass…
+Total: 183,411
+
+=== (1) ALL callers of wl_probe (fn@0x67614) ===
+  Direct bl/b: 0
+  fn-ptr (0x67615) any alignment: 1
+    0x58f1c aligned=True  ctx@0x58f0c: 0x00000000 0x00000000 0x00000000 0x00000000 0x00067615 0x00011649 0x0001132d 0x00011605
+
+
+=== (2) DUMP wl_probe (fn@0x67614) ===
+
+=========== wl_probe  fn @ 0x67614..0x67910 ===========
+  0x67614  push.w   {r4, r5, r6, r7, r8, sb, sl, fp, lr}
+  0x67618  sub      sp, #0x24
+  0x6761a  mov      r7, r0
+  0x6761c  mov      r6, r1
+  0x6761e  ldr      r0, [pc, #0x26c]  ; lit=0x40692
+  0x67620  mov      r8, r2
+  0x67622  ldr      r1, [pc, #0x26c]  ; "wl_probe"
+  0x67624  mov      fp, r3
+  0x67626  ldr      r5, [sp, #0x4c]
+  0x67628  bl       #0xa30  → fn@0xa30
+  0x6762c  movs     r0, #0
+  0x6762e  movs     r1, #0xb0
+  0x67630  bl       #0x7d60  → fn@0x7d60
+  0x67634  mov      r4, r0
+  0x67636  cbnz     r0, #0x6765e
+  0x67638  ldr      r3, [pc, #0x258]  ; lit=0x58f44
+  0x6763a  ldr      r0, [r3]
+  0x6763c  ands     r0, r0, #1
+  0x67640  beq.w    #0x6790a
+  0x67644  ldr      r3, [pc, #0x250]  ; lit=0x62e24
+  0x67646  ldr      r3, [r3]
+  0x67648  cmp      r3, #0
+  0x6764a  bge      #0x67654
+  0x6764c  bl       #0x14948  → fn@0x14948
+  0x67650  bl       #0xa30  → fn@0xa30
+  0x67654  mov      r1, r5
+  0x67656  ldr      r0, [pc, #0x244]  ; lit=0x4a073 → fn@0x4a072
+  0x67658  bl       #0xa30  → fn@0xa30
+  0x6765c  b        #0x67908  → tail-fn@0x67908
+  0x6765e  movs     r1, #0
+  0x67660  movs     r2, #0xb0
+  0x67662  bl       #0x91c  → fn@0x91c
+  0x67666  str      r5, [r4]
+  0x67668  mov      r0, r7
+  0x6766a  bl       #0x66e64  → fn@0x66e64
+  0x6766e  mov      r1, r7
+  0x67670  mov      sl, r0
+  0x67672  bl       #0x649a4  → fn@0x649a4
+  0x67676  str.w    r0, [r4, #0x90]
+  0x6767a  cbnz     r0, #0x6769c
+  0x6767c  ldr      r3, [pc, #0x214]  ; lit=0x58f44
+  0x6767e  ldr      r3, [r3]
+  0x67680  tst.w    r3, #1
+  0x67684  beq.w    #0x67900
+  0x67688  ldr      r3, [pc, #0x20c]  ; lit=0x62e24
+  0x6768a  ldr      r3, [r3]
+  0x6768c  cmp      r3, #0
+  0x6768e  bge      #0x67698
+  0x67690  bl       #0x14948  → fn@0x14948
+  0x67694  bl       #0xa30  → fn@0xa30
+  0x67698  ldr      r0, [pc, #0x204]  ; lit=0x4a088
+  0x6769a  b        #0x676d6  → tail-fn@0x676d6
+  0x6769c  mov      r1, r4
+  0x6769e  ldr      r2, [pc, #0x204]  ; lit=0x1148d → fn@0x1148c
+  0x676a0  bl       #0x4718  → fn@0x4718
+  0x676a4  movs     r0, #0
+  0x676a6  mov      r1, r0
+  0x676a8  ldr.w    r2, [r4, #0x90]
+  0x676ac  mov      r3, r0
+  0x676ae  bl       #0x6491c  → fn@0x6491c
+  0x676b2  str.w    r0, [r4, #0x8c]
+  0x676b6  cbnz     r0, #0x676de
+  0x676b8  ldr      r3, [pc, #0x1d8]  ; lit=0x58f44
+  0x676ba  ldr      r3, [r3]
+  0x676bc  tst.w    r3, #1
+  0x676c0  beq.w    #0x67900
+  0x676c4  ldr      r3, [pc, #0x1d0]  ; lit=0x62e24
+  0x676c6  ldr      r3, [r3]
+  0x676c8  cmp      r3, #0
+  0x676ca  bge      #0x676d4
+  0x676cc  bl       #0x14948  → fn@0x14948
+  0x676d0  bl       #0xa30  → fn@0xa30
+  0x676d4  ldr      r0, [pc, #0x1d0]  ; lit=0x4a0a8
+  0x676d6  mov      r1, r5
+  0x676d8  bl       #0xa30  → fn@0xa30
+  0x676dc  b        #0x67900  → tail-fn@0x67900
+  0x676de  add      r3, sp, #0x1c
+  0x676e0  mov.w    sb, #0
+  0x676e4  str      r0, [sp, #0x10]
+  0x676e6  movw     r1, #0x14e4
+  0x676ea  str      r3, [sp, #0x14]
+  0x676ec  mov      r0, r4
+  0x676ee  mov      r2, fp
+  0x676f0  mov      r3, r5
+  0x676f2  str      r6, [sp, #8]
+  0x676f4  str.w    sb, [sp]
+  0x676f8  str.w    sl, [sp, #4]
+  0x676fc  str.w    r8, [sp, #0xc]
+  0x67700  bl       #0x68a68  → wlc_attach
+  0x67704  mov      r6, r0
+  0x67706  cbnz     r0, #0x67730
+  0x67708  ldr      r3, [pc, #0x188]  ; lit=0x58f44
+  0x6770a  ldr      r3, [r3]
+  0x6770c  tst.w    r3, #1
+  0x67710  beq.w    #0x67900
+  0x67714  ldr      r3, [pc, #0x180]  ; lit=0x62e24
+  0x67716  ldr      r3, [r3]
+  0x67718  cmp      r3, sb
+  0x6771a  bge      #0x67724
+  0x6771c  bl       #0x14948  → fn@0x14948
+  ... TRUNCATED at 100 lines
+  ... [end 0x67910]
+
+
+=== (3) Handlers table @ 0x58F1C ± and 0x58F00 wrapper ===
+  0x58f00: 0x00058f1c
+  0x58f04: 0x00000000
+  0x58f08: 0x00000000
+  0x58f0c: 0x00000000
+  0x58f10: 0x00000000
+  0x58f14: 0x00000000
+  0x58f18: 0x00000000
+  0x58f1c: 0x00067615 → wl_probe
+  0x58f20: 0x00011649 → wl_open(dead?)
+  0x58f24: 0x0001132d → fn@0x1132c?
+  0x58f28: 0x00011605 → fn@0x11604?
+  0x58f2c: 0x00000000
+  0x58f30: 0x0001158d → fn@0x1158c?
+  0x58f34: 0x00011525 → fn@0x11524?
+  0x58f38: 0x0001146d → fn@0x1146c?
+  0x58f3c: 0x00000000
+
+
+=== (4) Look for fn-ptrs to 0x67615 / 0x67613 / 0x68A69 in the blob (any alignment) ===
+  wl_probe ptr (0x67615): 1 byte hits
+    0x58f1c aligned=True
+  wlc_attach ptr (0x68a69): 0 byte hits
+  wlc_bmac_attach ptr (0x6820d): 0 byte hits
+
+
+=== (5) Strings 'wl_open' / 'wl_probe' / 'wl_attach' / 'wlc_attach' / 'bmac_attach' ===
+  'wl_probe' at file offset 0x4a1ea
+  'wlc_attach' at file offset 0x4b1ff
+  'bmac_attach' at file offset 0x4b125
+  'wlc_bmac_attach' at file offset 0x4b121
+
+
+=== (6) ldr-refs to 'wl_probe' / 'wl_open' / 'wlc_attach' / 'bmac_attach' strings ===
+  'wl_probe' @ 0x4a1ea: 1 refs at ['0x67622']
+      ref 0x67622 inside fn@0x67614
+  'wlc_attach' @ 0x4b1ff: 3 refs at ['0x68aee', '0x68b2e', '0x68bf4']
+      ref 0x68aee inside fn@0x68a68
+      ref 0x68b2e inside fn@0x68a68
+      ref 0x68bf4 inside fn@0x68a68
+  'bmac_attach' @ 0x4b125: NO ldr refs
