@@ -8,17 +8,15 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 21:05 BST — PRE-TEST.304 READY TO FIRE. User approved gate-1 empirical probe; rebooting first to refresh substrate (was at uptime 48 min, late side of row 83 window). After reboot: lspci check, then fire when uptime is in 10-20 min window. Module already built (commit 66a2a89). Fire command in PRE-TEST.304 block below — copy-paste ready.
+## Current state (2026-04-27 21:18 BST — POST-TEST.304 FIRED + WRITTEN UP. Gate-1 verdict: **OOB Router +0x100 is W1C-or-RO from host writes** → option B "host writes 0x18109100 to set OOB pending bits" is **DEAD**. See POST-TEST.304 block below for full reasoning (incl. non-routed-bits ruling-out of RW1S). Wedge at end-of-t+90s SUMMARY (n=8 [t+90s,t+120s] bracket without test300). Auto-recovery, no SMC reset. Boot 0 started 21:16:01 — current uptime ~2 min as of writeup.
 
-**FIRE-READY CHECKLIST (after reboot):**
-1. PCIe state check: `sudo lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta|LnkCtl'` → expect MAbort-, CommClk+
-2. Wait for uptime ~10-20 min (`uptime`)
-3. Run fire command from PRE-TEST.304 block (it includes the rmmod + journalctl capture)
-4. Write up POST-TEST.304 in RESUME_NOTES, update KEY_FINDINGS rows 162 + new row for register semantics
-5. Commit + push immediately
+**Gate-1 closure → next-direction question is open.** The wake-trigger HW source for OOB bits 0/3 remains LIVE; what's killed is one specific candidate path (host injection via OOB Router pending). Three options listed in POST-TEST.304 §"Next direction": (1) PMU/GPIO surface, (2) DMA-via-olmsg trip path, (3) passive sample-2 re-read of pending. **Awaiting user steer.** Suggest static work before any next fire — Gate 1 closure was the last cheap empirical question available without more upstream analysis.
+
+**Substrate is fresh** (boot 0 @ 21:16:01, uptime climbing). PCIe lspci clean (MAbort-, CommClk+). No code changes outstanding. Module is built on commit 66a2a89 with T304 macro; that macro is now empirically validated and need not be re-fired.
 
 **Prior progress in this session (2026-04-27):**
 
+- T304 fire result + POST-TEST.304 written up (this commit). KEY_FINDINGS row 162 needs Gate-1 verdict appended; new row pinning "OOB Router +0x100 not host-writable" recommended.
 - POST-TEST.303 written up + committed (commit 3c85608); KEY_FINDINGS rows 104/162/163 updated
 
 **Gate-stack result (commit 4adaa81, phase6/t303e_oob_gate_stack.md).** 6 gates between host writing OOB Router pending and fn@0x115c executing on ARM:
@@ -1171,6 +1169,75 @@ sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.304.journalc
 - If RW1S and dispatch fires: fw might do something unexpected (e.g. assert host IRQ via PCIE2 mailbox response, change shared_info state, write to TCM). T276/T278/T287/T287c/T298/T303 instrumentation will catch any visible state change.
 - Wedge bracket [t+90s, t+120s] still expected as baseline. Auto-recovery should suffice.
 - Worst case: silent kernel wedge in normal bracket; user SMC reset if no auto-recovery.
+
+## POST-TEST.304 (written 2026-04-27 21:18 BST after machine auto-recovered from T304 fire)
+
+### Fire timing & substrate
+
+- insmod: ~21:11:00 BST (boot -1 started 21:06:15 → uptime ~5 min, fresh substrate within row 83 window)
+- All probe stages flushed CLEAN through `t+90s SUMMARY` at 21:13:16
+- Boot -1 ended 21:13:16 — silent kernel death right after t+90s SUMMARY
+- **Auto-recovery, NO SMC reset needed** — boot 0 started 21:16:01
+- Same [t+90s, t+120s] wedge bracket (KEY_FINDINGS row 104). Now n=8 without test300 (T270-BASELINE/T276/T287c/T298/T299/T302b/T303/T304).
+
+### Primary-source T304 data (gate-1 verdict)
+
+All 6 anchors plus SUMMARY logged successfully at post-set_active. No wedge during the T304 sequence itself.
+
+| Anchor | Log line |
+|---|---|
+| 1 | `about to save BAR0_WINDOW` |
+| 2 | `saved=0x18102000; about to set OOB Router window=0x18109000` |
+| 3 | `window set; about to read pre-write +0x100` |
+| 4 | `pre=0x00000000; about to write 0xffffffff` |
+| 5 | `write done; about to read post-write +0x100` |
+| 6 | `post=0x00000000; about to restore BAR0_WINDOW=0x18102000` |
+| SUMMARY | `pre=0x00000000 wrote=0xffffffff post=0x00000000 verdict=W1C-or-RO(no-set)` |
+
+Source: `phase5/logs/test.304.journalctl.txt`. Sample-1 BAR0 OOB Router accessibility now n=3 (T300, T301, T304 all clean at post-set_active). Sample-1 BAR0 OOB Router *write*-then-readback is also clean (no wedge during/after the write step) — first primary-source observation that BAR0 writes to OOB Router agent at post-set_active are tolerated.
+
+### Gate-1 verdict — host CANNOT set bits via OOB Router +0x100
+
+**Plain reading:** `pre=0x0`, `wrote=0xffffffff`, `post=0x0` → bits did not stick after the write. Either W1C (write-1-to-clear) or RO (host writes ignored).
+
+**Tightened ruling-out (advisor catch).** The post-write read could in principle be 0x0 under RW1S if every set bit was W1C-cleared by an ARM ISR before the readback. **This is structurally impossible here:**
+
+- The probe wrote `0xFFFFFFFF` — all 32 bits.
+- Only **bit 0** (RTE chipcommon-class ISR) was registered at post-set_active timing per T298/T303 (`count=1 sched_cc=0x0` confirmed at this exact stage in T304's prior `298 SUMMARY`).
+- Bits 1, 2, and 4–31 have **no ISR registered**, so even if RW1S + bit 0 fired + bit 0 W1C-cleared, bits 1/2/4–31 would have **no fast-clear path** and would remain SET on readback.
+- Observed `post = 0x00000000` → all 32 bits cleared by the write itself → **incompatible with RW1S**.
+
+Therefore: register at 0x18109100 is **W1C or RO** for host-side writes. RO and W1C are observationally indistinguishable in this experiment (both yield `post=0` from `pre=0`); the load-bearing claim — **host cannot set OOB pending bits via this register** — holds for both.
+
+### What this resolves / kills / leaves open
+
+- **Gate 1 (OOB Router +0x100 write semantics) → KNOWN-CLOSED for host-set.** First primary-source resolution from the gate stack mapped in `phase6/t303e_oob_gate_stack.md`.
+- **Option B "host writes 0x18109100 to set OOB pending bits 0/3 and trigger fn@0x115c via OOB path" → DEAD.** The OOB Router pending register is not host-driveable.
+- **Unaffected — every other wake-trigger surface remains LIVE:**
+  - PCIE2 mailbox path with MAILBOXMASK still gating (KEY_FINDINGS row 96 / T279)
+  - PMU / GPIO surfaces (never probed)
+  - DMA-via-olmsg-ring (Phase 4B plumbing exists but never triggered; trip path requires understanding fw poller schedule)
+  - Whatever HW path normally drives those OOB lines (probably internal core-side asserts: D11 MAC events, chipcommon-class events, etc — not host-reachable except via the agents themselves)
+- **"Fw is in WFI waiting for HW IRQ" framing from T303d remains intact.** What's killed is one specific candidate path for synthetic wake injection from the host.
+
+### Robustness datapoint — post-set_active substrate window
+
+T304 added 1 BAR0 write + 2 BAR0 reads (vs T300's 0 writes + 1 read) at post-set_active and still flushed clean through the entire ladder to t+90s SUMMARY. The post-set_active window appears robust to additional BAR0 OOB Router transactions when sample 2 (the t+60s re-access from T301) is omitted. Reinforces row 162 framing that the noise belt is per-agent + timing-dependent, not per-region or per-transaction-count.
+
+### Follow-up items (non-blocking on the verdict)
+
+- Anchor-6 says "about to restore BAR0_WINDOW" but no "restore done" anchor was added to the macro. Module continued cleanly through T276 poll + T298 walks, so functionally the restore landed — but the macro has no positive confirmation print. If a future sample 2 design re-enters this window, add a restore-done anchor.
+- Sample 2 (does pending naturally transition to non-zero in idle) is still unanswered across T300/T301/T302b/T303/T304. With Gate 1 closed, **passive observation of pending** is now the only useful read of this register from the host side. Whether that's worth pursuing depends on the next-direction call.
+
+### Next direction (deferred — separate decision from this writeup)
+
+Three live options after Gate 1 closure:
+
+1. **Pursue different wake surface — PMU/GPIO probe.** Static work first (find PMU register layout + any host-reachable GPIO-driven IRQ slots), then a probe-design pass.
+2. **Pursue DMA-via-olmsg trip path.** Requires understanding what fw poller (if any) services the olmsg ring. T303d said reads happen on-dispatch only, so this needs a different fw entry point analysis.
+3. **Resume passive sample 2 attempt** with a single-shot re-read at variable timing. Lower priority given Gate 1 closure — even if pending transitions, host can't act on it.
+
+User steer needed. Suggest static work (option 1's first phase, or a fresh look at fw entry points for option 2) before the next fire.
 
 ## Archived detail
 
