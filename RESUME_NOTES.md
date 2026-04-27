@@ -8,15 +8,14 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 — PRE-TEST.299 v2: cmdline corrected to `pcie_aspm=off` (pci=noaspm was insufficient — BIOS-enabled ASPM stayed on). AWAITING USER reboot.)
+## Current state (2026-04-27 — PRE-TEST.299 v3: cmdline corrected to `pcie_aspm.policy=performance` (v2 `pcie_aspm=off` was ALSO insufficient — it disables the kernel's ASPM subsystem entirely without touching the link bits BIOS already wrote). AWAITING USER reboot.)
 
-**Cmdline correction note.** First reboot used `pci=noaspm` but post-boot
-inspection showed `LnkCtl: ASPM L0s L1 Enabled` on 03:00.0 and `ASPM L1
-Enabled` on parent 02:00.0, with `pcie_aspm` policy `[default]`. `pci=noaspm`
-in modern kernels is passive ("don't enable ASPM") — it cannot disable what
-BIOS already turned on. Replaced with `pcie_aspm=off` (active disable) in
-`/etc/nixos/configuration.nix` line 22. Rebuilt with `nixos-rebuild boot`.
-Awaiting second reboot before T299 fire.
+**Cmdline correction history.** Three attempts at the same intent (force ASPM Disabled on the link):
+1. v1: `pci=noaspm` — passive, cannot disable BIOS-enabled ASPM. Post-reboot LnkCtl showed L0s L1 still Enabled.
+2. v2: `pcie_aspm=off` — *also* passive. Disables the kernel ASPM management subsystem ("PCIe ASPM is disabled" in dmesg) but BIOS-written LnkCtl bits remain. Post-reboot 2026-04-27 evening: 03:00.0 still `ASPM L0s L1 Enabled`, 02:00.0 still `ASPM L1 Enabled`. Per-device `link/` sysfs not created (subsystem disabled), policy knob locked at runtime.
+3. **v3: `pcie_aspm.policy=performance`** — active disable. Keeps subsystem on; kernel writes ASPM-Disabled to all LnkCtl regs at boot; policy sysfs stays writable for runtime overrides.
+
+Edited `/etc/nixos/configuration.nix` line 22, `nixos-rebuild boot` succeeded. Awaiting third reboot before T299 fire.
 
 **Model.** The blob carries two runtimes; the live one is HNDRTE/offload, not
 the `wl_probe → wlc_*` FullMAC chain. T298 just provided primary-source
@@ -168,10 +167,11 @@ H3 (worst): `pci=noaspm` introduces NEW wedge mode (e.g. fw timeout because PCIe
 Cmdline edit + first rebuild done by Claude. User just needs to reboot.
 
 After reboot, verify:
-1. `cat /proc/cmdline | grep pcie_aspm` should show `pcie_aspm=off`
+1. `cat /proc/cmdline | grep pcie_aspm` should show `pcie_aspm.policy=performance`
 2. `sudo lspci -vvv -s 03:00.0 | grep LnkCtl` should show `ASPM Disabled` (NOT `ASPM L0s L1 Enabled`)
 3. `sudo lspci -vvv -s 02:00.0 | grep LnkCtl` (parent bridge) should also show `ASPM Disabled`
 4. lspci clean: `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk'` should show no MAbort+/CommClk-
+5. `cat /sys/module/pcie_aspm/parameters/policy` should show `default performance [powersave] powersupersave` form with `[performance]` selected (or similar — square brackets around `performance`)
 
 If any of those fail, do NOT fire T299 — investigate first (the test premise depends on ASPM actually being off).
 
