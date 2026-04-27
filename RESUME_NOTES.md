@@ -8,7 +8,13 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 22:30 BST — POST-TEST.304 + 7 STATIC RECCES (T304b/c/d/e/f/g/h). **wl comparison stage 1 ATTEMPTED but FAILED to deliver core deliverable.** Two paths forward; awaiting user steer.
+## Current state (2026-04-27 23:38 BST — POST-CYCLE.1b. **wl bind FAILED a second time, host-side, mitigations=off does NOT silence the fault.** Three options on table (A/B/C); awaiting user steer.
+
+**Cycle 1 + 1b summary:** removed wl from blacklist (cycle 1) → wl_module_init aborts at `getvar+0x20` with "Unpatched return thunk in use" WARN + `code 1`. Added `mitigations=off` (cycle 1b) → WARN STILL fires, code 1 unchanged. wl never reached the chip in either cycle; **decisive question (does wr_idx advance under wl?) has not been answered.** Path B (live wl trace) blocked by host-side wl driver init failure.
+
+**Three options now (per POST-CYCLE.1b §):** A=inspect getvar source/strace; B=live USB+older kernel; C=cleanup + pivot to brcmfmac-only Path (a) MAILBOXMASK timing experiment. Recommendation: A → C → B in that order of cost.
+
+**Earlier in session (kept for context — POST-TEST.304 + 7 STATIC RECCES T304b/c/d/e/f/g/h):**
 
 **Three closed surfaces (from earlier in session):**
 
@@ -166,6 +172,37 @@ Observed after user reboot into wl-unblacklisted boot:
 3. Verify back to dev mode (brcmfmac usable, wl blacklisted, mitigations restored)
 
 **Awaiting user reboot for cycle 1b.**
+
+## POST-CYCLE.1b (2026-04-27 23:37 BST — wl bind FAILED again under mitigations=off; failure path is NOT mitigations-related)
+
+**Hypothesis FALSIFIED.** `mitigations=off` is in `/proc/cmdline` (verified) but the WARN at `__warn_thunk+0x2c/0x40` still fires from `getvar+0x20/0x70 [wl]` and `wl driver 6.30.223.271 (r587334) failed with code 1` is identical to cycle 1a. wl is unbound (`Kernel modules: bcma, wl` with no `Kernel driver in use:` line).
+
+**Boot history** (`journalctl --list-boots`): boot -2 = cycle 1a wl-unblacklisted; boot -1 = brief 41s; boot 0 = current cycle 1b @ 23:36:22, uptime ~1 min at writeup. Substrate clean (LnkSta 2.5GT/s x1, MAbort-, CommClk+).
+
+**dmesg snapshot:** `phase6/cycle1b_dmesg.txt` (1086 lines, full boot).
+
+**Decisive observations:**
+1. `mitigations=off loglevel=4` confirmed in `/proc/cmdline` — kernel param applied.
+2. `__warn_thunk` (arch/x86/kernel/cpu/bugs.c:3484) WARN STILL fires regardless. The check is unconditional in this kernel build — `mitigations=off` does not silence the runtime detection that wl's getvar built-in trampoline is non-retpoline.
+3. Same exact failure code 1 → the WARN is a separate signal; it doesn't gate `code 1`. The `code 1` originates inside `getvar` or `wl_module_init` for an independent reason. Per RESUME_NOTES PRE-CYCLE.1b risk acknowledgment, "the WARN macro doesn't return a value, so `code 1` may originate elsewhere" — confirmed.
+4. wlp0s20u2 USB MT76 dongle is up + associated as before (orthogonal to wl/BCM4360).
+
+**Strategic implication:** Path B (live wl trace) is blocked by wl driver init failure that mitigations=off cannot fix. To proceed via wl we need to either understand what `getvar+0x20` is failing on (source inspection / strace) or use a different kernel + matching wl build (live USB / older kernel detour).
+
+**Three options remain (per cycle 1b PRE plan):**
+
+- **Option A — Inspect broadcom-sta source / strace modprobe.** Find what `getvar` is being called with and why it returns nonzero. broadcom-sta-6.30.223.271-59 source is available in nixpkgs (`/nix/store/*-broadcom-sta-*` or `nix-build -E ... .src`). `getvar` is wl's NVRAM variable getter — typically called with a var-name string. May be hitting a missing kernel API (e.g. removed `kallsyms_lookup_name` or similar) inlined into getvar's setup. Moderate effort; cheap test.
+- **Option B — Live USB / older kernel.** Boot a Linux distro with kernel ~6.6 or earlier (where retpoline detection was different) + the matched wl build. Real detour but unambiguous. Mac firmware boot constraints + UEFI Secure Boot may complicate.
+- **Option C — Skip wl entirely; pivot to brcmfmac-only experiment.** Cleanup wl backups (restore ORIGINAL `/etc/nixos/configuration.nix.preWlCycle1` which removes both wl-unblacklist AND mitigations=off), reboot back to dev mode, then run **Path (a)** (MAILBOXMASK timing test): cheap brcmfmac-only modification to move MAILBOXMASK write to pre-set_active timing. Tests one specific failure-mode hypothesis directly. Independent of what wl does.
+
+**Recommendation:** Option A first (cheap, may unblock wl) → if A fails after ~30 min, fall through to Option C. Option B is high-cost/high-friction and worth deferring until A and C are exhausted.
+
+**Required cleanup BEFORE Option C** (or before declaring wl direction dead):
+1. `sudo cp /etc/nixos/configuration.nix.preWlCycle1 /etc/nixos/configuration.nix` — restore the ORIGINAL backup (predates BOTH cycle1 and cycle1b changes; restores wl blacklist AND removes mitigations=off)
+2. `sudo nixos-rebuild boot` ; commit + push + sync ; user reboots
+3. Verify back to dev mode (`Kernel driver in use: brcmfmac` after dev modprobe; mitigations restored)
+
+**Awaiting user steer on A vs B vs C.**
 
 **Substrate is fresh** (boot 0 @ 21:16:01). PCIe lspci clean. No code changes outstanding. T304 macro is empirically validated. Docs cleaned up per DOCS.md §3 (T299/T300/T301 pairs migrated). PLAN.md, RESUME_NOTES, KEY_FINDINGS all current as of this writeup.
 
