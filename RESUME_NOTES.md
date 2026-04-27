@@ -72,22 +72,47 @@ Auxiliary fields (with caveats):
   caused by BAR0 chipcommon/wrapper touches, not by something in the
   shared scaffold.
 
-**Next discriminator (proposed; not yet planned).** Two complementary
-probes both reachable via TCM/BAR2:
+**Next discriminator (post-A1 resolution).** A1 was resolved via static
+docs/EROM cross-check: `events_p = sched+0x358 = 0x18109000` is the
+**ARM OOB Router core (BCMA core ID 0x367)**, per phase1 EROM walk +
+Linux `bcma.h:76`. Distinct backplane agent (NOT chipcommon-wrap
+interior). Host-side bcma enumeration (test.218) misses this core; fw
+uses it via direct backplane access. Its `+0x100` register is the
+pending-events bitmap fw reads to decide which OOB-routed ISR to wake.
 
-1. **TCM-side `oobselouta30` shadow.** If fw maintains a TCM cache of
-   the OOB-selector value (likely — BIT_alloc is called many times per
-   init), reading that cache via BAR2 gives us the LIVE `oobselouta30`
-   bit pattern without touching chipcommon-wrap MMIO. T298 only gave
-   us the RESULT of a single past read; we want the live state.
-2. **Inject a wake event from host that doesn't require chipcommon-wrap
-   writes.** Candidates: DMA transfer (Phase 4B's olmsg ring path —
-   already plumbed but never fired with a real transfer), MSI assert
-   via PCIe config-space, or the upstream `pci=noaspm` candidate from
-   row 152.
+What this resolution changes for direction-picking:
 
-Defer choice until KEY_FINDINGS rows 148/161 are updated and an
-advisor-reviewed plan is written.
+- "Candidate A — TCM-side `oobselouta30` shadow" was largely answered
+  by T298 already: node[+0xC] mask values ARE the OOB allocation
+  result. There is no separate "live oobselouta30 value" to chase
+  (the register is routing config, not pending flags).
+- The newly-identified target is the OOB Router pending register at
+  0x18109100. Reading it is what would tell us which OOB lines are
+  asserted at runtime. But that's a BAR0 read — and we don't yet know
+  whether the BAR0 row 85 noise belt is chipcommon-wrap-specific or
+  generalises to all backplane reads (T297 wedge was specifically on
+  chipcommon-wrap+PCIE2-wrap; OOB Router is a different agent).
+
+Three remaining candidates, awaiting user steer:
+
+1. **A2 — More BAR2 sched_ctx mapping.** Cheap, speculative. Read
+   sched+0xD0 (slot counter per row 137), +0xD4-table (per-slot core-id
+   per row 138), the +0x300–0x350 gap, +0x35C onwards. Might find a
+   TCM-resident dispatch table tying OOB bits → ISR nodes. Risk: low;
+   yield: speculative.
+2. **A3 — Read OOB Router pending-events at 0x18109100 via BAR0.**
+   The actual wake-state register. Risk: row 85 noise belt may bite at
+   any BAR0 chipcommon-wrap-region read — though OOB Router is a
+   different agent than the chipcommon/PCIE2 wraps that wedged in T297.
+   Single read, 1-shot scaffold; cold-cycle budget needed.
+3. **B — Host-side wake-event injection.** DMA transfer over Phase 4B
+   olmsg ring (already plumbed at shared_info), MSI assert, or
+   `pci=noaspm` upstream lead from row 152. Most ambitious; biggest
+   information yield if it works.
+
+The user's earlier "1 pls" picked A as written in PLAN.md. With A1
+resolved and the framing collapsed, the choice has changed shape. New
+question to user: A2, A3, or B?
 
 **What not to retry blindly.**
 
