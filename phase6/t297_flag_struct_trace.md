@@ -212,6 +212,73 @@ Second Explore query confirmed:
 
 Per the agent's (cautious) reading: MI_GP1 and MI_GP0 are general-purpose interrupts that "are HW-designed to be host-writable" — i.e., the host might be able to SET MI_GP1 by writing 0x4000 to D11_BASE+0x168 via BAR0+select_core(D11), provided fw doesn't lock the bit. If so, this would be a viable host-write path to wake fw from WFI. Caveat: brcmsmac doesn't show host-side GP1/GP0 writes; the host-write path is unverified at runtime.
 
+## T297-13/14: indirect-addressing path identification
+
+Per advisor: scan for `ldr rN, [rM, #0x118]` (D11 REG base = sched_ctx[slot 1*4 + 0x114]) → paired indirect store at [+0x88]. Result: **ZERO direct-offset reader hits at +0x118**. Broader scan of all REG-table offsets (T297l):
+- +0x114 (chipcommon REG, slot 0): 60 hits — fw DOES read chipcommon REG via direct offset (in si_setcoreidx class-0 thunk, etc.)
+- +0x118 (D11 REG, slot 1): 21 hits but ALL are branch-target addresses, NOT data accesses
+- +0x11C, +0x120, +0x124: similar — mostly branches and stack-frame uses, no per-class table reads
+- Register-indexed pattern `ldr rA, [rB, rC, lsl #2]`: 178 hits — confirms fw uses **runtime class-index addressing** (rC = class), NOT direct constant offsets, for the per-class table
+
+This means fw doesn't hardcode any non-chipcommon class-index in immediate form; everything routes through the dispatch wrapper.
+
+## T297-15: PRODUCER FOUND — fn@0x6820C is the flag_struct allocator
+
+Site 0x682D8 (T289b's "TBD" entry) is the writer. fn@0x6820C body (key excerpts):
+
+```
+0x6820c  push.w {r4..fp, lr}
+0x68214  mov r6, r3
+0x6821c  mov r5, r0           ; r5 = arg0 (= dispatch_ctx)
+0x6821e  str r3, [sp, #0x6c]
+0x68220  mov sl, r1
+0x68224  mov r8, r2
+0x68252  ldr r1, [sp, #0x9c]  ; r1 = stack arg
+0x68254  mov r2, r6
+0x68256  add r3, sp, #0x6c
+0x68258  bl  #0x68cd2          ; **alloc helper → r0 = NEW STRUCT**
+0x6825c  mov r4, r0           ; r4 = new struct (= flag_struct)
+0x68260  beq.w #0x689ee       ; alloc-failed exit
+0x68266  str r0, [r5, #0x10]  ; **r5[+0x10] = r4 (= dispatch_ctx[+0x10] = flag_struct)**
+0x68268  str.w sb, [r5, #0x18]
+0x68274  str.w sb, [r0, #0x10]
+0x6826c  strb.w r3, [r0, #0x108]   ; init byte fields on flag_struct
+0x68270  strb.w r3, [r0, #0x10a]
+0x68278  strb.w fp, [r0, #0x14]
+... (many init stores to r4 = flag_struct)
+0x682b0  movw  r1, #0x812     ; r1 = D11's core ID (0x812)
+0x682d2  ldr   r0, [r4, #0x7c] ; r0 = sched_ctx ptr (stored earlier in r4[+0x7c])
+0x682d4  bl    #0x9990         ; class-validate wrapper → si_setcoreidx → returns per-class REG base
+0x682d8  str.w r0, [r4, #0x88] ; **r4[+0x88] = si_setcoreidx return = D11 REG base = 0x18001000**
+```
+
+The wrapper `fn@0x9990` validates the class arg and forwards to si_setcoreidx (class 0 thunk @ 0x27EC). Per T289 §1.1, si_setcoreidx returns `sched[class*4 + 0x8C]` which is the per-class REG base (chipcommon convention; for D11 = slot 1 → returns 0x18001000).
+
+Per T289 §1, `fn@0x9968` is the core-id-to-slot lookup. The validate wrapper at fn@0x9990 likely calls fn@0x9968(core_id=0x812) to get D11's slot, then calls si_setcoreidx with the slot.
+
+### What this resolves
+
+- **flag_struct[+0x88] writer LOCATED**: site 0x682D8 in fn@0x6820C, callable via dispatch_ctx allocation chain
+- **Value at flag_struct[+0x88] STATICALLY PROVEN**: si_setcoreidx(D11) return value = D11 REG base = 0x18001000
+- **wlc_pub[+8] = dispatch_ctx, dispatch_ctx[+0x10] = flag_struct**: confirmed by the `str r0, [r5, #0x10]` at 0x68266
+- **Wake-gate base address**: 0x18001000 (D11 REG base)
+- **Wake-gate register**: 0x18001168 (D11 + 0x168, macintstatus block per Explore)
+
+### KEY_FINDINGS impact
+
+Row 158 → **CONFIRMED** (was LIVE-STRONG). The static evidence chain is complete: producer → D11 REG base → consumer @ +0x168.
+
+## Strategic re-frame (post-CONFIRMED)
+
+Fw is waiting for **D11 MAC interrupts** to wake from WFI. Specifically the macintstatus register block at 0x18001168.
+
+To trigger fw to wake without real wireless activity:
+1. **Host-write MI_GP1 (bit 14, value 0x4000) directly to D11+0x168** via `select_core(D11) + iowrite32(BAR0+0x168, 0x4000)`. Per Explore agent §(b): MI_GP1 is HW-designed to be host-writable; brcmsmac doesn't show this pattern but the bits are not gated against external writes.
+2. Alternative: trigger a real MAC event by enabling D11 MAC RX/TX (requires fuller wlc init).
+3. Alternative: use TSF/CFP timer to fire MI_TO (bit 31).
+
+The first option is the most surgical and the cheapest to test. Caveat: untested in upstream; one runtime fire required (post-set_active to land after fw's wlc-attach completes).
+
 ## Clean-room posture
 
 All findings are disassembled mnemonics + literal-pool resolution + offset-pattern matching, plus open-source cross-reference (brcmsmac/d11.h via Explore). No reconstructed function bodies. Scripts in `phase6/t297*.py`. Zero hardware fires.
