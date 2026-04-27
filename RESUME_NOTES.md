@@ -825,7 +825,112 @@ Test300 enablement is causally shifting the wedge bracket. Three candidate next 
 2. **T303b — move sample 2 to t+30s.** Code edit: change the sample 2 hook from t+60s to t+30s. Sample 2 has never been read; getting one reading at any non-post-set_active timing would advance the wake-trigger question. Risk: t+30s is BEFORE the [t+90s, t+120s] bracket but inside the t+45s/t+60s shift seen with test300 — sample 2 might still wedge. n=1 likely outcome.
 3. **A2 — BAR2 sched_ctx mapping (no BAR0).** Read sched+0xD0 (slot counter), sched+0xD4-table (per-slot core-id), the +0x300-0x350 gap. Cheap, low-risk, no BAR0. Speculative yield (might find a TCM-resident OOB-bit→ISR dispatch table). Doesn't advance pending-register reading.
 
-A2 is cheapest. T303a is the cleanest causal call. T303b is the highest information-yield IF it doesn't wedge. Awaiting user steer + advisor pass.
+A2 is cheapest. T303a is the cleanest causal call. T303b is the highest information-yield IF it doesn't wedge. **2026-04-27 19:55 BST: user picked A2.**
+
+## PRE-TEST.303 (drafted 2026-04-27 19:55 BST on user pick of A2. NEW probe `bcm4360_test303_sched_extras` reads previously-unprobed sched_ctx fields: +0xCC semantics (observed 0x1 stable, unknown), +0xD0 slot count, +0xD4..+0xF0 per-slot core-ID table (8 entries × 4 bytes), +0x300..+0x354 gap (22 dwords, no static writers found in t288 enumerator scan). All BAR2-only — honours row 85 stopping rule. Requires REBUILD.)
+
+### Goal — single bit of information
+
+Cross-validate firmware's runtime view of the BCMA backplane against host-side `brcmf_pcie_select_core` enumeration (T218: 6 cores `0x800/0x812/0x83e/0x83c/0x81a/0x135`). Specifically: does the per-slot core-ID table at sched+0xD4 include the OOB Router (0x367) that host enumeration MISSED but EROM has at 0x18109000? If yes, this is primary-source confirmation that fw enumeration covers a superset of host enumeration, and sched+0xD0 will read 7 (or more). If no, the OOB Router is accessed via a separate pointer (sched+0x358 already shown) outside the enumerated slot table.
+
+Secondary: characterize the +0x300..+0x354 gap — t300_static_prep §65 calls it "uncharacterized — no static writers found". Runtime read tells us if it's zero-init'd (pure padding), populated by something static analysis missed, or used as a runtime workspace.
+
+### Hypothesis matrix
+
+| Outcome | Interpretation | Updates |
+|---|---|---|
+| sched+0xD0 = 7+ AND slot table contains 0x367 | **fw enumeration is a superset of host** — covers OOB Router. Cross-validates sched+0x358=0x18109000 as part of the slot model | KEY_FINDINGS row 162 strengthens with primary-source slot enumeration |
+| sched+0xD0 = 6 AND slot table = host enum | fw and host enumeration agree on 6 cores; OOB Router is accessed via a separate fw-internal pointer outside the slot model. The sched+0x358 path is special-case | row 162: OOB Router accessed via separate pointer, not in slot table |
+| sched+0xD0 differs from any prediction (e.g. 8, 9) | unexpected — check what's in the slot table to identify extras | depends on data |
+| Gap +0x300..+0x354 mostly zero | likely structure padding; static analysis was right | t300_static_prep §65 confirmed |
+| Gap +0x300..+0x354 has populated values | runtime workspace or static analysis missed writers | new direction — investigate via trace |
+| sched+0xCC NOT 0x1 stable | T287/T298's "0x1 stable" framing was stage-incomplete | row 163 update |
+| Probe wedges (substrate-noise belt extends to BAR2 range we haven't read before) | extremely unlikely per row 85 (TCM reads at 0x62A98+offsets up to +0x354 = TCM[0x62DEC] — within ramsize 0xA0000) | row 85 widens unexpectedly |
+
+### Probe code (new test303 macro, modeled after T287c)
+
+```c
+/* BCM4360 test.303: BAR2-only sched_ctx field-map extension.
+ * Reads previously-unprobed fields per t300_static_prep §60-67:
+ *   +0xCC = semantics LIVE (observed 0x1 stable in T287/T298)
+ *   +0xD0 = slot count (per row 137 / t288_pcie2_reg_map fn@0x67194)
+ *   +0xD4..+0xF0 = per-slot core-ID table (8 entries, slot*4 indexed)
+ *   +0x300..+0x354 = uncharacterized gap (22 dwords, no static writers)
+ * BAR2-only — zero BAR0/select_core/wrapper touches.
+ * Requires test287_sched_ctx_read=1 for context (same hook sites).
+ * READ-ONLY w.r.t. all MMIO. */
+static int bcm4360_test303_sched_extras;
+module_param(bcm4360_test303_sched_extras, int, 0644);
+MODULE_PARM_DESC(bcm4360_test303_sched_extras, "...");
+
+#define BCM4360_T303_READ_EXTRAS(tag) do { \
+    if (bcm4360_test303_sched_extras) { \
+        /* +0xCC + count + 8-slot core-ID table */ \
+        u32 _cc = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0CC); \
+        u32 _d0 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0D0); \
+        u32 _d4 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0D4); \
+        u32 _d8 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0D8); \
+        u32 _dc = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0DC); \
+        u32 _e0 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0E0); \
+        u32 _e4 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0E4); \
+        u32 _e8 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0E8); \
+        u32 _ec = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0EC); \
+        u32 _f0 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0F0); \
+        pr_emerg("BCM4360 test.303: %s sched[+0xCC]=0x%08x +0xD0(count)=0x%08x slots[+0xD4..+0xF0]=%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+            tag, _cc, _d0, _d4, _d8, _dc, _e0, _e4, _e8, _ec, _f0); \
+        /* gap +0x300..+0x354 in 8-dword groups */ \
+        /* ... 3 lines of 8 dwords + 1 line of 6 dwords = 22 dwords total ... */ \
+    } \
+} while (0)
+```
+
+Hook sites: same as T287/T287c (lines 1410, 4554, 4558, 4569, 4618, 4703 in pcie.c). Same risk profile.
+
+### Substrate prerequisites
+
+- Boot 0 started 19:49:32 BST; uptime now ~5-6 min at writeup
+- Plan to fire at uptime ~10-15 min (row 83 middle of clean window) → fire ~19:59-20:04 BST
+- 03:00.0/02:00.0 lspci clean, default ASPM
+- modinfo verify that `bcm4360_test303_sched_extras` param appears post-build
+
+### Pre-fire checklist (CLAUDE.md)
+
+1. → REBUILD required (new probe code + module param) — `make -C phase5/work`
+2. ✓ Hypothesis matrix above
+3. → PCIe state check after rebuild
+4. → Plan committed and pushed BEFORE fire (this commit)
+5. → FS sync after push
+6. → Wait for uptime ~10-15 min then fire
+7. ✓ Advisor consulted (recommended A2 as conservative substrate-saving option; user picked it)
+
+### Module params (fire command)
+
+- ENABLE: T236, T238, T276, T277, T278, T287, T287c, T298, **T303 (new)**
+- SAME as T302b plus T303 — DROP test300/test269/test284 (test300 is causal shifter, drop)
+
+### Fire command (run AFTER rebuild + lspci verify + uptime in window)
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test287_sched_ctx_read=1 \
+    bcm4360_test287c_extended=1 \
+    bcm4360_test298_isr_walk=1 \
+    bcm4360_test303_sched_extras=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.303.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.303.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.303.journalctl.txt
+```
+
+### Risk and recovery
+
+- All BAR2 reads, no BAR0 — safe per row 85 (noise belt is BAR0-specific to chipcommon-wrap/PCIE2-wrap)
+- Wedge bracket [t+90s, t+120s] still expected (no test300 means baseline pattern reproduces). Auto-recovery should suffice.
+- Worst case: silent kernel wedge in normal bracket; user SMC reset if no auto-recovery.
 
 ## Archived detail
 

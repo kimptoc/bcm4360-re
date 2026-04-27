@@ -1014,6 +1014,77 @@ MODULE_PARM_DESC(bcm4360_test287c_extended, "BCM4360 test.287c: extend T287 dump
 		} \
 	} \
 } while (0)
+
+/* BCM4360 test.303: BAR2-only sched_ctx field-map extension (A2 probe).
+ * Reads previously-unprobed fields per phase6/t300_static_prep §60-67:
+ *   +0xCC = semantics LIVE (T287/T298 observed 0x1 stable; meaning unknown)
+ *   +0xD0 = slot count (per row 137 / t288_pcie2_reg_map fn@0x67194)
+ *   +0xD4..+0xF0 = per-slot core-ID table (8 entries, slot*4 indexed,
+ *                  e.g. slot 0 → 0x800 chipcommon, slot 1 → 0x812 D11)
+ *   +0x300..+0x354 = uncharacterized gap (22 dwords, no static writers
+ *                    found in t288 enumerator scan)
+ * Cross-validates fw-side core enumeration against host T218 (6 cores
+ * 0x800/0x812/0x83e/0x83c/0x81a/0x135 — T218 missed OOB Router 0x367
+ * which fw uses via [sched+0x358]=0x18109000).
+ * BAR2-only — zero BAR0/select_core/wrapper touches; honours row 85
+ * stopping rule. READ-ONLY w.r.t. all MMIO. */
+static int bcm4360_test303_sched_extras;
+module_param(bcm4360_test303_sched_extras, int, 0644);
+MODULE_PARM_DESC(bcm4360_test303_sched_extras, "BCM4360 test.303 (A2): BAR2-only sched_ctx field-map extension. Reads sched[+0xCC] (LIVE), +0xD0 (slot count), +0xD4..+0xF0 (8-slot core-ID table), +0x300..+0x354 (22-dword gap). Hooked at same stages as T287/T287c. READ-ONLY. (1=enable, 0=off)");
+
+/* BCM4360 test.303: scheduler-ctx extras dump helper. */
+#define BCM4360_T303_READ_EXTRAS(tag) do { \
+	if (bcm4360_test303_sched_extras) { \
+		u32 _t303_cc = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0CC); \
+		u32 _t303_d0 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0D0); \
+		u32 _t303_d4 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0D4); \
+		u32 _t303_d8 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0D8); \
+		u32 _t303_dc = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0DC); \
+		u32 _t303_e0 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0E0); \
+		u32 _t303_e4 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0E4); \
+		u32 _t303_e8 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0E8); \
+		u32 _t303_ec = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0EC); \
+		u32 _t303_f0 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x0F0); \
+		pr_emerg("BCM4360 test.303: %s sched[+0xCC]=0x%08x +0xD0(count)=0x%08x slots[+0xD4..+0xF0]=%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			tag, _t303_cc, _t303_d0, _t303_d4, _t303_d8, \
+			_t303_dc, _t303_e0, _t303_e4, _t303_e8, _t303_ec, _t303_f0); \
+		{ \
+			u32 _g300 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x300); \
+			u32 _g304 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x304); \
+			u32 _g308 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x308); \
+			u32 _g30c = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x30c); \
+			u32 _g310 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x310); \
+			u32 _g314 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x314); \
+			u32 _g318 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x318); \
+			u32 _g31c = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x31c); \
+			pr_emerg("BCM4360 test.303: %s gap[+0x300..+0x31c]=%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+				tag, _g300, _g304, _g308, _g30c, _g310, _g314, _g318, _g31c); \
+		} \
+		{ \
+			u32 _g320 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x320); \
+			u32 _g324 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x324); \
+			u32 _g328 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x328); \
+			u32 _g32c = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x32c); \
+			u32 _g330 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x330); \
+			u32 _g334 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x334); \
+			u32 _g338 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x338); \
+			u32 _g33c = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x33c); \
+			pr_emerg("BCM4360 test.303: %s gap[+0x320..+0x33c]=%08x %08x %08x %08x %08x %08x %08x %08x\n", \
+				tag, _g320, _g324, _g328, _g32c, _g330, _g334, _g338, _g33c); \
+		} \
+		{ \
+			u32 _g340 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x340); \
+			u32 _g344 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x344); \
+			u32 _g348 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x348); \
+			u32 _g34c = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x34c); \
+			u32 _g350 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x350); \
+			u32 _g354 = brcmf_pcie_read_ram32(devinfo, BCM4360_T287_SCHED_CTX_BASE + 0x354); \
+			pr_emerg("BCM4360 test.303: %s gap[+0x340..+0x354]=%08x %08x %08x %08x %08x %08x\n", \
+				tag, _g340, _g344, _g348, _g34c, _g350, _g354); \
+		} \
+	} \
+} while (0)
+
 /* BCM4360 test.288a: read AI-backplane wrapper agent registers
  * (oobselina30 at +0x000, oobselouta30 at +0x100) for both
  * chipcommon-wrap (0x18100000) AND PCIE2-wrap (0x18103000) at every
@@ -1408,6 +1479,7 @@ MODULE_PARM_DESC(bcm4360_test300_oob_pending, "BCM4360 test.300 (A3): one-shot B
 		BCM4360_T284_READ_MBM("stage " tag); \
 		BCM4360_T285_READ_CC("stage " tag); \
 		BCM4360_T287_READ_SCHED("stage " tag); \
+		BCM4360_T303_READ_EXTRAS("stage " tag); \
 		BCM4360_T288A_READ_WRAPS("stage " tag); \
 		BCM4360_T298_ISR_WALK("stage " tag); \
 		BCM4360_T290A_CHAIN("stage " tag); \
@@ -4551,11 +4623,11 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				 * pre-set_active MBM writes work. Open question:
 				 * does the pre-set mask survive fw init? */
 				if (bcm4360_test284_premask_enable) {
-					BCM4360_T284_READ_MBM("pre-write (pre-set_active)"); BCM4360_T285_READ_CC("pre-write (pre-set_active)"); BCM4360_T287_READ_SCHED("pre-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("pre-write (pre-set_active)"); BCM4360_T298_ISR_WALK("pre-write (pre-set_active)"); BCM4360_T290A_CHAIN("pre-write (pre-set_active)"); BCM4360_T290B_CC_WRITE("pre-write (pre-set_active)");
+					BCM4360_T284_READ_MBM("pre-write (pre-set_active)"); BCM4360_T285_READ_CC("pre-write (pre-set_active)"); BCM4360_T287_READ_SCHED("pre-write (pre-set_active)"); BCM4360_T303_READ_EXTRAS("pre-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("pre-write (pre-set_active)"); BCM4360_T298_ISR_WALK("pre-write (pre-set_active)"); BCM4360_T290A_CHAIN("pre-write (pre-set_active)"); BCM4360_T290B_CC_WRITE("pre-write (pre-set_active)");
 					pr_emerg("BCM4360 test.284: calling brcmf_pcie_intr_enable (pre-set_active — writes MBM = 0xFF0300)\n");
 					brcmf_pcie_intr_enable(devinfo);
 					pr_emerg("BCM4360 test.284: brcmf_pcie_intr_enable returned\n");
-					BCM4360_T284_READ_MBM("post-write (pre-set_active)"); BCM4360_T285_READ_CC("post-write (pre-set_active)"); BCM4360_T287_READ_SCHED("post-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("post-write (pre-set_active)"); BCM4360_T298_ISR_WALK("post-write (pre-set_active)"); BCM4360_T290A_CHAIN("post-write (pre-set_active)"); BCM4360_T290B_CC_WRITE("post-write (pre-set_active)");
+					BCM4360_T284_READ_MBM("post-write (pre-set_active)"); BCM4360_T285_READ_CC("post-write (pre-set_active)"); BCM4360_T287_READ_SCHED("post-write (pre-set_active)"); BCM4360_T303_READ_EXTRAS("post-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("post-write (pre-set_active)"); BCM4360_T298_ISR_WALK("post-write (pre-set_active)"); BCM4360_T290A_CHAIN("post-write (pre-set_active)"); BCM4360_T290B_CC_WRITE("post-write (pre-set_active)");
 				}
 
 				pr_emerg("BCM4360 test.238: calling brcmf_chip_set_active resetintr=0x%08x (ultra-extended ladder t+120s)\n",
@@ -4566,7 +4638,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				else
 					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned TRUE\n");
 
-				BCM4360_T284_READ_MBM("post-set_active (CRITICAL: does ARM release clear it?)"); BCM4360_T285_READ_CC("post-set_active"); BCM4360_T287_READ_SCHED("post-set_active"); BCM4360_T288A_READ_WRAPS("post-set_active"); BCM4360_T298_ISR_WALK("post-set_active"); BCM4360_T290A_CHAIN("post-set_active"); BCM4360_T290B_CC_WRITE("post-set_active"); BCM4360_T300_OOB_PENDING_READ("post-set_active");
+				BCM4360_T284_READ_MBM("post-set_active (CRITICAL: does ARM release clear it?)"); BCM4360_T285_READ_CC("post-set_active"); BCM4360_T287_READ_SCHED("post-set_active"); BCM4360_T303_READ_EXTRAS("post-set_active"); BCM4360_T288A_READ_WRAPS("post-set_active"); BCM4360_T298_ISR_WALK("post-set_active"); BCM4360_T290A_CHAIN("post-set_active"); BCM4360_T290B_CC_WRITE("post-set_active"); BCM4360_T300_OOB_PENDING_READ("post-set_active");
 
 				/* BCM4360 test.276: 2 s post-ARM-release poll of
 				 * shared_info response fields. Log on any change,
@@ -4615,7 +4687,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						 brcmf_pcie_read_reg32(devinfo,
 							BRCMF_PCIE_PCIE2REG_MAILBOXINT));
 
-					BCM4360_T284_READ_MBM("post-T276-poll"); BCM4360_T285_READ_CC("post-T276-poll"); BCM4360_T287_READ_SCHED("post-T276-poll"); BCM4360_T288A_READ_WRAPS("post-T276-poll"); BCM4360_T298_ISR_WALK("post-T276-poll"); BCM4360_T290A_CHAIN("post-T276-poll"); BCM4360_T294_CC_RO_PROBE("post-T276-poll"); BCM4360_T290B_CC_WRITE("post-T276-poll");
+					BCM4360_T284_READ_MBM("post-T276-poll"); BCM4360_T285_READ_CC("post-T276-poll"); BCM4360_T287_READ_SCHED("post-T276-poll"); BCM4360_T303_READ_EXTRAS("post-T276-poll"); BCM4360_T288A_READ_WRAPS("post-T276-poll"); BCM4360_T298_ISR_WALK("post-T276-poll"); BCM4360_T290A_CHAIN("post-T276-poll"); BCM4360_T294_CC_RO_PROBE("post-T276-poll"); BCM4360_T290B_CC_WRITE("post-T276-poll");
 
 					/* BCM4360 test.277: post-poll console decode.
 					 * Re-read the pointer fw published at si[+0x010]
@@ -4700,7 +4772,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 							"POST-POLL (full)",
 							t278_ptr,
 							&devinfo->t278_prev_write_idx);
-						BCM4360_T284_READ_MBM("post-T278-initial-dump"); BCM4360_T285_READ_CC("post-T278-initial-dump"); BCM4360_T287_READ_SCHED("post-T278-initial-dump"); BCM4360_T288A_READ_WRAPS("post-T278-initial-dump"); BCM4360_T298_ISR_WALK("post-T278-initial-dump"); BCM4360_T290A_CHAIN("post-T278-initial-dump");
+						BCM4360_T284_READ_MBM("post-T278-initial-dump"); BCM4360_T285_READ_CC("post-T278-initial-dump"); BCM4360_T287_READ_SCHED("post-T278-initial-dump"); BCM4360_T303_READ_EXTRAS("post-T278-initial-dump"); BCM4360_T288A_READ_WRAPS("post-T278-initial-dump"); BCM4360_T298_ISR_WALK("post-T278-initial-dump"); BCM4360_T290A_CHAIN("post-T278-initial-dump");
 					} else if (bcm4360_test278_console_periodic) {
 						pr_emerg("BCM4360 test.278: requires bcm4360_test277_console_decode=1; skipping\n");
 					}
