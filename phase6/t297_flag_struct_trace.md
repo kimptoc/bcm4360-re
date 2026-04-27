@@ -179,6 +179,39 @@ To get fw past WFI, the host needs to either:
 
 **Fundamental re-frame**: the wake mechanism for fw isn't "host doorbell to PCIe" — it's "MAC event to D11 INTSTATUS". This explains why T241/T280/T284 host MBM writes did nothing (different register block entirely) and why hndrte_add_isr writes no HW registers (it's wlc-side scheduler work, not interrupt enable).
 
+## T297-11: D11 base literal scan — fw obtains D11 base via runtime EROM walk
+
+Per advisor (cheap static check before any runtime probe): scan blob for ALL backplane base address literals + Thumb-2 modified-immediate constructions. Per T289 §3 / KEY_FINDINGS row 141, only chipcommon REG (0x18000000) is known to be inline; PCIE2/PCIE2-wrap had zero hits. Question: do D11 REG (0x18001000) or D11 wrapper (0x18101000) appear?
+
+Result (T297j):
+
+| Target | 4-byte literal hits | `mov.w rN, #imm` hits | `movw+movt` paired hits |
+|---|---|---|---|
+| Chipcommon REG 0x18000000 | **1** at 0x328 | **2** at 0x67156, 0x67306 | 0 |
+| **D11 REG 0x18001000** | **0** | **0** | **0** |
+| **D11 wrapper 0x18101000** | **0** | **0** | **0** |
+| ARM-CR4 REG 0x18002000 | 0 | 0 | 0 |
+| ARM-CR4 wrapper 0x18102000 | 0 | 0 | 0 |
+| PCIE2 REG 0x18003000 | 0 | 0 | 0 |
+| PCIE2 wrapper 0x18103000 | 0 | 0 | 0 |
+| Core[5] REG 0x18004000 | 0 | 0 | 0 |
+
+**Conclusion**: fw obtains the D11 REG base via runtime EROM walk (fn@0x64590, populating sched_ctx[+0x114+slot*4]) — same path as PCIE2/ARM-CR4/etc. T287c's runtime observation of `sched_ctx+0x88 = 0x18001000` is consistent with this: si_setcoreidx(D11) reads sched_ctx[+0x114+slot*4] and writes the value into sched_ctx[+0x88]. flag_struct[+0x88] is plausibly written from the same EROM-walked source.
+
+This resolves the static "where does the D11 base come from" question and tightens the inference. The writer of flag_struct[+0x88] is not statically locatable via direct-offset scans (T297-3 negative result), but architecturally must be in a function that reads from sched_ctx[+0x118] (= REG-base table[1] for D11 = slot 1 in fw's order, where chipcommon = slot 0).
+
+## T297-12: D11 rev 42 macintstatus bit identification
+
+Second Explore query confirmed:
+
+- `MI_GP1 = bit 14 = 0x4000` (general-purpose interrupt 1) — matches fw's `mov.w r3, #0x4000; str.w r3, [r5, #0x168]` at fn@0x15E92
+- `MI_TO = bit 31 = 0x80000000` (general-purpose timeout) — matches fw's `str.w r3, [r5, #0x188]` at fn@0x15E92
+- bit 25 = 0x2000000 — TSF/CFP control field
+- D11 rev 42 INTSTATUS layout is **backward-compatible** with brcmsmac's rev 24-26 bit assignments
+- The brcmsmac "padding" label at +0x168/+0x16C is per-rev driver incompleteness, not actual padding (rev 42 actively uses it)
+
+Per the agent's (cautious) reading: MI_GP1 and MI_GP0 are general-purpose interrupts that "are HW-designed to be host-writable" — i.e., the host might be able to SET MI_GP1 by writing 0x4000 to D11_BASE+0x168 via BAR0+select_core(D11), provided fw doesn't lock the bit. If so, this would be a viable host-write path to wake fw from WFI. Caveat: brcmsmac doesn't show host-side GP1/GP0 writes; the host-write path is unverified at runtime.
+
 ## Clean-room posture
 
 All findings are disassembled mnemonics + literal-pool resolution + offset-pattern matching, plus open-source cross-reference (brcmsmac/d11.h via Explore). No reconstructed function bodies. Scripts in `phase6/t297*.py`. Zero hardware fires.
