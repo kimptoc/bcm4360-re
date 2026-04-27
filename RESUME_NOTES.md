@@ -8,25 +8,41 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 — live offload runtime distinguished from FullMAC dead code)
+## Current state (2026-04-27 — T297 null + stopping-rule violation; direction-decision required before next fire)
 
 **Model.** The blob carries two runtimes; the live one is HNDRTE/offload, not
 the `wl_probe → wlc_*` FullMAC chain. Firmware boots, populates `sched_ctx`,
 and idles at WFI as normal. The earlier "wake gate STRUCTURALLY CLOSED"
 framing applies to the FullMAC code path, not the live offload runtime.
 
-**What just changed.** T299–T306 (this session) traced the live BFS, ruled
-out FullMAC reachability via static heuristics, and reconciled with empirical
-test.290a chain-walks (n=2, never populated) and test.287c sched_ctx readings
-(stable across t+5/30/90 s). Full synthesis lives in
+**What just changed.** T297 fired and produced its 4th consecutive substrate
+null (wedge at `test.188: root-port pci_disable_link_state returned —
+reading LnkCtl`, ZERO T297 instrumentation lines fired). More importantly:
+**T297 violated KEY_FINDINGS row 85's stopping rule** which had said "pivot
+to a different MMIO surface (TCM, not chipcommon BAR0) before further
+hardware fires" — `test.288a` is exactly chipcommon-wrap + PCIE2-wrap on
+BAR0. The PRE-TEST.297 plan didn't reconcile with that rule and fired
+anyway. Row 85 now updated to n=4, 7 distinct wedge points, plus the
+discipline note. T299–T306 synthesis still stands (live offload runtime ≠
+FullMAC chain) — see
 [phase6/t299_t306_offload_runtime.md](phase6/t299_t306_offload_runtime.md).
-Load-bearing facts promoted to KEY_FINDINGS (new row plus SUPERSEDED-SCOPE
-markers on rows 159 / 160).
 
-**Next discriminator.** `test.288a` (chipcommon-wrap + PCIe2-wrap OOB-selector
-read, already compiled into the driver, never fired). Targets KEY_FINDINGS
-row 148's untested chipcommon-wrapper wake hypothesis. Read-only, single
-module-param flag, no rebuild required.
+**Next direction — DECISION REQUIRED before any further hardware fire.** Two
+viable branches:
+
+1. **BAR2-only relocation.** Redesign the wake-routing discriminator to read
+   `sched_ctx` (and any equivalent wake-routing state) from TCM via BAR2
+   only, with NO BAR0 `select_core` or chipcommon-wrap touch. Honours the
+   row 85 stopping rule. Probably cheaper than option 2 in the short run
+   but it isn't obvious that the wake-routing register is mirrored anywhere
+   readable from BAR2.
+2. **Static-only.** Keep characterising the live offload runtime via disasm
+   (the T299–T306 line) until there is a concrete *predicted* wrapper-OOB
+   bit pattern. Then the next BAR0 fire is one-shot-for-one-prediction
+   instead of a general probe — much higher information-per-fire ratio,
+   honours row 85 by deferring rather than avoiding BAR0.
+
+User decision needed on which branch to take.
 
 **What not to retry blindly.**
 
@@ -35,11 +51,17 @@ module-param flag, no rebuild required.
   failure mode there.
 - More PCIe2 mailbox / D11 INTMASK wake probes — both empirically and
   structurally exhausted (rows 125 / 159-superseded).
+- **Any further BAR0-touching probe (chipcommon, PCIE2, or wrapper) before
+  the direction decision is on disk.** Row 85's stopping rule remains in
+  force after T297; firing another BAR0 read just to "see if substrate is
+  better" is the same anti-pattern that produced the 4-null streak.
 - Insmod cycles on stale substrate without budgeting for the ~3/4 null-fire
   rate per row 85.
 
-**Substrate state.** Substrate-null cluster T294/T295/T296 from prior
-sessions is unresolved but no longer strategically blocking the new direction.
+**Substrate state.** lspci clean at 12:58 BST after cold cycle + SMC reset
+following T297 wedge. Uptime 15 min, fresh window in principle — but row 85
+shows substrate freshness alone does not reliably get past the test.158 /
+test.188 / test.193 / test.225 noise belt.
 
 ---
 
@@ -147,6 +169,51 @@ If wedged before journalctl: on next boot,
 - Substrate-noise null is the realistic mode failure (~75%+ on stale substrate)
 - Watchdog n=5/5 NOT auto-recovering recent wedges — user SMC reset will be
   needed if a substrate-noise wedge does occur
+
+## POST-TEST.297 (2026-04-27 11:47 BST → recovered ~12:42 BST after user SMC reset)
+
+### Result — substrate-noise null fire #4 (T294/T295/T296/T297 cumulative)
+
+**Wedge point:** `test.188: root-port pci_disable_link_state returned —
+reading LnkCtl` — 1319th and final journal line of boot -1 at
+11:47:35 BST. The pci_capability_read_word() that should have followed
+to print "after=0xNNNN" never returned. Same code site that T295 wedged
+on (one operation later in the function), and one operation upstream of
+T296's `chip=0x4360 chipid` print. Adds the 7th distinct wedge point
+along the Phase 5 init code path.
+
+**Recovery profile:** consistent with the recent cluster — watchdog did
+NOT auto-recover; user-initiated SMC reset + cold cycle required;
+~55-minute gap between wedge (11:47:35) and clean boot (12:42:43).
+
+**Instrumentation that fired:** zero. Wedge is upstream of test.276
+(shared_info), test.284 (premask), test.287/287c (sched_ctx), test.288a
+(wrapper-agent OOB read — the new probe), test.290a (chain walk).
+**No bit of new information was gathered.** Hypothesis untested,
+discriminator outcomes table N/A.
+
+### Hypothesis vs result
+
+PRE-TEST.297 hypothesis was that wrapper-agent OOB-selectors at
+`chipcommon-wrap+0x100` would carry sensible values across init stages,
+strengthening the row 148 chipcommon-wrap wake candidate. Hypothesis
+**not addressed** — fire never reached the probe. No update to row 148.
+
+### Process finding (the load-bearing observation)
+
+T297 was a chipcommon-wrap + PCIE2-wrap BAR0 read. KEY_FINDINGS row 85,
+written ~5 hours before T297 fired, had explicitly stopped further BAR0
+work: *"pivot to a different MMIO surface (TCM, not chipcommon BAR0)
+before further hardware fires."* The PRE-TEST.297 plan acknowledged
+substrate-noise risk but did not reconcile with the row 85 stopping
+rule. T297's null is the 4th confirmation that the rule was correct —
+not a reason to retry the same probe. This bypass pattern is now
+documented in row 85.
+
+### Files
+
+- [phase5/logs/test.297.journalctl.txt](phase5/logs/test.297.journalctl.txt) (boot -1 capture)
+- [phase5/logs/test.297.run.txt](phase5/logs/test.297.run.txt) (0-byte — insmod wedged before redirect flushed)
 
 ## Archived detail
 
