@@ -120,26 +120,46 @@ verdicts.
    PMU_WATCHDOG / PMU_RES_REQT or toggles GPIO, no fw handler will
    receive a resulting IRQ. **Closed without fw modification.**
 
-2. **DMA-via-olmsg trip path — PARTIALLY OPEN** (T304b). Zero live fw
-   pollers found in the 311-fn BFS reach set; the olmsg ring cannot
-   be serviced by a fw poller. Viability hinges on (a) DMA-completion
-   → IRQ wiring (MSI or OOB bit assertion), and (b) a registered ISR
-   callback for that IRQ. The most likely candidate handler is
-   pciedngl_isr (fn@0x1c98/0x1c99) — the cheapest next static move
-   is to disassemble pciedngl_isr's event-dispatch logic and
-   determine what events it processes. If it handles PCIe-side DMA
-   completion events, option 2 has a known target; if not, option 2
-   needs different machinery.
+2. **DMA-via-olmsg trip path — CLOSED via pciedngl_isr** (T304d).
+   pciedngl_isr (fn@0x1c98, OOB bit 3) end-to-end disasm shows it is
+   a SINGLE-BIT mailbox-doorbell handler (tests only bit 0x100 =
+   `BRCMF_PCIE_MB_INT_FN0_0`); reads packets from a `bus_info+0x24`
+   transport-local ring; **NEVER touches the olmsg DMA ring at
+   TCM[0x9d0a4]**. T304b confirmed no other live ISR handler exists.
+   Option 2 is dead via this surface.
 
-3. **Passive sample-2 re-read of OOB Router pending — LOWER
-   PRIORITY.** With gate 1 closed, even if pending transitions
-   naturally, host can't act on it. Useful only as observational
-   evidence about idle-state fw/agent behaviour.
+3. **NEW potential surface — H2D_MAILBOX_1 doorbell** (T304d
+   side-finding). Host writes to H2D_MAILBOX_1 → bit 0x100 →
+   pciedngl_isr's packet-read loop. **STATUS: UNDETERMINED.**
+   pciedngl_isr's empirical falsifier is decisive: console wr_idx=587
+   is FROZEN across n=8 fires (its first action is
+   `printf("pciedngl_isr called\n")` which would advance wr_idx).
+   The ISR has never fired in any observed run despite being
+   registered on bit 3. Two structural unknowns block calling this
+   viable:
+   - **Physical identity of `bus_info+0x18` pointer.** Agent treated
+     as "software shadow" without tracing. If MMIO (PCIE2
+     mailbox-status), this chain is gated by MAILBOXMASK
+     (KEY_FINDINGS rows 117/118/126: PCIE2 MAILBOXMASK at BAR0+0x4C
+     silently drops writes — same register family as
+     `BRCMF_PCIE_MB_INT_FN0_0`). If TCM/RAM, then there's an upstream
+     handler that writes 0x100 there, itself probably gated.
+   - **Why hasn't pciedngl_isr fired across n=8 fires?** Driver init
+     touches mailbox region; either it doesn't reach bit 0x100, or
+     MAILBOXMASK gates the chain.
 
-**Next concrete move (no fire required):** static disassembly of
-pciedngl_isr to gate option 2's viability. Both T304b §"Open
-Questions" #1 and T304c §6.1.3 flag this as the unresolved
-question. Pending user approval to launch.
+4. **Passive sample-2 re-read of OOB Router pending — LOWER
+   PRIORITY.** With gate 1 closed, host can't act on transitions
+   even if observed.
+
+**Next concrete move (no fire required):** trace
+`pciedev_info[+0x18]` and `bus_info[+0x18]` writers in the live BFS
+at chip-init time; identify what physical address that pointer chain
+resolves to; reconcile with MAILBOXMASK (T279). Outcome:
+- MMIO same as MAILBOXMASK gate → option 2/H2D_MAILBOX_1 dead, refocus
+- MMIO distinct from MAILBOXMASK gate → option becomes potentially viable
+- TCM/RAM → walk upstream writer chain
+Pending user approval to launch.
 
 **Heuristic caveat (per KEY_FINDINGS row 161):** the 311-fn live BFS
 rests on push-lr-as-fn-start + direct-BL coverage; indirect-call sites

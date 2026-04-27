@@ -8,25 +8,29 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 21:30 BST — POST-TEST.304 + 2 STATIC RECCES. Gate-1 verdict: **OOB Router +0x100 is W1C-or-RO from host writes** → option B is DEAD. T304b + T304c static reconnaissance (no fire) ran in parallel post-T304:
+## Current state (2026-04-27 21:40 BST — POST-TEST.304 + 3 STATIC RECCES (T304b/c/d). T304d disasm of pciedngl_isr completed and CHANGED the strategic picture but in a more nuanced way than the agent's report framed.
 
-- **T304b** (`phase6/t304b_fw_poller_enumeration.md`): **NO LIVE FW POLLERS.** Zero timer registration in 311-fn live BFS reach set; all HNDRTE timer APIs (`hndrte_init_timer`, `hndrte_add_isr` strings) reside in FullMAC dead-code region (0x40000+). Verifies T303d's "on-dispatch only" claim with exhaustive caller enumeration (fn@0x9936 has exactly 1 BL caller = fn@0x115c at 0x1162). **Implication for option 2:** DMA-via-olmsg cannot be serviced by a fw poller (none exists); option 2 viability now hinges on (a) DMA-completion → IRQ wiring, and (b) registered ISR callback for that IRQ.
-- **T304c** (`phase6/t304c_pmu_gpio_surface.md`): **PMU + GPIO host-reachable but DORMANT.** PMU registers at chipcommon+0x600..+0x66C are full BAR0-windowed access; GPIO at +0x60..+0x74 likewise. Neither has a registered fw ISR (T298 only enumerated pciedngl_isr + RTE chipcommon-class ISR). **Option 1 (host-driveable wake via PMU/GPIO) CLOSED** without fw modification. **DO NOT propagate two T304c report errors flagged by advisor:** (1) "chipcommon+0x168 wake source" framing is wrong — fw reads OOB pending at `[sched+0x358]+0x100 = 0x18109100` per row 162, not chipcommon+0x168; agent conflated dead FullMAC `flag_struct[+0x168]` (row 160 SUPERSEDED) with live offload read path; (2) §4.1 ISRs table lists wlc_isr — T298 found only 2 live nodes, no wlc_isr. Verdict (PMU/GPIO dormant) is sound; the supporting framing is not.
+**T304d** (`phase6/t304d_pciedngl_isr_disasm.md`): pciedngl_isr (fn@0x1c98, OOB bit 3) is a **SINGLE-BIT MAILBOX-DOORBELL handler**. Reads ISR_STATUS at `[pciedev_info+0x18→+0x18→+0x20]`, tests EXACTLY ONE bit (0x100 = `BRCMF_PCIE_MB_INT_FN0_0` per upstream `pcie.c:954` — corresponds to H2D_MAILBOX_1 doorbell). If unset → printf("invalid ISR status") + return. If set → W1C ACK + packet-processing loop (malloc → message_read_helper from a `bus_info+0x24` ring → dngl_dev_ioctl). **Olmsg DMA ring at TCM[0x9d0a4] is NEVER referenced.** No DMA-completion bits tested, no PCIE2 DMA-status reads, no multi-bit dispatch.
 
-**Strategic state — converged synthesis:**
-- **Option 1 (PMU/GPIO):** CLOSED.
-- **Option 2 (DMA-via-olmsg):** partially open; viability gated on pciedngl_isr (fn@0x1c98/0x1c99) callback internals + DMA-completion → IRQ wiring. Cheapest next move is static disasm of pciedngl_isr to learn what events it dispatches.
-- **Option 3 (passive sample-2 re-read of OOB pending):** unchanged, lower priority — even if pending transitions naturally, host can't act on it post-Gate-1.
+**EMPIRICAL FALSIFIER (advisor catch — decisive):** pciedngl_isr's first action is `printf("pciedngl_isr called\n")` which would advance console wr_idx. **`wr_idx = 587` is FROZEN across n=8 fires** (T270-BASELINE/T276/T287c/T298/T299/T302b/T303/T304, t+500ms→t+90s every fire). **pciedngl_isr HAS NEVER FIRED** in any observed run despite being registered on bit 3. Whatever the host driver does during standard init does NOT trigger H2D_MAILBOX_1 in a way that reaches this ISR.
+
+**Strategic state — sharper post-T304d:**
+- **Option 1 (PMU/GPIO):** CLOSED (T304c).
+- **Option 2 (DMA-via-olmsg via pciedngl_isr):** CLOSED (T304d — pciedngl_isr does not service the olmsg ring).
+- **NEW potential path: H2D_MAILBOX_1 doorbell.** Host writes to H2D_MAILBOX_1 → bit 0x100 → pciedngl_isr packet-read loop. **STATUS: UNDETERMINED, NOT YET CALLED VIABLE.** Two structural unknowns block the call:
+  1. **Physical identity of `bus_info+0x18` pointer** — agent treated as "software shadow" without tracing. If MMIO (PCIE2 mailbox-status), this entire chain is gated by MAILBOXMASK (T279, KEY_FINDINGS rows 117/118/126: PCIE2 MAILBOXMASK at BAR0+0x4C silently drops writes — same register family the agent referenced as `BRCMF_PCIE_MB_INT_FN0_0`). If TCM/RAM, then there's an upstream handler that writes 0x100 there, itself probably gated by some HW IRQ that's masked.
+  2. **Why hasn't pciedngl_isr fired across n=8 fires** if H2D_MAILBOX_1 is host-driveable? Driver init must touch mailbox region; either it doesn't reach bit 0x100, or MAILBOXMASK gates the whole chain. The wr_idx=587 freeze is a hard empirical constraint.
+- **Option 3 (passive sample-2 re-read of OOB pending):** unchanged, lower priority.
 - **No fire warranted.** No hypothesis sharp enough.
 
-**Suggested next move (no fire):** disassemble pciedngl_isr (fn@0x1c98/0x1c99). If it handles PCIe-side DMA completion events, option 2 has a known target. If it only handles PCIe link/config events, option 2 needs different machinery. T304b §"Open Questions" #1 + T304c §6.1.3 both flag this as the unresolved gate. **Awaiting user steer before launching another subagent.**
+**Suggested next move (no fire) — needs user authorization:** one more cheap static pass — trace `pciedev_info[+0x18]` and `bus_info[+0x18]` writers in the live BFS at chip-init time. Identify what physical address that pointer chain resolves to. If MMIO base is identified, cross-reference against MAILBOXMASK gating per T279. This tells us whether the H2D_MAILBOX_1 wake-entry is the same physical path T279 already proved blocked, or a structurally distinct path that's just not being driven yet. ~30 min subagent run, no fire risk.
 
-**Substrate is fresh** (boot 0 @ 21:16:01). PCIe lspci clean (MAbort-, CommClk+). No code changes outstanding. T304 macro is empirically validated; need not be re-fired. Docs cleaned up per DOCS.md §3 (T299/T300/T301 PRE/POST pairs migrated to RESUME_NOTES_HISTORY.md; only T302b/T303/T304 remain active in RESUME_NOTES.md). PLAN.md updated to post-T304 status; KEY_FINDINGS gained 3 new rows (gate-1 verdict + no-pollers + PMU/GPIO dormant) and row 104 extended with T304 wedge datapoint.
+**Earlier in session (2026-04-27):** T304b + T304c static recces done; KEY_FINDINGS gained 2 rows (no-pollers + PMU/GPIO dormant). T304 fire result + POST-TEST.304 written up; KEY_FINDINGS new gate-1 row + row 104 extended. T304d row added 21:40 BST.
 
-**Prior progress in this session (2026-04-27):**
+**Substrate is fresh** (boot 0 @ 21:16:01). PCIe lspci clean (MAbort-, CommClk+). No code changes outstanding. T304 macro is empirically validated; need not be re-fired. Docs cleaned up per DOCS.md §3 (T299/T300/T301 pairs migrated). PLAN.md, RESUME_NOTES, KEY_FINDINGS all current as of this writeup.
 
-- T304b + T304c static recces done; KEY_FINDINGS gained 2 new rows (no-pollers + PMU/GPIO dormant).
-- T304 fire result + POST-TEST.304 written up + KEY_FINDINGS new gate-1 row + row 104 extended.
+**Earlier session work (kept for context):**
+
 - POST-TEST.303 written up + committed (commit 3c85608); KEY_FINDINGS rows 104/162/163 updated
 
 **Gate-stack result (commit 4adaa81, phase6/t303e_oob_gate_stack.md).** 6 gates between host writing OOB Router pending and fn@0x115c executing on ARM:
