@@ -8,7 +8,15 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 — PRE-TEST.299 ready: pci=noaspm cmdline change to test row 152 / row 85 hypothesis. AWAITING USER reboot with new cmdline.)
+## Current state (2026-04-27 — PRE-TEST.299 v2: cmdline corrected to `pcie_aspm=off` (pci=noaspm was insufficient — BIOS-enabled ASPM stayed on). AWAITING USER reboot.)
+
+**Cmdline correction note.** First reboot used `pci=noaspm` but post-boot
+inspection showed `LnkCtl: ASPM L0s L1 Enabled` on 03:00.0 and `ASPM L1
+Enabled` on parent 02:00.0, with `pcie_aspm` policy `[default]`. `pci=noaspm`
+in modern kernels is passive ("don't enable ASPM") — it cannot disable what
+BIOS already turned on. Replaced with `pcie_aspm=off` (active disable) in
+`/etc/nixos/configuration.nix` line 22. Rebuilt with `nixos-rebuild boot`.
+Awaiting second reboot before T299 fire.
 
 **Model.** The blob carries two runtimes; the live one is HNDRTE/offload, not
 the `wl_probe → wlc_*` FullMAC chain. T298 just provided primary-source
@@ -155,20 +163,17 @@ H3 (worst): `pci=noaspm` introduces NEW wedge mode (e.g. fw timeout because PCIe
 - IDENTICAL build (no rebuild needed; module unchanged)
 - ONLY DIFFERENCE: kernel cmdline gains `pci=noaspm`
 
-### REQUIRED USER ACTION (cannot be done by Claude)
+### REQUIRED USER ACTION
 
-1. Edit `/etc/nixos/configuration.nix` line 22:
-   ```
-   boot.kernelParams = [ "pci=noaer" "intel_iommu=on" "iommu=strict" ];
-   ```
-   Change to:
-   ```
-   boot.kernelParams = [ "pci=noaer" "pci=noaspm" "intel_iommu=on" "iommu=strict" ];
-   ```
-2. `sudo nixos-rebuild boot` (or `switch` if you want immediate apply without reboot — but reboot is required anyway for cmdline to take effect)
-3. Reboot
-4. Verify after boot: `cat /proc/cmdline | grep noaspm` should return a non-empty line containing `pci=noaspm`
-5. Verify lspci clean: `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'` should show no MAbort+/CommClk-
+Cmdline edit + first rebuild done by Claude. User just needs to reboot.
+
+After reboot, verify:
+1. `cat /proc/cmdline | grep pcie_aspm` should show `pcie_aspm=off`
+2. `sudo lspci -vvv -s 03:00.0 | grep LnkCtl` should show `ASPM Disabled` (NOT `ASPM L0s L1 Enabled`)
+3. `sudo lspci -vvv -s 02:00.0 | grep LnkCtl` (parent bridge) should also show `ASPM Disabled`
+4. lspci clean: `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk'` should show no MAbort+/CommClk-
+
+If any of those fail, do NOT fire T299 — investigate first (the test premise depends on ASPM actually being off).
 
 ### Fire command (run AFTER reboot + cmdline verify)
 
