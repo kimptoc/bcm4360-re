@@ -8,7 +8,7 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 — POST-TEST.298 RECORDED: BAR2-only ISR-walk FIRED CLEAN, 2-node ISR set captured, late-ladder rmmod wedge as expected)
+## Current state (2026-04-27 — PRE-TEST.299 ready: pci=noaspm cmdline change to test row 152 / row 85 hypothesis. AWAITING USER reboot with new cmdline.)
 
 **Model.** The blob carries two runtimes; the live one is HNDRTE/offload, not
 the `wl_probe → wlc_*` FullMAC chain. T298 just provided primary-source
@@ -129,6 +129,103 @@ Uptime 2 min — fresh window. Next plan should be drafted while still
 fresh; don't fire again without one.
 
 ---
+
+## PRE-TEST.299 (drafted 2026-04-27 ~15:00 BST — single-variable re-fire of T298 with `pci=noaspm` added to kernel cmdline. Tests whether ASPM is the cause of the KEY_FINDINGS row 85 substrate-noise belt. **REQUIRES USER ACTION:** edit `/etc/nixos/configuration.nix`, rebuild, reboot.)
+
+### Goal — single bit of information
+
+Does adding `pci=noaspm` to kernel cmdline change the substrate-noise / wedge profile observed in T288c/T294/T295/T296/T297/T298-rmmod? The leading hypothesis (KEY_FINDINGS row 152) is that ASPM-related PCIe link transitions cause the silent wedges; T269 listed `pci=noaspm` as candidate B but it was never tested.
+
+### Hypothesis
+
+H1 (primary): `pci=noaspm` reduces or eliminates the row 85 noise belt. Predictions:
+- T298 probe still fires clean (sanity — same code path, only cmdline differs)
+- ISR-list result identical to T298's (deterministic baseline)
+- **rmmod completes without wedge** (T298's late-ladder wedge stops happening; run.txt becomes non-empty)
+- Possibly: T298 fires clean even on stale substrate (would be a bonus — testable later)
+
+H2 (alternative): `pci=noaspm` has no effect on the wedge profile — ASPM unrelated to the noise.
+
+H3 (worst): `pci=noaspm` introduces NEW wedge mode (e.g. fw timeout because PCIe link can't power-manage). Recovery: revert cmdline, reboot.
+
+### Diff vs T298 fire (2026-04-27 14:19 BST, fired CLEAN)
+
+- IDENTICAL module params (T236, T238, T276, T277, T278, T284, T287, T287c, T298)
+- IDENTICAL fire script
+- IDENTICAL build (no rebuild needed; module unchanged)
+- ONLY DIFFERENCE: kernel cmdline gains `pci=noaspm`
+
+### REQUIRED USER ACTION (cannot be done by Claude)
+
+1. Edit `/etc/nixos/configuration.nix` line 22:
+   ```
+   boot.kernelParams = [ "pci=noaer" "intel_iommu=on" "iommu=strict" ];
+   ```
+   Change to:
+   ```
+   boot.kernelParams = [ "pci=noaer" "pci=noaspm" "intel_iommu=on" "iommu=strict" ];
+   ```
+2. `sudo nixos-rebuild boot` (or `switch` if you want immediate apply without reboot — but reboot is required anyway for cmdline to take effect)
+3. Reboot
+4. Verify after boot: `cat /proc/cmdline | grep noaspm` should return a non-empty line containing `pci=noaspm`
+5. Verify lspci clean: `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'` should show no MAbort+/CommClk-
+
+### Fire command (run AFTER reboot + cmdline verify)
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test284_premask_enable=1 \
+    bcm4360_test287_sched_ctx_read=1 \
+    bcm4360_test287c_extended=1 \
+    bcm4360_test298_isr_walk=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.299.run.txt 2>&1
+sleep 150
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.299.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.299.journalctl.txt
+```
+
+If wedged before journalctl: on next boot, `sudo journalctl -k -b -1 > phase5/logs/test.299.journalctl.txt`.
+
+### Discriminator outcomes
+
+| Outcome | Interpretation | Next step |
+|---|---|---|
+| Clean fire + clean rmmod (run.txt non-empty + ISR list matches T298) | **H1 confirmed.** ASPM was the substrate-noise cause. Massively de-risks B1 (DMA injection) and A3 (OOB Router BAR0 read). | Pick B1, A2, or A3 with high confidence; proceed |
+| Clean fire + late rmmod wedge (run.txt 0 bytes again, journalctl t+90s last) | **H1 partial.** ASPM not the cause of late-ladder wedge; row 85 noise belt may be unaffected. | Revert cmdline; pick A2 (cheap BAR2 mapping) as next-cheapest |
+| Wedge upstream of T276 (substrate-noise null) | **H1 falsified.** ASPM not the cause; noise is something else. Independent confirmation that the noise belt is robust to this setting. | Revert cmdline; reconsider direction (A2 only safe choice) |
+| New wedge mode (NixOS boot fails / PCIe link issues) | **H3.** Revert cmdline immediately; ASPM is load-bearing for system stability. | Revert and pick A2 |
+
+### Substrate prerequisites
+
+- After reboot, fresh substrate window per row 83 (~20-25 min).
+- lspci verify before insmod.
+- Single fire is sufficient — discriminator is binary on the rmmod-completion question.
+
+### Pre-fire checklist (CLAUDE.md)
+
+1. ✓ NO REBUILD — same module that fired T298 clean
+2. ✓ Hypothesis stated above
+3. → PCIe state checked AFTER reboot (user)
+4. → Plan committed and pushed BEFORE fire (this commit)
+5. → FS sync after push
+6. → (user) Reboot with new cmdline; insmod within ≤2 min of boot for best substrate
+7. → (no advisor call needed — this is a single-variable re-fire, plan is short)
+
+### Risk and recovery
+
+- T299 has no new probe code; risk profile is identical to T298 except for cmdline.
+- If `pci=noaspm` itself breaks the system → revert `/etc/nixos/configuration.nix` line 22, `sudo nixos-rebuild boot`, reboot.
+- If T299 fires identically to T298 but with a clean rmmod → strong signal to add `pci=noaspm` to project recommended setup.
+
+### Why this is the right cheapest test
+
+- One config edit + reboot. No new code, no new probe risk.
+- Tests a hypothesis (row 152) that's been LIVE for ~3 days untested.
+- Either result improves the next-step decision quality. H1-confirmed dramatically lowers B1/A3 risk; H1-falsified at least removes one variable.
 
 ## PRE-TEST.298 (2026-04-27 ~13:30 BST — first BAR2-only fire of the new direction. ISR-list dynamic walk + sched_ctx[+0xCC] + pending-events word at 5 stages. ZERO BAR0 touches.)
 
