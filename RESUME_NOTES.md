@@ -5,9 +5,9 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-26 23:35 BST — **POST-TEST.295 NULL FIRE recorded. T295 wedged AFTER `test.188 root port LnkCtl after=0x0040`, BEFORE the next host-side step. ZERO `t294` anchors fired. Cumulative substrate-noise null cluster: T294 + T295 = n=2 of 3-stopping-rule. PRE-TEST.296 PLAN: re-fire T295/T294 unchanged on next cold-cycle. Awaiting user fire clearance — tight-freshness substrate window now (~10 min uptime since cold boot).**)
+## Current state (2026-04-27 06:42 BST — **POST-TEST.296 NULL FIRE recorded. T296 wedged silently AFTER `test.193: chip=0x4360 ccrev=43 pmurev=17 pmucaps=0x10a22b11` (line 1106 of journal — last log). Made it FURTHER than T294 (test.158) and T295 (test.188): past LnkCtl/ASPM, past chip_attach, past core enumeration, past ARM CR4 halt, past get_raminfo, past chipid lookup. ZERO `t294` anchors, ZERO set_active/T276/T290B markers — wedge upstream of NVRAM/fw download (test.225) and upstream of set_active. Watchdog did NOT auto-recover; user did cold boot + SMC reset (n=7/7 cluster across T288c/T290/T292/T293/T294/T295/T296). STOPPING RULE TRIGGERED — n=3 of 3 substrate-noise null fires (T294 / T295 / T296). Per PRE-TEST.296: pivot to (γ-c) — TCM-scribble at `[node+0xc]` per KEY_FINDINGS row 148. Need advisor consult before committing direction. T293 firing-#4 `orig=0xffffffff` anomaly UNRESOLVED.**)
 
-## Prior state (2026-04-26 23:25 BST — PRE-TEST.295 PLAN committed; fire wedged before reaching probe site.)
+## Prior state (2026-04-26 23:35 BST — POST-TEST.295 NULL FIRE; n=2 of 3-stopping-rule; PRE-TEST.296 plan was a plain re-fire on tight-freshness substrate.)
 
 ---
 
@@ -201,6 +201,93 @@ If wedged before journalctl: on next boot, `sudo journalctl -k -b -1 > phase5/lo
 If T296 also nulls at upstream wedge: cumulative n=3 substrate-noise nulls. Per KEY_FINDINGS row 85, pivot to **(γ-c) — TCM-scribble at `[node+0xc]` per KEY_FINDINGS row 148** (test the wake-gate hypothesis on a different MMIO surface that doesn't share PCIe-config-space wedge mode). Don't burn a 4th SMC reset re-firing the same probe path.
 
 If T296 lands: record (a)/(b)/(c) outcome per discriminator table; mark KEY_FINDINGS row 159 LIVE n=1 anomaly resolved.
+
+---
+
+## POST-TEST.296 (2026-04-26 23:43:45 BST fire, boot -2 — **NULL FIRE. Wedged silently after `test.193: chip=0x4360 ccrev=43 pmurev=17 pmucaps=0x10a22b11` (line 1106 of journal). Furthest of the 3 substrate-noise null fires (T294=test.158, T295=test.188, T296=test.193). Reached chip_attach completion + ARM CR4 halt + raminfo + chipid lookup, but wedged before NVRAM/fw download (test.225) and upstream of every T276/T284/T287/T290B/T294 anchor. Watchdog did NOT auto-recover; user did cold boot + SMC reset (n=7/7 cumulative). T293 firing-#4 `orig=0xffffffff` anomaly UNRESOLVED. Stopping-rule triggered: per PRE-TEST.296, pivot to (γ-c) — TCM-scribble at `[node+0xc]`.**)
+
+### Timeline (from `phase5/logs/test.296.journalctl.txt`, boot -2 — 23:30:57→23:44:04)
+
+- `23:30:57` boot -2 start (recovery from T295 cold cycle)
+- [~13 min idle uptime — fire at modest freshness, well within KEY_FINDINGS row 84's window; tighter than T294 but looser than the optimum ≤2 min target]
+- `23:43:45` insmod entry → `module_init entry — extended post-release TCM sampling`
+- `23:43:45` brcmf_core_init / brcmf_sdio_register (no-op for our chip)
+- `23:43:47` brcmf_pcie_register / pci_register_driver
+- `23:43:48` `test.128: PROBE ENTRY (device=43a0 vendor=14e4 ...)`
+- `23:43:49` `test.158: probe entry flush done — proceeding` ← past the T294 wedge point
+- `23:43:50` devinfo allocated; pdev assigned
+- `23:43:51` SBR via bridge → bridge_ctrl restored → before brcmf_chip_attach
+- `23:43:52` BAR0=0xb0600000 BAR2=0xb0400000; BAR0 probes (CC@0x18000000) `0x15034360` x2 — chip alive
+- `23:43:53`–`23:43:55` `test.218` host-side core enum (cores 1..5) — bit-identical to T287c/T293
+- `23:44:04` `test.218 core[6 ]` + `enumerated 6 cores total` — slow gap then completion
+- `23:44:04` buscore_reset → reset_device skipped (probe-start SBR already done)
+- `23:44:04` `test.145: halting ARM CR4 after second SBR` → `test.145: ARM CR4 halt done`
+- `23:44:04` `test.188: post-145 ARM CR4 IOCTL=0x00000021 RESET_CTL=0x00000000 CPUHALT=YES`
+- `23:44:04` `test.121: using fixed RAM info rambase=0x0 ramsize=0xa0000 srsize=0x0`
+- `23:44:04` `test.125: get_raminfo returning 0`
+- `23:44:04` `test.193: chip=0x4360 ccrev=43 pmurev=17 pmucaps=0x10a22b11` ← **LAST LOG LINE**
+- [silent backplane hang — no NVRAM print, no test.225 fw chunks, no setup-entry, no T276/T284/T287/T290B/T294]
+- (multi-hour gap; user away)
+- `06:29:20` (Mon 2026-04-27) brief boot -1 (~2.5 min, kernel-only — no brcmfmac fire)
+- `06:39:28` boot 0 — recovery clean
+
+### Critical primary-source findings
+
+**Finding 1 (LOAD-BEARING — substrate-null cluster grows to n=3):** T296 wedged silently mid-host-side init at `test.193` (chipid printout). ZERO `t294 a*` lines, ZERO T276/T284/T290B markers. Combined with T294 (wedge at test.158) and T295 (wedge at test.188), this completes 3 consecutive substrate-noise null fires on the same binary path. Wedge points span the host's pre-set_active config-space + chip_attach window. PRE-TEST.296's stopping rule fires.
+
+**Finding 2 (substrate-null progression depth varies):** T294 wedged early (test.158, ~17 lines into probe), T295 a bit later (test.188, ~25 lines), T296 deeper (test.193, ~40 lines past probe entry). All three sites are different. Confirms KEY_FINDINGS row 85 wording: "Substrate-noise null fires can wedge at ANY config-space write or BAR write the host issues during pre-set_active." T296 added a NEW wedge point (test.193 chipid printout — completes chip_attach but wedges before fw_download / NVRAM).
+
+**Finding 3 (UNRESOLVED — T293 firing-#4 `orig=0xffffffff` discriminator):** No T294 anchor (a0..a10) printed across T294/T295/T296 — three attempts, zero discriminator data. The (a) select-core silent-fail / (b) genuine BCAST_DATA flip / (c) chipcommon path degraded question stays LIVE. Per stopping rule, abandoning this probe path.
+
+**Finding 4 (negative — no new chipcommon information):** KEY_FINDINGS row 159 unchanged. Three null fires, zero new T290B firing data on either side.
+
+**Finding 5 (watchdog cluster grows to 7/7):** User SMC reset required again (n=7 since 09:57 BST 2026-04-26). Earlier auto-recovery baseline (n>30) still holds for older fires. Cluster confined to recent chipcommon-RMW / probe-during-fw-dispatch fires. Update KEY_FINDINGS row 84 from n=6/6 → n=7/7.
+
+### Discriminator outcome (per PRE-TEST.296 / PRE-TEST.295 table)
+
+Closest match: "Wedges UPSTREAM of T294 fire (test.158, etc.) — NULL — substrate noise; re-fire as T296 with same params." T296 *was* that re-fire; n=3 nulls reached. Stopping rule activates.
+
+### Crash markers — what's NOT present
+
+- ❌ No AER UR/CE markers (`pci=noaer` blinds us)
+- ❌ No NMI / hardlockup / softlockup / panic / Oops / BUG / Call Trace
+- ❌ No PCIe link state events
+- ❌ No T294 anchor (a0..a10), no T290B/T287/T276/T284 anchor
+- Pure silent backplane hang at chipid print — consistent with the T294/T295 wedges and the wider T288a'/T288c upstream-wedge family
+
+### Substrate (current — recovery boot 0)
+
+- Boot 0 since 06:39:28 BST, uptime ~3 min at this writeup
+- PCIe state: `<MAbort-` (clean) — cold cycle was effective
+- 0 brcmfmac modules loaded, 0 fires this boot
+- Per CLAUDE.md: pivot decision next, not another T296-style fire
+
+### KEY_FINDINGS impact
+
+- **Row 84** — update n=6/6 → n=7/7 (T288c/T290/T292/T293/T294/T295/T296 all required user SMC reset).
+- **Row 85** — extend the cumulative wedge-point list to 6 (post-T276 / OTP-bypass / fw chunk-1 / LnkCtl-ASPM-disable / root-port-LnkCtl / chipid-print). T296 adds the chipid-print wedge — deepest into chip_attach yet for the substrate-null cluster.
+- **Row 159** — UNCHANGED (no new T290B firing data this fire).
+
+### Decision (per stopping rule + PRE-TEST.296)
+
+n=3 substrate-noise nulls. Burning a 4th cold-cycle + SMC reset on the same probe path is explicitly disallowed by the stated rule. Two options:
+
+- **(γ-c) TCM-scribble at `[node+0xc]`** (PRE-TEST.296 default pivot) — test wake-gate hypothesis on a different MMIO surface (TCM, not chipcommon BAR0). Avoids the PCIe-config-space wedge family because the only host writes are TCM (BAR2-mapped iowrite32). Per KEY_FINDINGS row 148, `[node+0xc]` is the scheduler-side software flag mask; writing a bit into it could conceivably flip a pending-event for fn@0x1146C's dispatch. Caveat: row 148 itself is now "STRUCTURALLY WEAKER" per row 158 — without identifying flag_struct's allocation point and its [+0x88] writer, the wake-gate base address is not statically determinable. The TCM target may be wrong.
+- **(δ) Build broader observability before another fire** — defer hardware fires; do disasm / blob-static work to identify flag_struct's allocation point (per row 158's call to "trace flag_struct's allocation point and find the writer of its [+0x88] field"). Lower wedge risk; advances row 158 toward CONFIRMED.
+
+Both are LIVE. Advisor consult next — present the choice between (γ-c) and (δ) with the row 158 caveat that the wake-gate target itself is shaky.
+
+### What was NOT settled
+
+- ❌ The (a)/(b)/(c) discriminator for T293 firing-#4 `orig=0xffffffff` — STILL OPEN, abandoned per stopping rule.
+- ❌ Whether T290B at post-T276-poll wedges reproducibly (n=1 from T293 alone — never re-fired successfully).
+- ❌ Wake-gate target identity (row 148 / row 158 LIVE).
+
+### Next-fire candidates (advisor consult required)
+
+- **(γ-c) TCM-scribble probe at scheduler-node [+0xc]** — minimal write, BAR2-mapped (different wedge mode than BAR0 config space). Read-then-write-then-readback protocol. Probe site: post-T276-poll where T293 anomaly fired. **Builds on row 148 which is now structurally weaker** (row 158).
+- **(δ) Static disasm pivot — find flag_struct allocator + [+0x88] writer** — zero hardware fires until row 158 promotes CONFIRMED. Advances wake-gate target identification before the next live experiment.
+- **(ε) Different post-T276-poll probe target — ARM-CR4 wrapper RMW** — directly tests the (a) reading from T294's discriminator (whether select_core silent-fail leaves writes hitting ARM-CR4 wrapper). Different MMIO surface than chipcommon; probably safer than re-firing T290B at post-T276-poll. Same set_active wedge confound family as before.
 
 ---
 
