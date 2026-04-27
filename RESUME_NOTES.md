@@ -8,7 +8,26 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 19:51 BST — POST-TEST.302b WRITTEN UP. T302b FIRED at 19:45:29 BST (boot -1 uptime ~17 min — late but within row 83 clean window). All probe stages clean through `t+90s SUMMARY count=2 sched_cc=0x1 events_p=0x18109000 pending=0x0` at 19:47:23. **Boot -1 ended SAME SECOND** — silent kernel death immediately after t+90s SUMMARY, exactly the [t+90s, t+120s] T270-BASELINE pattern. Auto-recovery, NO SMC reset (boot 0 started 19:49:32). Current uptime ~2 min, lspci clean.
+## Current state (2026-04-27 20:18 BST — POST-TEST.303 WRITEUP IN PROGRESS. T303 FIRED at 20:10:56 BST (boot -1 uptime ~21 min — late but within row 83 clean window per row 83). All probe stages CLEAN through `t+90s SUMMARY count=2 sched_cc=0x1 events_p=0x18109000 pending=0x0` plus T303 readouts at every stage. **Boot -1 ended at 20:13:11** — silent kernel death right after t+90s SUMMARY, exact same [t+90s, t+120s] T270-BASELINE pattern (now n=7 without test300). Auto-recovery, NO SMC reset (boot 0 started 20:14:43). Current uptime ~2 min, lspci clean (MAbort-, CommClk+).
+
+**Headline T303 results (all BAR2-only sched_ctx field reads, modeled after T287c):**
+
+1. **`sched+0xD0` (count) = 0x5 stable** across all 6 stages.
+2. **`slots[+0xD4..+0xF0]` = `0x800 0x812 0x83e 0x83c 0x81a 0x135 0x0 0x0`** stable across all stages — first 6 entries match host-side `brcmf_pcie_select_core` enumeration (T218) EXACTLY in order; slots 6-7 zero. **OOB Router (0x367) is NOT in the slot table** → confirms KEY_FINDINGS row 162 framing: OOB Router is accessed via the separate `sched+0x358 = 0x18109000` pointer, outside the indexed slot model.
+3. **`sched+0xCC` is NOT stable across stages** — `0x0` at post-set_active, `0x1` from post-T276-poll onwards. T287/T298 framed this as "0x1 stable" but never sampled at post-set_active — prior framing was **stage-incomplete, not wrong**. Transition window = the ~2s T276 poll. NEW signal worth a row 163 update.
+4. **`gap +0x300..+0x354`** (22 dwords) is **NOT all zero** as t300_static_prep §65 expected. 6 populated dwords at `+0x318..+0x32c`: `2b084411 2a004211 02084411 01084411 11004211 00080201`, stable across all stages. Rest zero. **Note: populated entries are at gap indices 6..11 (offsets +0x18..+0x2c into the gap), NOT 0..5** — so these are NOT trivially 1:1 with the 6 populated slots at +0xD4..+0xE8. Structure unclear; record-bytes-defer-interpretation. Static analysis (t288_pcie2_reg_map enumerator) found no writers — fw populates this region at runtime via a path the static scan missed.
+
+**count semantics — open between two readings:**
+- (a) `count` = last allocated *index* (0-indexed): count=5 means slots 0..5 valid → matches host enum exactly.
+- (b) `count` excludes the I/O hub core (0x135 has base=0): fw counts 5 "real" backplane cores.
+
+(a) is the boring/likely answer. Don't pick (b) just because it's tidier. Either way the load-bearing claim is the same: **slot table = host enum exactly; OOB Router 0x367 NOT in slot table** — primary-source confirmation that fw uses the separate `sched+0x358` pointer for OOB Router access.
+
+**Wedge timing caveat.** All probe printks are bunched at 20:13:10/11 in journalctl, but insmod was 20:10:56 and `test.158: ASPM disabled` printed at 20:11:00 normally. The 2-minute gap = fw boot/wait. The 20:13:10/11 bunching is journald draining the printk buffer as the kernel dies — i.e., **journalctl timestamps cannot extract precise stage timing for this run.** Wedge bracket [t+90s, t+120s] is inferred from script-level fact (insmod returned, `sleep 150` was wedged inside), not from printk timestamps.
+
+**Hypothesis matrix outcome.** Closest match to row 2 of PRE-TEST.303 matrix ("sched+0xD0 = 6 AND slot table = host enum") with the count=5/6-IDs split as a footnote. OOB Router accessed via separate fw-internal pointer outside slot model — **CONFIRMED**.
+
+**Wake-trigger source: NO ADVANCE.** T303 was BAR2-only by design; it does not read OOB Router pending. Sample 2 question (does pending ever transition to non-zero) is still unanswered across T300/T301/T302b/T303.
 
 **Headline result.** Dropping `test300_oob_pending` MOVED wedge BACK to [t+90s, t+120s] — outcome row 1 of PRE-TEST.302b matrix. **Strong causal inference:** test300 BAR0 OOB Router read at post-set_active IS shifting the wedge bracket forward (n=6 without test300: T270-BASELINE/T276/T287c/T298/T299/T302b → wedge at [t+90s, t+120s]; n=2 with test300: T300 (~t+45s) / T301 (t+60s)). Also: T302b also dropped `test284_premask_enable` (the only other module-param diff vs T298/T299) but wedge bracket UNCHANGED — **eliminates the test284 confound from row 104.** test284 is NOT the wedge-shifting factor.
 
@@ -931,6 +950,85 @@ sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.303.journalc
 - All BAR2 reads, no BAR0 — safe per row 85 (noise belt is BAR0-specific to chipcommon-wrap/PCIE2-wrap)
 - Wedge bracket [t+90s, t+120s] still expected (no test300 means baseline pattern reproduces). Auto-recovery should suffice.
 - Worst case: silent kernel wedge in normal bracket; user SMC reset if no auto-recovery.
+
+## POST-TEST.303 (written 2026-04-27 20:18 BST)
+
+### Fire timing & substrate
+
+- insmod: 20:10:56 BST (boot -1 uptime ~21 min — late but within row 83 clean window)
+- ASPM-disable confirmation print: 20:11:00 BST (normal ~4s post-insmod)
+- ~2 min fw boot/wait gap (printk timing in journalctl unreliable from here on)
+- All probe stages CLEAN through `t+90s SUMMARY` (last lines flushed at 20:13:11)
+- Boot -1 ended 20:13:11 — silent kernel death right after t+90s SUMMARY
+- Auto-recovery, NO SMC reset — boot 0 started 20:14:43
+
+Wedge in expected [t+90s, t+120s] bracket (KEY_FINDINGS row 104). Now n=7 without test300 enabled (T270-BASELINE/T276/T287c/T298/T299/T302b/T303).
+
+### Primary-source data
+
+All values stable across all 6 stages (post-set_active, post-T276-poll, post-T278-initial-dump, t+500ms, t+5s, t+30s, t+90s) UNLESS noted:
+
+| Field | Value | Notes |
+|---|---|---|
+| `sched+0xCC` | **0x0 at post-set_active**, **0x1 from post-T276-poll onwards** | NEW signal. T287/T298 framed "0x1 stable" but never sampled at post-set_active — prior framing stage-incomplete. Transition window = ~2s T276 poll. Semantics still unknown but value is now known to be 0-init plus a write during the T276 poll path. |
+| `sched+0xD0` (count) | `0x5` | Stable |
+| `slots[+0xD4]` | `0x800` | CHIPCOMMON (host slot 1) |
+| `slots[+0xD8]` | `0x812` | host slot 2 |
+| `slots[+0xDC]` | `0x83e` | ARM-CR4 (host slot 3) |
+| `slots[+0xE0]` | `0x83c` | PCIE2 (host slot 4) |
+| `slots[+0xE4]` | `0x81a` | host slot 5 |
+| `slots[+0xE8]` | `0x135` | I/O hub (host slot 6, base=0) |
+| `slots[+0xEC]` | `0x0` | empty |
+| `slots[+0xF0]` | `0x0` | empty |
+| `gap +0x300..+0x314` | all `0x00000000` | (6 dwords) |
+| `gap +0x318` | `0x2b084411` | populated |
+| `gap +0x31c` | `0x2a004211` | populated |
+| `gap +0x320` | `0x02084411` | populated |
+| `gap +0x324` | `0x01084411` | populated |
+| `gap +0x328` | `0x11004211` | populated |
+| `gap +0x32c` | `0x00080201` | populated |
+| `gap +0x330..+0x354` | all `0x00000000` | (10 dwords) |
+
+### Findings
+
+1. **Slot table = host enumeration EXACTLY** (n=1 fire, but stable across 6 stages). 6 slot entries with the BCMA core-IDs in host-enum order, slots 6-7 zero. Primary-source confirmation that fw scheduler maintains a slot view that matches what host's `brcmf_pcie_select_core` finds via EROM walk.
+
+2. **OOB Router (0x367) is NOT in the slot table.** Confirms KEY_FINDINGS row 162's framing: fw accesses OOB Router via the separate `sched+0x358 = 0x18109000` pointer, OUTSIDE the indexed slot model. The slot table and the OOB Router pointer are two distinct fw-internal mechanisms.
+
+3. **count=5 vs 6 populated slot IDs — semantics open between (a) last-allocated index and (b) "real" cores excluding I/O hub.** (a) is the boring/likely answer. Either way the load-bearing claim — slot table = host enum, OOB Router separate — is unchanged. Don't pick (b) just because it's tidier.
+
+4. **`sched+0xCC` transitions during the T276 poll** (0x0 → 0x1). Worth row 163 update — T287/T298's "0x1 stable" framing was stage-incomplete (those probes never sampled at post-set_active). Semantics still unknown but the temporal profile is now characterized.
+
+5. **`+0x300..+0x354` gap is NOT all zero** — t300_static_prep §65 ("no static writers found") prediction broken. 6 populated dwords at `+0x318..+0x32c`. Indices 6..11 of the gap, NOT 0..5 — so NOT trivially 1:1 with slots 0..5. Structure unclear; leave as primary-source bytes for now.
+
+6. **n=7 reproduction of the [t+90s, t+120s] wedge bracket without test300** (row 104 update). T303 is the cleanest version yet — every probe stage flushed before the wedge, including all 4 readout lines per stage at t+5s/t+30s/t+90s.
+
+### Wedge timing caveat (advisor catch)
+
+All probe printks bunched at journalctl timestamps 20:13:10/11. Insmod print and ASPM-disable print landed normally. The bunching = printk buffer drained as the kernel dies. **Cannot extract precise stage timing from journalctl.** Wedge bracket inferred from script-level fact: insmod returned, `sleep 150` was wedged inside (run.txt is 0 bytes; rmmod never executed; boot ended ~135s after insmod = within [t+90s, t+150s]).
+
+### What this resolves
+
+- KEY_FINDINGS row 162 framing of "OOB Router accessed via separate pointer outside slot model" → CONFIRMED via primary-source slot enumeration.
+- KEY_FINDINGS row 104's [t+90s, t+120s] bracket → reproduced, n=7.
+- t300_static_prep §65 "gap is uncharacterized but probably zero-init" → partially falsified, 6 populated dwords found.
+
+### What this does NOT advance
+
+- Wake-trigger HW source (the OOB pending-events question). T303 was BAR2-only by design; sample 2 OOB Router pending read still never accomplished across T300/T301/T302b/T303.
+- The +0x318..+0x32c populated dwords' meaning. Need disasm or runtime trace of writers to interpret.
+
+### Next direction (held — needs advisor consult)
+
+Three candidates carried forward from the T302b "next direction" block, with T303 having narrowed options:
+
+1. **T303b — sample 2 OOB Router pending at t+30s.** Code edit: re-enable a single-shot test300 variant whose ONLY sample is at t+30s (not post-set_active, not t+60s). Predicts: substrate-budget call. T301 wedged at t+60s sample 2 BAR0 window-write. T303b at t+30s is BEFORE that point but during the OOB Router sample-2-causal window. Could finally read pending at a different timing — first observation of whether bit 0/3 ever transitions. Risk: row 104 bracket might shift to t+30s under test300 enablement (T300/T301 saw shifts to t+45s/t+60s, so t+30s is plausible). Would need cold-cycle if wedge happens earlier than expected.
+
+2. **A2-extension — disassemble writers of `+0x318..+0x32c`.** No new fire; pure static work. Identify which fn populates those 6 dwords during fw init. If a per-slot init routine, find when it runs and what it represents. Cheap, low-risk, but speculative yield.
+
+3. **B — host-side wake-event injection.** DMA transfer over Phase 4B olmsg ring (already plumbed at shared_info), MSI assert. Most ambitious; biggest information yield if it works. ASPM-falsified premise (row 152) means no de-risking from prior cmdline work.
+
+T303b is the cleanest advance on the wake question. A2-extension is the safest information-yield. B is the highest information-ceiling. Advisor consult before fire to pick.
 
 ## Archived detail
 
