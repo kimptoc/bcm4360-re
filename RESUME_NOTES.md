@@ -5,11 +5,33 @@
 > **Policy:** when a new POST-TEST is recorded here, migrate the oldest
 > PRE/POST pair down to HISTORY so this file holds at most ~3 tests.
 
-## Current state (2026-04-27 ~09:00 BST — **POST-TEST.296 NULL FIRE recorded; STOPPING RULE TRIGGERED → advisor pivot to (δ) static disasm. T297-298 series produced a CASCADE OF BREAKTHROUGHS:**
-**(1) Wake-gate identified as D11 macintstatus block (D11+0x168, base=0x18001000). flag_struct allocator located (fn@0x6820C). Wake mask is 0x48080 (bits MI_NSPECGEN_0/MI_DMAINT/MI_BG_NOISE per brcmsmac).**
-**(2) macintstatus is W1C — host CANNOT inject bits via writes; the earlier MI_GP1 host-write narrative is structurally impossible.**
-**(3) MAJOR re-frame: `wlc_bmac_up_finish` (fn@0x17ED6, identified by printf string) is the SOLE init-time arm path for D11+0x16C INTMASK with the canonical 0x48080 mask. fw's WFI freeze point per T287c is AFTER wl_probe but BEFORE wlc_bmac_up — meaning D11+0x16C=0 at the freeze point and fw is structurally deaf to all HW events. This explains why every prior probe (MBM writes, chipcommon RMW, etc.) failed silently — the wake gate was closed regardless of what we tried. Verified by T298t advisor scan: ZERO alternative paths to construct 0x48080 anywhere in the blob.**
-**The strategic problem RE-FRAMES: NOT "find the wake bit fw waits for" but "why doesn't fw advance from wl_probe to wlc_bmac_up_finish?". This is the new investigation target. Zero hardware fires this session — substrate-null cluster (n=3) is unresolved but irrelevant to the new direction.**)
+## Current state (2026-04-27 ~end-of-session — **T299/T300 series RE-RE-FRAMED the wake-gate question. Static-trace investigation reached convergence-without-progress. Strategic recalibration needed before next probe.**)
+
+**T299 series (a-z) traced from FW reset vector to identify what actually runs:**
+- **Bootstrap → fn@0x268 → fn@0x2408 (real C main, 5 insns) → fn@0x11d0 (idle loop)**
+- **Idle loop tail-call chain: fn@0x11d0 → bl 0x11cc → b.w 0x1c0c → b.w 0x1c1e (wfi;bx lr)** — verified, fn@0x11cc and 0x1c0c are 4-byte tail-call wrappers without push-lr that fn-start heuristic missed.
+- **8 ARM exception vectors all converge to fn@0x138 unified dispatcher** which reads *(0x224) for handler ptr. NO code installs *(0x224); single cpsie ai found at 0x4356e is FALSE POSITIVE (binary data misdisasm).
+- **BFS from bootstrap reaches 311 fns, all hndrte.c (HNDRTE = Hardware Native Run-Time Environment) — dongle-side ARM-CR4 PCIe-protocol runtime.**
+- **Live BFS does NOT reach: wl_probe, wlc_attach, wlc_bmac_attach, fn@0x142E0 (0x48080-writer), wlc_bmac_up_finish, pciedngl_probe, pciedngl_isr, bcm_olmsg_init, wrap_ARM, wlc_dpc.** All wifi/offload entry points appear orphaned from live execution.
+- **wl_probe (0x67614) has 0 direct callers; only 1 fn-ptr in orphaned 0x58F1C handlers table** (which T299g showed has 0 readers).
+- **fn@0x142E0 (0x48080 writer) has 2 callers: wlc_bmac_attach (dead) and fn@0x11704 (also reachable only from wl_probe via literal-pool fn-ptr).**
+
+**T300: ZERO live writers to D11+0x16C INTMASK in entire blob.** All 8 +0x16C stores are in fns NOT in live BFS. The dead FullMAC chain is the only known wake-arm path. movw/movt pair scan = 0 (no indirect 32-bit construction).
+
+**T301 (kernel source review):** brcmfmac/pcie.c writes `BRCMF_PCIE_PCIE2REG_INTMASK` at PCIe2 core +0x24 = **0x00FF0300**, NOT D11 INTMASK at +0x16C and NOT 0x48080. The "wake gate at D11+0x16C with mask 0x48080" hypothesis from prior sessions may have been chasing the wrong register entirely.
+
+**Convergence-without-progress signals:** repeated self-corrections on heuristic findings:
+- T299s "311 fns / no wifi" → corrected by T299t (need IRQ trace) → 319 still no wifi
+- T299t "IRQs disabled forever" → corrected by T299y (cpsie was FP)
+- T299z "wfi unreachable" → corrected (wfi IS reachable via tail-call chain heuristic missed)
+- Each correction kept the same heuristic stack: push-lr-as-fn-start + direct-bl + bx-via-pool
+
+**Strategic moment:** advisor recommends stopping static-trace. Real questions to resolve:
+- (a) Where does host-observed flag_struct[+0x64] = 0x48080 come from? Direct host write? Cache of host-set value? Coincidence with the ONE 0x48080 literal in fw (at file 0x14318)?
+- (b) Is the FW actually waiting at wfi for D11 INTMASK events, or for PCIe doorbell from host?
+- (c) What does fn@0x11cc (the main loop event processor) actually do?
+
+**Unresolved from prior session:** substrate-null cluster (T294/T295/T296), n=3 stopping rule triggered. No hardware fires this session.
 
 ## Prior state (2026-04-26 23:35 BST — POST-TEST.295 NULL FIRE; n=2 of 3-stopping-rule; PRE-TEST.296 plan was a plain re-fire on tight-freshness substrate.)
 
