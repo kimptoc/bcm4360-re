@@ -102,64 +102,75 @@ runtime discriminator lands.
 
 ### Current highest-value next work
 
-Post-T304 the OOB Router host-injection path is closed. Two parallel
-static reconnaissance passes (T304b + T304c, completed 2026-04-27
-21:25 BST, no fire) further narrowed the option space. Reports are at
-`phase6/t304b_fw_poller_enumeration.md` and
-`phase6/t304c_pmu_gpio_surface.md`. KEY_FINDINGS gained two new rows
-(no-live-pollers + PMU/GPIO dormant) capturing the load-bearing
-verdicts.
+Post-T304e: **all three host-driveable wake-injection candidates
+examined this session are now CLOSED.** Strategic pivot point reached.
+Reports: `phase6/t304b_fw_poller_enumeration.md`,
+`phase6/t304c_pmu_gpio_surface.md`,
+`phase6/t304d_pciedngl_isr_disasm.md`,
+`phase6/t304e_pciedev_info_pointer_trace.md`. KEY_FINDINGS gained 5
+new rows this session capturing the load-bearing verdicts.
 
-**Refined option triage:**
+**Closed surfaces (will not be re-investigated without new evidence):**
 
-1. **PMU / GPIO surface — CLOSED** (T304c). Both subsystems are
-   host-reachable via BAR0 windowing but neither has a registered fw
-   ISR in the offload runtime. T298 enumerated exactly 2 live ISRs
-   (pciedngl_isr OOB bit 3, RTE chipcommon-class fn@0xB04 OOB bit 0)
-   — no PMU- or GPIO-class ISR present. Even if host writes
-   PMU_WATCHDOG / PMU_RES_REQT or toggles GPIO, no fw handler will
-   receive a resulting IRQ. **Closed without fw modification.**
+1. **PMU / GPIO surface — CLOSED** (T304c). Both host-reachable via
+   BAR0 windowing but neither has a registered fw ISR. T298
+   enumerated exactly 2 live ISRs (pciedngl_isr OOB bit 3, RTE
+   chipcommon-class fn@0xB04 OOB bit 0) — no PMU- or GPIO-class ISR.
 
-2. **DMA-via-olmsg trip path — CLOSED via pciedngl_isr** (T304d).
-   pciedngl_isr (fn@0x1c98, OOB bit 3) end-to-end disasm shows it is
-   a SINGLE-BIT mailbox-doorbell handler (tests only bit 0x100 =
-   `BRCMF_PCIE_MB_INT_FN0_0`); reads packets from a `bus_info+0x24`
-   transport-local ring; **NEVER touches the olmsg DMA ring at
-   TCM[0x9d0a4]**. T304b confirmed no other live ISR handler exists.
-   Option 2 is dead via this surface.
+2. **DMA-via-olmsg via pciedngl_isr — CLOSED** (T304d). pciedngl_isr
+   end-to-end disasm: single-bit mailbox-doorbell handler; reads from
+   `bus_info+0x24` transport-local ring; NEVER touches the olmsg DMA
+   ring at TCM[0x9d0a4]. T304b confirmed no other live ISR handler.
 
-3. **NEW potential surface — H2D_MAILBOX_1 doorbell** (T304d
-   side-finding). Host writes to H2D_MAILBOX_1 → bit 0x100 →
-   pciedngl_isr's packet-read loop. **STATUS: UNDETERMINED.**
-   pciedngl_isr's empirical falsifier is decisive: console wr_idx=587
-   is FROZEN across n=8 fires (its first action is
-   `printf("pciedngl_isr called\n")` which would advance wr_idx).
-   The ISR has never fired in any observed run despite being
-   registered on bit 3. Two structural unknowns block calling this
-   viable:
-   - **Physical identity of `bus_info+0x18` pointer.** Agent treated
-     as "software shadow" without tracing. If MMIO (PCIE2
-     mailbox-status), this chain is gated by MAILBOXMASK
-     (KEY_FINDINGS rows 117/118/126: PCIE2 MAILBOXMASK at BAR0+0x4C
-     silently drops writes — same register family as
-     `BRCMF_PCIE_MB_INT_FN0_0`). If TCM/RAM, then there's an upstream
-     handler that writes 0x100 there, itself probably gated.
-   - **Why hasn't pciedngl_isr fired across n=8 fires?** Driver init
-     touches mailbox region; either it doesn't reach bit 0x100, or
-     MAILBOXMASK gates the chain.
+3. **H2D_MAILBOX_1 doorbell — CLOSED** (T304e). Two independent
+   strands: (a) **Empirical:** pciedngl_isr (the only bit 0x100
+   handler) has NEVER fired across n=8 fires — `wr_idx=587` frozen at
+   every probe stage, and pciedngl_isr's first action is
+   `printf("pciedngl_isr called\n")` which would advance wr_idx if it
+   had ever fired. (b) **Protocol:** fw blob contains ZERO references
+   to HOSTRDY_DB1 (0x10000000), the flag upstream brcmfmac's
+   `brcmf_pcie_hostready()` uses to gate H2D_MAILBOX_1 writes. fw
+   never advertises hostready → upstream driver never writes
+   H2D_MAILBOX_1 → ISR never fires. Both strands close this surface
+   independently of the (still-open) MMIO-vs-TCM resolution for
+   `bus_info[+0x18]`.
 
-4. **Passive sample-2 re-read of OOB Router pending — LOWER
-   PRIORITY.** With gate 1 closed, host can't act on transitions
-   even if observed.
+**Caveat carried forward:** T304e did not actually trace the writer
+of `pciedev_info[+0x18]` (pcidongle_probe stores at 0x1EBE-0x1EE8
+left undisassembled). The "TCM shadow proven" framing in T304e's
+report is INFERRED, not established — the agent's two arguments are
+weak (T289 "no PCIE2 base literals" doesn't preclude runtime-loaded
+base addresses from EROM walk; "computed value at fn@0x1E44 means
+TCM" is wrong — `str.w r0, [r2, #0x100]` with computed r0 is the
+standard MMIO RMW idiom). The strategic verdict (H2D_MAILBOX_1
+closed) holds independently. **If a future session pivots back to
+wake-injection, the bus_info[+0x18] physical identity is a real gap.**
 
-**Next concrete move (no fire required):** trace
-`pciedev_info[+0x18]` and `bus_info[+0x18]` writers in the live BFS
-at chip-init time; identify what physical address that pointer chain
-resolves to; reconcile with MAILBOXMASK (T279). Outcome:
-- MMIO same as MAILBOXMASK gate → option 2/H2D_MAILBOX_1 dead, refocus
-- MMIO distinct from MAILBOXMASK gate → option becomes potentially viable
-- TCM/RAM → walk upstream writer chain
-Pending user approval to launch.
+**Strategic pivot — wake question reframed:**
+
+The "find a host-injection path" frame has been thoroughly exhausted
+on the surfaces accessible to a static + single-shot empirical
+campaign. Two remaining viable directions:
+
+1. **`wl` driver comparison work — PROMOTED to highest priority.**
+   Previously sat in "deferred / lower-priority" since post-T299. The
+   vendor `wl` driver presumably DOES make this fw fire pciedngl_isr
+   (or some other ISR) successfully, since the chip works under the
+   original driver. Capturing the register-write sequence `wl` issues
+   during init/up — and diffing against what brcmfmac does — is the
+   highest-value remaining direction. Concrete first step: load `wl`
+   on a parallel system or in a controlled environment and capture
+   MMIO/config-write trace via lib instrumentation, ftrace, or a
+   strategic LD_PRELOAD wrapper.
+
+2. **Accept that wake requires HW-internal events** (D11 MAC events,
+   chipcommon events, internal core asserts driven by frame
+   reception or PHY state). These are not directly host-driveable
+   but might reveal a synthetic injection path through D11 MAC
+   config or PHY register manipulation. Higher cost,
+   lower-probability than (1).
+
+**No fire warranted.** Awaiting user steer on direction.
 
 **Heuristic caveat (per KEY_FINDINGS row 161):** the 311-fn live BFS
 rests on push-lr-as-fn-start + direct-BL coverage; indirect-call sites
@@ -207,11 +218,6 @@ Before any next hardware fire, the PRE-TEST block MUST state:
   chipcommon, PCIE2, wrapper, or OOB-router reads
 - how the test exits before the [t+90s, t+120s] wedge bracket
 - what single bit of information the fire is expected to decide
-
-**Resume `wl` comparison work only where it produces runtime deltas.**
-The Phase 6 thread still matters, but the best remaining value is
-likely live `wl` MMIO/config comparison or explicit register-sequence
-comparison, not more broad dead-code archaeology.
 
 ### Deferred / lower-priority lines
 
