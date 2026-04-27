@@ -73,6 +73,76 @@ Three paths:
 
 Recommended order: (δ-1) first (cheapest), then (δ-2), then (δ-3) only if the others dead-end. If all three dead-end statically, the only remaining option is a TCM read-only sampling probe at runtime — which advisor explicitly noted as the safe fallback over (γ-c) write-probe.
 
+## Update — T297-6/7/8: T274 re-scan with resumable iterator (post-advisor)
+
+### T274's old scan was incomplete (but T281's HW-MMIO inference still holds)
+
+Advisor flagged that T274's negative writer scan likely hit the same capstone-stops-at-undecodable-bytes bug T297e exposed. T297f re-ran the scan with the resumable iterator (which T297e proved finds 6× more hits).
+
+**Result — 22 writer candidate sites found, vs T274's near-zero:**
+
+| Offset | 32-bit hits | Sub-32 hits | `add rN, rM, #imm` | `mov rN, #imm` |
+|---|---|---|---|---|
+| +0x168 | 3 (`str.w`) | 2 (strh, strb) | 2 (one is `add r0, r4, #0x168`) | 1 (`mov.w r1, #0x168`) |
+| +0x16C | 4 (`str.w`) | 3 (strb) | 4 (`add rN, rM, #0x16c`) | 0 |
+
+### Classification of each [+0x168] / [+0x16C] writer (T297g)
+
+| Site | Fn | Pattern | Interpretation |
+|---|---|---|---|
+| 0x15640 | fn@0x15638 | `mov.w r1, #-1; str.w r1, [r4, #0x168]` (where r4 = `[r0, +0x88]`) | **Clear-all wake-gate bits** — W1C-style write of 0xFFFFFFFF |
+| 0x15ede | fn@0x15E92 | `mov.w r3, #0x4000; str.w r3, [r5, #0x168]` (r5 = `[r4, +0x88]`) | **Clear specific bit** (0x4000 = bit 14) — W1C-style |
+| 0x23108 | fn@0x2309C | T281's W1C clear (matched bits) | Documented in T281 |
+| 0x230fe / 0x23402 / 0x23420 / 0x23448 | fn@0x2309C / 0x233E8 / 0x2340C | All W1C clears on [+0x16C] | Multiple consumers exist |
+| 0x230fe→0x23102 | fn@0x2309C | `str r3, [r5, #0x16c]; ldr r2, [r5, #0x16c]` — write then immediate readback | **HW MMIO write barrier** — strong evidence the address is HW |
+| 0x142ce / 0x14310 / 0x187fc | misc fns | strb.w (byte) writes — different struct shape | Likely different chain (not flag_struct) |
+| 0x2bdc0 | fn@0x2b92c | strh.w with `movw r1, #0x932`; in series with [+0x158/0x180/0x188/0x200] writes | Different struct (16-bit-aligned reg layout) |
+| 0x3cb18 | fn@0x3cab0 | bitmap clear-bit operation (`add r2, r4, r3, lsr #3 ; ldrb [r2, #0x168] ; bic ; strb`) | Byte-array indexing; unrelated chain |
+
+**Net conclusion**: ALL writes through the flag_struct→[+0x88] chain at [+0x168]/[+0x16C] are **W1C-clear semantics** (consumer-side). NO producer-set pattern (`ldr; orr #bit; str`) found. The read-then-write-back-with-verify at fn@0x2309C is a classic HW MMIO write barrier.
+
+### Register-block layout via [+0x88]-loaded base (T297h)
+
+In functions following the wake-gate chain (ldr-sites: 0x1563a, 0x15e9e, 0x230aa, 0x233fc, 0x23416, 0x23444), the register-block accesses are:
+
+| Offset | Loads | Stores | Notable constants written |
+|---|---|---|---|
+| +0x128 | 4 | 2 | (R/W; tested with `tst.w #1`) |
+| +0x168 | 1 | 3 | -1 (clear-all), 0x4000 |
+| +0x16C | 2 | 5 | 0 (zero out, then readback) |
+| +0x180 | 6 | 0 | (read-only mask register?) |
+| +0x184 | 2 | 0 | (read-only) |
+| +0x188 | 0 | 1 | 0x80000000 (bit 31) |
+| +0x18C | 0 | 2 | 0x2000000 (bit 25) |
+
+This **looks like a HW interrupt-control block** — pairs of status (W1C) + mask (R/W) registers at consecutive 4-byte offsets. The +0x180 read-only mask + +0x184 register pair, +0x188/+0x18C paired writes of bit-31 and bit-25, and +0x168/+0x16C paired clears all match the standard Broadcom interrupt-block convention.
+
+### KEY_FINDINGS impact (revised)
+
+- **Row 158** — STAYS LIVE. The wake-gate IS HW MMIO (T281 inference HOLDS, even after the better scan). What's NOT yet identified: which HW core's MMIO base it points at.
+- **Row 156** — REINFORCED. hndrte_add_isr writes no HW registers; the wake-gate is initialized somewhere else.
+- **NEW finding**: Multiple sibling consumer functions (fn@0x15638, fn@0x15E92, fn@0x233E8, fn@0x2340C) follow the SAME flag_struct→[+0x88] chain — this is a real wlc-internal register block, with bit-31 and bit-25 as named events.
+
+### Identification candidates for the wake-gate HW base
+
+The block has the layout: [+0x128]=R/W status, [+0x168]/[+0x16C]=W1C status pair, [+0x180]/[+0x184]=read-only masks, [+0x188]/[+0x18C]=mask R/W. This shape suggests:
+
+- **NOT chipcommon REG base** — chipcommon has Watchdog/PMU/Clock/UART/SPROM/JTAG/PWMs etc. at known offsets; the wake-gate cluster doesn't match.
+- **NOT PCIE2** — fw blob has 0 PCIE2 literals (T289 §3); fw could only reach PCIE2 via EROM-walked sched_ctx[per-class][reg], which T287c shows fw never does at runtime.
+- **Plausible: D11 (core[2] = 0x18001000) MAC interrupt block** — D11 has interrupt-status registers in its main MMIO page; offsets 0x128/0x168/0x16C/0x180+ are within the D11 MAC reg range.
+- **Plausible: ARM-CR4 core registers (0x18002000)** — ARM has its own peripheral interrupts; Cortex-R4 has VIC at predictable offsets within its register space, but the absolute offsets typically start higher than 0x100.
+- **Plausible: an internal hndrte-block at chipcommon WRAPPER (0x18100000) that's not the standard agent regs** — wrap pages have agent regs only at 0x000-0xFFF; offsets 0x128/0x168/0x180+ would be beyond the agent range.
+
+The most likely candidate is **D11 MAC interrupt block at +0x100 within the D11 core base**. T287c showed sched_ctx+0x88 shifting to 0x18001000 (core[2]) at runtime — that's D11's REG base. If `flag_struct[+0x88]` was set to the same value (0x18001000) during wlc init, the wake-gate would be at 0x18001000+0x168 = `0x18001168`.
+
+This is verifiable cheaply with a TCM read-only probe at runtime (no chipcommon RMW needed) — read `flag_struct[+0x88]` directly via TCM and confirm.
+
+## What's next (advisor consult required)
+
+The cheapest static verification: scan for code that populates `flag_struct[+0x88]` with the per-class register base from sched_ctx (if it does, that's the EROM-walk-result store). If found → confirms architectural class of the wake-gate (D11/ARM/PCIE2/whichever class).
+
+Alternatively: **TCM read-only probe at runtime** — read `flag_struct[+0x88]` via BAR2 iowrite32 read-only probe at an early point post-set_active. This is the safe runtime approach the advisor suggested as a fallback. It does NOT require chipcommon RMW, just BAR2 read.
+
 ## Clean-room posture
 
 All findings are disassembled mnemonics + literal-pool resolution + offset-pattern matching. No reconstructed function bodies. Scripts in `phase6/t297*.py`. Zero hardware fires.
