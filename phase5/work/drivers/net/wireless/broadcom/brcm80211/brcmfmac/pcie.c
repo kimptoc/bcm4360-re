@@ -1070,6 +1070,57 @@ static int bcm4360_test298_isr_walk;
 module_param(bcm4360_test298_isr_walk, int, 0644);
 MODULE_PARM_DESC(bcm4360_test298_isr_walk, "BCM4360 test.298: BAR2-only dynamic walk of ISR list at TCM[0x629A4] (head ptr) + sched_ctx[+0xCC] + pending-events word. Per-stage. ZERO BAR0 / select_core / wrapper-MMIO touches — honours KEY_FINDINGS row 85 stopping rule. Decoder: fn=0x1C99=pciedngl_isr, fn=0x0B05=RTE-CC-class ISR, fn=0x1146D=wlc_isr (FullMAC; dead per T299/T306). (1=enable, 0=off)");
 
+/* BCM4360 test.300 (A3): one-shot read of the ARM OOB Router pending-events
+ * register at 0x18109100. Per phase6/t300_static_prep.md: fw reads this LIVE
+ * via fn@0x9936 (ldr [sched+0x358]; ldr [+0x100]; bx lr) — there is no TCM
+ * shadow. To observe pending state we must read it via BAR0 directly.
+ *
+ * BAR0 risk: KEY_FINDINGS row 85 retired the chipcommon-wrap (0x18100000)
+ * and PCIE2-wrap (0x18103000) surfaces after T297 wedged. The OOB Router
+ * is BCMA core 0x367, a DISTINCT backplane agent at 0x18109000 — NOT the
+ * same agent T297 wedged on, but in the same 0x181xx000 region. Whether
+ * that region is generally noise-belt territory or only chipcommon/PCIE2-
+ * wrap-specific is part of what this fire tests.
+ *
+ * Design (per advisor 2026-04-27 evening):
+ *  - 2 sample points only (post-set_active and t+60s) — sample 1 = cheapest
+ *    discriminator on whether the OOB Router region wedges; sample 2 confirms
+ *    WFI reading if sample 1 read 0
+ *  - bare BAR0_WINDOW save / write / read / restore — NO select_core
+ *  - restore happens unconditionally (straight-line; no early return)
+ *  - per-step anchors (matches T288a style) so wedge sub-step is observable
+ */
+static int bcm4360_test300_oob_pending;
+module_param(bcm4360_test300_oob_pending, int, 0644);
+MODULE_PARM_DESC(bcm4360_test300_oob_pending, "BCM4360 test.300 (A3): one-shot BAR0 read of ARM OOB Router pending-events at 0x18109100. Save BAR0_WINDOW, write 0x18109000, read +0x100, restore BAR0_WINDOW. NO select_core, NO chipcommon/PCIE2/wrapper read. Wired at exactly 2 stages: post-set_active and t+60s. Tests whether BCMA core 0x367 (OOB Router) is reachable without hitting KEY_FINDINGS row 85's noise belt. Single bit of info: any non-zero across the 2 samples = HW event was asserted (identifies WHICH OOB bits fired); both zero = fw genuinely in WFI with no event delivery. (1=enable, 0=off)");
+
+#define BCM4360_T300_OOB_ROUTER_BASE  0x18109000
+#define BCM4360_T300_OOB_PENDING_OFF  0x100
+
+#define BCM4360_T300_OOB_PENDING_READ(tag) do { \
+	if (bcm4360_test300_oob_pending) { \
+		u32 _t300_saved = 0xDEADC0DE, _t300_pending = 0xDEADC0DE; \
+		pr_emerg("BCM4360 test.300: %s anchor-1 (about to save BAR0_WINDOW)\n", tag); \
+		pci_read_config_dword(devinfo->pdev, \
+			BRCMF_PCIE_BAR0_WINDOW, &_t300_saved); \
+		pr_emerg("BCM4360 test.300: %s anchor-2 (saved=0x%08x; about to set OOB Router window=0x%08x)\n", \
+			 tag, _t300_saved, BCM4360_T300_OOB_ROUTER_BASE); \
+		pci_write_config_dword(devinfo->pdev, \
+			BRCMF_PCIE_BAR0_WINDOW, BCM4360_T300_OOB_ROUTER_BASE); \
+		pr_emerg("BCM4360 test.300: %s anchor-3 (window set; about to read +0x%03x)\n", \
+			 tag, BCM4360_T300_OOB_PENDING_OFF); \
+		_t300_pending = brcmf_pcie_read_reg32(devinfo, \
+			BCM4360_T300_OOB_PENDING_OFF); \
+		pr_emerg("BCM4360 test.300: %s anchor-4 (pending=0x%08x; about to restore BAR0_WINDOW=0x%08x)\n", \
+			 tag, _t300_pending, _t300_saved); \
+		pci_write_config_dword(devinfo->pdev, \
+			BRCMF_PCIE_BAR0_WINDOW, _t300_saved); \
+		pr_emerg("BCM4360 test.300: %s SUMMARY pending@0x%08x = 0x%08x (saved_win=0x%08x restored)\n", \
+			 tag, BCM4360_T300_OOB_ROUTER_BASE + BCM4360_T300_OOB_PENDING_OFF, \
+			 _t300_pending, _t300_saved); \
+	} \
+} while (0)
+
 #define BCM4360_T288A_CC_WRAP_BASE	0x18100000
 #define BCM4360_T288A_PCIE2_WRAP_BASE	0x18103000
 
@@ -4515,7 +4566,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				else
 					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned TRUE\n");
 
-				BCM4360_T284_READ_MBM("post-set_active (CRITICAL: does ARM release clear it?)"); BCM4360_T285_READ_CC("post-set_active"); BCM4360_T287_READ_SCHED("post-set_active"); BCM4360_T288A_READ_WRAPS("post-set_active"); BCM4360_T298_ISR_WALK("post-set_active"); BCM4360_T290A_CHAIN("post-set_active"); BCM4360_T290B_CC_WRITE("post-set_active");
+				BCM4360_T284_READ_MBM("post-set_active (CRITICAL: does ARM release clear it?)"); BCM4360_T285_READ_CC("post-set_active"); BCM4360_T287_READ_SCHED("post-set_active"); BCM4360_T288A_READ_WRAPS("post-set_active"); BCM4360_T298_ISR_WALK("post-set_active"); BCM4360_T290A_CHAIN("post-set_active"); BCM4360_T290B_CC_WRITE("post-set_active"); BCM4360_T300_OOB_PENDING_READ("post-set_active");
 
 				/* BCM4360 test.276: 2 s post-ARM-release poll of
 				 * shared_info response fields. Log on any change,
@@ -4888,6 +4939,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				BCM4360_T253_SHARED_PROBE("t+60000ms");
 				BCM4360_T255_STRUCT_DECODE("t+60000ms");
 				BCM4360_T256_SCHED_WALK("t+60000ms");
+				BCM4360_T300_OOB_PENDING_READ("t+60000ms");
 				if (bcm4360_test269_early_exit) {
 					pr_emerg("BCM4360 test.269: early-exit at t+60000ms — skipping t+90s/t+120s/scaffolds, jumping to ultra_dwells_done\n");
 					goto ultra_dwells_done;

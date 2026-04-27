@@ -8,7 +8,7 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-27 17:00 BST — User pointed to `t299_next_steps.md` for direction. Switched B → A2/T300. Step 0 (doc updates) DONE in commit `27c009a`. Step 1 (static prep) DONE — see `phase6/t300_static_prep.md`. **Result: no TCM-resident shadow of OOB pending-events found.** Per directive doc §3 → next is A3 (one-shot OOB Router pending read at `0x18109100` via BAR0). Awaiting user go/no-go on A3 PRE-TEST draft. Optional secondary BAR2 add-on identified: per-slot core-ID table at `sched_ctx + 0xd0..0x114` (cross-validation only, no wake-question yield).
+## Current state (2026-04-27 17:30 BST — PRE-TEST.300 (A3) drafted + module REBUILT + verified via modinfo. Plan satisfies the Hardware Fire Gate from `t299_next_steps.md`. **REQUIRES USER GO/NO-GO BEFORE FIRE.** Key risk: BAR0 region 0x181xx000 — OOB Router (0x18109000) is a distinct backplane agent from the chipcommon-wrap (0x18100000) / PCIE2-wrap (0x18103000) surfaces that wedged in T297, but whether the entire region is noise-belt territory is part of what the fire tests. Single-purpose probe: 2 BAR0 reads (post-set_active, t+60s), bare BAR0_WINDOW save/write/read/restore (no select_core), early-exit at t+60s via test269.
 
 T299 FIRED 15:29:00 BST on boot -1 with full ASPM-disabled chain (cmdline `pcie_aspm.policy=performance` parsed, runtime sysfs flip applied at 15:27:57 before insmod; 03:00.0+02:00.0+root all `ASPM Disabled`). Probe ran clean through all 9 stages — IDENTICAL 2-node ISR readout to T298. Wedged at end-of-t+90s probe (boot -1 ended 15:31:05, ~7s after t+90s SUMMARY). User cold-boot/SMC reset; current uptime now ~30+ min, ASPM back to default. **H1 (ASPM = wedge cause) FALSIFIED.** **Wedge is the known [t+90s, t+120s] bracket** (KEY_FINDINGS row 104, T270-BASELINE pattern, reproduced T276/T287c/T298/T299) — NOT a "rmmod wedge" as POST-TEST.298 mistakenly claimed.
 
@@ -243,7 +243,124 @@ If wedged before journalctl: on next boot, `sudo journalctl -k -b -1 > phase5/lo
 - Tests a hypothesis (row 152) that's been LIVE for ~3 days untested.
 - Either result improves the next-step decision quality. H1-confirmed dramatically lowers B1/A3 risk; H1-falsified at least removes one variable.
 
-## POST-TEST.299 (2026-04-27 15:29:00 BST fire, boot -1 — **FIRED CLEAN through all 9 probe stages with ASPM fully disabled chain (cmdline `pcie_aspm.policy=performance` + runtime sysfs `policy=performance` flip applied 15:27:57 before insmod). ISR-list = 2 nodes, IDENTICAL to T298. Wedged at end-of-t+90s probe — same [t+90s, t+120s] bracket as T270-BASELINE/T276/T287c/T298. H1 (ASPM = wedge cause) FALSIFIED. T299 t+90s readout latency rose mid-stage (1s/print vs T298's all-same-second).**)
+## PRE-TEST.300 (drafted 2026-04-27 17:30 BST — A3 single-shot BAR0 read of ARM OOB Router pending-events at `0x18109100`. NO new probe types, NO BAR2 add-on, NO new module params beyond test300_oob_pending and test269_early_exit. Module REBUILT 2026-04-27 — verified test300 param via modinfo. **REQUIRES USER GO/NO-GO BEFORE FIRE.**)
+
+### Goal — single bit of information
+
+Is `OOB Router + 0x100` (the pending-events bitmap fw reads via `fn@0x9936`) ever non-zero between post-set_active and t+60s? Two readings:
+- Sample 1 (post-set_active): immediately after `brcmf_chip_set_active` returns
+- Sample 2 (t+60s): 60s into the dwell ladder, just before `bcm4360_test269_early_exit` jumps to ultra_dwells_done
+
+Any non-zero value identifies which OOB bits hardware events have asserted — direct primary-source observation of the wake-trigger source for OOB bit 0 (RTE-CC ISR) or bit 3 (`pciedngl_isr`). Both samples zero tightens the "fw genuinely in WFI with no event delivery" reading.
+
+### Hardware Fire Gate (per `t299_next_steps.md`)
+
+| Gate item | Answer |
+|---|---|
+| Touches BAR0? | **YES** — single `pci_write_config_dword(BAR0_WINDOW, 0x18109000)` per sample, then `brcmf_pcie_read_reg32(devinfo, 0x100)`, then restore |
+| BAR0 address + expected value | `BAR0 + 0x100` after window=0x18109000 → reads OOB Router pending-events register (offset 0x100 per fn@0x9936). Expected: 0x00000000 (fw in WFI) per row 116; non-zero ANY value identifies asserted OOB bits |
+| Why OOB Router ≠ T297 wedge surfaces | OOB Router = BCMA core 0x367 at backplane 0x18109000 (per phase1 EROM walk + Linux `bcma.h:76`). T297 wedged at root-port `pci_disable_link_state` then T288A's wraps targeted chipcommon-wrap (0x18100000) and PCIE2-wrap (0x18103000) — **distinct backplane agents** in the same 0x181xx000 region. Whether the entire 0x181xx000 region is noise-belt territory or only chipcommon/PCIE2-wrap-specific is part of what this fire tests |
+| Exit before [t+90s, t+120s] bracket | YES — `bcm4360_test269_early_exit=1` causes `goto ultra_dwells_done` at t+60s, skipping all further probes |
+| Single bit of info | YES — "any non-zero across 2 samples?" |
+
+### Module params (fire command)
+
+- ENABLE: T236 (force seed), T238 (ultra dwells), T276 (shared_info), T277 (console decode), T278 (console periodic), T287 + T287c (sched_ctx fields), T298 (BAR2-only ISR walk — keep enabled to give the T298/T299 ISR-list reproduction baseline; if T300 wedges, journalctl will show whether T298's BAR2-only readout still matched the 2-node result), **T300 (the new BAR0 OOB Router read)**, **T269 early-exit (skips t+90s/t+120s/scaffolds)**
+- DROP: T284 premask (no value-add for this fire); T288A wraps (RETIRED per row 85); T290A/B chain (BAR2-only, lower priority); T294/295/296/297 (all retired)
+
+### Probe code (pcie.c lines 1098..1133, hooks at 4569 + 4942)
+
+```c
+#define BCM4360_T300_OOB_PENDING_READ(tag) do { \
+    if (bcm4360_test300_oob_pending) { \
+        u32 _t300_saved = 0xDEADC0DE, _t300_pending = 0xDEADC0DE; \
+        pr_emerg("BCM4360 test.300: %s anchor-1 (about to save BAR0_WINDOW)\n", tag); \
+        pci_read_config_dword(devinfo->pdev, BRCMF_PCIE_BAR0_WINDOW, &_t300_saved); \
+        pr_emerg("BCM4360 test.300: %s anchor-2 (saved=0x%08x; about to set OOB Router window=0x18109000)\n", tag, _t300_saved); \
+        pci_write_config_dword(devinfo->pdev, BRCMF_PCIE_BAR0_WINDOW, 0x18109000); \
+        pr_emerg("BCM4360 test.300: %s anchor-3 (window set; about to read +0x100)\n", tag); \
+        _t300_pending = brcmf_pcie_read_reg32(devinfo, 0x100); \
+        pr_emerg("BCM4360 test.300: %s anchor-4 (pending=0x%08x; about to restore BAR0_WINDOW=0x%08x)\n", tag, _t300_pending, _t300_saved); \
+        pci_write_config_dword(devinfo->pdev, BRCMF_PCIE_BAR0_WINDOW, _t300_saved); \
+        pr_emerg("BCM4360 test.300: %s SUMMARY pending@0x18109100 = 0x%08x (saved_win=0x%08x restored)\n", tag, _t300_pending, _t300_saved); \
+    } \
+} while (0)
+```
+
+Anchors-1..-4 fire at sub-step granularity so a wedge between any two anchors is observable in journalctl. Final `restore` is straight-line (no early return between save and restore). NO `brcmf_pcie_select_core` is called — bare BAR0_WINDOW save / write / read / restore.
+
+### Hypothesis matrix
+
+| Outcome | Interpretation | Updates |
+|---|---|---|
+| Sample 1 reads cleanly (0 or non-zero), Sample 2 also reads cleanly, BOTH zero | **H1: fw genuinely in WFI, no HW events delivered.** Tightens row 116. Forces project back to wake-injection (B), where the constraint walk says no enumerated sub-option has a mechanism — real impasse, may force a deeper re-read of the fw's expected event source | KEY_FINDINGS row 116 strengthens; row 148 wake-trigger question stays LIVE |
+| Sample 1 or Sample 2 NON-ZERO | **MAJOR FINDING.** Identifies which OOB bits HW has asserted. AND with each ISR node's mask (T298 result: 0x1 = RTE-CC, 0x8 = pciedngl_isr) to identify which ISR's bit fired | row 148 wake-trigger source identified at primary-source level |
+| Sample 1 wedges (last log = anchor-2 or anchor-3) | **OOB Router region IS noise-belt territory.** A3 fails. Forces project back to wake-injection (B) — which has the same constraint-walk problem as outcome 1. **Real impasse.** | KEY_FINDINGS row 85 widens (BAR0 noise belt covers OOB Router region too, not just chipcommon/PCIE2-wrap); A3 retired |
+| Sample 1 reads cleanly, Sample 2 wedges | OOB Router region reachable at post-set_active but degrades by t+60s. Substrate-bound. Sample 1 result still load-bearing; project pivots based on it | row 85 nuance: OOB Router region reachable only early |
+| Sample 1 anchor-2 or anchor-3 reads value 0xffffffff | window set silently failed OR OOB Router agent silently rejected the access. Discriminator: anchor-2 succeeded → window write happened → 0xffffffff is the agent's response. Anchor pattern lets us decide | row 85 widens with finer detail |
+| New wedge mode upstream of post-set_active (substrate noise) | falls into the existing row 85 noise belt; T300 not the culprit. Cold cycle and re-fire | substrate variance |
+
+### Recovery section
+
+If sample 1 wedges (last journalctl entry = anchor-1, -2, or -3):
+- Outcome 3: A3 fails. The next probe candidate is wake-injection (B), but the constraint walk says no enumerated sub-option has a mechanism. **Real impasse.** Options at that point:
+  - re-read the fw's reset/init disasm for any host-side event the OOB Router DOES route from PCI config space (would need a new static pass)
+  - try a B variant nobody has named yet (e.g., DMA-capable host write to a specific TCM region the fw polls outside ISRs)
+  - accept the project is information-bounded at this point and move to the wl-comparison thread
+
+If samples read cleanly with both zero:
+- Outcome 1: most likely outcome per row 116. Same impasse path as above (B without mechanism), but with stronger confidence the fw is waiting on a real HW event vs spinning on something we missed. Worth one more advisor consult before pivoting
+
+If sample 1 or 2 reads NON-ZERO:
+- Outcome 2: jackpot. Decode bits via T298 mask map (bit 0 = RTE-CC ISR; bit 3 = pciedngl_isr; other bits = unidentified). Next probe would target identifying which HW event sets that specific bit (likely doable via static analysis of the ISR callback's argument struct)
+
+### Substrate prerequisites
+
+- Cold-boot was at 16:26:22 BST; uptime now ~1h+ — past the optimal 20-25 min clean window per KEY_FINDINGS row 83. **Recommend cold cycle before fire.**
+- After cold-cycle reboot: `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'` — verify clean state
+- insmod within ≤2 min of cold-cycle boot per row 83
+- Single fire is sufficient — the discriminator is binary at sample 1
+
+### Pre-fire checklist (CLAUDE.md)
+
+1. ✓ Module REBUILT 2026-04-27 17:25 BST after T300 source edits — verified via `modinfo` (test300_oob_pending param visible)
+2. ✓ Hypothesis matrix above
+3. → PCIe state checked AFTER cold cycle (user)
+4. → Plan committed and pushed BEFORE fire (this commit)
+5. → FS sync after push
+6. → User cold cycle; insmod within ≤2 min of cold-boot
+7. ✓ Final advisor call done (2026-04-27 evening) — design revised from 7 samples to 2
+
+### Fire command (run AFTER cold cycle + lspci verify)
+
+```bash
+sudo modprobe cfg80211 && sudo modprobe brcmutil && \
+sudo insmod /home/kimptoc/bcm4360-re/phase5/work/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko \
+    bcm4360_test236_force_seed=1 bcm4360_test238_ultra_dwells=1 \
+    bcm4360_test276_shared_info=1 bcm4360_test277_console_decode=1 \
+    bcm4360_test278_console_periodic=1 \
+    bcm4360_test287_sched_ctx_read=1 \
+    bcm4360_test287c_extended=1 \
+    bcm4360_test298_isr_walk=1 \
+    bcm4360_test300_oob_pending=1 \
+    bcm4360_test269_early_exit=1 \
+    > /home/kimptoc/bcm4360-re/phase5/logs/test.300.run.txt 2>&1
+sleep 75
+sudo rmmod brcmfmac_wcc brcmfmac brcmutil 2>&1 | tee -a /home/kimptoc/bcm4360-re/phase5/logs/test.300.run.txt || true
+sudo journalctl -k -b 0 > /home/kimptoc/bcm4360-re/phase5/logs/test.300.journalctl.txt
+```
+
+Note: `sleep 75` (vs T298/T299's `sleep 150`) because `test269_early_exit=1` should make the probe complete by ~t+62s and exit cleanly before the [t+90s, t+120s] bracket. If the early-exit works, rmmod should actually run for the first time in this campaign.
+
+If wedged before journalctl: on next boot, `sudo journalctl -k -b -1 > phase5/logs/test.300.journalctl.txt`.
+
+### Risk and recovery
+
+- T300 BAR0 risk per row 85: OOB Router region untested; if same noise belt, sample 1 wedges (Outcome 3 above)
+- If `test269_early_exit` works AND T300 reads cleanly: this would be the FIRST fire to complete rmmod since T269 baseline (a useful side-result regardless of T300 value)
+- Worst case: cold-boot + SMC reset cycle (~30-60s wall clock for user)
+
+**FIRED CLEAN through all 9 probe stages with ASPM fully disabled chain (cmdline `pcie_aspm.policy=performance` + runtime sysfs `policy=performance` flip applied 15:27:57 before insmod). ISR-list = 2 nodes, IDENTICAL to T298. Wedged at end-of-t+90s probe — same [t+90s, t+120s] bracket as T270-BASELINE/T276/T287c/T298. H1 (ASPM = wedge cause) FALSIFIED. T299 t+90s readout latency rose mid-stage (1s/print vs T298's all-same-second).**)
 
 ### ASPM state at fire time (boot -1)
 
