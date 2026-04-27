@@ -1,0 +1,53 @@
+Disasm pass…
+Total: 183,411
+
+=== (1) Callers of fn@0x142E0 (the 0x48080 writer) ===
+
+  Direct bl/blx/b targeting 0x142e0:
+    Hits: 2
+      0x1170a: bl → caller fn @ 0x11704
+      0x6827c: bl → caller fn @ 0x6820c = wlc_bmac_attach
+  fn-ptr (0x142e1) any alignment: 0
+  Tagged-window [0x141f0..0x14300] (any alignment): 2 hits
+      val=0x14211: 1 occurrences
+      val=0x14223: 1 occurrences
+
+
+=== (2) Callers of fn@0x6820C (wlc_bmac_attach) ===
+
+  Direct bl/blx/b targeting 0x6820c:
+    Hits: 1
+      0x68b90: bl → caller fn @ 0x68a68 = wlc_attach
+  fn-ptr (0x6820d) any alignment: 0
+  Tagged-window [0x681f0..0x68300]: 0 hits
+
+
+=== (3) ALL 4B occurrences of value 0x00048080 ===
+  Total hits (any alignment): 1
+    0x14318 aligned=True  ctx@0x142f8: 0x230730aa 0x30a4f8a0 0xf8a02304 0xf24130a6 0xf8a00301 0x23ff30bc 0x316cf880 0xbf004770 0x00048080 0x03fcf100 0x46082206 0xf7ec4619
+      nearest fn-start <= 0x14318: fn@0x142b8
+
+
+=== (4) Re-verify fn@0x142E0 writes 0x48080 to [arg+0x64] ===
+  0x142e0  ldr      r3, [pc, #0x34]  ; lit=0x48080 ★★★
+  0x142e2  str      r3, [r0, #0x64]  [STORE]
+  0x142e4  movs     r3, #0
+  0x142e6  str.w    r3, [r0, #0x180]  [STORE]
+  0x142ea  strb.w   r3, [r0, #0xa2]
+  0x142ee  movs     r3, #3
+  0x142f0  strh.w   r3, [r0, #0xa8]
+  0x142f4  movs     r3, #2
+  0x142f6  strh.w   r3, [r0, #0xaa]
+  0x142fa  movs     r3, #7
+  0x142fc  strh.w   r3, [r0, #0xa4]
+  0x14300  movs     r3, #4
+  0x14302  strh.w   r3, [r0, #0xa6]
+  0x14306  movw     r3, #0x1001
+  0x1430a  strh.w   r3, [r0, #0xbc]
+  0x1430e  movs     r3, #0xff
+  0x14310  strb.w   r3, [r0, #0x16c]
+  0x14314  bx       lr
+    [end bx lr]
+
+
+=== (5) ALL load-from-pool of 0x142E1 (fn ptr to 142E0) ===

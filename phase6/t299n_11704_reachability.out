@@ -1,0 +1,130 @@
+Disasm pass…
+Total: 183,411
+
+=== (1) DUMP fn@0x11704 (NEW caller of 0x142E0) ===
+
+=========== fn@0x11704  fn @ 0x11704..0x117f4 ===========
+  0x11704  push     {r4, lr}
+  0x11706  mov      r4, r0
+  0x11708  ldr      r0, [r0, #0xc]
+  0x1170a  bl       #0x142e0  → fn@0x142E0 (writes 0x48080)
+  0x1170e  ldr      r0, [r4, #0xc]
+  0x11710  pop.w    {r4, lr}
+  0x11714  b.w      #0x148c8  → tail-fn@0x148c8
+  0x11718  push     {r4, lr}
+  0x1171a  mov      r4, r0
+  0x1171c  ldr      r0, [r0, #0xc]
+  0x1171e  bl       #0x15c30  → fn@0x15c30
+  0x11722  cbnz     r0, #0x1172e
+  0x11724  ldr      r0, [r4, #0xc]
+  0x11726  pop.w    {r4, lr}
+  0x1172a  b.w      #0x1783c  → tail-fn@0x1783c
+  0x1172e  pop      {r4, pc}
+  0x11730  b.w      #0x1ef3c  → tail-fn@0x1ef3c
+  0x11734  push     {r4, lr}
+  0x11736  ldr      r4, [r0, #4]
+  0x11738  ldr      r3, [r4, #0xc]
+  0x1173a  ldrb.w   r3, [r3, #0xac]
+  0x1173e  cbz      r3, #0x11750
+  0x11740  ldr      r0, [r4, #8]
+  0x11742  bl       #0x2333c  → fn@0x2333c
+  0x11746  mov      r0, r4
+  0x11748  pop.w    {r4, lr}
+  0x1174c  b.w      #0x113b4  → tail-fn@0x113b4
+  0x11750  pop      {r4, pc}
+  0x11752  movs     r0, r0
+  0x11754  ldr      r3, [pc, #0x2c]  ; lit=0x58f44
+  0x11756  push     {r4, lr}
+  0x11758  ldr      r3, [r3]
+  0x1175a  mov      r4, r0
+  0x1175c  tst.w    r3, #2
+  0x11760  beq      #0x1177a
+  0x11762  ldr      r3, [pc, #0x24]  ; lit=0x62e24
+  0x11764  ldr      r3, [r3]
+  0x11766  cmp      r3, #0
+  0x11768  bge      #0x11772
+  0x1176a  bl       #0x14948  → fn@0x14948
+  0x1176e  bl       #0xa30  → fn@0xa30
+  0x11772  ldr      r0, [pc, #0x18]  ; lit=0x4a1ba
+  0x11774  ldr      r1, [r4]
+  0x11776  bl       #0xa30  → fn@0xa30
+  0x1177a  ldr      r0, [r4, #8]
+  0x1177c  bl       #0x16210  → fn@0x16210
+  0x11780  movs     r0, #0
+  0x11782  pop      {r4, pc}
+  0x11784  ldrh     r4, [r0, #0x3a]
+  0x11786  movs     r5, r0
+  0x11788  cmp      r6, #0x24
+  0x1178a  movs     r6, r0
+  0x1178c  adr      r1, #0x2e8
+  0x1178e  movs     r4, r0
+  0x11790  ldr      r0, [r0, #8]
+  0x11792  b.w      #0x233e8  → tail-fn@0x233e8
+  0x11796  ldr      r0, [r0, #8]
+  0x11798  b.w      #0x2340c  → tail-fn@0x2340c
+  0x1179c  ldr      r0, [r0, #8]
+  0x1179e  b.w      #0x2343a  → tail-fn@0x2343a
+  0x117a2  movs     r0, r0
+  0x117a4  mov      r3, r1
+  0x117a6  mov      r1, r2
+  0x117a8  ldr      r2, [pc, #4]  ; lit=0x11389 → fn@0x11388
+  0x117aa  b.w      #0x1430  → tail-fn@0x1430
+  0x117ae  nop      
+  0x117b0  asrs     r1, r1, #0xe
+  0x117b2  movs     r1, r0
+  0x117b4  mov      r0, r1
+  0x117b6  b.w      #0x1218  → tail-fn@0x1218
+  0x117ba  movs     r0, r0
+  0x117bc  push     {r4, r5, r6, lr}
+  0x117be  mov      r4, r2
+  0x117c0  mov      r6, r3
+  0x117c2  mov      r5, r1
+  0x117c4  cbnz     r1, #0x117d0
+  0x117c6  ldr      r0, [pc, #0x18]  ; "wl_rte.c"
+  0x117c8  movw     r1, #0x387
+  0x117cc  bl       #0x11e8  → fn@0x11e8
+  0x117d0  mov      r0, r5
+  0x117d2  mov      r1, r4
+  0x117d4  mov      r2, r6
+  0x117d6  pop.w    {r4, r5, r6, lr}
+  0x117da  b.w      #0x1138  → tail-fn@0x1138
+  0x117de  nop      
+  0x117e0  ldr      r7, [sp, #0x32c]
+  0x117e2  movs     r4, r0
+  0x117e4  cbz      r1, #0x117ec
+  0x117e6  mov      r0, r1
+  0x117e8  b.w      #0xfc4  → tail-fn@0xfc4
+  0x117ec  movs     r0, #1
+  0x117ee  bx       lr
+  0x117f0  ldr      r0, [r0, #0x78]
+  0x117f2  bx       lr
+  ... [end 0x117f4]
+
+
+=== (2) Callers of fn@0x11704 ===
+  Direct bl/b: 0
+  fn-ptr (0x11705) any alignment: 1
+    0x678d0 aligned=True  ctx: 0x00040c2f 0x0001146d 0x0004a0f1 0x00011719 0x00011705 0x00011731 0x0004a10e 0x000116e1
+
+
+=== (3) BFS-climb caller tree from fn@0x11704 ===
+  Building callgraph from direct bl/b/blx targets...
+  fn_starts identified: 1,312
+
+  BFS upward from fn@0x11704:
+  fn@0x11704: NO CALLERS (root)
+
+
+=== (4) BFS-climb from wlc_bmac_attach (0x6820C) for sanity ===
+  wlc_bmac_attach ← wlc_attach ✗ DEAD
+    wlc_attach ← wl_probe ✗ DEAD
+      wl_probe: NO CALLERS (root)
+
+
+=== (5) BFS-climb from fn@0x142E0 (0x48080 writer) ===
+  fn@0x142E0 (writes 0x48080) ← fn@0x11704
+  fn@0x142E0 (writes 0x48080) ← wlc_bmac_attach ✗ DEAD
+    fn@0x11704: NO CALLERS (root)
+    wlc_bmac_attach ← wlc_attach ✗ DEAD
+      wlc_attach ← wl_probe ✗ DEAD
+        wl_probe: NO CALLERS (root)
