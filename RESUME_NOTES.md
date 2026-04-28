@@ -92,6 +92,57 @@ sudo phase5/work/test-brcmfmac.sh
 
 Path (a) reframed as T305 is the live test. Decision belongs to user. Code is staged + built but not fired in user's absence (substrate has wl-tainted reboot history this session, and per CLAUDE.md full-experiment tier requires user awareness for crash recovery).
 
+## A + B + C synthesis (2026-04-28 ~07:30 BST — wl.ko disasm + bcmdhd cross-reference)
+
+User pointed at `t305_glm51_options.md` (Kilo doc claiming bcmdhd uses PCI config-space for interrupt masking). Three workstreams in parallel:
+
+**A — wl.ko config-space write enumeration (direct disasm + reloc walk).** Full report: `phase6/t305_wl_config_writes.md`. 31 write sites; reachable from `wl_pci_probe → wlc_attach → wlc_bmac_attach`:
+- `si_clkctl_xtal` writes config **0xB4 + 0xB8** (PMU/clock crystal area)
+- `si_pcieobffenable` / `si_pcieltrenable` program PCIe LTR/OBFF caps
+- `si_pci_setup` writes config **0x94** (vendor RMW) during interface up
+- BCM4360-specific: `wlc_bmac_4360_pcie2_war` (798 bytes, not yet disassembled)
+- **NO `PCIIntmask = 0x3` write anywhere** — Kilo doc's specific recommendation REFUTED in wl.
+
+**B — bcmdhd cross-reference (subagent, AOSP source w/ file:line citations).**
+- bcmdhd is the **same role as brcmfmac** (offload-host driver) — successfully drives BCM4360.
+- bcmdhd does NOT write config 0x94, 0xB4, or 0xB8. `si_clkctl_xtal` and `si_pci_setup` are declared in headers but NOT implemented in the dongle-host build (those are full-driver helpers from wl/PCIE-gen1 codebase).
+- bcmdhd's `dhdpcie_bus_intr_enable` for BCM4360 (PCIE2 rev 1, NOT in {2,4,6}) takes the **MMIO branch**: `si_corereg(sih, buscoreidx, PCIMailBoxMask=0x4C, def_intmask, def_intmask)` where `def_intmask = D2H_MB | FN0_0 | FN0_1`. **This is structurally identical to brcmfmac's `brcmf_pcie_intr_enable`.**
+- bcmdhd's `si_corereg` internally does select-core-then-MMIO-write — the same pattern T305 forces explicitly.
+- bcmdhd surfaces ONE init WAR at PCIE2 internal cfg **0x4e0** via CONFIGADDR/CONFIGDATA (BAR0+0x120/0x124), described as "BAR1 window may not be sized properly" RMW.
+
+**C — T306 read-only PCI-cfg dump probe (built).** Reads config 0x40..0xFF (48 dwords) at pre-write / post-set_active / post-T276-poll. Independent of test284/305, safe to combine.
+
+### KEY REFRAME
+
+The Kilo document's "wl-only config-space writes (0x94/0xB4/0xB8) are the missing magic" hypothesis is **largely closed** by B: bcmdhd successfully drives BCM4360 without making those writes. They are full-driver / PCIE-gen1 helper code, NOT necessary for offload-mode operation. Pursuing T307 (vendor-cfg writes) is no longer the highest-priority direction.
+
+What B **does** confirm: bcmdhd's intr_enable for BCM4360 takes the MMIO branch (PCIE2+0x4C), uses `si_corereg` which internally selects the PCIE2 core BEFORE the write. Our existing T241/T280/T284 used `brcmf_pcie_intr_enable` which writes BAR0+0x4C **without** selecting PCIE2 first — exactly the row-171 confound. **T305's design (explicit select_core(PCIE2) before the write) now exactly matches bcmdhd's pattern.** T305 is now strongly motivated, not just speculatively motivated.
+
+### Already-implemented checks (verified, NOT new gaps)
+
+- BAR1 WAR (PCIE2 internal cfg 0x4e0 RMW via CONFIGADDR/CONFIGDATA) is at pcie.c lines 2742-2748 (`test.128`). brcmfmac does this with explicit `brcmf_pcie_select_core(BCMA_CORE_PCIE2)` first. NOT a gap vs bcmdhd.
+- bcma pcie2_init writes (test.194: SBMBX, PMCR_REFUP) are at pcie.c lines 2718-2731. Per memory and code comments, gated on chiprev=3 / pcie2_rev=1.
+
+### Open new lead from B (lower priority than T305)
+
+bcmdhd's BAR1 WAR write to PCIE2 internal cfg 0x4e0 is "RMW (read, write back unchanged)" — same as brcmfmac's test.128. **B's wording suggests the read itself is the operative side effect** (some chips have read-clears semantics). Worth confirming the bcmdhd source at `dhd_pcie.c:457-464` literally writes back the unchanged value, vs read-only-then-write-modified. If the write IS modifying, our test.128 may be wrong. Defer.
+
+### Fire plan recommendation
+
+**Single combined fire: T305 + T306 enabled together.**
+- T305 (pre-set_active MBM write WITH select_core(PCIE2)) — bcmdhd-pattern-validated; single-bit answer on whether the write lands when properly routed.
+- T306 (PCI cfg dump 0x40..0xFF at 3 stages) — read-only; baseline of what brcmfmac leaves at vendor area, including 0x94/0xB4/0xB8.
+- Independent surfaces. T306 is read-only; T305 writes one register. Both print SUMMARY at pre-set_active timing well before any wedge.
+
+Both questions answered in one substrate cost. Per CLAUDE.md full-experiment tier, awaiting user GO.
+
+### Decision tree for follow-ups
+
+- **T305 lands (mbm_post = 0xFF0300):** the routing confound was real. Next: T308 (does the mask persist across set_active? + trigger H2D doorbell + check console).
+- **T305 drops with select_core verified:** MBM is genuinely write-locked. Pursue bcmdhd's `si_corereg` mechanism more carefully — maybe it does something different than our select_core+write. Examine its source.
+- **T306 shows 0x94/0xB4/0xB8 already non-zero or in wl-target state:** chip defaults are favourable; vendor-cfg-writes hypothesis closed.
+- **T306 shows 0x94/0xB4/0xB8 all zero:** wl writes them for a reason, and if T305 doesn't unblock, it's worth looking at why bcmdhd works without them (maybe PMU is in a different state at probe time on Android vs Linux).
+
 
 ## PRE-TEST.302b (drafted 2026-04-27 19:43 BST on user GO. Drops `bcm4360_test300_oob_pending=1` AND `bcm4360_test269_early_exit=1` from the T301 fire; otherwise unchanged. Restores `sleep 150` per T298/T299 baseline so the t+90s/t+120s probes actually run. NO rebuild — same module bits, different param set.)
 
