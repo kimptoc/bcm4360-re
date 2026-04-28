@@ -8,7 +8,38 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-28 ~16:55 BST — DIVERGED to wl-blob test; brcmfmac RE work paused)
+## Current state (2026-04-28 ~23:50 BST — wl-blob excursion CLOSED; baseline cmdline RESTORED in gen-101; ready to resume brcmfmac RE)
+
+### CMDLINE-RESTORE (2026-04-28 ~23:50 BST) — gen-101 staged
+
+User decided to give up on wl path. Gen-101 built with original cmdline:
+`pci=noaer pcie_aspm.policy=performance intel_iommu=on iommu=strict`
+
+Gen-101 is byte-identical to gen-96 (NixOS dedup confirms — same store path
+`bx5zfjxxi2lhdzcpf08bkw6z0qzniyxh-nixos-system-nixos-25.11.9067.54170c54449e`).
+On next reboot, systemd-boot defaults to gen-101 (or pick gen-96 — they are
+functionally identical).
+
+**Backup files in /etc/nixos/ (kept for forensic reference, not needed for normal ops):**
+- `configuration.nix.preWlMitigationTest` — pristine baseline (matches current)
+- `configuration.nix.preMitigationsOff` — gen-97 intermediate (retbleed=off spectre_v2=off)
+- `configuration.nix.preNoIommu` — gen-99 baseline (matches current)
+
+**wl-test outcome summary** (closed; not pursued further this session):
+- Mitigations RULED OUT (gen-97 retbleed/spectre_v2, gen-98 mitigations=off)
+- IOMMU params RULED OUT (gen-100)
+- Failure is in `wl_attach → wlc_attach` (deep BCM4360 hardware probe), not init
+- WARN at `getvar+0x20` is `WARN_ONCE` cosmetic, irrelevant
+- Source: lll-project/broadcom-sta src/wl_linux.c:912
+- Same hardware works on Debian Trixie kernel 6.12 (Debian bug 1100832)
+- **H1 vs H3 (cumulative damage vs NixOS-specific) — UNRESOLVED**
+- Untested: gen-60 (6.12.78) / gen-59 (6.12.76) older-kernel discriminator
+
+**Next step on resume:**
+1. Reboot (gen-101 default, or pick gen-96 — identical) to restore brcmfmac-required cmdline
+2. Verify substrate clean: `lspci -vvv -s 03:00.0 | grep -E 'MAbort|CommClk|LnkSta'`
+3. Resume from open task #168 — diagnose T305/T306 fire-attempt hard freeze
+4. Decide whether the H1 (cumulative damage) hypothesis warrants a clean 66a2a89 brcmfmac fire as a discriminator before resuming patch development
 
 ### WL-IOMMU-TEST (2026-04-28 ~23:30 BST) — gen-100 staged, IOMMU params dropped
 
