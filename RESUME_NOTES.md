@@ -10,6 +10,28 @@
 
 ## Current state (2026-04-28 ~16:55 BST — DIVERGED to wl-blob test; brcmfmac RE work paused)
 
+### WL-IOMMU-TEST (2026-04-28 ~23:30 BST) — gen-100 staged, IOMMU params dropped
+
+**Why:** wl mitigation hypothesis FALSIFIED across gen-97 (retbleed=off spectre_v2=off) and gen-98 (mitigations=off). Reading the broadcom-sta source ([lll-project/broadcom-sta src/wl_linux.c:912](https://github.com/lll-project/broadcom-sta/blob/master/src/wl_linux.c)) revealed the "failed with code 1" message comes from **wl_attach → wlc_attach** (deeper hardware probe), NOT from wl_module_init. The `Unpatched return thunk` WARN is `WARN_ONCE` cosmetic — fires once per boot, never affects the failure (Arch Linux users confirm wl works despite it). NixOS broadcom-sta is at -59 patch (rpmfusion through patch 035, kernel 6.17 ready) — well-patched. Same hardware (MacBook Pro 11,1 + BCM43a0) confirmed working on Debian Trixie kernel 6.12 ([Debian bug 1100832](https://www.mail-archive.com/debian-bugs-dist@lists.debian.org/msg2026406.html)).
+
+**Two hypotheses for wl_attach failing here:**
+- **H1 — BCM4360 cumulative damage** from this project's crash testing, deeper than lspci/MAbort can detect. Concerning for our brcmfmac work too.
+- **H2 — NixOS-specific cmdline** — most likely `intel_iommu=on iommu=strict` (Apple Macs typically don't have these set on Debian).
+
+**Gen-100 staged (testing H2):**
+- `/etc/nixos/configuration.nix` line 25 → `boot.kernelParams = [ "pci=noaer" "pcie_aspm.policy=performance" ];`  (`intel_iommu=on iommu=strict` removed)
+- Backup at `/etc/nixos/configuration.nix.preNoIommu`
+- `sudo nixos-rebuild boot` ran clean → gen-100 built. Currently still on gen-98.
+
+**Next step (when user ready):**
+1. Reboot (systemd-boot defaults to gen-100). Pick gen-99 or earlier from menu to revert.
+2. `sudo insmod /run/booted-system/kernel-modules/lib/modules/6.12.80/kernel/net/wireless/wl.ko`
+3. Compare result:
+   - **wl binds + creates network interface (e.g., wlp3s0)** → IOMMU was the variable. H2 confirmed. RESTORE iommu params after (we need them for brcmfmac DMA work).
+   - **wl still fails with code 1** → H1 stronger (cumulative damage). Pivot to brcmfmac discriminator: clean 66a2a89 fire from this verified-clean substrate.
+
+**Critical:** restore `intel_iommu=on iommu=strict` after this test regardless of outcome — they're load-bearing for our brcmfmac work.
+
 ### WL-MITIGATION-TEST (2026-04-28 ~16:55 BST) — gen-97 attempt FALSIFIED, gen-98 staged
 
 **Why diverged:** after deep power cycle (battery drain + SMC reset), substrate is **clean** (`<MAbort-`). User wants to confirm BCM4360 hardware health via Broadcom proprietary `wl` driver before resuming brcmfmac fires.
