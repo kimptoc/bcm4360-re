@@ -10,25 +10,29 @@
 
 ## Current state (2026-04-28 ~16:55 BST — DIVERGED to wl-blob test; brcmfmac RE work paused)
 
-### WL-MITIGATION-TEST (2026-04-28 ~16:55 BST) — staged, awaiting reboot
+### WL-MITIGATION-TEST (2026-04-28 ~16:55 BST) — gen-97 attempt FALSIFIED, gen-98 staged
 
-**Why diverged:** after deep power cycle (battery drain + SMC reset), substrate is **clean** (`<MAbort-`). User wants to confirm BCM4360 hardware health via Broadcom proprietary `wl` driver before resuming brcmfmac fires. `wl` modprobe at 16:39:21 in current boot (gen-96) failed with kernel WARN `Unpatched return thunk in use` at `getvar+0x20` → `wl_module_init` returned code 1, module is zombie (loaded, refcount 0, unbound).
+**Why diverged:** after deep power cycle (battery drain + SMC reset), substrate is **clean** (`<MAbort-`). User wants to confirm BCM4360 hardware health via Broadcom proprietary `wl` driver before resuming brcmfmac fires.
 
-**Root cause:** kernel's retbleed/return-thunk mitigation rejects code path in proprietary wl blob. NOT a hardware issue.
+**Gen-97 attempt (retbleed=off spectre_v2=off) — RESULT: hypothesis FALSIFIED.**
+- Booted gen-97 at 23:02:00 BST. /proc/cmdline confirmed both flags. sysfs: `spectre_v2: Vulnerable; IBPB: disabled`.
+- `sudo insmod .../wl.ko` at 23:03:48 — module loaded but **same WARN fires identically**: `Unpatched return thunk in use` at `getvar+0x20/0x70 [wl]` → `wl_module_init` → `wl driver 6.30.223.271 (r587334) failed with code 1`.
+- Conclusion: WARN is NOT a runtime mitigation. Almost certainly **GPL-symbol-substitution** — kernel refuses to export GPL-only `__x86_return_thunk` to MIXED/Proprietary modules and substitutes `warn_thunk_thunk` instead. Cmdline mitigation toggles cannot reach this.
+- Kernel itself prints: "*You are using the Broadcom STA wireless driver, which is not maintained and is incompatible with Linux kernel security mitigations.*" — hardcoded for wl.
 
-**Action staged (gen-97):**
-- `/etc/nixos/configuration.nix` line 22 → `boot.kernelParams` now includes `retbleed=off spectre_v2=off`
-- Backup at `/etc/nixos/configuration.nix.preWlMitigationTest`
-- `sudo nixos-rebuild boot` ran clean → gen-97 created, NOT activated. Currently still on gen-96.
-- Revert helper: `phase5/work/revert-wl-mitigation.sh` (restores backup + nixos-rebuild boot)
+**Gen-98 staged (mitigations=off blanket) — broader hammer for completeness.**
+- `/etc/nixos/configuration.nix` updated: replaced `retbleed=off spectre_v2=off` with `mitigations=off`.
+- Backup chain: `.preWlMitigationTest` (original), `.preMitigationsOff` (gen-97 intermediate).
+- `sudo nixos-rebuild boot` ran clean → gen-98 created. Currently still on gen-97 from previous test.
+- Expectation: WARN persists (this is GPL enforcement, not toggleable). Proving empirically.
 
 **Next step (when user ready):**
-1. Reboot (systemd-boot will default to gen-97 with mitigations off)
-2. `sudo modprobe wl` (or `insmod`) and observe — if `wl` binds and BCM4360 enumerates as wireless interface → hardware confirmed healthy
-3. After test: run `phase5/work/revert-wl-mitigation.sh` then reboot back to mitigated kernel (any generation 96 or earlier)
-4. Resume brcmfmac fires from clean substrate
+1. Reboot (systemd-boot defaults to gen-98). Or pick gen-96/older from menu to revert immediately.
+2. `sudo insmod /run/booted-system/kernel-modules/lib/modules/6.12.80/kernel/net/wireless/wl.ko`
+3. Compare WARN to previous attempts — if gone, hypothesis was right after all. If present, wl is fundamentally dead on 6.12 and we abandon this path.
+4. After: revert via `phase5/work/revert-wl-mitigation.sh` (restores gen-96 baseline) then reboot.
 
-**Mitigation flip is reversible at any time via the systemd-boot menu** (pick gen-96 or earlier).
+**Reminder: substrate is clean and BCM4360 lspci-enumerates fine — basic hardware health is already evidenced regardless of wl outcome.**
 
 ---
 
