@@ -10,7 +10,27 @@
 
 ## Current state (2026-04-28 ~08:45 BST — POST-fire-attempt: HARD FREEZE during fw download; T305+T306 NEVER FIRED; substrate clean post-reboot)
 
-### POST-FIRE-ATTEMPT (boot -1: 08:35:19 → 08:39:25 BST, 4 min)
+### POST-R1-RE-FIRE (boot -1: 08:43:02 → 08:51:37 BST, 8.5 min) — **2nd hard freeze, different crash point**
+
+R1 (re-fire identical script) was attempted. Same patched brcmfmac (15.6 MB, T305+T306 params) loaded successfully via insmod. **Crash hit at test.158 `about to pci_clear_master`** — BEFORE chip_attach completed properly, BEFORE fw download even began. ~20 sec from module_init to freeze. Identical no-oops/no-AER hard-freeze pattern, abrupt journal cutoff. Required hard power-cycle (13 min gap to next boot).
+
+**2-for-2 crashes today; both during PCIe device I/O, at different points in the same ~20s window:**
+- Crash 1 (08:39:25): test.225 chunk 24/108 — BAR2 MMIO write (deep in fw download)
+- Crash 2 (08:51:37): test.158 pci_clear_master — config-space write (early, just after chip_attach)
+
+**Common factor:** PCIe transaction targeting BCM4360. Pure host-side setup (chip enumeration, buscore_reset, PMU WARs, max/min_res_mask writes — all observed up to 08:51:36 in crash 2) completes fine. The freeze hits at the next outbound PCIe txn.
+
+**`pci=noaer` is in /proc/cmdline** — present yesterday (test.304 succeeded with it) and today, so not a NEW variable. But it means PCIe link-layer errors and completion timeouts are completely INVISIBLE. If the BCM4360 is dropping completions, we'd see hard freeze not AER trace.
+
+**Substrate post-each-reboot:** clean. MAbort-, CommClk+, link 2.5GT/s x1, no brcm modules loaded. Hardware survives intact between boots.
+
+**Diff from yesterday's test.304 (last clean run):** new code added is bounded to the test.276 pre-set_active block, gated on params default-0. Macro definition + 2 module_param entries at file scope. None of this code runs until pre-set_active. Both crashes hit BEFORE pre-set_active. So new T305/T306 code itself can be ruled out as the trigger.
+
+**What DID change today:** all crashes are first-fire-after-cold-boot. Yesterday's test.304 was likely a fire after the system had been up for hours of testing. Cold-boot state difference is plausible but unverified.
+
+**Suspended R1 plan; T305+T306 never reached set_active in either fire. STOP touching hardware until we have a hypothesis.** Advisor consultation pending.
+
+### POST-FIRE-ATTEMPT-1 (boot -2: 08:35:19 → 08:39:25 BST, 4 min)
 
 `fire-t305-t306.sh` was invoked. Patched brcmfmac (15.6 MB, with T305+T306 params) loaded successfully. Path through chip_attach → fw_request → set_passive → enter_download_state → fw chunked write. **Crash hit at test.225 chunk 24/108** (98304 / 442233 bytes written, ~22% through). Chunks 1–24 all show `readback=…OK`. Then immediate journal cutoff at 08:39:25 with no oops, no panic, no AER, no PCIe error. Required hard power-cycle (3+ min gap before next boot).
 
