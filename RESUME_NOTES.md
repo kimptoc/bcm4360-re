@@ -30,6 +30,16 @@ R1 (re-fire identical script) was attempted. Same patched brcmfmac (15.6 MB, T30
 
 **Suspended R1 plan; T305+T306 never reached set_active in either fire. STOP touching hardware until we have a hypothesis.** Advisor consultation pending.
 
+### PRE-FIRE-3 (warm-boot discriminator A) — fire scheduled at >=15 min post-boot
+
+**Boot 0 started 09:04:19. Current ~09:19. Firing now after 15+ min uptime.**
+
+**Hypothesis (cold-boot timing):** today's 2-for-2 hard freezes both happened at first-fire-after-cold-boot (4 min and 8 min uptime). Yesterday's clean test.304 was after long uptime. If we fire at 15+ min uptime with the SAME script + SAME build, and:
+- it SURVIVES through fw download + pre-set_active → cold-boot init was the killer; T305/T306 should produce SUMMARY lines
+- it CRASHES → cold-boot hypothesis falsified; switch to discriminator B (revert pcie.c to 66a2a89, rebuild, fire test.304-equivalent — distinguish env vs build)
+
+**Substrate ready:** MAbort-, CommClk+, link 2.5GT/s x1, no brcm modules, mitigations not overridden. Patched brcmfmac.ko present at phase5/work (T305+T306 params, build 08:19 today).
+
 ### POST-FIRE-ATTEMPT-1 (boot -2: 08:35:19 → 08:39:25 BST, 4 min)
 
 `fire-t305-t306.sh` was invoked. Patched brcmfmac (15.6 MB, with T305+T306 params) loaded successfully. Path through chip_attach → fw_request → set_passive → enter_download_state → fw chunked write. **Crash hit at test.225 chunk 24/108** (98304 / 442233 bytes written, ~22% through). Chunks 1–24 all show `readback=…OK`. Then immediate journal cutoff at 08:39:25 with no oops, no panic, no AER, no PCIe error. Required hard power-cycle (3+ min gap before next boot).
