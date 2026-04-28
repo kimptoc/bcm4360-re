@@ -935,6 +935,65 @@ static int bcm4360_test305_premask_with_select;
 module_param(bcm4360_test305_premask_with_select, int, 0644);
 MODULE_PARM_DESC(bcm4360_test305_premask_with_select, "BCM4360 test.305: pre-set_active MAILBOXMASK enable WITH explicit select_core(PCIE2) before the write. Discriminator for the row-171 confound: was T284's silent-drop verdict a routing artefact (write hit chipcommon+0x4C instead of PCIE2+0x4C) or a true write-lock? Logs BAR0_WINDOW before+after select_core, MBM before+after intr_enable. Set THIS or test284, not both. (1=enable, 0=off)");
 
+/* BCM4360 test.306: PCI CONFIG SPACE vendor-area read at multiple stages.
+ * READ-ONLY discriminator for the "wl writes vendor config offsets that
+ * brcmfmac doesn't" hypothesis. Static disasm of wl.ko (broadcom-sta
+ * 6.30.223.271-59) found 31 config-space write sites; the BCM4360 init
+ * call graph (wl_pci_probe -> wlc_attach -> wlc_bmac_attach -> ...)
+ * reaches:
+ *   - si_clkctl_xtal: writes config 0xB4 + 0xB8 (PMU/clock crystal area)
+ *   - si_pci_setup (during wl_up later): RMW config 0x94
+ *   - si_pcieobffenable / si_pcieltrenable: PCIe cap chain (LTR/OBFF)
+ *   - pcicore_pmeen / pcicore_pmeclr / pcicore_pmestatclr: PME area
+ * brcmfmac currently writes config space only at offset 0x80
+ * (BAR0_WINDOW). The vendor-PMU-area registers are never touched.
+ * T306 reads offsets 0x40..0xFF in 4-byte steps at pre-write,
+ * post-set_active, and post-T276-poll stages. Output is a single
+ * SUMMARY line per stage with hex dump of the 0xC0 bytes (48 dwords).
+ * Goal: see what default values brcmfmac leaves these at, and whether
+ * any change naturally during fw boot. If the wl-target offsets show
+ * non-default values, that's a baseline for what wl needs to write.
+ * READ-ONLY — no writes, no risk of wedging the chip. Independent of
+ * test305; safe to combine. Default off. Wired at pre-write, post-
+ * set_active, and post-T276-poll. */
+static int bcm4360_test306_cfg_dump;
+module_param(bcm4360_test306_cfg_dump, int, 0644);
+MODULE_PARM_DESC(bcm4360_test306_cfg_dump, "BCM4360 test.306: read-only dump of PCI CONFIG SPACE offsets 0x40..0xFF at pre-write, post-set_active, post-T276-poll stages. Discriminator for vendor-config-space gap (wl writes 0x94, 0xB4, 0xB8 etc; brcmfmac doesn't). READ-ONLY. Independent of test284/305. (1=enable, 0=off)");
+
+/* BCM4360 test.306: PCI config-space dump helper. Reads 0x40..0xFF
+ * (48 dwords = 192 bytes) and emits as 6 hex lines per stage. Standard
+ * PCIe Type 0 header + capability chain + vendor-specific area covered. */
+#define BCM4360_T306_CFG_DUMP(tag) do { \
+	if (bcm4360_test306_cfg_dump) { \
+		u32 _t306_v[48]; \
+		int _t306_i; \
+		for (_t306_i = 0; _t306_i < 48; _t306_i++) { \
+			pci_read_config_dword(devinfo->pdev, \
+				0x40 + (_t306_i * 4), &_t306_v[_t306_i]); \
+		} \
+		pr_emerg("BCM4360 test.306: %s cfg[0x40..0x5C]= %08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 tag, _t306_v[0], _t306_v[1], _t306_v[2], _t306_v[3], \
+			 _t306_v[4], _t306_v[5], _t306_v[6], _t306_v[7]); \
+		pr_emerg("BCM4360 test.306: %s cfg[0x60..0x7C]= %08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 tag, _t306_v[8], _t306_v[9], _t306_v[10], _t306_v[11], \
+			 _t306_v[12], _t306_v[13], _t306_v[14], _t306_v[15]); \
+		pr_emerg("BCM4360 test.306: %s cfg[0x80..0x9C]= %08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 tag, _t306_v[16], _t306_v[17], _t306_v[18], _t306_v[19], \
+			 _t306_v[20], _t306_v[21], _t306_v[22], _t306_v[23]); \
+		pr_emerg("BCM4360 test.306: %s cfg[0xA0..0xBC]= %08x %08x %08x %08x %08x %08x %08x %08x (note 0xB4+0xB8 = wl si_clkctl_xtal targets)\n", \
+			 tag, _t306_v[24], _t306_v[25], _t306_v[26], _t306_v[27], \
+			 _t306_v[28], _t306_v[29], _t306_v[30], _t306_v[31]); \
+		pr_emerg("BCM4360 test.306: %s cfg[0xC0..0xDC]= %08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 tag, _t306_v[32], _t306_v[33], _t306_v[34], _t306_v[35], \
+			 _t306_v[36], _t306_v[37], _t306_v[38], _t306_v[39]); \
+		pr_emerg("BCM4360 test.306: %s cfg[0xE0..0xFC]= %08x %08x %08x %08x %08x %08x %08x %08x\n", \
+			 tag, _t306_v[40], _t306_v[41], _t306_v[42], _t306_v[43], \
+			 _t306_v[44], _t306_v[45], _t306_v[46], _t306_v[47]); \
+		pr_emerg("BCM4360 test.306: %s SUMMARY cfg94=0x%08x cfgB4=0x%08x cfgB8=0x%08x\n", \
+			 tag, _t306_v[(0x94-0x40)/4], _t306_v[(0xB4-0x40)/4], _t306_v[(0xB8-0x40)/4]); \
+	} \
+} while (0)
+
 /* BCM4360 test.285: read-only probe of chipcommon registers via
  * BAR0_WINDOW switch. T283 static analysis inferred that fw's
  * scheduler wake-path is chipcommon-side (BIT_alloc reads chipcommon
@@ -4708,7 +4767,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				 * pre-set_active MBM writes work. Open question:
 				 * does the pre-set mask survive fw init? */
 				if (bcm4360_test284_premask_enable) {
-					BCM4360_T284_READ_MBM("pre-write (pre-set_active)"); BCM4360_T285_READ_CC("pre-write (pre-set_active)"); BCM4360_T287_READ_SCHED("pre-write (pre-set_active)"); BCM4360_T303_READ_EXTRAS("pre-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("pre-write (pre-set_active)"); BCM4360_T298_ISR_WALK("pre-write (pre-set_active)"); BCM4360_T290A_CHAIN("pre-write (pre-set_active)"); BCM4360_T290B_CC_WRITE("pre-write (pre-set_active)");
+					BCM4360_T284_READ_MBM("pre-write (pre-set_active)"); BCM4360_T285_READ_CC("pre-write (pre-set_active)"); BCM4360_T287_READ_SCHED("pre-write (pre-set_active)"); BCM4360_T303_READ_EXTRAS("pre-write (pre-set_active)"); BCM4360_T288A_READ_WRAPS("pre-write (pre-set_active)"); BCM4360_T298_ISR_WALK("pre-write (pre-set_active)"); BCM4360_T290A_CHAIN("pre-write (pre-set_active)"); BCM4360_T290B_CC_WRITE("pre-write (pre-set_active)"); BCM4360_T306_CFG_DUMP("pre-write (pre-set_active)");
 					pr_emerg("BCM4360 test.284: calling brcmf_pcie_intr_enable (pre-set_active — writes MBM = 0xFF0300)\n");
 					brcmf_pcie_intr_enable(devinfo);
 					pr_emerg("BCM4360 test.284: brcmf_pcie_intr_enable returned\n");
@@ -4764,7 +4823,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 				else
 					pr_emerg("BCM4360 test.238: brcmf_chip_set_active returned TRUE\n");
 
-				BCM4360_T284_READ_MBM("post-set_active (CRITICAL: does ARM release clear it?)"); BCM4360_T285_READ_CC("post-set_active"); BCM4360_T287_READ_SCHED("post-set_active"); BCM4360_T303_READ_EXTRAS("post-set_active"); BCM4360_T288A_READ_WRAPS("post-set_active"); BCM4360_T298_ISR_WALK("post-set_active"); BCM4360_T290A_CHAIN("post-set_active"); BCM4360_T290B_CC_WRITE("post-set_active"); BCM4360_T300_OOB_PENDING_READ("post-set_active"); BCM4360_T304_OOB_WRITE_PROBE("post-set_active");
+				BCM4360_T284_READ_MBM("post-set_active (CRITICAL: does ARM release clear it?)"); BCM4360_T285_READ_CC("post-set_active"); BCM4360_T287_READ_SCHED("post-set_active"); BCM4360_T303_READ_EXTRAS("post-set_active"); BCM4360_T288A_READ_WRAPS("post-set_active"); BCM4360_T298_ISR_WALK("post-set_active"); BCM4360_T290A_CHAIN("post-set_active"); BCM4360_T290B_CC_WRITE("post-set_active"); BCM4360_T300_OOB_PENDING_READ("post-set_active"); BCM4360_T304_OOB_WRITE_PROBE("post-set_active"); BCM4360_T306_CFG_DUMP("post-set_active");
 
 				/* BCM4360 test.276: 2 s post-ARM-release poll of
 				 * shared_info response fields. Log on any change,
@@ -4813,7 +4872,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 						 brcmf_pcie_read_reg32(devinfo,
 							BRCMF_PCIE_PCIE2REG_MAILBOXINT));
 
-					BCM4360_T284_READ_MBM("post-T276-poll"); BCM4360_T285_READ_CC("post-T276-poll"); BCM4360_T287_READ_SCHED("post-T276-poll"); BCM4360_T303_READ_EXTRAS("post-T276-poll"); BCM4360_T288A_READ_WRAPS("post-T276-poll"); BCM4360_T298_ISR_WALK("post-T276-poll"); BCM4360_T290A_CHAIN("post-T276-poll"); BCM4360_T294_CC_RO_PROBE("post-T276-poll"); BCM4360_T290B_CC_WRITE("post-T276-poll");
+					BCM4360_T284_READ_MBM("post-T276-poll"); BCM4360_T285_READ_CC("post-T276-poll"); BCM4360_T287_READ_SCHED("post-T276-poll"); BCM4360_T303_READ_EXTRAS("post-T276-poll"); BCM4360_T288A_READ_WRAPS("post-T276-poll"); BCM4360_T298_ISR_WALK("post-T276-poll"); BCM4360_T290A_CHAIN("post-T276-poll"); BCM4360_T294_CC_RO_PROBE("post-T276-poll"); BCM4360_T290B_CC_WRITE("post-T276-poll"); BCM4360_T306_CFG_DUMP("post-T276-poll");
 
 					/* BCM4360 test.277: post-poll console decode.
 					 * Re-read the pointer fw published at si[+0x010]
