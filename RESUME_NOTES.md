@@ -8,7 +8,31 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-28 ~08:45 BST — POST-fire-attempt: HARD FREEZE during fw download; T305+T306 NEVER FIRED; substrate clean post-reboot)
+## Current state (2026-04-28 ~16:55 BST — DIVERGED to wl-blob test; brcmfmac RE work paused)
+
+### WL-MITIGATION-TEST (2026-04-28 ~16:55 BST) — staged, awaiting reboot
+
+**Why diverged:** after deep power cycle (battery drain + SMC reset), substrate is **clean** (`<MAbort-`). User wants to confirm BCM4360 hardware health via Broadcom proprietary `wl` driver before resuming brcmfmac fires. `wl` modprobe at 16:39:21 in current boot (gen-96) failed with kernel WARN `Unpatched return thunk in use` at `getvar+0x20` → `wl_module_init` returned code 1, module is zombie (loaded, refcount 0, unbound).
+
+**Root cause:** kernel's retbleed/return-thunk mitigation rejects code path in proprietary wl blob. NOT a hardware issue.
+
+**Action staged (gen-97):**
+- `/etc/nixos/configuration.nix` line 22 → `boot.kernelParams` now includes `retbleed=off spectre_v2=off`
+- Backup at `/etc/nixos/configuration.nix.preWlMitigationTest`
+- `sudo nixos-rebuild boot` ran clean → gen-97 created, NOT activated. Currently still on gen-96.
+- Revert helper: `phase5/work/revert-wl-mitigation.sh` (restores backup + nixos-rebuild boot)
+
+**Next step (when user ready):**
+1. Reboot (systemd-boot will default to gen-97 with mitigations off)
+2. `sudo modprobe wl` (or `insmod`) and observe — if `wl` binds and BCM4360 enumerates as wireless interface → hardware confirmed healthy
+3. After test: run `phase5/work/revert-wl-mitigation.sh` then reboot back to mitigated kernel (any generation 96 or earlier)
+4. Resume brcmfmac fires from clean substrate
+
+**Mitigation flip is reversible at any time via the systemd-boot menu** (pick gen-96 or earlier).
+
+---
+
+## Previous state (2026-04-28 ~08:45 BST — POST-fire-attempt: HARD FREEZE during fw download; T305+T306 NEVER FIRED; substrate clean post-reboot)
 
 ### POST-R1-RE-FIRE (boot -1: 08:43:02 → 08:51:37 BST, 8.5 min) — **2nd hard freeze, different crash point**
 
