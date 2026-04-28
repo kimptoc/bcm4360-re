@@ -40,6 +40,28 @@ R1 (re-fire identical script) was attempted. Same patched brcmfmac (15.6 MB, T30
 
 **Substrate ready:** MAbort-, CommClk+, link 2.5GT/s x1, no brcm modules, mitigations not overridden. Patched brcmfmac.ko present at phase5/work (T305+T306 params, build 08:19 today).
 
+### POST-FIRE-3 (boot -1: 09:04:19 → 09:20:32 BST, 16 min) — **3rd hard freeze; cold-boot hypothesis FALSIFIED**
+
+Fire happened at ~15-min uptime. Crashed within ~21 seconds of brcmfmac module_init. **Crash 3 hit at test.188 post-attach** — after `brcmf_pcie_attach` (test.128 + test.194 PCIe2 register writes) returned, before `brcmf_chip_get_raminfo` (test.130) and before fw download.
+
+**3-for-3 today, three different crash points within ~20 sec window:**
+- Crash 1 (08:39:25, 4 min uptime): test.225 chunk 24 — deep in fw download (BAR2 MMIO writes)
+- Crash 2 (08:51:37, 8 min uptime): test.158 about_to pci_clear_master — first config write after chip_attach
+- Crash 3 (09:20:32, 16 min uptime): test.188 post-attach ARM CR4 check — between brcmf_pcie_attach and fw download
+
+**Verdict on hypothesis A (cold-boot timing): FALSIFIED.** 15+ min uptime did NOT prevent the freeze. Crash distribution is random across the 20-sec post-init window — NOT a deterministic code bug.
+
+**Strong candidates remaining:**
+- (i) Marginal hardware (PSU sag, capacitor, BCM4360 silicon failure surfacing under PCIe load) — would explain random crash points
+- (ii) System-level issue introduced today (kernel state, power management, cmdline change we missed)
+- (iii) Build implicated despite gating — discriminator B would test this
+
+**Hardware substrate clean post-each-reboot, link UP at 2.5GT/s x1.** Three power cycles required so far.
+
+**Suspending all hardware fires. Next steps require user decision.** Discriminator B (revert pcie.c to 66a2a89, rebuild, fire test.304-equivalent) is the next experiment but burns another reboot if it crashes. Alternative: full diagnostic survey (memtest, smartctl, applesmc temps) before any further fire.
+
+
+
 ### POST-FIRE-ATTEMPT-1 (boot -2: 08:35:19 → 08:39:25 BST, 4 min)
 
 `fire-t305-t306.sh` was invoked. Patched brcmfmac (15.6 MB, with T305+T306 params) loaded successfully. Path through chip_attach → fw_request → set_passive → enter_download_state → fw chunked write. **Crash hit at test.225 chunk 24/108** (98304 / 442233 bytes written, ~22% through). Chunks 1–24 all show `readback=…OK`. Then immediate journal cutoff at 08:39:25 with no oops, no panic, no AER, no PCIe error. Required hard power-cycle (3+ min gap before next boot).
