@@ -60,6 +60,16 @@ Fire happened at ~15-min uptime. Crashed within ~21 seconds of brcmfmac module_i
 
 **Suspending all hardware fires. Next steps require user decision.** Discriminator B (revert pcie.c to 66a2a89, rebuild, fire test.304-equivalent) is the next experiment but burns another reboot if it crashes. Alternative: full diagnostic survey (memtest, smartctl, applesmc temps) before any further fire.
 
+### PRE-FIRE-4 (discriminator B — code vs environment)
+
+**Substrate as of 09:37:** clean (MAbort-, CommClk+, link 2.5GT/s x1, no brcm loaded). `pcie.c` reverted via `git checkout 66a2a89 -- ...` (verified: `grep -c bcm4360_test30[56]` returns 0). Clean rebuild done — fresh `pcie.o`, fresh `brcmfmac.o`, fresh `brcmfmac.ko` (15.57 MB, modinfo confirms no test305/306). Other .o files still from Apr 22 (same as yesterday — not a new variable).
+
+**Hypothesis.** Fire at 66a2a89 (last known-good) with the closest-match-to-yesterday param set: `test.276 + 277 + 278 + 287 + 298 + 303 + 304`. Outcomes:
+- **Survives** → today's T305/T306 build was implicated despite gating (stack/section/.bss layout shift, debug-info size, etc.). Bisect: T306 only, then T305 only.
+- **Crashes** → environmental/hardware. Don't fire again today; capture full lspci -xxxxvvv extended config diff and let the chip cool.
+
+**Pre-test checklist done:** build OK; substrate clean; mitigations not overridden; hypothesis stated.
+
 
 
 ### POST-FIRE-ATTEMPT-1 (boot -2: 08:35:19 → 08:39:25 BST, 4 min)
