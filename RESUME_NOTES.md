@@ -8,7 +8,35 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-28 ~00:30 BST — wl path closed; PRE-PATH(a)/T305 staged + built; awaiting user reboot + fire decision)
+## Current state (2026-04-28 ~08:45 BST — POST-fire-attempt: HARD FREEZE during fw download; T305+T306 NEVER FIRED; substrate clean post-reboot)
+
+### POST-FIRE-ATTEMPT (boot -1: 08:35:19 → 08:39:25 BST, 4 min)
+
+`fire-t305-t306.sh` was invoked. Patched brcmfmac (15.6 MB, with T305+T306 params) loaded successfully. Path through chip_attach → fw_request → set_passive → enter_download_state → fw chunked write. **Crash hit at test.225 chunk 24/108** (98304 / 442233 bytes written, ~22% through). Chunks 1–24 all show `readback=…OK`. Then immediate journal cutoff at 08:39:25 with no oops, no panic, no AER, no PCIe error. Required hard power-cycle (3+ min gap before next boot).
+
+**T305 and T306 never executed.** Both wire in inside the test.276 pre-set_active block (pcie.c lines 4770/4781), which only runs *after* `brcmf_chip_set_active`, which only runs *after* fw download completes. We crashed long before that point.
+
+**This crash is anomalous.** 78 prior `phase5/logs/test.*.journalctl*` runs traversed the same fw-download path; yesterday's `test.304` ran chunks 1–109 cleanly. Today's chunk-24 hard freeze has no obvious mechanism in the code — it's a pure BAR2 MMIO chunked write with per-chunk readback verification.
+
+**Substrate post-reboot (boot 0, 08:43:02):** clean. `lspci -vvv -s 03:00.0` → MAbort-, CommClk+, LnkSta 2.5GT/s x1. No brcm modules loaded. `mitigations=off` not present. Hardware survived intact.
+
+**Confounder: brcmfmac is NOT in nixos blacklist** (`boot.blacklistedKernelModules = [ "wl" "b43" "bcma" "ssb" ]`). udev would auto-bind brcmfmac on PCI match if the patched .ko were ever installed into the system module tree. The booted-system path holds only stock 216KB brcmfmac.ko.xz, so auto-bind would have used stock — but the test.X markers in dmesg confirm our patched 15.6MB module loaded. ⇒ The fire script `insmod` was the loader, as expected.
+
+**Hypotheses for the freeze (low confidence):**
+1. **Coincidental hardware event** — power, thermal, capacitor. Re-fire would test reproducibility.
+2. **Cold-boot timing** — module init at +3:47 from cold boot may differ from typical post-uptime fires; PCIe/CPU state not fully settled.
+3. **Test-code interaction** — unlikely; T305/T306/T298 all wire post-set_active, none reached.
+
+**Decision pending from user.** Options:
+- **(R1) Re-fire identical script** — simplest; tests repro. ~80% expected to succeed based on history.
+- **(R2) Strip to T306-only** (read-only cfg dump) — minimum-risk discriminator, omits T305 write path. If it survives, T305 can be added on the next fire.
+- **(R3) Wait and investigate substrate** — temperatures, dmidecode, journal for any recent SEL/MCE events. Lowest hardware risk but learns nothing about original question.
+
+Recommendation: **R1 first** — the test/code is innocent; high prior probability the crash was incidental. If it crashes again at the SAME chunk, switch to R2 + investigate.
+
+### PRE-FIRE — what was prepared (preserved for context)
+
+
 
 **Headline.** Cycle 1+1b (live wl trace attempt) closed: wl_module_init aborts at `getvar+0x20` with `code 1`; under Option-A static disasm of wl.ko the real failure is `wlc_attach` returning 1 inside the closed Broadcom blob (the WARN is a structurally-noisy retpoline-fallback printk, not the failure). Module-param sweep (`passivemode`, `oneonly`, `nompc`, `piomode`) all fail identically. **wl path dead** — full migration of cycle1/1b detail in [RESUME_NOTES_HISTORY.md](RESUME_NOTES_HISTORY.md). **Pivot to Path (a)** per advisor steer; reframed with explicit `select_core(PCIE2)` per KEY_FINDINGS row-171 confound flag.
 
