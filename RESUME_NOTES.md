@@ -70,6 +70,30 @@ Fire happened at ~15-min uptime. Crashed within ~21 seconds of brcmfmac module_i
 
 **Pre-test checklist done:** build OK; substrate clean; mitigations not overridden; hypothesis stated.
 
+### POST-FIRE-4 (boot -1: 09:27:28 → 09:38:30 BST, 11 min) — **4th hard freeze; discriminator B verdict: HARDWARE/ENV implicated**
+
+User fired the canonical `test-brcmfmac.sh` (plain insmod, no params) on the clean 66a2a89 rebuild. Active test was `test.234` (default-on, gated only on `!test236_force_seed`) — the upper-TCM-zero + ARM release diagnostic. **Crashed at `t+700ms` post-set_active dwell.** 81 test.234 markers in journal. None of test305/306/276/277/278 (rebuilt module has no T305/306; canonical script doesn't enable the others).
+
+**4-for-4 today, all within ~20s of insmod, four different crash points:**
+- Crash 1 (4 min uptime, T305/306 build): mid-fw-download (chunk 24)
+- Crash 2 (8 min uptime, T305/306 build): pci_clear_master
+- Crash 3 (16 min uptime, T305/306 build): post-PCIe-attach ARM check
+- Crash 4 (11 min uptime, **clean 66a2a89 build**): t+700ms post-set_active dwell
+
+**Discriminator B verdict.** Reverted build (no T305/306 code at all) ALSO crashed → today's T305/306 patch is NOT the (sole) cause. Hardware or environmental issue confirmed.
+
+**Substrate after crash 4 is DIRTY for the first time today:**
+- `ASPM Disabled` (was Enabled by default after prior crashes)
+- `CommClk-` (was `CommClk+` after every prior crash)
+- MAbort still clean
+- Link still UP at 2.5GT/s x1
+
+Suggests **cumulative damage** from the four hard freezes. Captured full extended config to `/home/kimptoc/bcm4360-re/phase5/logs/test.crash4-post-cfg.txt`.
+
+**FULL STOP on hardware fires.** Per advisor: don't keep iterating on hardware today. Diagnosis is more valuable than another data point at this rate. Recommended cooldown + reseat + comparison of the captured config-space dump against any pre-wl-cycle baseline.
+
+**One observational note:** Crash 4 progressed FURTHER than crashes 1–3 (got past set_active and 700ms post-release dwell). Could be statistical variance in the ~20s instability window, or the clean build is marginally less destabilizing. Not enough data to claim either.
+
 
 
 ### POST-FIRE-ATTEMPT-1 (boot -2: 08:35:19 → 08:39:25 BST, 4 min)
