@@ -22,6 +22,35 @@ User authorized pivot to static analysis after the H1 evidence ruled out further
 
 **Target D (compare wl `wl_attach` vs brcmfmac pre-set_active) — DEFERRED.** Phase 6 NOTES.md explicitly warns against broad wl callgraph expansion without runtime grounding; T304h's prior subagent attempt produced "wl.ko likely…" hypotheses without disasm and was flagged DO-NOT-PROPAGATE in row 165. With chip degraded, runtime grounding for any wl finding would be hard to obtain.
 
+### T307 (option-3 pivot — HW-internal-event wake-surface enumeration, 2026-04-29 ~08:30–10:00 BST)
+
+User authorized strategic pivot per row 167's option (b): "accept that wake requires HW-internal events and shift to D11 MAC event sources / internal core asserts". Worked the bit-0 RTE chipcommon-class ISR (T298 Node[1], fn=0x0b05) — the only previously-undisassembled element of the wake surface.
+
+**Trace (all directly disassembled, no subagent):**
+- Thunk fn@0xB04: loads `*0x6296c` (sched_ctx) into r0, `*0x62994` (chipcommon-ctx pointer) into r1, tail-calls dispatcher fn@0xABC.
+- Dispatcher fn@0xABC: walks 5-entry callback table at TCM[0x62914..0x6294F] — each entry `{u32 mask, fn_ptr fn, void* arg}`. Fires `fn(arg)` for any entry where `table_mask & active_mask != 0`. Active mask = chipcommon_ctx[+0x20] AND `*(0x62950)` global mask, OR a fallback constant `0x41` when `sched_ctx[+0x14] <= 20`.
+- Table-base getter fn@0xAB4: returns the constant `0x62914`.
+- Registration helper fn@0x63AC4: `register_cc_isr(sih, fn, mask, arg)` — si-switches to chipcommon, finds first empty slot, stores entry, ORs mask into `*(0x62950)` and chipcommon-struct `[+0x24]`.
+
+**Exhaustive direct-BL search of the entire 442 KB blob (`phase6/t307_find_callers.py`):** ONLY ONE caller of register_cc_isr at fn@0x63F44 (inside an HNDRTE init function). It registers `(fn=0x1BA4, mask=0x20, arg=0)`.
+
+**fn@0x1BA4 (the sole registered chipcommon-class callback):** PMU/PLL bookkeeping handler. Reads chipcommon-ctx `[+0x644]` (PMU_PLLCONTROL_ADDR area per BCMA layout), tests bit 25, exits if not set. ACKs by writing 0x40 to `[+0x608]` (PMU_STAT INTPEND bit). Reads remaining-time at `*(0x629C8)`, computes elapsed via `fn@0xFD8 - *(0x629C4)`, decrements; tail-calls fn@0x1B3C which programs PMU_PLLCONTROL_ADDR with computed bits. **No doorbell writes, no shared_info writes, no DMA/ring touches, no fw scheduler nudges. No protocol-advance side effects.**
+
+**Closure (combining T307 + prior rows):** the HW-internal-event wake surface in offload runtime is now fully enumerated and none of it advances brcmfmac protocol state. The fw is genuinely idle at WFI waiting for events that the offload runtime never enables. **The path to fw wake on this configuration is fw-modification or chip-replacement, not host-injection.** New KEY_FINDINGS row added between rows 174 and the wl-failure row.
+
+### Project-level strategic position (post-T307)
+
+All host-side wake-injection paths were already CLOSED prior (rows 167/168/169/170). T307 closes the last remaining "could there be a HW-internal event we haven't traced?" question. The two fundamental blockers are now both confirmed:
+
+1. **Chip:** H1 hardware degradation (row 99) — endpoint-only persistent CommClk- / ASPM Disabled, asymmetric vs root port, survived deep cold cycle.
+2. **Firmware:** offload runtime never enables any wake source the host can drive. fw expects events that don't fire under the brcmfmac driver path.
+
+These are independent; either alone would block bring-up. Together they bound this branch of the project. The remaining options are:
+- Source a known-good BCM4360 (replace AirPort board per [iFixit guide](https://www.ifixit.com/Guide/MacBook+Pro+13-Inch+Retina+Display+Early+2015+AirPort+Board+Replacement/38518)) AND find a fw-modification path or wl-trace path on a healthy substrate.
+- Archive findings as research output; the project has produced substantial primary-source RE results (chip identity, fw structure, register layouts, protocol observations, ISR enumeration) that stand independently of bring-up.
+
+
+
 ### Synthesis (where this leaves the project)
 
 The previously-pending T305/T306 fire was aimed at the MBM-as-wake-gate hypothesis. That hypothesis is now formally closed by static analysis alone: T305's mechanism would have worked, but the wake mechanism it was probing isn't the right one anyway (fw doesn't read PCIE2 registers).
