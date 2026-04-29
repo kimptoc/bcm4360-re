@@ -29,7 +29,9 @@ This is concrete H1 (cumulative-damage) evidence. Captured to KEY_FINDINGS.md as
 - More setpci-only config-space probes (no MMIO/DMA/insmod)
 - Diff full extended config dump now vs `test.crash4-post-cfg.txt` byte-by-byte (config 0x40..0x4ff)
 - Inspect Vendor-Specific cap [68], Vendor-Specific Information at config 0x100+ (Broadcom proprietary regs accessible without driver bind)
-- Try a longer cold cycle (shutdown + 30+ min unplugged + battery drain attempt #2) to test whether degradation is recoverable
+- Try a longer cold cycle (shutdown + several hours unplugged) — only untested recovery path
+
+**Web research (2026-04-29 ~07:50 BST):** searched for prior occurrences of (a) PCIe endpoint `LnkCtl=0x0000` / `CommClk-` persistent across power cycles, (b) BCM4360 `wlc_attach` code-1 failures, (c) BCM4360 brcmfmac silent hangs mid-fw-download. **No direct match for our exact symptom set**, but the closest analogue ([Arch forum "PCIe broken / retraining fails"](https://bbs.archlinux.org/viewtopic.php?pid=2296253)) showed similar persistence (across kernels AND a BIOS reset) attributed to hardware degradation in PCIe switch electronics. MacBook Pro BCM4360 has documented physical failure modes ([antenna cable pinch / burnout](https://discussions.apple.com/thread/4416587), [AirPort board replacement guide](https://www.ifixit.com/Guide/MacBook+Pro+13-Inch+Retina+Display+Early+2015+AirPort+Board+Replacement/38518)) — relevant if chassis was flexed during the recent crash sequence, but we have no specific evidence of that. `wlc_attach` returning 1 is a generic Broadcom-blob silicon-probe failure with no published code semantics. **Net:** research adds weight to H1 (cumulative damage) without confirming or ruling out recovery; no evidence others have observed this exact state recover after longer power-off, but no evidence against either.
 
 ### CMDLINE-RESTORE (2026-04-28 ~23:50 BST) — gen-101 staged
 
