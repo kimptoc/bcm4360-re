@@ -8,7 +8,28 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-28 ~23:50 BST — wl-blob excursion CLOSED; baseline cmdline RESTORED in gen-101; ready to resume brcmfmac RE)
+## Current state (2026-04-29 07:30 BST — booted gen-101 baseline; substrate INSPECTION reveals persistent BCM4360 endpoint degradation; H1 strongly hardened; **NO HARDWARE FIRES**)
+
+### POST-REBOOT-INSPECTION (2026-04-29 ~07:30 BST) — H1 evidence concretized
+
+User rebooted overnight. Booted on the restored baseline cmdline (`pci=noaer pcie_aspm.policy=performance intel_iommu=on iommu=strict`). Pre-fire substrate check at 07:13:22 BST boot revealed:
+
+**Endpoint 03:00.0 (BCM4360):** `LnkCtl: ASPM Disabled; CommClk-` (LnkCtl=0x0000)
+**Root port 00:1c.2:** `LnkCtl: ASPM L0s L1 Enabled; CommClk+`
+
+This **endpoint-specific** asymmetry is bit-identical to `phase5/logs/test.crash4-post-cfg.txt` (Apr 28 09:46 BST). Pre-crash-4 baselines (test.{230,243,256}, test.baseline-postcycle.158) ALL showed BCM4360 at LnkCtl=0x0143 (`ASPM L0s L1 Enabled, CommClk+`) — same as the root port still has.
+
+**Persistence chain:** the degraded state survived 4 hard freezes + battery drain + SMC reset (Apr 28 ~16:00 BST) + 4 wl-excursion reboots + 21+ hours cooldown + the Apr 29 reboot.
+
+**Setpci-only config reads work** (`14e4 14e4 14e4` round-trip clean; D0; link trains 2.5GT/s x1) — endpoint is alive at the config layer; only the link-clock and (one bit of) AER state is degraded.
+
+This is concrete H1 (cumulative-damage) evidence. Captured to KEY_FINDINGS.md as a new LIVE row right after the wl-failure row. Per advisor: **do NOT fire brcmfmac on this substrate today.** Discriminator B (POST-FIRE-4) already proved code-vs-environment was environmental. H1 vs H3 was previously to be discriminated by another fire — but the persistent endpoint asymmetry now points strongly at H1 without spending another fire. Another fire would risk pushing the chip further with no offsetting information gain.
+
+**Awaiting user steer.** Surfacing the finding before any further hardware action. Safe non-fire investigations available if user wants to keep digging without firing:
+- More setpci-only config-space probes (no MMIO/DMA/insmod)
+- Diff full extended config dump now vs `test.crash4-post-cfg.txt` byte-by-byte (config 0x40..0x4ff)
+- Inspect Vendor-Specific cap [68], Vendor-Specific Information at config 0x100+ (Broadcom proprietary regs accessible without driver bind)
+- Try a longer cold cycle (shutdown + 30+ min unplugged + battery drain attempt #2) to test whether degradation is recoverable
 
 ### CMDLINE-RESTORE (2026-04-28 ~23:50 BST) — gen-101 staged
 
