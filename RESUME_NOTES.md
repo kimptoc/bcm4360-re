@@ -8,7 +8,36 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-29 07:30 BST — booted gen-101 baseline; substrate INSPECTION reveals persistent BCM4360 endpoint degradation; H1 strongly hardened; **NO HARDWARE FIRES**)
+## Current state (2026-04-29 ~08:30 BST — static-analysis pivot completed targets A+C; target B already closed prior session; MBM-as-wake-gate fully closed; strategy decision pending)
+
+### STATIC-ANALYSIS-SESSION (2026-04-29 ~08:00–08:30 BST) — three targets closed, one deferred
+
+User authorized pivot to static analysis after the H1 evidence ruled out further hardware fires. Three targets reached closure:
+
+**Target C (cheapest first) — KEY_FINDINGS row 58 "Phase 5 has ZERO writes of magic markers" was FACTUALLY WRONG.** Phase 5 pcie.c:814-815 defines `BCM4360_T276_MAGIC_START_VAL=0xA5A5A5A5` and `BCM4360_T276_MAGIC_END_VAL=0x5A5A5A5A`, used at pcie.c:4625-4665 to write the full shared_info struct (magic_start, DMA lo+hi, buf_size, fw_init_done=0, magic_end) AFTER FORCEHT and IMMEDIATELY BEFORE `brcmf_chip_set_active`, gated on `bcm4360_test276_shared_info=1`. Row 58 was likely written before test.276 was added and never updated when the fix landed. Row 58 SUPERSEDED with the corrected fact. Row 40 (T276 reproduces Phase 4B's response) is the correct version. Commit `1cd818c`.
+
+**Target A — T305 design validated structurally via bcmdhd `ai_corereg` comparison.** brcmf_pcie_intr_enable (pcie.c:2868-2873) does `iowrite32(value, devinfo->regs + 0x4C)` with NO `select_core(PCIE2)` first → row-171/197 confound real. bcmdhd's `dhdpcie_bus_intr_enable` calls `si_corereg → ai_corereg → ai_setcoreidx` which does `OSL_PCI_WRITE_CONFIG(osh, PCI_BAR0_WIN, 4, addr)` BEFORE the MMIO RMW. Source: [intel/edison-bcm43340/aiutils.c](https://raw.githubusercontent.com/intel/edison-bcm43340/master/aiutils.c). T305's design (`brcmf_pcie_select_core(BCMA_CORE_PCIE2)` + `brcmf_pcie_intr_enable`) is structurally identical to bcmdhd's working pattern. **Verdict: T305 would land the write at PCIE2+0x4C on a healthy chip.** Rows 93/122/128 ("MBM is write-locked") most likely a routing confound — T241/T280/T284 wrote to whatever core BAR0_WINDOW happened to point at, not PCIE2. New REINTERPRETATION row added after row 128 with primary-source line numbers in both drivers. Commit `5031456`.
+
+**Target B (was already closed) — fw blob has ZERO refs to PCIE2 register space.** KEY_FINDINGS row 160 (T289b, 2026-04-26): exhaustive scan, 0 hits for `0x1800304C` (MAILBOXMASK), 0 hits for `0x18003000` (PCIE2 reg base), 0 hits for `0x18103000` (PCIE2 wrap base), both literal-pool and inline-immediate. **MBM is structurally not the wake gate.** Combined with target A: even if T305 lands the write, fw doesn't read MBM → no wake. **The whole MBM-as-wake-gate line of work is now closed.**
+
+**Target D (compare wl `wl_attach` vs brcmfmac pre-set_active) — DEFERRED.** Phase 6 NOTES.md explicitly warns against broad wl callgraph expansion without runtime grounding; T304h's prior subagent attempt produced "wl.ko likely…" hypotheses without disasm and was flagged DO-NOT-PROPAGATE in row 165. With chip degraded, runtime grounding for any wl finding would be hard to obtain.
+
+### Synthesis (where this leaves the project)
+
+The previously-pending T305/T306 fire was aimed at the MBM-as-wake-gate hypothesis. That hypothesis is now formally closed by static analysis alone: T305's mechanism would have worked, but the wake mechanism it was probing isn't the right one anyway (fw doesn't read PCIE2 registers).
+
+Per row 167's T304e closure: the wake question pivots from "find a host-injection path" to either:
+- **(a) Trace what `wl` does on this hardware that successfully triggers fw ISRs** — but wl now also fails on this chip (row 98), and target D's prior subagent attempts hit a complexity wall (row 165).
+- **(b) Accept that wake requires HW-internal events** (D11 MAC event sources, internal core asserts) and shift the strategy.
+
+H1 (cumulative damage, row 99) is hardened by the persistent CommClk- evidence and means hardware fires risk further degradation with no offsetting information. Without hardware, (a) is bottlenecked on disasm subagent reliability (row 165), and (b) is a strategy decision rather than a static-analysis target.
+
+**Awaiting user steer.** Concrete options:
+1. Accept H1 + MBM-line closure → archive findings, mark project at-rest, document the chassis/replacement paths if the chip ever needs to be revived.
+2. Take one more shot at target D with much tighter scoping (single function, "show bytes or report missing").
+3. Pivot to (b) — treat HW-internal-event sources as the new direction, all static.
+
+### POST-REBOOT-INSPECTION (2026-04-29 ~07:30 BST) — H1 evidence concretized
 
 ### POST-REBOOT-INSPECTION (2026-04-29 ~07:30 BST) — H1 evidence concretized
 
