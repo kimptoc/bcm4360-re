@@ -8,7 +8,23 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-29 ~08:30 BST — static-analysis pivot completed targets A+C; target B already closed prior session; MBM-as-wake-gate fully closed; strategy decision pending)
+## Current state (2026-04-29 ~08:45 BST — project closed; system reverted to pre-project state; gen-102 staged)
+
+### REVERT-TO-ORIGINAL (2026-04-29 ~08:45 BST) — gen-102 staged
+
+User authorized reverting system config to pre-project state after T307 closure. Edits to `/etc/nixos/configuration.nix`:
+- Removed `boot.blacklistedKernelModules = [ "wl" "b43" "bcma" "ssb" ]`
+- Removed `boot.kernelParams = [ "pci=noaer" "pcie_aspm.policy=performance" "intel_iommu=on" "iommu=strict" ]`
+
+Backup at `/etc/nixos/configuration.nix.preOriginalRevert`. `sudo nixos-rebuild boot` ran clean → gen-102 built.
+
+**Verification:** gen-102 kernel-params = `loglevel=4 lsm=landlock,yama,bpf` — bit-identical to pre-project gens 59 (2026-03-22), 60 (2026-04-02), 61 (2026-04-12). System cmdline back to baseline NixOS.
+
+**On next reboot:** systemd-boot defaults to gen-102. wl/b43/bcma/ssb will auto-load (wl will fail at `wlc_attach` per row 98 — clean error, no crash; brcmfmac upstream will early-return per row 75; effective state = BCM4360 unbound, USB mt76 wifi continues to work as today).
+
+**To re-enter project state if needed:** `sudo cp /etc/nixos/configuration.nix.preOriginalRevert /etc/nixos/configuration.nix && sudo nixos-rebuild boot` then reboot to that generation.
+
+### STATIC-ANALYSIS-SESSION (2026-04-29 ~08:00–08:30 BST) — three targets closed, one deferred
 
 ### STATIC-ANALYSIS-SESSION (2026-04-29 ~08:00–08:30 BST) — three targets closed, one deferred
 
