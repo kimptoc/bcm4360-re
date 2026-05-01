@@ -2,6 +2,29 @@
 
 An effort to bring open-source Linux driver support to the Broadcom BCM4360 802.11ac wireless chipset, which currently requires an unmaintained proprietary driver (`wl`/broadcom-sta) with known unpatched security vulnerabilities.
 
+> ## Project Status — LARGELY ON HOLD (as of 2026-05-01)
+>
+> Investigations through Phases 5 and 6 reached strong evidence that this project's BCM4360
+> sample has been **degraded at the silicon level** by the cumulative crash testing the project
+> conducted (see KEY_FINDINGS rows 98 and the 2026-05-01 recheck row). The proprietary `wl`
+> driver consistently fails at `wlc_attach` with `code 1` regardless of kernel version, mitigation
+> flags, IOMMU settings, or module parameters — a depth of failure that lspci-level checks cannot
+> see. Independently, T307's static enumeration of the firmware's HW-internal-event wake surface
+> closed the last remaining "could host injection wake the firmware?" question: the firmware is
+> genuinely waiting for events the offload runtime never enables, so no host-side patching of
+> brcmfmac would unblock progress on this chip in its current state.
+>
+> Practical consequence: further hardware fires on this sample are unlikely to produce new
+> findings. Resuming the project would most likely require **chip replacement** (a fresh BCM4360
+> AirPort board or PCE-AC68 card) and/or a **fw-modification path** that's out of scope for the
+> current campaign. The system has been reverted to its pre-project NixOS baseline (gen-102) —
+> see [RESUME_NOTES.md](RESUME_NOTES.md) "POST-REVERT-RECHECK" for the latest substrate state.
+>
+> What's preserved: the complete clean-room analysis (Phases 1, 3, 4, 5, 6) — firmware identity,
+> shared_info handshake, BCDC/olmsg protocol audit, ISR enumeration, OOB Router identification,
+> wake-surface closure — all stays in the repo and remains a useful starting point for any future
+> resumption with healthier hardware.
+
 Documentation map: see [DOCS.md](DOCS.md) for where high-level summaries,
 pinned findings, live session notes, phase analysis, and raw logs belong.
 

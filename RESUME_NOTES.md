@@ -8,7 +8,44 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-04-29 ~08:45 BST — project closed; system reverted to pre-project state; gen-102 staged)
+## Current state (2026-05-01 — project on hold; system on gen-102 (pre-project baseline); BCM4360 link recovered, chip-init still dead)
+
+### POST-REVERT-RECHECK (2026-05-01) — link layer recovered, chip-init still fails
+
+User asked "still dead, right?" — quick read-only probe. Snapshot:
+
+```
+sudo lspci -vvv -s 03:00.0 | grep -E 'LnkSta:|LnkCtl:|MAbort|CommClk|Kernel driver|Kernel modules|UESta|CESta'
+  Status: Cap+ ... >MAbort- ...
+  LnkCtl: ASPM L0s L1 Enabled; RCB 64 bytes, LnkDisable- CommClk+
+  LnkSta: Speed 2.5GT/s, Width x1
+  UESta:  DLP- SDES- TLP- FCP- CmpltTO- CmpltAbrt- UnxCmplt- RxOF- MalfTLP-
+  CESta:  RxErr- BadTLP- BadDLLP- Rollover- Timeout- AdvNonFatalErr+ CorrIntErr- HeaderOF-
+  Kernel modules: bcma, wl
+
+dmesg:
+  pci 0000:03:00.0: [14e4:43a0] type 00 class 0x028000 PCIe Endpoint
+  pci 0000:03:00.0: BAR 0 [mem 0xb0600000-0xb0607fff 64bit]
+  pci 0000:03:00.0: BAR 2 [mem 0xb0400000-0xb05fffff 64bit]
+  wl driver 6.30.223.271 (r587334) failed with code 1
+
+lsmod: wl loaded (refcount 0); brcmfmac NOT loaded (wl auto-bound first)
+ip link: only wlp0s20u1 (USB mt76) — BCM4360 contributes no interface
+```
+
+**What changed since 2026-04-29:**
+- LnkCtl recovered: was `CommClk-` / `LnkCtl=0x0000` per row 99; now `CommClk+` / `ASPM L0s L1 Enabled`.
+- LnkSta recovered: was `LnkSta=0x0000` (link down); now `Speed 2.5GT/s, Width x1`.
+- `>MAbort-` clean; no dirty PCIe state.
+
+**What didn't change:**
+- wl `code 1` failure at `wlc_attach` reproduces (same as row 98).
+- AER CESta `AdvNonFatalErr+` still persistent (only residual error indicator).
+- BCM4360 contributes no usable network interface; user is on USB mt76 wifi.
+
+**KEY_FINDINGS row 99 status:** PARTIAL-SUPERSEDED. Its "persistent across 4 hard freezes + battery drain + 6 reboots + 21h cooldown" framing for LnkCtl/LnkSta degradation is REFUTED — link layer was eventually transient. H1 (silicon-level chip degradation) still LIVE but on row 98 evidence (deep `wlc_attach` probe failure) alone, not on row 99 LnkCtl evidence. New KEY_FINDINGS row added between row 174 (chipcommon BCAST_DATA) and row 177 (wl bind failure).
+
+**User decision:** do NOT add `wl` blacklist — leave dmesg noise from clean `code 1` failure rather than special-case the config further. README updated to flag project-on-hold status.
 
 ### REVERT-TO-ORIGINAL (2026-04-29 ~08:45 BST) — gen-102 staged
 
