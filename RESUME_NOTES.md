@@ -8,7 +8,7 @@
 > [KEY_FINDINGS.md](KEY_FINDINGS.md); broader documentation rules live in
 > [DOCS.md](DOCS.md).
 
-## Current state (2026-05-01 — project on hold; system on gen-102 (pre-project baseline); BCM4360 link recovered, chip-init still dead)
+## Current state (2026-05-12 — project on hold; chip-init failure reproduced n≥4 reboots post-revert; PCIe-side "dirty" state today is host-side de-activation, not chip regression)
 
 ### POST-REVERT-RECHECK (2026-05-01) — link layer recovered, chip-init still fails
 
@@ -46,6 +46,48 @@ ip link: only wlp0s20u1 (USB mt76) — BCM4360 contributes no interface
 **KEY_FINDINGS row 99 status:** PARTIAL-SUPERSEDED. Its "persistent across 4 hard freezes + battery drain + 6 reboots + 21h cooldown" framing for LnkCtl/LnkSta degradation is REFUTED — link layer was eventually transient. H1 (silicon-level chip degradation) still LIVE but on row 98 evidence (deep `wlc_attach` probe failure) alone, not on row 99 LnkCtl evidence. New KEY_FINDINGS row added between row 174 (chipcommon BCAST_DATA) and row 177 (wl bind failure).
 
 **User decision:** do NOT add `wl` blacklist — leave dmesg noise from clean `code 1` failure rather than special-case the config further. README updated to flag project-on-hold status.
+
+### POST-REVERT-RECHECK (2026-05-12) — chip-init still dead; PCIe-side "dirty" state today is host-side de-activation
+
+User asked "still dead?" again — quick read-only probe (n=2 since revert, plus 2026-05-07 informal check).
+
+**2026-05-07 reading** (kernel 6.12.85 — new kernel since last probe; uptime ~5 min; after battery drain + SMC reset):
+- LnkCtl: `ASPM L0s L1 Enabled; CommClk+` (same as 2026-05-01)
+- LnkSta: `Speed 2.5GT/s, Width x1` (same)
+- BARs: enabled at canonical addresses
+- CESta: `Timeout+ AdvNonFatalErr+` (new `Timeout+` bit — recoverable correctable, likely benign boot transient)
+- wl `code 1` at t=4.349s — identical failure
+- Active wifi: `wlp0s20u2` (USB port renumbered after SMC reset)
+
+**2026-05-12 reading** (kernel 6.12.85 unchanged; uptime ~7 min; post-SMC + post-battery-drain):
+```
+sudo lspci -vvv -s 03:00.0 | grep -E 'Region|LnkCtl|LnkSta|MAbort|CESta'
+  Region 0: Memory at b0600000 (64-bit, non-prefetchable) [disabled] [size=32K]
+  Region 2: Memory at b0400000 (64-bit, non-prefetchable) [disabled] [size=2M]
+  LnkCtl: ASPM Disabled; RCB 64 bytes, LnkDisable- CommClk-
+  LnkSta: Speed 2.5GT/s, Width x1
+  CESta:  RxErr- BadTLP- BadDLLP- Rollover- Timeout- AdvNonFatalErr+ CorrIntErr- HeaderOF-
+
+dmesg:
+  pci 0000:03:00.0: [14e4:43a0] type 00 class 0x028000 PCIe Endpoint
+  pci 0000:03:00.0: BAR 0 [mem 0xb0600000-0xb0607fff 64bit]
+  pci 0000:03:00.0: BAR 2 [mem 0xb0400000-0xb05fffff 64bit]
+  wl driver 6.30.223.271 (r587334) failed with code 1   (t=3.759s)
+
+ip link: only wlp0s20u1 (USB mt76, port renumbered again)
+lsmod: wl loaded, refcount 0
+```
+
+**Key observation — PCIe-side state visibly different from 2026-05-01/2026-05-07:** BARs `[disabled]`, LnkCtl `ASPM Disabled, CommClk-`. This visually echoes the pre-revert row-99 "dirty" pattern. **Interpretation: host-side de-activation**, not chip-state regression:
+1. Endpoint enumerates cleanly at both canonical BAR addresses — device alive on the bus, just powered down because nothing claimed it.
+2. Chip-init failure timing essentially identical to prior readings (3.76s vs 4.35s) — no degradation in the bring-up attempt itself.
+3. 2026-05-07 reading (BARs enabled, `CommClk+`) at the same kernel proves LnkCtl/BAR state varies with timing relative to `wl`'s failure and the kernel's response (`pci_disable_device` + runtime PM).
+
+**Net effect on H1:** further weakens row-99 LnkCtl/BAR evidence — at least part of the pre-revert `ASPM Disabled, CommClk-, BARs disabled` pattern was the kernel's response to `wl`'s failed bind, not a chip property. H1 (silicon-level degradation) now supported by row-98 chip-init failure ONLY. AER `AdvNonFatalErr+` remains the one consistent persistent indicator across every post-revert reading (the 2026-05-07 `Timeout+` was transient).
+
+**Reproducibility footprint after this probe:** `wl code 1` chip-init failure under kernel 6.12.80 (row 178) + 6.12.85 (2026-05-07, 2026-05-12) + pre/post SMC reset + post-battery-drain + n≥4 reboots + ~11 days post-revert. Failure is mechanically robust.
+
+KEY_FINDINGS row 177 amended in-place with this 2026-05-12 refinement (status: REFINED — LnkCtl/BAR "dirty" state attributable to host-side de-activation; SUPERSEDES-PARTIAL row 99 strengthened).
 
 ### REVERT-TO-ORIGINAL (2026-04-29 ~08:45 BST) — gen-102 staged
 
